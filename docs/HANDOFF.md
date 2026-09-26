@@ -5,8 +5,11 @@ income schedule. Payday and till now anchor on the next salary receipt; Horizon'
 Expected support remains flagged inside the window. Till and Overview consume the payday engine's
 low and shared weekly pace; the old no-inflows subtraction is gone. Pace floors whole pounds using
 weeks to the earliest low date and protects zero. Estimate arithmetic (decision 165) is untouched.
-No schema/migration/setting. Release facts belong in `RELEASE_NOTES_v0.22.0.md` after Publish verification.
-The agent owns publication this sitting; do not ask the household to merge/tag/publish.
+No schema/migration/setting. **Published v0.22.0 on 2026-09-26** from merge `0cca6ae` (PR #77),
+Publish run `36273381993` green. `v0.22.0`, `latest`, `sha-0cca6ae` share
+`sha256:38fa8f57bb372a4af75cbed91a7bbad3f747f5edf4eb03e5d7aa608b072b1a58`, different from v0.21.1. Full facts in
+`RELEASE_NOTES_v0.22.0.md`. Main CI: 514 unit tests, 78 browser tests, Docker smoke green.
+Household steps: backup, then Force Update; change old image pins first.
 
 ---
 
