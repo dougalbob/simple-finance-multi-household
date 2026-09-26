@@ -26,7 +26,6 @@ test.describe('category rename picker — visible selection agrees with submitte
     await waitForCategoryEditor(page);
 
     // Ensure we have at least two custom parents to exercise non-first selection.
-    // First parent already exists from settings.spec.ts (Playwright Garden). Create a second.
     const secondParent = `Picker Parent ${Date.now()}`;
     await section.getByLabel('Operation').selectOption('add-parent');
     await section.getByLabel('Name').fill(secondParent);
@@ -39,7 +38,6 @@ test.describe('category rename picker — visible selection agrees with submitte
     // Now rename the second parent (non-first among custom, but also non-first overall).
     const renamedSecond = `${secondParent} Renamed`;
     await section.getByLabel('Operation').selectOption('rename');
-    // Wait for the editor to be ready after op change (it stays ready, but be safe)
     await waitForCategoryEditor(page);
     const which = section.getByLabel('Which category');
     await which.selectOption({ label: `${secondParent} (parent)` });
@@ -55,19 +53,20 @@ test.describe('category rename picker — visible selection agrees with submitte
     await expect(section.locator('li p', { hasText: renamedSecond })).toHaveCount(1, {
       timeout: 30_000,
     });
-    await expect(section.locator('li p', { hasText: secondParent })).toHaveCount(0);
+    // Old name exact should no longer exist (new name contains old as prefix, so exact check)
+    await expect(
+      section.locator('li').filter({ has: section.locator(`p:text-is("${secondParent}")`) }),
+    ).toHaveCount(0);
     // First parent still exists unchanged.
     await expect(section.locator('li p', { hasText: 'Playwright Garden' })).toHaveCount(1);
 
     // Acceptance: save, then rename again without refreshing; no stale version failure.
-    // The version is synced via useEffect on tree change.
-    const secondRename = `${renamedSecond} Again`;
     await which.selectOption({ label: `${renamedSecond} (parent)` });
     await expect(which.locator('option:checked')).toHaveText(`${renamedSecond} (parent)`);
-    await section.getByLabel('Name').fill(secondRename);
+    await section.getByLabel('Name').fill(`${renamedSecond} Again`);
     await section.getByRole('button', { name: 'Apply' }).click();
     await expect(section.getByRole('status')).toContainText(/renamed/i, { timeout: 30_000 });
-    await expect(section.locator('li p', { hasText: secondRename })).toHaveCount(1, {
+    await expect(section.locator('li p', { hasText: `${renamedSecond} Again` })).toHaveCount(1, {
       timeout: 30_000,
     });
   });
@@ -78,7 +77,6 @@ test.describe('category rename picker — visible selection agrees with submitte
     const section = page.getByRole('region', { name: /Category tree/i });
     await waitForCategoryEditor(page);
 
-    // Create a parent and a child under it, then another parent to ensure child is under non-first parent.
     const parentForChild = `Picker Parent Child ${Date.now()}`;
     await section.getByLabel('Operation').selectOption('add-parent');
     await section.getByLabel('Name').fill(parentForChild);
@@ -94,7 +92,6 @@ test.describe('category rename picker — visible selection agrees with submitte
     const parentCard = section.locator(`li:has(> p:text-is("${parentForChild}"))`);
     await expect(parentCard.getByText(childName)).toBeVisible({ timeout: 30_000 });
 
-    // Rename that child — it is under a non-first parent.
     const renamedChild = `${childName} Renamed`;
     await section.getByLabel('Operation').selectOption('rename');
     const which = section.getByLabel('Which category');
@@ -105,7 +102,7 @@ test.describe('category rename picker — visible selection agrees with submitte
     await section.getByRole('button', { name: 'Apply' }).click();
     await expect(section.getByRole('status')).toContainText(/renamed/i, { timeout: 30_000 });
     await expect(parentCard.getByText(renamedChild)).toBeVisible({ timeout: 30_000 });
-    await expect(parentCard.getByText(childName)).toHaveCount(0);
+    await expect(parentCard.getByText(childName, { exact: true })).toHaveCount(0);
   });
 
   test('switching operations does not retain an unintended target', async ({ page }) => {
@@ -115,18 +112,14 @@ test.describe('category rename picker — visible selection agrees with submitte
 
     await section.getByLabel('Operation').selectOption('rename');
     const which = section.getByLabel('Which category');
-    // Pick first available category (seeded Housing parent)
     await which.selectOption({ label: 'Housing (parent)' });
     await expect(which.locator('option:checked')).toHaveText('Housing (parent)');
 
-    // Switch to add-parent — the category picker should disappear and not retain target.
     await section.getByLabel('Operation').selectOption('add-parent');
     await expect(section.getByLabel('Which category')).toHaveCount(0);
 
-    // Switch back to rename — should require choosing again, not retain previous.
     await section.getByLabel('Operation').selectOption('rename');
     const whichAgain = section.getByLabel('Which category');
-    // The select should be back to placeholder "Choose…" (value empty)
     await expect(whichAgain).toHaveValue('');
   });
 
@@ -136,7 +129,6 @@ test.describe('category rename picker — visible selection agrees with submitte
     const section = page.getByRole('region', { name: /Category tree/i });
     await waitForCategoryEditor(page);
 
-    // Create a parent and child for retirement test
     const parent = `Retire Parent ${Date.now()}`;
     await section.getByLabel('Operation').selectOption('add-parent');
     await section.getByLabel('Name').fill(parent);
@@ -150,7 +142,6 @@ test.describe('category rename picker — visible selection agrees with submitte
     await section.getByRole('button', { name: 'Apply' }).click();
     await expect(section.getByRole('status')).toContainText(/added/i, { timeout: 30_000 });
 
-    // Now retire that child — selection must be visible correctly.
     await section.getByLabel('Operation').selectOption('retire');
     const which = section.getByLabel('Which category');
     await which.selectOption({ label: child });

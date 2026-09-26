@@ -21,30 +21,30 @@ test.describe('debt deletion — empty mistaken setup', () => {
     const debtRow = debts.locator('li', { hasText: counterparty });
     await expect(debtRow).toBeVisible();
     await expect(debtRow.getByText('no movements yet')).toBeVisible();
-    // Status should be awaiting, not settled
     await expect(debtRow.getByText('Awaiting first payment')).toBeVisible();
 
-    // Cancel path: open Delete, then Keep it
-    const deleteDetails = debtRow.locator('details', { hasText: 'Delete' });
-    await deleteDetails.locator('summary').click();
-    await expect(
-      deleteDetails.getByRole('button', { name: `Delete “${counterparty}”` }),
-    ).toBeVisible();
-    await deleteDetails.getByRole('button', { name: 'Keep it' }).click();
+    // Cancel path: open outer Delete details, then inner Delete button, then Keep it
+    const outerDelete = debtRow.locator('details', { hasText: 'Delete' });
+    await outerDelete.locator('summary').first().click();
+    const innerDeleteBtn = outerDelete.getByRole('button', { name: `Delete “${counterparty}”` });
+    await expect(innerDeleteBtn).toBeVisible();
+    await innerDeleteBtn.click();
+    const keepBtn = outerDelete.getByRole('button', { name: 'Keep it' });
+    await expect(keepBtn).toBeVisible();
+    await keepBtn.click();
     await expect(debtRow).toBeVisible();
+    await expect(innerDeleteBtn).toBeVisible();
 
     // Now actually delete
-    await deleteDetails.locator('summary').click();
-    await expect(deleteDetails.getByText(`Permanently delete “${counterparty}”`)).toBeVisible();
-    await expect(deleteDetails.getByText(/no movements at all — not even voided/)).toBeVisible();
-    await deleteDetails.getByRole('button', { name: 'Yes, permanently delete it' }).click();
-    await expect(deleteDetails.getByRole('status')).toContainText(/permanently deleted/i, {
+    await innerDeleteBtn.click();
+    await expect(outerDelete.getByText(`Permanently delete “${counterparty}”`)).toBeVisible();
+    await expect(outerDelete.getByText(/no movements at all — not even voided/)).toBeVisible();
+    await outerDelete.getByRole('button', { name: 'Yes, permanently delete it' }).click();
+    await expect(outerDelete.getByRole('status')).toContainText(/permanently deleted/i, {
       timeout: 30_000,
     });
-    // After deletion it must disappear from the list
     await expect(debtRow).toHaveCount(0, { timeout: 30_000 });
 
-    // And disappear from debt selectors (Borrow & repay)
     const borrow = page.locator('section[aria-labelledby="borrow-heading"]');
     await expect(
       borrow.getByLabel('Debt').locator(`option:has-text("${counterparty}")`),
@@ -67,7 +67,6 @@ test.describe('debt deletion — empty mistaken setup', () => {
     const debtRow = debts.locator('li', { hasText: counterparty });
     await expect(debtRow).toBeVisible();
 
-    // Edit to add expected support
     const editDetails = debtRow.locator('details', { hasText: 'Edit' }).first();
     await editDetails.locator('summary').click();
     const editForm = editDetails.locator('form').first();
@@ -76,39 +75,29 @@ test.describe('debt deletion — empty mistaken setup', () => {
     await editForm.getByRole('button', { name: 'Save debt' }).click();
     await expect(editForm.getByRole('status')).toContainText(/updated/i, { timeout: 30_000 });
 
-    // Expecting text should appear
     await expect(debtRow.getByText(/Expecting £100.00 on day 12/)).toBeVisible();
 
-    // Check that horizon shows expected support (projection)
-    await page.goto('/horizon');
-    // Horizon may show expected money in — look for the counterparty
-    // We don't assert exact amount here, just that the debt exists in projection logic
-    // Instead, go to All Transactions and check for EXP< row (expected support)
-    // For a debt with expected support, All Transactions shows EXP< row for today if due?
-    // Simpler: verify debt row still shows awaiting status before deletion
     await page.goto('/pots');
     await expect(
       debts.locator('li', { hasText: counterparty }).getByText('Awaiting first payment'),
     ).toBeVisible();
 
-    // Delete it
-    const deleteDetails = debts.locator('li', { hasText: counterparty }).locator('details', {
+    const outerDelete = debts.locator('li', { hasText: counterparty }).locator('details', {
       hasText: 'Delete',
     });
-    await deleteDetails.locator('summary').click();
-    await expect(
-      deleteDetails.getByText(/expected-support plan that will disappear/),
-    ).toBeVisible();
-    await deleteDetails.getByRole('button', { name: 'Yes, permanently delete it' }).click();
-    await expect(deleteDetails.getByRole('status')).toContainText(/permanently deleted/i, {
+    await outerDelete.locator('summary').first().click();
+    const innerDeleteBtn = outerDelete.getByRole('button', { name: `Delete “${counterparty}”` });
+    await expect(innerDeleteBtn).toBeVisible();
+    await innerDeleteBtn.click();
+    await expect(outerDelete.getByText(/expected-support plan that will disappear/)).toBeVisible();
+    await outerDelete.getByRole('button', { name: 'Yes, permanently delete it' }).click();
+    await expect(outerDelete.getByRole('status')).toContainText(/permanently deleted/i, {
       timeout: 30_000,
     });
     await expect(debts.locator('li', { hasText: counterparty })).toHaveCount(0, {
       timeout: 30_000,
     });
 
-    // After deletion, expected support should no longer generate forecast
-    // Check horizon does not mention this counterparty
     await page.goto('/horizon');
     await expect(page.getByText(counterparty)).toHaveCount(0);
   });
@@ -133,12 +122,9 @@ test.describe('debt deletion — empty mistaken setup', () => {
 
     const debtRow = debts.locator('li', { hasText: counterparty });
     await expect(debtRow.getByText('we owe £10.00')).toBeVisible();
-    // Delete button should NOT be present for debts with movements
     await expect(debtRow.locator('details', { hasText: 'Delete' })).toHaveCount(0);
 
-    // Void the movement, now it's voided-only
     await page.goto('/pots');
-    // Find the recent boundary movement and void it
     const external = page.locator('section[aria-labelledby="external-history-heading"]');
     const movementRow = external.locator('li', { hasText: counterparty }).first();
     await movementRow.locator('summary', { hasText: 'Void' }).click();
@@ -151,7 +137,6 @@ test.describe('debt deletion — empty mistaken setup', () => {
     const debtRowAfterVoid = debts.locator('li', { hasText: counterparty });
     await expect(debtRowAfterVoid.getByText('Awaiting first payment')).toBeVisible();
     await expect(debtRowAfterVoid.getByText('no effective movements — all voided')).toBeVisible();
-    // Still cannot delete because voided history blocks deletion
     await expect(debtRowAfterVoid.locator('details', { hasText: 'Delete' })).toHaveCount(0);
   });
 });
@@ -191,7 +176,6 @@ test.describe('honest loan status — awaiting vs settled', () => {
     await expect(trackForm.getByRole('status')).toContainText(/now tracking/i);
 
     const borrow = page.locator('section[aria-labelledby="borrow-heading"]');
-    // Borrow
     await borrow.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
     await borrow.getByLabel('What happened?').selectOption({ label: 'Borrowed — money in' });
     await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
@@ -202,7 +186,6 @@ test.describe('honest loan status — awaiting vs settled', () => {
       debts.locator('li', { hasText: counterparty }).getByText('we owe £100.00'),
     ).toBeVisible();
 
-    // Partial repayment
     await borrow.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
     await borrow.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
     await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
@@ -213,7 +196,6 @@ test.describe('honest loan status — awaiting vs settled', () => {
       debts.locator('li', { hasText: counterparty }).getByText('we owe £60.00'),
     ).toBeVisible();
 
-    // Full repayment
     await borrow.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
     await borrow.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
     await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
@@ -222,7 +204,6 @@ test.describe('honest loan status — awaiting vs settled', () => {
     await expect(borrow.getByRole('status')).toContainText(/repaid £60.00/i);
     await expect(debts.locator('li', { hasText: counterparty }).getByText('settled')).toBeVisible();
 
-    // Overpayment
     await borrow.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
     await borrow.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
     await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
