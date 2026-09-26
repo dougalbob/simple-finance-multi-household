@@ -752,7 +752,11 @@ test.describe('mobile quick entry', () => {
   test('the phone home is the till, not a dump of laptop pages', async ({ page }) => {
     await page.goto('/');
     await waitForTill(page);
-    await expect(page.getByText('Household total now', { exact: true })).toBeVisible();
+    await expect(
+      page
+        .locator('section[aria-labelledby="money-heading"]')
+        .getByText('Household total now', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText('Payday projection').first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Due this week' })).toBeVisible();
     const more = page.getByRole('navigation', { name: 'Other pages' });
