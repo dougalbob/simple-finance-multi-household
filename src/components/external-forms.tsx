@@ -6,6 +6,7 @@ import {
   addExternalMovementAction,
   addSwapAction,
   archivePotAction,
+  deleteDebtAction,
   editDebtAction,
   editExternalMovementAction,
   voidSwapAction,
@@ -890,6 +891,62 @@ export function ArchivePotForm({
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className={dangerSubmitClass}>
           {pending ? 'Archiving…' : 'Yes, archive it'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          className="rounded border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-ink-body"
+        >
+          Keep it
+        </button>
+      </div>
+      <FormMessage status={state.status} message={state.message} />
+    </form>
+  );
+}
+
+/** Permanently delete an empty mistaken debt setup (decision 167). */
+export function DeleteDebtForm({
+  debtId,
+  version,
+  counterparty,
+  direction,
+  hasExpectedInflow,
+}: {
+  debtId: number;
+  version: number;
+  counterparty: string;
+  direction: 'we_owe' | 'they_owe';
+  hasExpectedInflow: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(deleteDebtAction, initialActionState);
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <button type="button" onClick={() => setConfirming(true)} className={dangerSubmitClass}>
+        Delete “{counterparty}”
+      </button>
+    );
+  }
+  return (
+    <form action={formAction} className="flex flex-col gap-2">
+      <input type="hidden" name="debtId" value={debtId} />
+      <input type="hidden" name="expectedVersion" value={version} />
+      <p className="text-sm font-medium text-ink-body">
+        Permanently delete “{counterparty}” ({direction === 'we_owe' ? 'we owe' : 'owed to us'})?
+      </p>
+      <p className="text-sm text-ink-soft">
+        This debt has no movements at all — not even voided — so it is an empty mistaken setup.
+        Deleting it is permanent and cannot be undone. Its expected-support plan, if any, will be
+        removed and will no longer generate forecast or All Transactions expectation rows. A debt
+        with any movement history, including voided, cannot be deleted this way.
+      </p>
+      {hasExpectedInflow ? (
+        <p className="text-xs text-warning">This debt has an expected-support plan that will disappear.</p>
+      ) : null}
+      <div className="flex gap-2">
+        <button type="submit" disabled={pending} className={dangerSubmitClass}>
+          {pending ? 'Deleting…' : 'Yes, permanently delete it'}
         </button>
         <button
           type="button"

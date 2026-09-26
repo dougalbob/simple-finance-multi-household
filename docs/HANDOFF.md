@@ -1,3 +1,21 @@
+# Handoff: v0.22.1 category picker, debt deletion, honest loan status (decisions 167–169)
+
+**Branch:** `arena/01a0dfd7-simple-finance`, from `main` @ `0f7070f` (v0.22.0 merge).
+
+Three narrowly scoped fixes, no schema change:
+
+1. **Category rename picker selects wrong visible category (decision 169):** Settings → Category tree → Rename: option values are `parent:<id>` / `child:<id>` but controlled value was bare `String(categoryId)`. Browser displayed first parent while hidden ID/version referred to intended category. Fixed by storing `categoryKind`, making select value `${kind}:${id}`, syncing version when tree updates (save → rename again without refresh no stale failure), and adding hydration-ready guard `data-category-ready` + `inert` with `waitForCategoryEditor`. Switching operations clears unintended target; add-parent/add-child and child retirement still work; parent retirement remains prohibited.
+
+2. **Permanently delete a mistaken debt setup (decision 167):** Accounts & Pots → Owed and Owing: household accidentally created Parents and prefers full deletion, not void/hide. Safety boundary: hard-delete only when no movement records whatsoever, including voided. Enforced server-side in transaction guarding race; UI hides Delete when not eligible but server still refuses. After deletion debt disappears from list and selectors, and any expected-support plan no longer generates forecast or All Transactions EXP< rows. Confirmation identifies counterparty and explains permanence. Audit, concurrency and auth conventions respected without retaining active row to simulate deletion. Existing debt code said debts are never deleted, so SPEC and decision deliberately amended.
+
+3. **A loan awaiting first payment must not say settled (decision 168):** Martin & Sue (we owe) settled, no movements yet — bridging pending estate settlement. `debtBalanceLabel` returned settled for any zero balance. Now returns Awaiting first payment for `we_owe` with no effective movements, Awaiting first loan for `they_owe`; settled reserved for loan with actual movement history whose balance is zero. Voided-only history displays unstarted but still blocks deletion per decision 167. No first payment invented, no pot estimate increased. Expected support still appears in projections as expected borrowing where configured, never received income. First borrowing/lending moves to outstanding; full repayment to settled; overpayment distinguishable. Lists/pickers use consistent wording.
+
+**Tests:** 528 unit tests (514 + 14 new: debt deletion and honest status), browser tests: category-picker (4 specs), debt-lifecycle (6 specs) plus existing 78. Domain tests cover empty delete, cancel, expected-support plan deletion, live/voided block, unrelated data unchanged, version guard, race guard, and awaiting vs settled vs overpaid. No schema/migration.
+
+**Published as v0.22.1 on _TBD_ from merge _TBD_ (PR _TBD_), Publish run _TBD_ green. `v0.22.1`, `latest`, `sha-<TBD>` share `sha256:<TBD>`, different from v0.22.0. Full facts in `RELEASE_NOTES_v0.22.1.md`. Household steps: backup, then Force Update; change old image pins first.**
+
+---
+
 # Handoff: v0.22.0 salary-window planning (decision 166)
 
 The household confirmed the £1,000 on the 12th is expected borrowing from parents, not a second

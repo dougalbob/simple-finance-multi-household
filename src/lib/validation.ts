@@ -749,6 +749,12 @@ export const archivePotEntrySchema = z.object({
   expectedVersion: positiveIdSchema,
 });
 
+/** Permanently delete an empty mistaken debt setup (decision 167). */
+export const deleteDebtEntrySchema = z.object({
+  debtId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+});
+
 /** Interaction log entry (SPEC §21.2). */
 export const supplierInteractionEntrySchema = z.object({
   supplierId: z.number().int().positive('Unknown supplier'),

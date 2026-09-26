@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import {
   addVehicleAction,
   editPotAction,
@@ -229,25 +229,59 @@ export function CategoryTreeEditor({ tree }: { tree: CategoryNodeData[] }) {
   const [op, setOp] = useState<'add-parent' | 'add-child' | 'rename' | 'retire'>('add-parent');
   const [parentId, setParentId] = useState<number | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [categoryKind, setCategoryKind] = useState<'parent' | 'child' | null>(null);
   const [version, setVersion] = useState<number | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(true);
+  }, []);
 
   const pick = (
     nextOp: typeof op,
     nextParentId: number | null,
     nextCategoryId: number | null,
+    nextKind: 'parent' | 'child' | null,
     nextVersion: number | null,
   ) => {
     setOp(nextOp);
     setParentId(nextParentId);
     setCategoryId(nextCategoryId);
+    setCategoryKind(nextKind);
     setVersion(nextVersion);
   };
+
+  // Keep the optimistic version in sync when the tree updates (e.g. after a
+  // rename). Without this, save → rename again without refresh would hit a
+  // stale version conflict.
+  useEffect(() => {
+    if (categoryId === null || categoryKind === null) return;
+    if (categoryKind === 'parent') {
+      const parent = tree.find((entry) => entry.id === categoryId);
+      if (parent && parent.version !== version) {
+        setVersion(parent.version);
+      }
+    } else {
+      const child = tree.flatMap((p) => p.children).find((entry) => entry.id === categoryId);
+      if (child && child.version !== version) {
+        setVersion(child.version);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync version on tree change only
+  }, [tree, categoryId, categoryKind]);
 
   const needsParent = op === 'add-child';
   const needsCategory = op === 'rename' || op === 'retire';
 
+  const categorySelectValue =
+    categoryId === null || categoryKind === null ? '' : `${categoryKind}:${categoryId}`;
+
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form
+      action={formAction}
+      className="flex flex-col gap-3"
+      data-category-ready={ready ? 'true' : 'false'}
+      inert={!ready ? true : undefined}
+    >
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
           <label htmlFor="category-op" className={labelClass}>
@@ -256,7 +290,7 @@ export function CategoryTreeEditor({ tree }: { tree: CategoryNodeData[] }) {
           <select
             id="category-op"
             value={op}
-            onChange={(event) => pick(event.target.value as typeof op, null, null, null)}
+            onChange={(event) => pick(event.target.value as typeof op, null, null, null, null)}
             className={inputClass}
           >
             <option value="add-parent">Add a parent category</option>
@@ -277,6 +311,7 @@ export function CategoryTreeEditor({ tree }: { tree: CategoryNodeData[] }) {
                 pick(
                   'add-child',
                   event.target.value === '' ? null : Number(event.target.value),
+                  null,
                   null,
                   null,
                 )
@@ -301,23 +336,24 @@ export function CategoryTreeEditor({ tree }: { tree: CategoryNodeData[] }) {
             </label>
             <select
               id="category-which"
-              value={categoryId === null ? '' : String(categoryId)}
+              value={categorySelectValue}
               onChange={(event) => {
                 const value = event.target.value;
                 if (value === '') {
-                  pick(op, null, null, null);
+                  pick(op, null, null, null, null);
                   return;
                 }
                 const [kind, id] = value.split(':');
                 const numId = Number(id);
-                if (kind === 'parent') {
+                const parsedKind = kind === 'parent' ? 'parent' : 'child';
+                if (parsedKind === 'parent') {
                   const parent = tree.find((entry) => entry.id === numId);
-                  pick(op, null, numId, parent?.version ?? null);
+                  pick(op, null, numId, 'parent', parent?.version ?? null);
                 } else {
                   const child = tree
                     .flatMap((parent) => parent.children)
                     .find((entry) => entry.id === numId);
-                  pick(op, null, numId, child?.version ?? null);
+                  pick(op, null, numId, 'child', child?.version ?? null);
                 }
               }}
               className={inputClass}

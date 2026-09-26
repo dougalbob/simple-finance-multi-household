@@ -2059,3 +2059,65 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     not overdraft. No allowance below/at zero or when the low is today. Wording states this is on top
     of planned shop/fuel and spending it all would touch zero. Starting estimates are labelled
     Household total now, never a bank balance. Decision 165 and the £180 case are untouched.
+
+167. **Permanently delete an empty mistaken debt setup (v0.22.1, 2026-09-26).** The household
+    accidentally created “Parents” and cannot remove it. They explicitly prefer full deletion, not
+    voiding or hiding. Existing code said debts are never deleted; that holds for any debt with
+    history. An empty setup with no movement records whatsoever, including voided, is a mistaken
+    entry, not history, and may be hard-deleted.
+
+    Safety boundary: hard-delete only when it has no movement records at all, including voided.
+    Do not silently cascade-delete financial history. Enforce eligibility server-side, not just by
+    hiding a button; guard against a movement being recorded between confirmation and deletion by
+    checking inside the same transaction as the delete. Existing debt code explicitly said debts are
+    never deleted, so this decision amends that rule deliberately. If deletion of debts with
+    movements is needed, clarify separately before extending scope. Do not substitute void/archive
+    for permanent removal of an eligible empty setup.
+
+    After deletion it disappears from the list and any debt selectors, and any expected-support plan
+    attached to it no longer generates forecast or All Transactions expectation rows. Unrelated
+    debts, pot estimates, transactions and outstanding totals remain unchanged. Authentication,
+    concurrency (optimistic version) and audit conventions are respected without retaining an active
+    debt row merely to simulate deletion. UI explains confirmation clearly and identifies the
+    counterparty. Tests cover empty delete, cancel leaves untouched, expected-support plan deleted
+    with its projections gone, live/voided movements block deletion via UI and direct action, and
+    unrelated data unchanged. No schema change; deletion is a row delete with audit.
+
+168. **A loan awaiting its first payment must not say “settled” (v0.22.1, 2026-09-26).** Reported
+    example: Martin & Sue (we owe) settled, no movements yet — bridging pending estate settlement.
+    This is a genuine borrowing arrangement, but its first payment has not arrived. Zero movements
+    and zero balance do not mean a loan has been repaid. Source: `debtBalanceLabel` in
+    `src/lib/records/debts.ts` returned `settled` for any zero balance. The balance resolver already
+    exposes `movementCount`.
+
+    Use an honest distinct status, preferably “Awaiting first payment”, for an unstarted borrowing
+    setup. Use suitable equivalent wording for money the household intends to lend — “Awaiting first
+    loan” for `they_owe`. Reserve “Settled” for a loan with actual movement history whose
+    outstanding amount is zero; preserve outstanding and overpayment labels. Consider voided-only
+    history explicitly: with all movements voided there is no effective borrowing/lending, so the
+    displayed state should be unstarted, although deletion remains blocked by retained history under
+    decision 167's safety boundary. Reuse existing effective-movement semantics rather than inventing
+    different balance arithmetic.
+
+    No first payment is invented and no pot estimate is increased. Expected support still appears in
+    projections as expected borrowing where configured, never received income. First borrowing/lending
+    moves the status to outstanding. Full repayment shows Settled; partial repayment stays
+    outstanding; overpayment remains distinguishable. Relevant lists/pickers use consistent wording.
+    No schema change; `debtBalanceLabel` now takes `movementCount` and returns awaiting when zero.
+
+169. **Category rename picker selects the wrong visible category (v0.22.1, 2026-09-26).** Settings →
+    Category tree → Rename a category: selecting a parent or child made the dropdown display the
+    first parent instead of the chosen category. Concrete mismatch in `CategoryTreeEditor`,
+    `src/components/settings-forms.tsx`: option values are `parent:<id>` or `child:<id>`, but the
+    controlled select value was only `String(categoryId)`. After selection, no option matched that
+    bare ID, so the browser displayed the first selectable option while hidden `categoryId` and
+    `version` still referred to the originally selected category.
+
+    Fix the value/state mismatch: visible selection, submitted ID and optimistic version must always
+    agree. The picker also serves retirement — check that path too, keep parent retirement prohibited.
+    The fix stores `categoryKind` (`parent` | `child`) alongside `categoryId`, makes the select value
+    `${kind}:${id}`, and keeps version in sync when the tree updates (save, then rename again without
+    refreshing must not hit stale version). Apply hydration-ready conventions: `data-category-ready`
+    and `inert` until React has hydrated, with `waitForCategoryEditor` in e2e support, matching the
+    till and filters pattern that prevents a `selectOption` before hydration from silently desyncing.
+    Tests assert selection and persisted result, not just success message.

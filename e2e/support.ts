@@ -59,3 +59,14 @@ export function addDaysIso(isoDate: string, days: number): string {
     .toISOString()
     .slice(0, 10);
 }
+
+/**
+ * Wait until the category tree editor is listening (decision 167). The
+ * rename/retire picker is controlled React state with `parent:` / `child:`
+ * option values; a `selectOption` before hydration would leave the visible
+ * selection and the hidden `categoryId` out of sync (the bug this session
+ * fixed). The form is `inert` until ready and publishes `data-category-ready`.
+ */
+export async function waitForCategoryEditor(page: Page): Promise<void> {
+  await expect(page.locator('[data-category-ready="true"]')).toBeAttached();
+}

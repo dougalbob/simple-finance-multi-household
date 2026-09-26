@@ -99,7 +99,9 @@ import {
 } from '@/lib/records/transfers';
 import {
   createDebt,
+  DebtHasMovementsError,
   DebtNotFoundError,
+  deleteDebt,
   editDebt,
   InvalidDebtInputError,
   type EditDebtPatch,
@@ -127,6 +129,7 @@ import {
   categoryEntrySchema,
   checkpointEntrySchema,
   debtEntrySchema,
+  deleteDebtEntrySchema,
   editDebtEntrySchema,
   editPotEntrySchema,
   editPurchaseEntrySchema,
@@ -1554,6 +1557,43 @@ export async function editDebtAction(
       return { status: 'error', message: err.message };
     }
     return { status: 'error', message: 'The debt could not be saved. Please try again.' };
+  }
+}
+
+export async function deleteDebtAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  const parsed = deleteDebtEntrySchema.safeParse({
+    debtId: numberOrNull(formData.get('debtId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+  });
+  if (!parsed.success) {
+    return {
+      status: 'error',
+      message: firstIssue(parsed.error, 'The delete link is incomplete — refresh and try again.'),
+    };
+  }
+  try {
+    const deleted = deleteDebt(getDbHandle().db, {
+      id: parsed.data.debtId,
+      expectedVersion: parsed.data.expectedVersion,
+      actor: user.email,
+    });
+    revalidatePages();
+    return { status: 'ok', message: `Debt “${deleted.counterparty}” permanently deleted.` };
+  } catch (err) {
+    if (
+      err instanceof DebtNotFoundError ||
+      err instanceof VersionConflictError ||
+      err instanceof DebtHasMovementsError ||
+      err instanceof InvalidDebtInputError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The debt could not be deleted. Please try again.' };
   }
 }
 

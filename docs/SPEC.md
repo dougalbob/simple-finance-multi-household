@@ -481,6 +481,11 @@ world of §10.1 cannot represent these, so they get their own honest boxes:
   from the linked loan movements — never stored — so it cannot drift: for `we_owe`, borrowed minus
   repaid; for `they_owe`, lent minus repaid-to-us. Voided movements never count. No interest, no
   schedules: repayments simply reduce the balance, and a settled debt stays as history.
+  An empty mistaken setup with no movements at all, including voided, may be permanently deleted
+  after confirmation (decision 167); a debt with any movement history, including voided, cannot be
+  hard-deleted. A debt with no effective movements displays “Awaiting first payment” (`we_owe`) or
+  “Awaiting first loan” (`they_owe`), not “settled” (decision 168); voided-only history counts as
+  unstarted for display but still blocks deletion.
 - **Expected inflow — a plan with a start, a changeable day and an end (v0.5.0; planned from v0.7.0 on).**
   Because the money that would settle a debt is often dependable (Mum's £1,000 each 12th, while the loan
   runs), a debt may carry a **read-only expectation**: an amount, a day-of-month and an optional **until
@@ -634,7 +639,10 @@ breakdown of receipts — remains out of scope.
   with drill-down to children ("…Council Tax £Y, DIY £Z"). Exactly two levels — a third would slow till-time
   entry.
 - The tree is user-editable in Settings: add/rename parents and children; **retiring** a child prevents new
-  assignments but preserves history. Schedules also reference a child category + target.
+  assignments but preserves history. Schedules also reference a child category + target. The rename/retire
+  picker’s visible selection, submitted ID and optimistic version must always agree (decision 169); the
+  version stays in sync after a rename so a second rename without refresh does not hit a stale conflict,
+  and the picker is `inert` until hydrated (`data-category-ready`).
 
 Initial tree:
 
