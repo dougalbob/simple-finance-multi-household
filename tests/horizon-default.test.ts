@@ -181,9 +181,12 @@ describe('nextScheduledIncomeDate — scheduled income only (decision 150)', () 
     });
 
     assert.equal(nextScheduledIncomeDate(db, TODAY), '2026-09-25');
-    // The payday window (§7.2) still counts the support, which lands first —
-    // the two definitions deliberately differ here.
-    assert.equal(getProjectionView(db, now)?.result.paydayDate, '2026-09-24');
+    // The payday window also anchors on salary, retaining earlier support.
+    assert.equal(getProjectionView(db, now)?.result.paydayDate, '2026-09-25');
+    assert.equal(
+      getProjectionView(db, now)?.receiptLines.filter((line) => line.expected).length,
+      1,
+    );
 
     // Horizon's default: the day before the salary, not the day before Mum.
     const { date } = resolveHorizonThrough({

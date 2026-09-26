@@ -377,16 +377,18 @@ test.describe('mobile quick entry', () => {
 
     // ...and the figure that stops the mortgage being a surprise three days
     // before payday: what is left when everything expected to leave has left,
-    // counting no income at all (SPEC §7.7).
-    await expect(entry.getByText('Free to spend before income')).toBeVisible();
-    await expect(entry.getByText(/Nothing coming in is counted/)).toBeVisible();
+    // counting expected support but not spendable salary (SPEC §7.7).
+    await expect(entry.getByText('Lowest before pay day')).toBeVisible();
+    await expect(
+      entry.getByText(/Salary on .* is not counted as money you can spend/),
+    ).toBeVisible();
     await expect(entry.getByText(/never a bank balance/).first()).toBeVisible();
 
     // A cash pot shows no balance at all: the household counts the notes.
     await pot.selectOption({ label: "Alex's cash" });
     await expect(entry.getByText(/no balance is shown for cash/i)).toBeVisible();
     await expect(entry.getByText(/Last reported/)).toHaveCount(0);
-    await expect(entry.getByText('Free to spend before income')).toBeVisible();
+    await expect(entry.getByText('Lowest before pay day')).toBeVisible();
   });
 
   test('suggests suppliers inline, filters as you type and moves on to the amount', async ({
@@ -458,7 +460,7 @@ test.describe('mobile quick entry', () => {
     // the type tabs, the pot, and what is left before income lands.
     await expect(entry.getByRole('tab', { name: 'Purchase' })).toBeVisible();
     await expect(entry.getByLabel('Pot').locator('option:checked')).toHaveText('Main account');
-    await expect(entry.getByText('Free to spend before income')).toBeVisible();
+    await expect(entry.getByText('Lowest before pay day')).toBeVisible();
 
     // The tab strip sits inside the viewport — a different mode is one tap
     // away, which is the whole point of opening here.
@@ -634,7 +636,7 @@ test.describe('mobile quick entry', () => {
     // Start the drags on the balance card, away from inputs and buttons —
     // measured afresh each time, because a vertical drag scrolls the page.
     const balanceCard = async () => {
-      const card = entry.getByText('Free to spend before income');
+      const card = entry.getByText('Lowest before pay day');
       // Mid-screen, clear of the sticky page navigation.
       await card.evaluate((element) => element.scrollIntoView({ block: 'center' }));
       const box = await card.boundingBox();
@@ -750,7 +752,11 @@ test.describe('mobile quick entry', () => {
   test('the phone home is the till, not a dump of laptop pages', async ({ page }) => {
     await page.goto('/');
     await waitForTill(page);
-    await expect(page.getByRole('heading', { name: /Household:/i })).toBeVisible();
+    await expect(
+      page
+        .locator('section[aria-labelledby="money-heading"]')
+        .getByText('Household total now', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText('Payday projection').first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Due this week' })).toBeVisible();
     const more = page.getByRole('navigation', { name: 'Other pages' });
@@ -811,7 +817,7 @@ test.describe('mobile quick entry', () => {
   }) => {
     await page.goto('/');
     await waitForTill(page);
-    const before = await page.getByRole('heading', { name: /household:/i }).textContent();
+    const before = await page.locator('#money-heading').textContent();
     if (before === null) throw new Error('household heading missing');
     const beforePence = Math.round(parsePounds(before) * 100);
 
@@ -826,7 +832,7 @@ test.describe('mobile quick entry', () => {
     // SPEC §7.1: the seed checkpoints were written down before this transfer,
     // so both legs count. The household total does not move. (A credit
     // recorded *before* a same-day checkpoint is the one that stays absorbed.)
-    const after = await page.getByRole('heading', { name: /household:/i }).textContent();
+    const after = await page.locator('#money-heading').textContent();
     if (after === null) throw new Error('household heading missing');
     expect(Math.round(parsePounds(after) * 100)).toBe(beforePence);
   });

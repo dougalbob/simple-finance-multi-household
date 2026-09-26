@@ -157,6 +157,7 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
       commitmentsPence: outlook.commitmentsPence,
       dayToDayPence: outlook.dayToDayPence,
       freeToSpendPence: outlook.freeToSpendPence,
+      paceText: outlook.paceText,
       lowDate: outlook.lowDate,
       lowDateLabel: outlook.lowDate === null ? null : formatShortLocalDate(outlook.lowDate),
     },

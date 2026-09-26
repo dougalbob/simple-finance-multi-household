@@ -2049,3 +2049,13 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     §7.1: if a count already includes money not yet recorded, record that credit before the checkpoint
     or checkpoint again afterwards — a credit written down later is treated as new money. No schema
     change; live rows already carry `createdAt`.
+
+166. **Salary-window planning and one shared low (v0.22.0, 2026-09-26).** The household confirmed
+    the £1,000 on the 12th is monthly parental borrowing tracked as expected debt support, not a
+    second income schedule. Salary alone ends the payday/till window; support remains flagged inside
+    it. No setting, schema or migration; Horizon's decision-150 default stays unchanged. The till and
+    Overview now read the payday engine's low rather than a no-inflows subtraction. Weekly spare pace
+    floors whole pounds from the positive low divided by weeks to its earliest date, protecting zero,
+    not overdraft. No allowance below/at zero or when the low is today. Wording states this is on top
+    of planned shop/fuel and spending it all would touch zero. Starting estimates are labelled
+    Household total now, never a bank balance. Decision 165 and the £180 case are untouched.

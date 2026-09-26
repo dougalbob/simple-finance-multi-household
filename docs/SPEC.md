@@ -206,6 +206,20 @@ projection starts from household_available_now and applies, day by day until pay
 projected_low = the minimum running value within the window
 ```
 
+**Salary anchors the window (decision 166).** Use the next scheduled salary receipt date,
+with the existing weekend shift, never the next debt expectation. No new setting: the household's
+£1,000 monthly parental support is tracked as borrowing. Support remains inside the longer window,
+flagged as borrowed and expected, never payday or received income. Horizon's default is unchanged.
+
+**Weekly pace:** when the low is positive, divide that low by the weeks from today to its
+**earliest** low date; floor to whole pounds, never round up. The low already subtracts planned
+shop and fuel, so the pace is explicitly **on top of the planned shop and fuel**. Spending it all
+would touch zero at the lowest point, not preserve a cushion. Protect zero, not the overdraft.
+For a negative low state the shortfall and no allowance; for zero state no allowance; when the low
+is today do not invent a weekly number. All three surfaces share the same calculation and wording.
+Phone home, Overview and the panel's starting line call the same estimate **Household total now**,
+with the quiet reminder that it is not a bank balance. Decision 165's estimate arithmetic is unchanged.
+
 `projected_low` normally occurs just before salary lands. The projection **includes** expected income; it is
 not a spending-only forecast.
 
@@ -318,8 +332,7 @@ where_we'd_land = household_available_now
 - **The default date (v0.13.0, decision 150).** With no `?through=` (whatever else is in the URL), the date is
   **the day before the next scheduled income** — the earliest upcoming instance of a *receipt schedule*,
   already moved off a weekend (§11.3). Only scheduled income counts: a debt's expected support is borrowed
-  money, never income (§10.2), so it never sets the default, even when it lands first. This deliberately
-  differs from the payday window (§7.2) and the till figure (§7.7), which do count the support. The default is
+  money, never income (§10.2), so it never sets the default, even when it lands first. The payday window (§7.2) and till (§7.7) now share this salary anchor, while still including support within their windows. The default is
   clamped into the selectable window: income **tomorrow** ⇒ tomorrow (the income day itself, so that window
   includes the salary — preferred to jumping to five weeks); income **beyond 400 days** ⇒ today + 400. With
   **no scheduled income at all** the long-standing default stands: five weeks ahead (today + 35). An explicit
@@ -344,43 +357,21 @@ where_we'd_land = household_available_now
   forecast, and *expected support is an expectation of borrowed money — it is owed, never income, and it lands
   only if it is actually borrowed and recorded.*
 
-### 7.7 What is left before income lands (the till figure) — v0.9.0
+### 7.7 Lowest before pay day (the till figure) — v0.22.0
 
-A checkpoint answers *"what did the bank last say?"*. It does not answer *"will this card still work
-tomorrow?"*, and the two differ exactly when it matters: a healthy balance with the mortgage leaving three
-days before payday. The household asked for that second number beside the first, at the till and on the
-review screens. It is the same arithmetic as §7.5, with the window taken to the next expected income
-instead of a named payday.
+The till and Overview use **the identical projected low and earliest low date from §7.2's engine**,
+not a separate spending-only subtraction. The window ends on the next salary receipt schedule,
+never on a debt's expected support. Borrowed support inside that window remains included and flagged
+as expected, never received income. The salary itself is not counted as money you can spend: the
+engine applies outgoings before receipts, including on salary day.
 
-```
-free_to_spend = household_available_now (§7.1)
-                − Σ expected commitments due in (today, next income]        (DD/SO instances, §11)
-                − Σ projected day-to-day events due in (today, next income] (§7.3)
+Both surfaces show “Lowest before pay day” and the same weekly pace as the projection panel (§7.2).
+No salary schedule or no checkpoint means no figure, not zero. The estimate arithmetic is unchanged.
 
-pot_spendable(P) = estimate(P) − Σ commitments due from P in the same window   (= §7.5's pot watch)
-```
+Per-pot signals remain `estimate(P) − commitments from P`, in the same salary window. They exclude
+household shops/fuel and receipts: these are bills-only transfer-planning signals, not the household
+spending allowance. The checkpoint stays the reported figure, never edited. Cash pots show no balance.
 
-- **It counts no income.** This is the *dip*: everything already expected to leave, before the money lands.
-  Adding the next receipt back in would turn "£500 with a £600 mortgage pending" into a comfortable picture
-  and hide precisely the risk the household asked to see. It is not a forecast of the balance after payday —
-  that is what §7.2's end-of-window figure and §7.6's horizon are for.
-- **The next income is whichever comes first:** an income schedule's next instance or a debt's expected
-  support (§7.2's payday selection, §10.2 — an expectation, labelled as one).
-- **The household figure includes projected day-to-day events** (§7.3) because the weekly shop and the fill
-  will really happen. **The per-pot figure does not** — groceries vary by pot and payment method, and a
-  pot-scoped number is a transfer-planning signal (§7.5's reasoning, unchanged).
-- **The per-pot figure is `pot_watch`** (§7.5) with this window: shown as a shortfall when the pot cannot
-  cover the bills due from it, quiet context otherwise. It is the answer to "is *this* account about to
-  bounce", beside the household answer to "are we about to bounce".
-- **Shown at the till and on review:** the Quick Entry purchase panel (household headline plus the selected
-  pot's checkpoint and its shortfall when there is one) and the pot mini-balances on Overview. The
-  projection panel (§7.2) is unchanged; its `projected_low` equals this figure whenever no other receipt
-  lands inside the window (pinned by `tests/cycle-outlook.test.ts`), so the two surfaces cannot drift.
-- **No window, no figure.** No income schedule (or no checkpoint) means the figure does not exist, and the
-  UI says exactly what is missing rather than guessing or showing a zero. `free_to_spend` is null, never 0.
-- **The checkpoint stays the reported figure.** This is read-only context in the entry form, never an edited
-  balance (§5), and it is never called a bank balance. **Cash pots show no balance at all** — the household
-  counts the notes (§15.1).
 
 ## 8. Warnings (two tiers)
 

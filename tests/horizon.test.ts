@@ -190,7 +190,7 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
     );
   });
 
-  it('expected inflow feeds the payday window earliest-wins and stays out of estimates', async () => {
+  it('expected inflow does not set payday and stays out of estimates', async () => {
     const { db } = await setUp(3);
     // Support on the 3rd of each month: it lands after the salary, so it does
     // not win the cycle. Note the salary's own weekend rule is in play —
@@ -206,14 +206,12 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
     assert.equal(snapshot.householdAvailablePence, p(820));
   });
 
-  it('the expectation wins the payday when it lands before the salary', async () => {
+  it('support lands inside the salary window without becoming payday', async () => {
     const { db } = await setUp(24);
-    // Support due on the 24th (a Thursday) beats the salary, which shifts to
-    // Friday the 25th: the cycle flips to the earlier expected money, so the
-    // window ends on the 24th and the salary sits outside it.
+    // Support on the 24th remains inside the window ending at salary on the 25th.
     const view = getProjectionView(db, now);
     assert.ok(view);
-    assert.equal(view.result.paydayDate, '2026-09-24');
+    assert.equal(view.result.paydayDate, '2026-09-25');
     const expected = view.receiptLines.filter((line) => line.expected === true);
     assert.equal(expected.length, 1);
     assert.equal(expected[0]?.dueDate, '2026-09-24');
