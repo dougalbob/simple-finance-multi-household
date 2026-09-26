@@ -72,9 +72,7 @@ test.describe('category rename picker — visible selection agrees with submitte
     });
   });
 
-  test('rename a child under another parent keeps visible selection correct', async ({
-    page,
-  }) => {
+  test('rename a child under another parent keeps visible selection correct', async ({ page }) => {
     test.slow();
     await page.goto('/settings');
     const section = page.getByRole('region', { name: /Category tree/i });

@@ -942,7 +942,9 @@ export function DeleteDebtForm({
         with any movement history, including voided, cannot be deleted this way.
       </p>
       {hasExpectedInflow ? (
-        <p className="text-xs text-warning">This debt has an expected-support plan that will disappear.</p>
+        <p className="text-xs text-warning">
+          This debt has an expected-support plan that will disappear.
+        </p>
       ) : null}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className={dangerSubmitClass}>

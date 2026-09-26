@@ -46,7 +46,9 @@ export class InvalidDebtInputError extends Error {
 
 export class DebtHasMovementsError extends Error {
   constructor(debtId: number) {
-    super(`Debt ${debtId} has movements and cannot be permanently deleted — void history is retained.`);
+    super(
+      `Debt ${debtId} has movements and cannot be permanently deleted — void history is retained.`,
+    );
     this.name = 'DebtHasMovementsError';
   }
 }
@@ -236,7 +238,10 @@ export interface DebtWithBalance {
  * in (repaid to us). Also returns the total movement count including voided
  * rows, which blocks permanent deletion (decision 167).
  */
-export function debtBalance(db: Db, debt: Debt): {
+export function debtBalance(
+  db: Db,
+  debt: Debt,
+): {
   balancePence: number;
   movementCount: number;
   totalMovementCount: number;
@@ -352,11 +357,7 @@ export function debtsSummary(db: Db): DebtsSummary {
  * that has not started yet (decision 168). Voided-only history counts as
  * unstarted for display, but still blocks permanent deletion (decision 167).
  */
-export function debtBalanceLabel(
-  debt: Debt,
-  balancePence: number,
-  movementCount?: number,
-): string {
+export function debtBalanceLabel(debt: Debt, balancePence: number, movementCount?: number): string {
   if (balancePence === 0) {
     if (movementCount !== undefined && movementCount === 0) {
       return debt.direction === 'we_owe' ? 'Awaiting first payment' : 'Awaiting first loan';

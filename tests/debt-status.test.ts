@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  createDebt,
-  debtBalance,
-  debtBalanceLabel,
-  editDebt,
-} from '../src/lib/records/debts';
+import { createDebt, debtBalance, debtBalanceLabel, editDebt } from '../src/lib/records/debts';
 import {
   createExternalMovement,
   voidExternalMovement,
@@ -39,7 +34,10 @@ describe('a loan awaiting its first payment must not say settled (decision 168)'
         now: NOW,
       });
       const lendBal = debtBalance(fx.db, lend);
-      assert.equal(debtBalanceLabel(lend, lendBal.balancePence, lendBal.movementCount), 'Awaiting first loan');
+      assert.equal(
+        debtBalanceLabel(lend, lendBal.balancePence, lendBal.movementCount),
+        'Awaiting first loan',
+      );
     } finally {
       fx.close();
     }
@@ -108,7 +106,10 @@ describe('a loan awaiting its first payment must not say settled (decision 168)'
       // We just ensure the debt is not settled and still projects
       const { balancePence, movementCount } = debtBalance(fx.db, withPlan);
       assert.equal(movementCount, 0);
-      assert.equal(debtBalanceLabel(withPlan, balancePence, movementCount), 'Awaiting first payment');
+      assert.equal(
+        debtBalanceLabel(withPlan, balancePence, movementCount),
+        'Awaiting first payment',
+      );
     } finally {
       fx.close();
     }
