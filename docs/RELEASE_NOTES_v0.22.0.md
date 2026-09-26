@@ -1,6 +1,12 @@
 # Release notes — v0.22.0 (salary-window planning)
 
-**Publication:** pending verification; release facts will be filled after the tagged image is green.
+**Published:** 2026-09-26. Publish run `36273381993` passed; registry tags verified.
+**Merge commit:** `0cca6aeab5432c8a5b7b1a2f1428c6123b6e5ec8` (PR #77; short SHA `0cca6ae`).
+**Image tags:** `ghcr.io/dougalbob/simple-finance:v0.22.0` ·
+`ghcr.io/dougalbob/simple-finance:latest` · `ghcr.io/dougalbob/simple-finance:sha-0cca6ae`.
+**Digest:** `sha256:38fa8f57bb372a4af75cbed91a7bbad3f747f5edf4eb03e5d7aa608b072b1a58`, shared by all three tags.
+This differs from v0.21.1's `sha256:c9ada52917fed04c28ba828c585a92bcf566d7c3103580842f3d4de02077a506`;
+v0.21.1 still resolves to its original digest.
 **Version badge:** `v0.22.0 · pre-release`
 
 ## What changed
@@ -20,6 +26,16 @@
 No database change, no schema change and no migration. Existing data is used as-is. The estimate
 updates on the next page load; decision 165's same-day credit arithmetic and the £180 case are unchanged.
 v0.21.1 is not retagged and its release notes are untouched.
+
+## Verification
+
+PR #77 and the exact main merge commit passed gates, browser and Docker checks.
+All 514 unit tests and 78 browser tests passed. Main CI:
+[36273098587](https://github.com/dougalbob/simple-finance/actions/runs/36273098587).
+[Publish run 36273381993](https://github.com/dougalbob/simple-finance/actions/runs/36273381993)
+built and smoke-tested the image before pushing; registry verification finished green.
+The GHCR package-version API groups `v0.22.0`, `latest`, and `sha-0cca6ae` under the single digest above.
+The annotated tag stays on the tested merge commit; this notes-only stamp does not amend it.
 
 ## Updating in Unraid
 
