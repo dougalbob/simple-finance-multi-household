@@ -37,18 +37,19 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
             Payday projection
           </p>
           <h2 id="projection-heading" className="text-xl font-semibold">
-            To {projection.paydayScheduleName ?? 'pay day'} · {result.paydayDate} ({result.days}{' '}
-            days)
+            To pay day · {result.paydayDate} ({result.days} days)
           </h2>
         </div>
-        <span className="text-xs text-ink-muted">A projection, not a bank forecast</span>
+        <span className="text-xs text-ink-muted">A projection, not a bank balance</span>
       </div>
 
       <p className={`rounded-lg border px-3 py-2 text-sm font-medium ${tierStyles}`}>{tierText}</p>
 
+      <p className="mt-2 text-sm text-ink-soft">{projection.paceText}</p>
+
       <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
         <div className="flex justify-between gap-2">
-          <dt className="text-ink-soft">Available now</dt>
+          <dt className="text-ink-soft">Household total now</dt>
           <dd className="font-semibold tabular-nums">{formatPence(result.availableNowPence)}</dd>
         </div>
         <div className="flex justify-between gap-2">

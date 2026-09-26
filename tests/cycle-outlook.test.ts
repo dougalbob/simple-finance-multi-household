@@ -243,3 +243,73 @@ describe('quick entry data: default pot and balance context', () => {
     assert.equal(data.cycle.householdAvailablePence, snapshot.householdAvailablePence);
   });
 });
+
+describe('salary window with parental borrowing (decision 166)', () => {
+  it('includes the 12th support and 21st–22nd bills; all surfaces share the low and pace', async () => {
+    const { createDebt, editDebt } = await import('../src/lib/records/debts');
+    const now = new Date('2026-10-03T12:00:00Z');
+    const fixture = await createHouseholdFixture(ACTOR, now);
+    const { db, pots } = fixture;
+    try {
+      addCheckpoint(db, { potId: pots.main.id, amountPence: p(2000), actor: ACTOR, now });
+      createSchedule(db, {
+        name: 'Salary',
+        kind: 'receipt',
+        frequency: 'monthly',
+        dueDayOfMonth: 26,
+        amountPence: p(2500),
+        potId: pots.salary.id,
+        activeFrom: '2026-10-01',
+        actor: ACTOR,
+        now,
+      });
+      for (const day of [21, 22])
+        createSchedule(db, {
+          name: `Bill ${day}`,
+          kind: 'dd',
+          frequency: 'monthly',
+          dueDayOfMonth: day,
+          amountPence: p(1200),
+          potId: pots.main.id,
+          supplierName: 'Bills',
+          categoryId: fixture.categoryId('Housing', 'Mortgage/Rent'),
+          targetKind: 'household',
+          activeFrom: '2026-10-01',
+          actor: ACTOR,
+          now,
+        });
+      const debt = createDebt(db, {
+        counterparty: 'Parents',
+        direction: 'we_owe',
+        actor: ACTOR,
+        now,
+      });
+      editDebt(db, {
+        id: debt.id,
+        expectedVersion: 1,
+        actor: ACTOR,
+        now,
+        patch: { expectedInflow: { amountPence: p(1000), dayOfMonth: 12 } },
+      });
+      const view = getProjectionView(db, now)!;
+      const till = getCycleOutlook(db, now);
+      assert.equal(till.incomeDate, '2026-10-26');
+      assert.equal(till.commitmentsPence, p(2400));
+      assert.equal(till.freeToSpendPence, p(600)); // 2000 + support 1000 − bills 2400
+      assert.equal(till.lowDate, '2026-10-22');
+      assert.equal(till.freeToSpendPence, view.result.projectedLowPence);
+      assert.equal(till.paceText, view.paceText);
+      assert.match(till.paceText, /£221.00 a week/);
+      assert.equal(buildEntryData(db, now, ACTOR).cycle.paceText, view.paceText);
+      assert.equal(view.receiptLines.filter((line) => line.expected).length, 1);
+      assert.equal(getMoneySnapshot(db, now).householdAvailablePence, p(2000));
+      setWeeklyGroceriesPence(db, p(45), ACTOR, now);
+      const withShops = getProjectionView(db, now)!;
+      assert.ok(withShops.result.dayToDayPence > 0);
+      assert.equal(getCycleOutlook(db, now).freeToSpendPence, withShops.result.projectedLowPence);
+      assert.equal(getCycleOutlook(db, now).paceText, withShops.paceText);
+    } finally {
+      fixture.close();
+    }
+  });
+});

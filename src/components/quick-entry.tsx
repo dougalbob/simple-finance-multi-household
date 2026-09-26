@@ -105,6 +105,7 @@ export interface EntryCycleOutlook {
   /** Projected weekly shop / fuel events due before income lands (SPEC §7.3). */
   dayToDayPence: number;
   freeToSpendPence: number | null;
+  paceText: string;
   /** Rendered on the server, e.g. "Tue 30 Sep". */
   incomeDateLabel: string | null;
   lowDate: string | null;
@@ -1071,19 +1072,12 @@ function PotBalance({ pot }: { pot: EntryPotOption | null }) {
   );
 }
 
-/**
- * The household headline (SPEC §7.7): what is left once everything already
- * expected to leave before the next income has left. The income itself is
- * deliberately **not** counted — the household asked for the mortgage that
- * bounces three days before payday to be visible while standing in a shop,
- * and adding the salary back in would hide exactly that dip. The two lines
- * that make the figure up are always spelled out beneath it.
- */
+/** The shared salary-window low and pace, not a separate spending-only sum. */
 function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
   if (cycle.incomeDate === null) {
     return (
       <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
-        No expected income is scheduled yet, so there is no “before income lands” figure. Add it in
+        No salary income is scheduled yet, so there is no “lowest before pay day” figure. Add it in
         Recurring payments and it appears here.
       </p>
     );
@@ -1091,7 +1085,7 @@ function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
   if (cycle.freeToSpendPence === null) {
     return (
       <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
-        Free to spend before {cycle.incomeDateLabel}: record a balance checkpoint and this figure
+        Lowest before pay day ({cycle.incomeDateLabel}): record a balance checkpoint and this figure
         appears here.
       </p>
     );
@@ -1103,7 +1097,7 @@ function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
         <span className="min-w-0 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          Free to spend before income
+          Lowest before pay day
         </span>
         <span
           className={`min-w-0 text-xl font-semibold break-words tabular-nums sm:text-2xl ${negative ? 'text-negative' : 'text-ink'}`}
@@ -1112,8 +1106,7 @@ function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
         </span>
       </div>
       <p className="mt-1 text-xs text-ink-soft">
-        {cycle.incomeSource ?? 'Income'} lands {cycle.incomeDateLabel} (
-        {cycle.days === 1 ? '1 day' : `${cycle.days} days`}). {beforeIncomeSentence(cycle)}
+        {cycle.paceText} Salary on {cycle.incomeDateLabel} is not counted as money you can spend.
       </p>
       <p className="mt-1 text-xs text-ink-muted">
         A projection of the records in this app — never a bank balance.
@@ -1355,22 +1348,6 @@ function PanelHint({ panel, onShow }: { panel: number; onShow: (index: number) =
       </span>
     </div>
   );
-}
-
-/** What leaves the household before income lands, in one honest sentence. */
-function beforeIncomeSentence(cycle: EntryCycleOutlook): string {
-  const leaving = [
-    cycle.commitmentsPence > 0 ? `${formatPence(cycle.commitmentsPence)} of bills` : null,
-    cycle.dayToDayPence > 0
-      ? `${formatPence(cycle.dayToDayPence)} of projected shopping & fuel`
-      : null,
-  ].filter((part): part is string => part !== null);
-  const low =
-    cycle.lowDateLabel === null ? '' : ` The money bottoms out around ${cycle.lowDateLabel}.`;
-  if (leaving.length === 0) {
-    return `Nothing else is expected to leave before then.${low} Nothing coming in is counted.`;
-  }
-  return `${leaving.join(' and ')} leave before then.${low} Nothing coming in is counted.`;
 }
 
 /** The one-line "what will be saved" summary above the lines (SPEC §15.1). */

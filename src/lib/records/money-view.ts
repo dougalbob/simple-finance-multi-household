@@ -1,3 +1,4 @@
+import { weeklyPaceText } from './weekly-pace';
 import { and, asc, desc, eq, gte, isNull, lte, or } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
@@ -226,6 +227,7 @@ export interface ProjectionLine extends ProjectionScheduleLine {
 export interface ProjectionView {
   snapshot: MoneySnapshot;
   result: ProjectionResult;
+  paceText: string;
   /** The income schedule defining the planning cycle (SPEC §11.3). */
   paydayScheduleName: string | null;
   paydayScheduleId: number | null;
@@ -255,13 +257,10 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
   const today = toLocalDateString(now);
   const potLabel = new Map(snapshot.pots.map((pot) => [pot.pot.id, pot.pot.label]));
 
-  // The payday is the next expected-receipt due date (SPEC §11.3), now
-  // combined with the earliest expected debt inflow — earliest wins (the
-  // planning cycle flips to whichever money is expected next, v0.5.0). After
-  // the due pass, every unconverted instance is strictly in the future.
+  // Salary receipts anchor the cycle; borrowed support stays inside it (decision 166).
   const income = nextExpectedIncome(db, today);
   if (income === null) {
-    // No expected-receipt schedule and no expected debt inflow → no planning
+    // No expected-receipt schedule → no planning
     // cycle → no projection. The estimate still exists; the UI says exactly
     // what is missing.
     return null;
@@ -352,6 +351,7 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
   return {
     snapshot,
     result,
+    paceText: weeklyPaceText(today, result.lowDate, result.projectedLowPence),
     paydayScheduleName: income.scheduleName,
     paydayScheduleId: payday === null ? null : payday.scheduleId,
     commitmentLines: toLines(commitmentRows),
@@ -383,26 +383,8 @@ export interface CycleOutlookPot {
   outgoing: Array<{ name: string; amountPence: number; dueDate: string }>;
 }
 
-/**
- * "What is left before income lands" (SPEC §7.7, v0.9.0). The Quick Entry
- * balance is two figures, not one: the last reported checkpoint (what the
- * bank said) and this outlook — everything already expected to leave between
- * now and the next expected income, so standing in a shop with a healthy
- * checkpoint cannot hide next week's direct debit.
- *
- * `freeToSpendPence` deliberately counts **no income**: it is the dip just
- * before the money lands, which is the moment that decides whether a card
- * bounces. Adding the salary in would turn a £500-with-a-£600-mortgage-
- * pending day into a comfortable £1,800 picture and hide exactly the risk
- * the household asked to see.
- *
- * The household figure includes projected day-to-day events (§7.3), because
- * the weekly shop and the fuel fill will really happen. The per-pot figures
- * exclude them (§7.5's reasoning: groceries vary by pot and payment method,
- * and a pot-scoped figure is a transfer-planning signal). Per pot, the number
- * is `pot_watch` (SPEC §7.5) with the window taken to the next expected
- * income rather than a named payday.
- */
+/** Salary-window household low, shared with the payday engine (decision 166).
+ * Per-pot watches remain bills-only transfer signals. */
 export interface CycleOutlook {
   asOf: Date;
   /** The next expected income (SPEC §11.3) — null when none is scheduled. */
@@ -414,9 +396,10 @@ export interface CycleOutlook {
   householdAvailablePence: number | null;
   commitmentsPence: number;
   dayToDayPence: number;
-  /** available − commitments − projected shops/fills inside the window. */
+  /** The shared engine’s lowest point, including support inside the salary window. */
   freeToSpendPence: number | null;
-  /** The day the money bottoms out (the last outgoing before income); null when nothing is due. */
+  paceText: string;
+  /** Earliest day sharing the projected low, including today; null without a projection. */
   lowDate: string | null;
   pots: CycleOutlookPot[];
   commitments: Array<{
@@ -471,10 +454,7 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
     };
   });
 
-  const dueDates = [
-    ...commitments.map((line) => line.dueDate),
-    ...dayToDayEvents.map((event) => event.dueDate),
-  ].sort((a, b) => a.localeCompare(b));
+  const projection = getProjectionView(db, now);
 
   return {
     asOf: now,
@@ -484,11 +464,9 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
     householdAvailablePence: snapshot.householdAvailablePence,
     commitmentsPence,
     dayToDayPence,
-    freeToSpendPence:
-      income === null || snapshot.householdAvailablePence === null
-        ? null
-        : snapshot.householdAvailablePence - commitmentsPence - dayToDayPence,
-    lowDate: dueDates[dueDates.length - 1] ?? null,
+    freeToSpendPence: projection?.result.projectedLowPence ?? null,
+    lowDate: projection?.result.lowDate ?? null,
+    paceText: projection?.paceText ?? '',
     pots,
     commitments,
     dayToDayEvents: dayToDayEvents.map(({ name, amountPence, dueDate }) => ({
@@ -618,16 +596,12 @@ function windowLines(
     }));
 }
 
-/**
- * The next money the household expects in (SPEC §11.3, §10.2): the earliest
- * of the unconverted receipt instances and a debt's expected support — the
- * planning-cycle payday. null when nothing is expected at all.
- */
+/** The next scheduled salary receipt; debt expectations never define payday. */
 interface NextIncome {
   date: string;
-  /** The schedule's name, or "support from {counterparty}" for a debt. */
+  /** The salary receipt schedule's name. */
   source: string;
-  /** Set only when the next income is an income schedule, not an expectation. */
+  /** The receipt schedule defining payday. */
   scheduleId: number | null;
   scheduleName: string | null;
 }
@@ -664,7 +638,7 @@ function nextReceiptScheduleInstance(
 
 /**
  * The next **scheduled income** date (Horizon's default, SPEC §7.6, decision
- * 150): receipt schedules only. Unlike `nextExpectedIncome` (§7.2/§7.7) a
+ * 150): receipt schedules only. Like `nextExpectedIncome` (§7.2/§7.7), a
  * debt's expected support never counts — the household anchors the horizon
  * on the salary, and borrowed money is never income (§10.2). null when no
  * receipt schedule has an upcoming instance.
@@ -675,8 +649,6 @@ export function nextScheduledIncomeDate(db: Db, today: string): string | null {
 
 function nextExpectedIncome(db: Db, today: string): NextIncome | null {
   const schedule = nextReceiptScheduleInstance(db, today);
-  const inflow = expectedInflowLines(db, today, null, null)[0] ?? null;
-
   const scheduleOption: NextIncome | null =
     schedule === undefined
       ? null
@@ -686,13 +658,7 @@ function nextExpectedIncome(db: Db, today: string): NextIncome | null {
           scheduleId: schedule.scheduleId,
           scheduleName: schedule.scheduleName,
         };
-  const inflowOption: NextIncome | null =
-    inflow === null
-      ? null
-      : { date: inflow.dueDate, source: inflow.name, scheduleId: null, scheduleName: null };
-  if (scheduleOption === null) return inflowOption;
-  if (inflowOption === null) return scheduleOption;
-  return scheduleOption.date <= inflowOption.date ? scheduleOption : inflowOption;
+  return scheduleOption;
 }
 
 /**

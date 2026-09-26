@@ -1,3 +1,15 @@
+# Handoff: v0.22.0 salary-window planning (decision 166)
+
+The household confirmed the £1,000 on the 12th is expected borrowing from parents, not a second
+income schedule. Payday and till now anchor on the next salary receipt; Horizon's default is unchanged.
+Expected support remains flagged inside the window. Till and Overview consume the payday engine's
+low and shared weekly pace; the old no-inflows subtraction is gone. Pace floors whole pounds using
+weeks to the earliest low date and protects zero. Estimate arithmetic (decision 165) is untouched.
+No schema/migration/setting. Release facts belong in `RELEASE_NOTES_v0.22.0.md` after Publish verification.
+The agent owns publication this sitting; do not ask the household to merge/tag/publish.
+
+---
+
 # Handoff: a same-day transfer recorded after a checkpoint now moves the inbound pot
 
 Date: 2026-09-26. Branch: `arena/01a0df10-simple-finance`, from `main` @ `063ff5d` (v0.21.0 merge).

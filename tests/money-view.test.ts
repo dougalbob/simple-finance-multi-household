@@ -333,11 +333,11 @@ describe('money view: expected support before the first borrowing (v0.7.0)', () 
     const { db } = await setUp();
     // The morning after payday: the September salary (Fri 25 Sep) has landed,
     // so the next receipt is Monday 26 October — and the 10th's support is
-    // earlier than that, so the cycle runs to the money that comes next.
+    // earlier than that, but never ends the salary window.
     const at = new Date('2026-09-26T10:00:00+01:00');
     const view = getProjectionView(db, at);
     assert.ok(view);
-    assert.equal(view.result.paydayDate, '2026-10-09'); // Sat 10 Oct → Fri 9 Oct (decision 7)
+    assert.equal(view.result.paydayDate, '2026-10-26'); // salary, not borrowed support
     const expected = view.receiptLines.filter((line) => line.expected === true);
     assert.equal(expected.length, 1);
     assert.equal(expected[0]?.dueDate, '2026-10-09');

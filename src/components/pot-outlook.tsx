@@ -2,15 +2,7 @@ import { formatPence } from '@/lib/money';
 import type { CycleOutlook, CycleOutlookPot } from '@/lib/records/money-view';
 import { formatShortLocalDate } from '@/lib/time';
 
-/**
- * The "before income lands" figures (SPEC §7.7, v0.9.0), shared by every
- * review surface — the Overview's mini-balances and the till — so the same
- * arithmetic is never rendered two different ways. The number is
- * the dip: everything already expected to leave before the next income has
- * left, with nothing coming in counted.
- */
-
-/** The household-wide headline, with the two figures that make it up. */
+/** Shared salary-window low and weekly pace (SPEC §7.7, decision 166). */
 export function CycleOutlookLine({
   outlook,
   className,
@@ -21,7 +13,7 @@ export function CycleOutlookLine({
   if (outlook.incomeDate === null) {
     return (
       <p className="rounded-lg bg-canvas px-3 py-2 text-sm text-ink-soft">
-        No expected income is scheduled yet, so there is no “before income lands” figure. Add the
+        No salary income is scheduled yet, so there is no “lowest before pay day” figure. Add the
         income schedule in Recurring payments and it appears here.
       </p>
     );
@@ -29,7 +21,7 @@ export function CycleOutlookLine({
   if (outlook.freeToSpendPence === null) {
     return (
       <p className="rounded-lg bg-canvas px-3 py-2 text-sm text-ink-soft">
-        Record a balance checkpoint and the “before income lands” figure appears here.
+        Record a balance checkpoint and the “lowest before pay day” figure appears here.
       </p>
     );
   }
@@ -42,13 +34,10 @@ export function CycleOutlookLine({
           : 'bg-canvas text-ink-body'
       } ${className ?? ''}`}
     >
-      Free to spend before income lands ({formatShortLocalDate(outlook.incomeDate)}):{' '}
-      <span className="font-semibold tabular-nums">{formatPence(outlook.freeToSpendPence)}</span> —
-      after {formatPence(outlook.commitmentsPence)} of bills
-      {outlook.dayToDayPence > 0
-        ? ` and ${formatPence(outlook.dayToDayPence)} of projected shopping & fuel`
-        : ''}
-      , counting nothing coming in.
+      Lowest before pay day ({formatShortLocalDate(outlook.incomeDate)}):{' '}
+      <span className="font-semibold tabular-nums">{formatPence(outlook.freeToSpendPence)}</span>.{' '}
+      {outlook.paceText} Salary on {formatShortLocalDate(outlook.incomeDate)} is not counted as
+      money you can spend.
     </p>
   );
 }

@@ -112,12 +112,12 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-positive">
-            Available now (estimate)
+            Household total now
           </p>
           <h2 id="money-heading" className="text-xl font-semibold">
             {money.householdAvailablePence === null
               ? 'Waiting for your first checkpoint'
-              : `Household: ${formatPence(money.householdAvailablePence)}`}
+              : formatPence(money.householdAvailablePence)}
           </h2>
         </div>
         <span className="text-xs text-ink-muted">

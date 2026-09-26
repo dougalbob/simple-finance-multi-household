@@ -135,7 +135,7 @@ function MoneyRow({
         <h2 id="money-heading" className="text-xl font-semibold">
           {money.householdAvailablePence === null
             ? 'Waiting for your first checkpoint'
-            : `Household available now: ${formatPence(money.householdAvailablePence)}`}
+            : `Household total now: ${formatPence(money.householdAvailablePence)}`}
         </h2>
         <Link href="/pots" className="text-sm font-medium text-accent hover:underline">
           Accounts &amp; Pots →
