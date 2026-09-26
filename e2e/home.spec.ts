@@ -817,7 +817,7 @@ test.describe('mobile quick entry', () => {
   }) => {
     await page.goto('/');
     await waitForTill(page);
-    const before = await page.getByRole('heading', { name: /household:/i }).textContent();
+    const before = await page.locator('#money-heading').textContent();
     if (before === null) throw new Error('household heading missing');
     const beforePence = Math.round(parsePounds(before) * 100);
 
@@ -832,7 +832,7 @@ test.describe('mobile quick entry', () => {
     // SPEC §7.1: the seed checkpoints were written down before this transfer,
     // so both legs count. The household total does not move. (A credit
     // recorded *before* a same-day checkpoint is the one that stays absorbed.)
-    const after = await page.getByRole('heading', { name: /household:/i }).textContent();
+    const after = await page.locator('#money-heading').textContent();
     if (after === null) throw new Error('household heading missing');
     expect(Math.round(parsePounds(after) * 100)).toBe(beforePence);
   });
