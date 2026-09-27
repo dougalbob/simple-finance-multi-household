@@ -40,8 +40,15 @@ test.describe('all transactions', () => {
     await expect(corner.getByRole('cell').last()).not.toHaveText('—');
 
     // A converted standing order keeps its code and links back to the
-    // schedule. `.first()`: the `desktop` project moves this schedule's due day
-    // to the 21st, which back-fills a second converted row inside the window.
+    // schedule. The seed dates this schedule so its newest conversion is about
+    // a week behind today on *every* day of the year (decision 170 ·
+    // `scripts/e2e-seed-dates.ts`): with a fixed due day the newest conversion
+    // could sit one day outside this page's default last-30-days window and the
+    // row would not exist at all — which is what happened on 2026-09-27.
+    // `.first()`: an older conversion can share the window on some days. The
+    // `desktop` project's move of this schedule to the 21st adds nothing here —
+    // a cadence edit regenerates only the forward window and never invents past
+    // instances (SPEC §11.1, decision 162).
     const phone = table
       .locator('tr', { has: page.getByRole('link', { name: /Phone plan/ }) })
       .first();

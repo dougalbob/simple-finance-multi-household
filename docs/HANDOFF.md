@@ -1,8 +1,10 @@
-# Handoff: v0.22.1 category picker, debt deletion, honest loan status (decisions 167–169)
+# Handoff: v0.22.1 category picker, debt deletion, honest loan status (decisions 167–170)
 
-**Branch:** `arena/01a0dfd7-simple-finance`, from `main` @ `0f7070f` (v0.22.0 merge).
+**Branch:** `arena/01a0e1ea-simple-finance`, from `main` @ `0f7070f` (v0.22.0 merge). This branch
+carries the three fixes originally prepared on `arena/01a0dfd7-simple-finance` (PR #79, superseded
+and closed) plus decision 170, the repair that makes the browser suite green again.
 
-Three narrowly scoped fixes, no schema change:
+Three narrowly scoped app fixes, no schema change — and one test-harness fix:
 
 1. **Category rename picker selects wrong visible category (decision 169):** Settings → Category tree → Rename: option values are `parent:<id>` / `child:<id>` but controlled value was bare `String(categoryId)`. Browser displayed first parent while hidden ID/version referred to intended category. Fixed by storing `categoryKind`, making select value `${kind}:${id}`, syncing version when tree updates (save → rename again without refresh no stale failure), and adding hydration-ready guard `data-category-ready` + `inert` with `waitForCategoryEditor`. Switching operations clears unintended target; add-parent/add-child and child retirement still work; parent retirement remains prohibited.
 
@@ -10,7 +12,9 @@ Three narrowly scoped fixes, no schema change:
 
 3. **A loan awaiting first payment must not say settled (decision 168):** Martin & Sue (we owe) settled, no movements yet — bridging pending estate settlement. `debtBalanceLabel` returned settled for any zero balance. Now returns Awaiting first payment for `we_owe` with no effective movements, Awaiting first loan for `they_owe`; settled reserved for loan with actual movement history whose balance is zero. Voided-only history displays unstarted but still blocks deletion per decision 167. No first payment invented, no pot estimate increased. Expected support still appears in projections as expected borrowing where configured, never received income. First borrowing/lending moves to outstanding; full repayment to settled; overpayment distinguishable. Lists/pickers use consistent wording.
 
-**Tests:** 528 unit tests (514 + 14 new: debt deletion and honest status), browser tests: category-picker (4 specs), debt-lifecycle (6 specs) plus existing 78. Domain tests cover empty delete, cancel, expected-support plan deletion, live/voided block, unrelated data unchanged, version guard, race guard, and awaiting vs settled vs overpaid. No schema/migration.
+4. **The browser suite had an expiry date (decision 170, tests only — no app change):** `e2e/transactions.spec.ts` went red on 2026-09-27 and stayed red across four pushes of PR #79, which read as a regression from the fixes above. It was not: the same spec fails identically on pristine `main` @ `0f7070f`. The seeded "Phone plan" standing order was dated the **28th of the month**, so its newest converted payment was the 28th of the *previous* month — exactly 30 days behind today on the 27th of any month whose predecessor has 31 days, i.e. one day outside All Transactions' default last-30-days window. The row the spec asserts on did not exist. Nor could the next payment rescue it: `desktop.spec.ts` moves that schedule to the 21st earlier in the same run, deleting the upcoming 28th, and a cadence edit never invents past instances (decision 162). Seeded dates are now relative with a guaranteed margin (`scripts/e2e-seed-dates.ts` · `recentMonthlyDueDay`), guarded for every day of 2025–2028 by `tests/e2e-seed-dates.test.ts`, and the spec's stale "back-fills a second converted row" comment is corrected. **Read decision 170 before adding any seeded date a spec asserts on.**
+
+**Tests:** 534 unit tests (528 from the three fixes + 6 new seed-date guards), all green. Browser: **88 tests green locally** (78 existing + category-picker 4 + debt-lifecycle 6) via the SANDBOX entry 8 recipe — run them there, not in CI: ~5 minutes against ~6 minutes of CI *per push*, and CI job logs cannot be downloaded in this sandbox (entry 15). Domain tests cover empty delete, cancel, expected-support plan deletion, live/voided block, unrelated data unchanged, version guard, race guard, and awaiting vs settled vs overpaid. No schema/migration.
 
 **Published as v0.22.1 on _TBD_ from merge _TBD_ (PR _TBD_), Publish run _TBD_ green. `v0.22.1`, `latest`, `sha-<TBD>` share `sha256:<TBD>`, different from v0.22.0. Full facts in `RELEASE_NOTES_v0.22.1.md`. Household steps: backup, then Force Update; change old image pins first.**
 
