@@ -203,10 +203,7 @@ export function editTask(db: Db, input: TaskVersionInput & { patch: EditTaskPatc
 }
 
 /** Tick the box: the task is done, by whom, when, and optionally why. */
-export function completeTask(
-  db: Db,
-  input: TaskVersionInput & { note?: string | null },
-): Task {
+export function completeTask(db: Db, input: TaskVersionInput & { note?: string | null }): Task {
   const now = input.now ?? new Date();
   const actor = checkedActor(input.actor);
   const note = checkedCompletionNote(input.note ?? null);
@@ -492,9 +489,7 @@ function checkedDetail(raw: string | null): string | null {
     .trim();
   if (detail === '') return null;
   if (detail.length > MAX_TASK_DETAIL_LENGTH) {
-    throw new InvalidTaskInputError(
-      `Keep the detail to ${MAX_TASK_DETAIL_LENGTH} characters.`,
-    );
+    throw new InvalidTaskInputError(`Keep the detail to ${MAX_TASK_DETAIL_LENGTH} characters.`);
   }
   return detail;
 }

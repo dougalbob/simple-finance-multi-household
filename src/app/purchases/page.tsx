@@ -3,6 +3,7 @@ import { RecentEntryActions } from '@/components/record-forms';
 import { AttachmentForm } from '@/components/attachment-form';
 import { FuelDetailsForm, type FuelDetailsFormProps } from '@/components/fuel-details-form';
 import { PurchaseFilterForm } from '@/components/purchase-filter-form';
+import { OpenTaskList, TaskCreateForm } from '@/components/task-forms';
 import { listAuditForEntity, type AuditEntry } from '@/lib/audit';
 import { formatPence } from '@/lib/money';
 import { currentUserFromRequest } from '@/lib/auth/next';
@@ -16,6 +17,7 @@ import { listSuppliersForEntry } from '@/lib/records/suppliers';
 import { targetLabel, targetNames } from '@/lib/records/targets';
 import { listStoredAttachments, type StoredAttachment } from '@/lib/records/attachments';
 import { fuelRowDetails, getFuelRowContext } from '@/lib/records/fuel';
+import { getTasksBySubject, type TaskRowView } from '@/lib/records/tasks-view';
 import { listVehicles } from '@/lib/records/vehicles';
 import { formatInstantLocal, toLocalDateString } from '@/lib/time';
 
@@ -137,6 +139,8 @@ export default async function PurchasesPage({
   const supplierNames = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
   const personNames = new Map(people.map((person) => [person.id, person.label]));
   const fuelContext = getFuelRowContext(db);
+  // "Chase the refund" (decision 175): open tasks about each listed purchase.
+  const tasksByPurchase = getTasksBySubject(db, 'purchase', now);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
@@ -217,6 +221,7 @@ export default async function PurchasesPage({
                     attachments={listStoredAttachments(db, purchase.id)}
                     fuel={fuelRowDetails(fuelContext, purchase, allocations)}
                     history={listAuditForEntity(db, 'purchase', purchase.id)}
+                    openTasks={tasksByPurchase.get(purchase.id)?.open ?? []}
                     fromSchedule={purchase.scheduleInstanceId !== null}
                     isRefund={purchase.refundOfPurchaseId !== null}
                     voidedAt={purchase.voidedAt}
@@ -264,6 +269,8 @@ interface PurchaseRowProps {
   /** Odometer, litres and mpg — fuel purchases only (v0.10.0). */
   fuel: FuelDetailsFormProps | null;
   history: AuditEntry[];
+  /** Open tasks about this purchase — "Chase the refund" (v0.25.0). */
+  openTasks: TaskRowView[];
   people: Array<{ id: number; label: string }>;
   vehicles: Array<{ id: number; label: string }>;
   categories: Array<{ id: number; parentName: string; childName: string }>;
@@ -302,6 +309,26 @@ function PurchaseRow(props: PurchaseRowProps) {
         {props.note !== '' ? <p className="mt-0.5 text-xs text-ink-muted">{props.note}</p> : null}
         {props.fuel !== null ? <FuelDetailsForm {...props.fuel} /> : null}
         <AttachmentForm purchaseId={props.purchaseId} attachments={props.attachments} />
+        {props.openTasks.length > 0 ? (
+          <div className="mt-1.5 max-w-md text-ink-body">
+            <p className="mb-1 text-xs font-medium text-ink-muted">Tasks</p>
+            <OpenTaskList tasks={props.openTasks} showSubject={false} />
+          </div>
+        ) : null}
+        {props.voidedAt === null ? (
+          <details className="mt-1">
+            <summary className="cursor-pointer text-xs font-medium text-ink-muted hover:text-ink-emphasis">
+              Add a task
+            </summary>
+            <div className="mt-1 max-w-md">
+              <TaskCreateForm
+                idPrefix={`purchase-${props.purchaseId}-task`}
+                subject={`purchase:${props.purchaseId}`}
+                titlePlaceholder="e.g. Chase the refund"
+              />
+            </div>
+          </details>
+        ) : null}
         <details className="mt-1">
           <summary className="cursor-pointer text-xs font-medium text-ink-muted hover:text-ink-emphasis">
             History

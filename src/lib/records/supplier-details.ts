@@ -19,6 +19,15 @@ import { isValidLocalDate } from '../time';
 export const INTERACTION_CHANNELS = ['call', 'email', 'letter', 'in_person', 'other'] as const;
 export type InteractionChannel = (typeof INTERACTION_CHANNELS)[number];
 
+/** How each channel reads on the supplier card's log. */
+export const INTERACTION_CHANNEL_LABELS: Record<InteractionChannel, string> = {
+  call: 'Phone call',
+  email: 'Email',
+  letter: 'Letter',
+  in_person: 'In person',
+  other: 'Other',
+};
+
 export const MAX_REFERENCE_LABEL_LENGTH = 100;
 export const MAX_REFERENCE_VALUE_LENGTH = 500;
 export const MAX_INTERACTION_SUMMARY_LENGTH = 1000;

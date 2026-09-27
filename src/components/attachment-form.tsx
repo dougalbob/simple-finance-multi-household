@@ -73,7 +73,8 @@ export function AttachmentForm({
   allowUpload?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(uploadAttachmentAction, initialActionState);
-  const kind = supplierId !== undefined ? 'supplier' : receiptId !== undefined ? 'receipt' : 'purchase';
+  const kind =
+    supplierId !== undefined ? 'supplier' : receiptId !== undefined ? 'receipt' : 'purchase';
   const words = OWNER_WORDS[kind];
   const ownerId = (supplierId ?? receiptId ?? purchaseId) as number;
   const inputId = `attachment-file-${kind}-${ownerId}`;

@@ -37,12 +37,12 @@ export interface TaskRowView {
   title: string;
   detail: string | null;
   dueDate: string | null;
-  /** "Sat 1 Nov" (with the year when it is not this year), or null when undated. */
+  /** "Sun 1 Nov" (with the year when it is not this year), or null when undated. */
   dueDateLabel: string | null;
   due: TaskDue;
   subjectKind: string;
   subjectId: number | null;
-  /** `EnergyCo`, `Vehicle A`, `£84.20 at EnergyCo on Mon 1 Sep`, `household`. */
+  /** `EnergyCo`, `Vehicle A`, `£84.20 at EnergyCo on Tue 1 Sept`, `household`. */
   subjectLabel: string;
   /** Where the subject lives — null for the household. */
   subjectHref: string | null;
@@ -65,7 +65,7 @@ export interface TaskViewContext {
   actorNames: ReadonlyMap<string, string>;
 }
 
-/** "£84.20 at EnergyCo on Mon 1 Sep" — the words a purchase task is about. */
+/** "£84.20 at EnergyCo on Tue 1 Sept" — the words a purchase task is about. */
 export function purchaseSubjectName(
   purchase: { totalPence: number; occurredDate: string; supplierName: string | null },
   today: string,
@@ -183,8 +183,7 @@ export function taskRowView(task: Task, context: TaskViewContext): TaskRowView {
     title: task.title,
     detail: task.detail,
     dueDate: task.dueDate,
-    dueDateLabel:
-      task.dueDate === null ? null : formatShortLocalDateWithYear(task.dueDate, today),
+    dueDateLabel: task.dueDate === null ? null : formatShortLocalDateWithYear(task.dueDate, today),
     due: taskDue(task.dueDate, today),
     subjectKind: task.subjectKind,
     subjectId: task.subjectId,
@@ -267,7 +266,10 @@ export function getNoticedItems(db: Db, now: Date): NoticedItem[] {
       });
     }
     if (vehicle.fillsWithoutFullTank !== null) {
-      const query = new URLSearchParams({ targetKind: 'vehicle', targetId: String(vehicle.vehicleId) });
+      const query = new URLSearchParams({
+        targetKind: 'vehicle',
+        targetId: String(vehicle.vehicleId),
+      });
       if (fuelCategoryId !== null) query.set('categoryId', String(fuelCategoryId));
       items.push({
         key: `fuel-full-tank-${vehicle.vehicleId}`,

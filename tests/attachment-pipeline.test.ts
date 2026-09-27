@@ -13,6 +13,7 @@ import { createPerson } from '../src/lib/records/people';
 import { createPot } from '../src/lib/records/pots';
 import { createPurchase } from '../src/lib/records/purchases';
 import { createReceipt } from '../src/lib/records/receipts';
+import { createSupplier } from '../src/lib/records/suppliers';
 import {
   AttachmentInputError,
   AttachmentNotFoundError,
@@ -21,6 +22,7 @@ import {
   isSafeFileKey,
   listStoredAttachments,
   listStoredReceiptAttachments,
+  listStoredSupplierAttachments,
   readAttachmentBytes,
   sanitizeOriginalName,
   sniffAttachmentMime,
@@ -637,3 +639,138 @@ function purchaseIn(
   });
   return saved.purchase.id;
 }
+
+describe('documents on suppliers (v0.25.0, decision 175)', () => {
+  it('attaches a letter or policy to a supplier through the same pipeline', async () => {
+    const fx = await createHouseholdFixture('alex@example.com');
+    try {
+      const documentsDir = path.join(path.dirname(fx.handle.raw.name), 'documents');
+      const energyCo = createSupplier(fx.db, { name: 'EnergyCo', actor: 'alex@example.com' });
+      const insurerCo = createSupplier(fx.db, { name: 'InsurerCo', actor: 'alex@example.com' });
+      const letter = await storeAttachment({
+        db: fx.db,
+        supplierId: energyCo.id,
+        originalName: 'Tariff letter.pdf',
+        bytes: PDF_BYTES,
+        actor: 'alex@example.com',
+        documentsDir,
+      });
+      await storeAttachment({
+        db: fx.db,
+        supplierId: energyCo.id,
+        originalName: 'Meter photo.jpg',
+        bytes: JPEG_BYTES,
+        actor: 'sam@example.com',
+        documentsDir,
+      });
+      assert.ok(existsSync(path.join(documentsDir, letter.fileKey)));
+
+      const bySupplier = listStoredSupplierAttachments(fx.db, [energyCo.id, insurerCo.id]);
+      assert.deepEqual(
+        bySupplier.get(energyCo.id)?.map((doc) => doc.originalName),
+        ['Tariff letter.pdf', 'Meter photo.jpg'],
+      );
+      assert.equal(bySupplier.get(insurerCo.id), undefined);
+      assert.equal(listStoredSupplierAttachments(fx.db, []).size, 0);
+
+      const row = fx.db.select().from(attachments).where(eq(attachments.id, letter.id)).get();
+      assert.equal(row?.supplierId, energyCo.id);
+      assert.equal(row?.purchaseId, null);
+      assert.equal(row?.receiptId, null);
+      const audit = fx.db
+        .select()
+        .from(auditEntries)
+        .where(eq(auditEntries.action, 'attachment.store'))
+        .all();
+      assert.deepEqual(
+        audit.map((entry) => [entry.entity, entry.entityId]),
+        [
+          ['supplier', String(energyCo.id)],
+          ['supplier', String(energyCo.id)],
+        ],
+      );
+
+      const removed = await deleteAttachment({
+        db: fx.db,
+        id: letter.id,
+        actor: 'alex@example.com',
+        documentsDir,
+      });
+      assert.equal(removed.deleted, true);
+      assert.deepEqual(
+        listStoredSupplierAttachments(fx.db, [energyCo.id])
+          .get(energyCo.id)
+          ?.map((doc) => doc.originalName),
+        ['Meter photo.jpg'],
+      );
+      const deletion = fx.db
+        .select()
+        .from(auditEntries)
+        .where(eq(auditEntries.action, 'attachment.delete'))
+        .get();
+      assert.equal(deletion?.entity, 'supplier');
+      assert.equal(deletion?.entityId, String(energyCo.id));
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('takes PDF, JPEG or PNG only, for a supplier that exists, and one owner', async () => {
+    const fx = await createHouseholdFixture('alex@example.com');
+    try {
+      const documentsDir = path.join(path.dirname(fx.handle.raw.name), 'documents');
+      const energyCo = createSupplier(fx.db, { name: 'EnergyCo', actor: 'alex@example.com' });
+      const purchase = purchaseIn(fx.db, fx);
+      // No text/plain: a pasted policy number belongs in a reference pair.
+      await assert.rejects(
+        storeAttachment({
+          db: fx.db,
+          supplierId: energyCo.id,
+          originalName: 'policy.txt',
+          bytes: Buffer.from('Policy number: EXAMPLE-0001\n'),
+          actor: 'alex@example.com',
+          documentsDir,
+        }),
+        /Only genuine PNG, JPEG or PDF/,
+      );
+      await assert.rejects(
+        storeAttachment({
+          db: fx.db,
+          supplierId: 9999,
+          originalName: 'terms.pdf',
+          bytes: PDF_BYTES,
+          actor: 'alex@example.com',
+          documentsDir,
+        }),
+        /supplier no longer exists/,
+      );
+      await assert.rejects(
+        storeAttachment({
+          db: fx.db,
+          supplierId: energyCo.id,
+          purchaseId: purchase,
+          originalName: 'terms.pdf',
+          bytes: PDF_BYTES,
+          actor: 'alex@example.com',
+          documentsDir,
+        }),
+        /exactly one purchase, income record or supplier/,
+      );
+      // The database refuses two owners too, whatever the code does.
+      assert.throws(
+        () =>
+          fx.handle.raw
+            .prepare(
+              `INSERT INTO attachments (purchase_id, supplier_id, file_key, original_name, mime, size_bytes, sha256, created_by, created_at)
+               VALUES (?, ?, '00000000-0000-4000-8000-000000000001.pdf', 'x.pdf', 'application/pdf', 1, 'x', 'a', 0)`,
+            )
+            .run(purchase, energyCo.id),
+        /CHECK constraint/,
+      );
+      assert.equal(listStoredSupplierAttachments(fx.db, [energyCo.id]).size, 0);
+      assert.equal(listStoredAttachments(fx.db, purchase).length, 0);
+    } finally {
+      fx.close();
+    }
+  });
+});

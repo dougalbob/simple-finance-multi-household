@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { auditEntries } from '../src/lib/db/schema';
+import { auditEntries, tasks } from '../src/lib/db/schema';
 import {
   InvalidSupplierDetailError,
   addSupplierInteraction,
   addSupplierReference,
   listSupplierInteractions,
   listSupplierReferences,
-  upcomingSupplierFollowUps,
 } from '../src/lib/records/supplier-details';
+import { listTasks, sortTasksByDue, taskDue } from '../src/lib/records/tasks';
 import {
   SupplierNotFoundError,
   createSupplier,
@@ -115,10 +115,10 @@ describe('supplier reference pairs (SPEC §21.1)', () => {
 });
 
 describe('supplier interaction log (SPEC §21.2)', () => {
-  it('records channel, summary, outcome and a follow-up date', async () => {
+  it('records channel, summary and outcome; a follow-up date becomes a task (decision 175)', async () => {
     const { fx, supplier } = await withSupplier();
     try {
-      const interaction = addSupplierInteraction(fx.db, {
+      const { interaction, followUpTask } = addSupplierInteraction(fx.db, {
         supplierId: supplier.id,
         channel: 'call',
         summary: '  Asked about the renewal premium  ',
@@ -130,8 +130,18 @@ describe('supplier interaction log (SPEC §21.2)', () => {
       assert.equal(interaction.summary, 'Asked about the renewal premium');
       assert.equal(interaction.outcome, 'Quoted £312.40');
       assert.equal(interaction.createdBy, ACTOR);
-      assert.equal(interaction.followUpDate, '2026-10-01');
       assert.equal(interaction.occurredAt.toISOString(), '2026-09-20T09:15:00.000Z');
+      assert.ok(!('followUpDate' in interaction), 'the log no longer carries the date');
+
+      assert.ok(followUpTask !== null);
+      assert.equal(followUpTask.title, 'Follow up with InsurerCo');
+      assert.equal(followUpTask.detail, 'Asked about the renewal premium');
+      assert.equal(followUpTask.dueDate, '2026-10-01');
+      assert.equal(followUpTask.subjectKind, 'supplier');
+      assert.equal(followUpTask.subjectId, supplier.id);
+      assert.equal(followUpTask.relatedInteractionId, interaction.id);
+      assert.equal(followUpTask.createdBy, ACTOR);
+      assert.equal(followUpTask.completedAt, null);
 
       const audit = fx.db
         .select()
@@ -140,6 +150,31 @@ describe('supplier interaction log (SPEC §21.2)', () => {
         .all();
       assert.equal(audit.length, 1);
       assert.match(audit[0]!.summary, /call/);
+      assert.match(audit[0]!.summary, /Follow up with InsurerCo/);
+      const taskAudit = fx.db
+        .select()
+        .from(auditEntries)
+        .where(eq(auditEntries.action, 'task.create'))
+        .all();
+      assert.equal(taskAudit.length, 1);
+      assert.equal(taskAudit[0]!.entityId, String(followUpTask.id));
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('logs an interaction with no follow-up without creating a task', async () => {
+    const { fx, supplier } = await withSupplier();
+    try {
+      const { followUpTask } = addSupplierInteraction(fx.db, {
+        supplierId: supplier.id,
+        channel: 'email',
+        summary: 'Sent the meter reading',
+        followUpDate: '   ',
+        actor: ACTOR,
+      });
+      assert.equal(followUpTask, null);
+      assert.equal(fx.db.select().from(tasks).all().length, 0);
     } finally {
       fx.close();
     }
@@ -180,12 +215,13 @@ describe('supplier interaction log (SPEC §21.2)', () => {
         InvalidSupplierDetailError,
       );
       assert.equal(listSupplierInteractions(fx.db, supplier.id).length, 0);
+      assert.equal(fx.db.select().from(tasks).all().length, 0, 'no half-saved follow-up');
     } finally {
       fx.close();
     }
   });
 
-  it('lists newest first and surfaces only future follow-ups, soonest first', async () => {
+  it('lists newest first; every follow-up stays an open task, a passed one first', async () => {
     const { fx, supplier } = await withSupplier();
     try {
       const other = createSupplier(fx.db, { name: 'BroadbandCo', actor: ACTOR });
@@ -235,12 +271,23 @@ describe('supplier interaction log (SPEC §21.2)', () => {
         ['Chased again', 'Sent the paperwork'],
       );
 
-      const followUps = upcomingSupplierFollowUps(fx.db, '2026-09-20');
+      // The v0.24.0 defect: every list filtered follow-ups to `>= today`, so
+      // the 1 September promise had silently vanished. As a task it leads.
+      const names = new Map([
+        [supplier.id, 'InsurerCo'],
+        [other.id, 'BroadbandCo'],
+      ]);
+      const open = sortTasksByDue(listTasks(fx.db), '2026-09-20');
       assert.deepEqual(
-        followUps.map((row) => `${row.followUpDate}:${row.supplierName}`),
-        ['2026-09-22:BroadbandCo', '2026-09-25:InsurerCo', '2026-10-05:InsurerCo'],
+        open.map((task) => `${task.dueDate}:${names.get(task.subjectId!)}`),
+        [
+          '2026-09-01:BroadbandCo',
+          '2026-09-22:BroadbandCo',
+          '2026-09-25:InsurerCo',
+          '2026-10-05:InsurerCo',
+        ],
       );
-      assert.equal(followUps[0]!.channel, 'call');
+      assert.equal(taskDue(open[0]!.dueDate, '2026-09-20').label, 'Overdue by 19 days');
     } finally {
       fx.close();
     }

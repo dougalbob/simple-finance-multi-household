@@ -396,9 +396,7 @@ export function listStoredSupplierAttachments(
       sha256: attachments.sha256,
     })
     .from(attachments)
-    .where(
-      and(inArray(attachments.supplierId, [...supplierIds]), eq(attachments.state, 'stored')),
-    )
+    .where(and(inArray(attachments.supplierId, [...supplierIds]), eq(attachments.state, 'stored')))
     .orderBy(asc(attachments.id))
     .all();
   for (const { supplierId, ...attachment } of rows) {
@@ -416,9 +414,13 @@ function resolveOwner(input: {
   supplierId?: number;
 }): AttachmentOwner {
   const owners: AttachmentOwner[] = [
-    ...(input.purchaseId !== undefined ? [{ kind: 'purchase' as const, id: input.purchaseId }] : []),
+    ...(input.purchaseId !== undefined
+      ? [{ kind: 'purchase' as const, id: input.purchaseId }]
+      : []),
     ...(input.receiptId !== undefined ? [{ kind: 'receipt' as const, id: input.receiptId }] : []),
-    ...(input.supplierId !== undefined ? [{ kind: 'supplier' as const, id: input.supplierId }] : []),
+    ...(input.supplierId !== undefined
+      ? [{ kind: 'supplier' as const, id: input.supplierId }]
+      : []),
   ];
   if (owners.length !== 1) {
     throw new AttachmentInputError(

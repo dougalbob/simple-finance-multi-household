@@ -78,7 +78,7 @@ export function formatShortLocalDate(dateString: string): string {
 
 /**
  * `formatShortLocalDate`, plus the year when the date is not in `today`'s
- * year: "Sat 1 Nov" this year, "Tue 5 Jan 2027" next. A task due next
+ * year: "Sun 1 Nov" this year, "Tue 5 Jan 2027" next. A task due next
  * January or an interaction logged last spring must not read as this year's.
  */
 export function formatShortLocalDateWithYear(dateString: string, today: string): string {
