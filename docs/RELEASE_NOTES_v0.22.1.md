@@ -1,12 +1,13 @@
 # Release notes — v0.22.1 (category picker, debt deletion, honest loan status)
 
-**Published:** _to be filled after Publish green_. Publish run _TBD_ — _to be filled_.
-**Merge commit:** _TBD_ (PR _TBD_; short SHA _TBD_).
+**Published:** 2026-09-27. Publish run `36308225732` passed; registry tags verified.
+**Merge commit:** `c5e94aa8b2f4078f5fffe4b59deefebf9cd1e7cc` (PR #80; short SHA `c5e94aa`).
 **Image tags:** `ghcr.io/dougalbob/simple-finance:v0.22.1` ·
-`ghcr.io/dougalbob/simple-finance:latest` · `ghcr.io/dougalbob/simple-finance:sha-<TBD>`.
-**Digest:** `sha256:<TBD>`, shared by all three tags.
+`ghcr.io/dougalbob/simple-finance:latest` · `ghcr.io/dougalbob/simple-finance:sha-c5e94aa`.
+**Digest:** `sha256:e8d55169227a3e31fbd4d2c15512f0eb569d451d970e734d0f333288a1efe1de`, shared by all three tags.
 This differs from v0.22.0's `sha256:38fa8f57bb372a4af75cbed91a7bbad3f747f5edf4eb03e5d7aa608b072b1a58`;
-v0.22.0 still resolves to its original digest.
+v0.22.0 still resolves to its original digest (its package version still carries tags `v0.22.0` and
+`sha-0cca6ae` only — `latest` has moved to this release).
 **Version badge:** `v0.22.1 · pre-release`
 
 ## What changed
@@ -25,11 +26,27 @@ No database schema change, no migration. (Decision 170 changes the *fictional* d
 
 ## Verification
 
-PR _TBD_ and the exact main merge commit passed gates, browser and Docker checks.
-All _TBD_ unit tests and _TBD_ browser tests passed. Main CI: _TBD_.
-Publish run _TBD_ built and smoke-tested the image before pushing; registry verification finished green.
-The GHCR package-version API groups `v0.22.1`, `latest`, and `sha-<TBD>` under the single digest above.
+PR #80 passed all three checks — gates, browser and Docker:
+[run 36307374068](https://github.com/dougalbob/simple-finance/actions/runs/36307374068),
+**88 browser tests passed, 0 failed**. 534 unit tests across 121 suites green, `format:check`,
+`tsc --noEmit`, `next build` and `npm audit --omit=dev` clean.
+[Publish run 36308225732](https://github.com/dougalbob/simple-finance/actions/runs/36308225732)
+built and smoke-tested the image before pushing; registry verification finished green.
+The GHCR package-version API groups `v0.22.1`, `latest`, and `sha-c5e94aa` under the single digest above.
 The annotated tag stays on the tested merge commit; this notes-only stamp does not amend it.
+
+**One honest caveat about the merge commit's own CI run**
+([36307670736](https://github.com/dougalbob/simple-finance/actions/runs/36307670736)): gates and Docker
+passed, and the browser job reported **87 passed / 1 failed** — the failure being
+`e2e/home.spec.ts:617`, the mobile till's swipe gesture, not anything this release changed. It is a race
+in the *test*: `drag()` fires raw touch events at coordinates measured immediately after
+`scrollIntoView`, so on a loaded runner the page is still moving, the gesture arrives diagonal and the
+till's own rule (≥50px and ≥1.5× more sideways than down) reads it as a scroll, leaving the panel where
+it was. Three facts place it outside this release: the identical tree passed 88/88 twenty minutes earlier
+on PR #80; the spec passes 6 consecutive local runs of the `mobile` project (23 tests each); and nothing
+in decisions 167–170 touches the till's panels. Re-running that job is not permitted for this session's
+GitHub token (`403 Resource not accessible by integration`), so the test is hardened in PR #81 instead —
+the drag now waits for the scroll to settle before measuring.
 
 ## Updating in Unraid
 
