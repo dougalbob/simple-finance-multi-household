@@ -85,6 +85,40 @@ async function drag(
   await cdp.detach();
 }
 
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Centre an element in the viewport and measure it **once the scroll has
+ * settled**. `drag()` dispatches raw touch events at absolute coordinates, so a
+ * box measured while the page is still moving hands the gesture stale
+ * coordinates: the drag then arrives diagonal, and the till's own swipe rule
+ * (at least 50px, and at least 1.5x more sideways than down — decision 144)
+ * reads it as a scroll and leaves the panel where it was. On a loaded CI runner
+ * that race failed `data-active-panel` in "Save is only on the second card…"
+ * (2026-09-27, on the v0.22.1 merge commit) while the identical tree passed
+ * 88/88 on PR #80 twenty minutes earlier and six consecutive local runs of this
+ * project. Measuring until two readings agree removes the race without guessing
+ * a scroll duration; it costs one extra `boundingBox` when the page is already
+ * still.
+ */
+async function settledBox(page: Page, target: Locator, what: string): Promise<Box> {
+  await target.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  let previous: Box | null = null;
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const box = await target.boundingBox();
+    if (box === null) throw new Error(`no ${what}`);
+    if (previous !== null && box.x === previous.x && box.y === previous.y) return box;
+    previous = box;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`${what} never settled after scrolling`);
+}
+
 test.describe('mobile quick entry', () => {
   test('records a purchase at the till, then refuses an unbalanced split', async ({ page }) => {
     await page.goto('/');
@@ -636,11 +670,10 @@ test.describe('mobile quick entry', () => {
     // Start the drags on the balance card, away from inputs and buttons —
     // measured afresh each time, because a vertical drag scrolls the page.
     const balanceCard = async () => {
-      const card = entry.getByText('Lowest before pay day');
-      // Mid-screen, clear of the sticky page navigation.
-      await card.evaluate((element) => element.scrollIntoView({ block: 'center' }));
-      const box = await card.boundingBox();
-      if (box === null) throw new Error('no balance card');
+      // Mid-screen, clear of the sticky page navigation — and measured only
+      // once the scroll has stopped (`settledBox`), because `drag()` needs
+      // coordinates that are still true when the touch lands.
+      const box = await settledBox(page, entry.getByText('Lowest before pay day'), 'balance card');
       return { x: box.x + box.width / 2, y: box.y + 4 };
     };
 
@@ -655,9 +688,7 @@ test.describe('mobile quick entry', () => {
     await drag(page, start, { x: start.x - 150, y: start.y + 10 });
     await expect(track).toHaveAttribute('data-active-panel', '1');
     const heading = entry.getByRole('heading', { name: 'Category & allocation' });
-    await heading.evaluate((element) => element.scrollIntoView({ block: 'center' }));
-    const back = await heading.boundingBox();
-    if (back === null) throw new Error('no details heading');
+    const back = await settledBox(page, heading, 'details heading');
     const from = { x: back.x + 20, y: back.y + back.height / 2 };
     await drag(page, from, { x: from.x + 150, y: from.y - 5 });
     await expect(track).toHaveAttribute('data-active-panel', '0');
