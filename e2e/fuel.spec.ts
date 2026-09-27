@@ -143,6 +143,75 @@ test.describe('the Fuel tab at the pump (v0.11.0)', () => {
     await expect(supplier).toHaveValue('Playwright Forecourt');
   });
 
+  test('a saved fill hands the form back blank, and Save waits for the next one', async ({
+    page,
+  }) => {
+    // Fuel matches the purchase form (decision 174): the entry fields clear on
+    // save and Save is greyed out until the next fill has an amount, while the
+    // car, the payer and the pot — the standing choices — stay as they were.
+    test.slow(); // its own fill, against the dev server
+    const entry = await openFuelTab(page);
+    const amount = entry.getByLabel('Fuel amount');
+    const litres = entry.getByLabel('Litres (optional)');
+    const odometer = entry.getByLabel('Odometer (optional)');
+    const supplier = entry.getByLabel('Supplier (optional)');
+    const note = entry.getByLabel('Note (optional)');
+    const date = entry.getByLabel('Date');
+    const fullTank = entry.getByLabel(/Filled to full/);
+    const save = entry.getByRole('button', { name: 'Save fuel' });
+    const pot = entry.getByLabel('Pot');
+    // The settings project has already cleared the default pot by now, and a
+    // fill cannot be saved without one — same as `recordFuel` above.
+    if ((await pot.inputValue()) === '') await pot.selectOption({ label: 'Main account' });
+    const potValue = await pot.inputValue();
+
+    // The spec's own vehicle, so nothing else in the run moves its numbers.
+    await pickChip(entry, 'Vehicle', VEHICLE);
+    await pickChip(entry, 'Paid by', 'Alex');
+    await amount.fill('31.00');
+    await litres.fill('21');
+    await odometer.fill('31200');
+    await fullTank.check();
+    // A seeded fuel supplier, so this spec adds no supplier name either.
+    await supplier.click();
+    await entry
+      .getByRole('listbox', { name: 'Supplier suggestions' })
+      .getByRole('option', { name: /Corner Foods/ })
+      .click();
+    await expect(supplier).toHaveValue('Corner Foods');
+    await note.fill('Half a tank, sorry');
+    await date.fill((await date.getAttribute('max')) ?? '');
+    await expect(save).toBeEnabled();
+
+    await save.click();
+    await expect(entry.getByRole('status')).toContainText(/Fuel saved/i, { timeout: 30_000 });
+
+    // Blank: the amount, the optional readings, the supplier, the note, the
+    // date — and the full-tank tick is off again (decision 147), because a
+    // tick left behind would measure the next fill as a full tank.
+    await expect(amount).toHaveValue('');
+    await expect(litres).toHaveValue('');
+    await expect(odometer).toHaveValue('');
+    await expect(supplier).toHaveValue('');
+    await expect(note).toHaveValue('');
+    await expect(date).toHaveValue('');
+    await expect(fullTank).not.toBeChecked();
+    // The standing choices stay: same car, same payer, same pot.
+    await expect(
+      entry.getByRole('radiogroup', { name: 'Vehicle' }).getByRole('radio', { name: VEHICLE }),
+    ).toBeChecked();
+    await expect(
+      entry.getByRole('radiogroup', { name: 'Paid by' }).getByRole('radio', { name: 'Alex' }),
+    ).toBeChecked();
+    await expect(pot).toHaveValue(potValue ?? '');
+    // The answer about mpg is still on screen, and Save is greyed out until
+    // the next fill has an amount.
+    await expect(entry.getByRole('status')).toContainText(/Fuel saved/i);
+    await expect(save).toBeDisabled();
+    await amount.fill('12.34');
+    await expect(save).toBeEnabled();
+  });
+
   test('opens on the signed-in person and their own car; a tap overrides it', async ({ page }) => {
     test.slow();
     // The seed links the dev sign-in to Alex, owner of Vehicle A.

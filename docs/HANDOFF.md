@@ -1,3 +1,79 @@
+# Handoff: v0.24.0 — a saved purchase clears the till (decision 174)
+
+**Branch:** `arena/01a0e36d-simple-finance`, from `main` @ `1081025` (the v0.23.1 merge). The previous
+session could not make code changes (it ended when PR #84 merged), so it left a prepared note; this
+sitting implemented it, and the release is the single pull request (decision 173).
+
+## What changed
+
+`src/components/quick-entry.tsx` only. The household asked for two things at the till — clear the
+breadcrumbs of the purchase just saved, and grey Save out until the *next* entry is complete — and
+the second follows from the first, so it is one change:
+
+- An effect in `PurchaseForm` keyed on `[state]` clears the entry fields when `state.status === 'ok'`:
+  supplier, amount, date, note, the note field's open flag, and the split lines back to one fresh
+  default line with `lineFollowsTotal` back to true. With the form blank, `balanced` is false, so the
+  existing `saveBlocked` rule and the existing disabled styling grey Save out with no new state and no
+  new flag.
+- `resetForAnother` keeps its own copy of that clearing (it is the start-over for an unsaved form, and
+  the slide to card 1 + supplier focus is the one thing the save does *not* do).
+- The same effect and rule in `FuelForm`: amount, litres, odometer, supplier, date, note clear and the
+  full-tank tick goes back to off; pot, vehicle and paid-by stay. Clearing the amount is what greys
+  Save fuel out (`canSave` needs a positive one).
+- "Add another" now renders only while the next entry has not begun: `nextEntryStarted` is computed
+  from the typed values (supplier, amount, date, note, split amounts, line count), so the button is
+  offered while the form is blank after a save and withdraws as soon as the household starts typing
+  the next purchase, instead of wiping a half-typed entry.
+
+**Sticky, by the household's choice:** pot and paid-by on purchases; pot, vehicle and paid-by on
+fuel. Category and target are also not part of the "next entry has begun" test, so changing one does
+not hide the button.
+
+## What a future session should know
+
+1. **Key the reset effect on the `state` object, never on `state.message`.** Two identical
+   consecutive saves produce the identical message string, so a message-keyed effect would not fire
+   for the second save and the form would stay dirty. `e2e/home.spec.ts`'s "a second identical save
+   clears the form again" exists to keep that honest.
+2. **`data` must not be a dependency of that effect.** The purchase and fuel actions both
+   `revalidatePages()`, so a successful save re-renders the server page and hands the client island a
+   fresh props object; re-firing on that would wipe the *next* entry half-typed. The effect reads
+   `data` from its closure on the render where `state` changed, which is current.
+3. **The save must never move focus or a panel** (decision 151). The household confirmed this over
+   the alternative of sliding back to card 1 with the supplier focused. The e2e spec asserts
+   `expectNoFieldFocused` after a save, so a future "convenience" focus move fails the suite.
+4. **Errors clear nothing** (`status === 'error'`), and a save that trips the duplicate notice is
+   still `'ok'` and does reset. The notice reads `state` and is untouched; server-side duplicate
+   detection is unchanged — only the accidental double-tap became unreachable.
+5. **Balance checkpoints were left alone on purpose.** The ask was purchases, then fuel. A repeated
+   checkpoint is a different question; if the household wants the same rule there, it is a small
+   change to `BalanceForm`.
+6. **The new e2e specs are order-sensitive in the way the project is.** `e2e/fuel.spec.ts`'s new
+   spec picks the pot itself (`if ((await pot.inputValue()) === '') …`), because the settings project
+   clears the default pot before the fuel project runs — the first full-suite run caught exactly that.
+   Its `VEHICLE` is created by the first spec in the same file, so it must keep running second.
+7. **Playwright locally:** SANDBOX entry 8 recipe still holds. `node_modules` was absent again this
+   sitting (`npm ci --ignore-scripts` fixes it). The overlay `playwright.local.config.ts` is throwaway
+   and must be deleted before committing — it is **not** in `.gitignore`, so `git status` is the check.
+8. **The Fuel tab's `fullTank` reset is a correctness fix, not tidiness.** A tick left on the form
+   would silently measure the next fill as a full tank and report a wrong mpg (decision 147).
+
+## Gates at close
+
+`npm test` **547 passed** / 124 suites · `npm run typecheck` clean · `npm run format:check` clean ·
+`npm run build` clean (`next-env.d.ts` restored afterwards). Playwright **92 passed** across every
+project via the SANDBOX entry 8 overlay — 25 mobile, the rest unchanged in count but all re-run, since
+the till is on the phone home page and the Fuel tab. No schema, no migration, no server-action change.
+
+## Housekeeping still open
+
+- The household's v0.23.1 steps were never confirmed done; v0.24.0 supersedes that update anyway —
+  backup, then Force Update, and the badge should read `v0.24.0 · pre-release`.
+- The next working session records the post-merge verified facts (merge SHA, digest, run IDs) at the
+  top of this file, as decision 173 requires.
+
+---
+
 # Handoff: v0.23.1 — the upgrade migration repair and the release-process rework (decisions 172–173)
 
 **Branch:** `arena/01a0e2fe-simple-finance`, from `main` @ `aed1c12` (the v0.23.0 merge). v0.23.0

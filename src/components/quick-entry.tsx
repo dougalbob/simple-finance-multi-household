@@ -405,7 +405,9 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
    * till, so the household types the total once and Save can enable without
    * retyping it on the split line. The flag turns off for good when the user
    * takes the line over — editing the Line 1 amount, "+ Add split", or Assign
-   * remaining — and only "Add another" starts the following again.
+   * remaining — and only a fresh entry starts the following again: "Add
+   * another", or a successful save, which hands the form back blank
+   * (decision 174).
    */
   const [lineFollowsTotal, setLineFollowsTotal] = useState(true);
   const submitGuard = useRef(false);
@@ -443,6 +445,48 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     if (target === 'supplier') supplierRef.current?.focus();
     else categoryRef.current?.focus({ preventScroll: true });
   }, [panel, lines]);
+
+  /**
+   * A saved purchase hands the form back empty (decision 174). The household
+   * asked for both halves of this: the fields from the purchase just saved
+   * cleared so the next entry starts blank, and Save greyed out until that
+   * next entry is complete — with an empty form `balanced` is false, so the
+   * existing `saveBlocked` rule and its disabled styling do the second half
+   * without a "saved" flag. It also removes the accidental double-tap: Save
+   * used to stay live on the just-saved values, and pressing it again really
+   * did write a second purchase.
+   *
+   * Keyed on the `state` **object**, not on `state.message`: two identical
+   * consecutive saves carry the same message string, and a message-keyed
+   * effect would not fire for the second one. Every action result is a new
+   * object, so this runs once per result, and clearing twice is idempotent
+   * (a StrictMode double-invoke costs nothing).
+   *
+   * Errors clear nothing — `status === 'error'` keeps every value so the
+   * household can correct and retry. A save that tripped the duplicate
+   * notice is still `'ok'` (the purchase *was* saved), so it resets too; the
+   * notice reads `state` and is untouched.
+   *
+   * Values only: no panel change and no `focus()`. The user has just pressed
+   * Save on card 2 and is reading the confirmation — decision 151 says focus
+   * moves only as the answer to something they did, and raising the phone
+   * keyboard uninvited is the exact thing it forbids. "Add another" keeps
+   * its own slide-and-focus.
+   */
+  useEffect(() => {
+    if (state.status !== 'ok') return;
+    setTotal('');
+    setSupplierName('');
+    setOccurredDate('');
+    setNote('');
+    setNoteOpen(false);
+    setLines([newLine(data.defaultCategoryId, data)]);
+    setLineFollowsTotal(true);
+    // `state` alone, deliberately: a `data` dependency would re-fire this on a
+    // parent re-render (a revalidating server action hands the island a fresh
+    // props object) and wipe the *next* entry half-typed under it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const totalPence = parsePence(total);
   const linePence = lines.map((line) => parsePence(line.amount));
@@ -482,7 +526,9 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     })),
   );
   // True when saving is *blocked*. A pot is as required as a balanced split:
-  // the form can start with none selected, and the server refuses that.
+  // the form can start with none selected, and the server refuses that. After
+  // a successful save the entry fields are blank (decision 174), so `balanced`
+  // is false and Save is greyed out until the next entry is complete.
   const saveBlocked =
     pending ||
     !balanced ||
@@ -490,6 +536,30 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     paidByPersonId === '' ||
     data.people.length === 0 ||
     data.pots.length === 0;
+  /**
+   * Has the next entry started? Computed from the form's own values, so it
+   * needs no state of its own (decision 174).
+   *
+   * "Add another" is a reset, so it is only offered while there is nothing to
+   * lose: after a save the form is blank, and the button sits there until the
+   * household begins the next purchase, when it disappears rather than wiping
+   * a half-typed entry under their thumb. That hazard existed before this
+   * release too — the button used to be offered for as long as the success
+   * message was on screen.
+   *
+   * Deliberately the *typed* entry fields only — supplier, amount, date, note
+   * and the split lines. Pot, Paid by, category and target are sticky choices
+   * the reset does not take away (see `resetForAnother`), so a change to one
+   * of those is not the start of a new entry and must not hide the button; the
+   * dots and the swipe stay on the card for getting back to panel 1 anyway.
+   */
+  const nextEntryStarted =
+    supplierName !== '' ||
+    total !== '' ||
+    note !== '' ||
+    occurredDate !== '' ||
+    lines.length !== 1 ||
+    (lines[0]?.amount ?? '') !== '';
 
   function selectSupplier(name: string) {
     setSupplierName(name);
@@ -568,7 +638,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
   function addSplit() {
     // "+ Add split" stops the following for good: the new line stays empty and
     // Line 1 is neither cleared nor shrunk, even if the extra line is removed
-    // again. Only "Add another" starts it over.
+    // again. Only a fresh entry starts it over — "Add another", or a save.
     setLineFollowsTotal(false);
     setLines((current) => [...current, newLine(data.defaultCategoryId, data)]);
   }
@@ -649,6 +719,9 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
   }
 
   function resetForAnother() {
+    // The clearing half is now also what a successful save does (decision
+    // 174), so immediately after a save this is an idempotent no-op; before
+    // one it is still the "start over without saving" reset it always was.
     setTotal('');
     setSupplierName('');
     setOccurredDate('');
@@ -657,7 +730,9 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     setLines([newLine(data.defaultCategoryId, data)]);
     setLineFollowsTotal(true);
     // A fresh entry starts where every entry starts: Panel 1, on the supplier
-    // (decision 137) — once panel 1 is no longer inert.
+    // (decision 137) — once panel 1 is no longer inert. This is the one thing
+    // the save does *not* do by itself (decision 151: focus moves only as the
+    // answer to something the household did — and here they did: they tapped).
     pendingFocus.current = 'supplier';
     setPanel(0);
   }
@@ -997,7 +1072,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                 >
                   {pending ? 'Saving…' : 'Save purchase'}
                 </button>
-                {state.status === 'ok' ? (
+                {state.status === 'ok' && !nextEntryStarted ? (
                   <button
                     type="button"
                     onClick={resetForAnother}
@@ -1419,6 +1494,31 @@ function FuelForm({ data }: { data: QuickEntryData }) {
   useEffect(() => {
     if (!pending) submitGuard.current = false;
   }, [pending]);
+  /**
+   * Fuel matches the purchase form: a saved fill hands the form back empty
+   * (decision 174). Same reason, same shape — key it on the `state` object so
+   * two identical fills in a row both reset, an error keeps the values for a
+   * retry, and the duplicate notice still reads `state` untouched.
+   *
+   * The stickies here are pot, vehicle and paid by: the same car is usually
+   * filled again next week, and the vehicle keeps following the payer until
+   * it has been tapped (decision 146), so that choice is left alone. The
+   * "Filled to full" tick resets to off with everything else — a tick left
+   * behind would silently measure the next fill as a full tank (decision 147).
+   * Clearing the amount is what greys Save out: `canSave` needs a positive one.
+   */
+  useEffect(() => {
+    if (state.status !== 'ok') return;
+    setAmount('');
+    setSupplierName('');
+    setOccurredDate('');
+    setNote('');
+    setLitres('');
+    setOdometer('');
+    setFullTank(false);
+    // `state` alone — see the purchase form's note on why `data` is not a dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
   // The forecourt price, worked out as soon as both figures are typed.
   const amountPence = parsePence(amount);
   const litresParsed = parseLitres(litres);
@@ -1426,6 +1526,8 @@ function FuelForm({ data }: { data: QuickEntryData }) {
     amountPence !== null && amountPence > 0 && litresParsed.ok && litresParsed.value !== null
       ? `= ${formatPencePerLitre(amountPence, litresParsed.value)}`
       : null;
+  // The amount is the only required typing, so after a save clears it this is
+  // false and Save is greyed out until the next fill has one (decision 174).
   const canSave =
     amountPence !== null &&
     amountPence > 0 &&

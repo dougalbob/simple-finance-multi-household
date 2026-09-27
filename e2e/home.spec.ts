@@ -138,18 +138,27 @@ test.describe('mobile quick entry', () => {
     await entry.getByRole('button', { name: 'Next: category →' }).click();
     await expect(entry.locator('[data-panel-track]')).toHaveAttribute('data-active-panel', '1');
     await expect(entry.getByLabel(/^Category/)).toBeFocused();
+
+    const saveButton = entry.getByRole('button', { name: 'Save purchase' });
+    // Splits must total exactly: an unbalanced entry cannot be submitted.
+    // Checked *before* the save, because a saved form is blank now (174).
+    await entry.getByLabel('Line 1 amount').fill('1.00');
+    await expect(saveButton).toBeDisabled();
+    await expect(entry.getByText(/Remaining|Over by/)).toBeVisible();
+
     await entry.getByLabel('Line 1 amount').fill('12.34');
     await entry.getByLabel(/^Category/).selectOption({ label: 'Groceries / Weekly Shop' });
     await expect(entry.getByText('Matches exactly')).toBeVisible();
 
-    const saveButton = entry.getByRole('button', { name: 'Save purchase' });
     await saveButton.click();
     await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
 
-    // Splits must total exactly: an unbalanced entry cannot be submitted.
-    await entry.getByLabel('Line 1 amount').fill('1.00');
+    // The saved entry is handed back blank, so there is no second purchase
+    // waiting to be saved by an accidental second tap (decision 174).
+    await expect(entry.locator('input[name="supplierName"]')).toHaveValue('');
+    await expect(entry.locator('input[name="amount"]')).toHaveValue('');
+    await expect(entry.getByLabel('Line 1 amount')).toHaveValue('');
     await expect(saveButton).toBeDisabled();
-    await expect(entry.getByText(/Remaining|Over by/)).toBeVisible();
 
     // The record is really stored: it is there on a fresh request.
     await page.goto('/purchases');
@@ -356,7 +365,7 @@ test.describe('mobile quick entry', () => {
     await expect(saveButton).toBeDisabled();
   });
 
-  test('Add another starts the following over', async ({ page }) => {
+  test('saving clears the form, and Add another goes back to the supplier', async ({ page }) => {
     test.slow(); // its own purchase, against the dev server
     await page.goto('/');
     await waitForTill(page);
@@ -372,20 +381,134 @@ test.describe('mobile quick entry', () => {
     await entry.getByRole('button', { name: 'Save purchase' }).click();
     await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
 
-    // After the save the line is taken over (the value sticks)...
-    await line1.fill('1.00');
-    await expect(line1).toHaveValue('1.00');
+    // The save already handed the following back to the amount (decision 174):
+    // the entry fields are blank, so there is nothing to save again.
+    await expect(amount).toHaveValue('');
+    await expect(line1).toHaveValue('');
+    await expect(entry.locator('input[name="supplierName"]')).toHaveValue('');
+    await expect(entry.getByRole('button', { name: 'Save purchase' })).toBeDisabled();
 
-    // ...and "Add another" hands the following back to the amount, and goes
-    // back to the first card on the supplier (decision 137).
+    // "Add another" is the shortcut back to the first card on the supplier
+    // (decision 137) — and it is offered because the form is still pristine.
     await entry.getByRole('button', { name: 'Add another' }).click();
     await expect(entry.locator('[data-panel-track]')).toHaveAttribute('data-active-panel', '0');
     await expect(entry.locator('input[name="supplierName"]')).toBeFocused();
-    await expect(amount).toHaveValue('');
-    await expect(line1).toHaveValue('');
     await amount.fill('7.50');
     await expect(line1).toHaveValue('7.50');
     await expect(entry.getByText('Matches exactly')).toBeVisible();
+  });
+
+  test('a saved purchase hands the form back blank, and Save waits for the next entry', async ({
+    page,
+  }) => {
+    // The household's own ask (decision 174): clear the breadcrumbs of the
+    // purchase just saved, and grey Save out until the *next* entry is
+    // complete — because with a blank form the split is not balanced, so Save
+    // cannot be pressed and a second tap cannot write a second purchase.
+    test.slow(); // its own purchase, against the dev server
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    const supplier = entry.locator('input[name="supplierName"]');
+    const amount = entry.locator('input[name="amount"]');
+    const line1 = entry.getByLabel('Line 1 amount');
+    const date = entry.getByLabel('Date');
+    const pot = entry.getByLabel('Pot');
+    const saveButton = entry.getByRole('button', { name: 'Save purchase' });
+
+    // The pot and the payer are the household's standing choices, so record
+    // what they are before the save and expect them back afterwards.
+    const potValue = await pot.inputValue();
+    const paidByValue = await entry
+      .getByRole('radiogroup', { name: 'Paid by' })
+      .locator('input:checked')
+      .getAttribute('value');
+    expect(potValue).not.toBe('');
+    expect(paidByValue).not.toBeNull();
+
+    await supplier.fill('Playwright Blank Shop');
+    await amount.fill('9.99');
+    await expect(line1).toHaveValue('9.99');
+    await entry.getByRole('button', { name: '+ Note' }).click();
+    await entry.getByLabel('Note (optional)').fill('Left behind by the last fill');
+    await entry.getByRole('button', { name: 'Next: category →' }).click();
+    await expect(entry.locator('[data-panel-track]')).toHaveAttribute('data-active-panel', '1');
+    // The app's own "today" — the date input's max is exactly that (SPEC §15.1).
+    await date.fill((await date.getAttribute('max')) ?? '');
+    await expect(date).not.toHaveValue('');
+
+    await saveButton.click();
+    await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
+
+    // Blank: supplier, amount, the split line, the date...
+    await expect(supplier).toHaveValue('');
+    await expect(amount).toHaveValue('');
+    await expect(line1).toHaveValue('');
+    await expect(date).toHaveValue('');
+    // ...and the note field is closed again, behind "+ Note" as it started.
+    await expect(entry.getByRole('button', { name: '+ Note' })).toBeVisible();
+    await expect(entry.getByLabel('Note (optional)')).toHaveCount(0);
+    // The choices the household made for this purchase stick: the same pot and
+    // the same payer usually pay for the next one.
+    await expect(pot).toHaveValue(potValue ?? '');
+    await expect(
+      entry.getByRole('radiogroup', { name: 'Paid by' }).locator(`input[value="${paidByValue}"]`),
+    ).toBeChecked();
+    // The confirmation stays, and so does the way back to the first card.
+    await expect(entry.getByRole('status')).toContainText(/saved/i);
+    await expect(entry.getByRole('button', { name: 'Add another' })).toBeVisible();
+    // Nothing took focus: the save is not the household tapping a field, and
+    // an uninvited keyboard is what decision 151 exists to prevent.
+    await expectNoFieldFocused(page);
+    // Greyed out, with the disabled styling it always had.
+    await expect(saveButton).toBeDisabled();
+
+    // The next entry starts the following over by itself — no "Add another"
+    // needed for it any more...
+    await showPanel(entry, 0);
+    await amount.fill('14.25');
+    await expect(line1).toHaveValue('14.25');
+    await expect(entry.getByText('Matches exactly')).toBeVisible();
+    // ...and "Add another" steps aside rather than wiping the entry in hand.
+    await expect(entry.getByRole('button', { name: 'Add another' })).toBeHidden();
+    await showPanel(entry, 1);
+    await expect(saveButton).toBeEnabled();
+  });
+
+  test('a second identical save clears the form again, duplicate notice or not', async ({
+    page,
+  }) => {
+    // The subtle half of decision 174. Two saves in a row produce the *same*
+    // message string, so an effect keyed on the message would not fire for the
+    // second one and the form would stay dirty. A duplicate notice may or may
+    // not appear (the server decides, on supplier + amount + timing); either
+    // way the save succeeded, so the form clears.
+    test.slow(); // two sequential saves, against the dev server
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    const supplier = entry.locator('input[name="supplierName"]');
+    const amount = entry.locator('input[name="amount"]');
+
+    const saveTwice = async () => {
+      // The save leaves the phone on the card the household saved from, and
+      // the hidden card is inert — so go back to the entry card to type.
+      await showPanel(entry, 0);
+      await supplier.fill('Playwright Twice Shop');
+      await amount.fill('3.50');
+      await entry.getByRole('button', { name: 'Next: category →' }).click();
+      await entry.getByRole('button', { name: 'Save purchase' }).click();
+      await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
+    };
+
+    await saveTwice();
+    await expect(amount).toHaveValue('');
+    await saveTwice();
+    // The same message, a new result: the form is blank again.
+    await expect(amount).toHaveValue('');
+    await expect(supplier).toHaveValue('');
+    await expect(entry.getByLabel('Line 1 amount')).toHaveValue('');
+    await expect(entry.getByRole('button', { name: 'Save purchase' })).toBeDisabled();
   });
 
   test('the till panel leads with the pot, the reported balance and what is left', async ({

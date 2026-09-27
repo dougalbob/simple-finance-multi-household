@@ -741,9 +741,22 @@ Home = four big actions:
    - **Card 2, Category & allocation:** category → "For" (household / person / vehicle) → split lines →
      "+ Add split" → **Paid by** (one tap-button per person, radio semantics) → **Date** (full width,
      "Today if blank") → **Save purchase** (enabled only when the lines total exactly; remainder helper
-     available) → confirmation with "Add another", which returns to card 1 on the supplier field.
+     available) → a confirmation line, and the form handed back **blank** (decision 174): supplier,
+     amount, date, note and the split lines are cleared, the note field closes behind "+ Note" again,
+     and the amount-following restarts, so the next purchase starts from empty and **Save is greyed
+     out until it is complete** — one save cannot be pressed twice by an accidental second tap.
+     **Pot and Paid by stay as they are**, because the same pot and the same person usually pay for
+     the next purchase; they are choices, not the entry. The confirmation stays on screen while the
+     next entry is typed. A failed save clears nothing, so the values can be corrected and re-saved.
+     Nothing moves: the card the household is on, and the keyboard, are left exactly as they were
+     (decision 151) — a save is not a tap on a field.
      Changing Paid by re-targets any line still on the old payer's default (their car, themselves);
      lines pointed elsewhere by hand stay put.
+   - **"Add another" (decision 174)** sits next to Save while the confirmation is up **and the next
+     entry has not begun** — it is offered when the form is still blank, and steps aside as soon as
+     the household starts typing the next purchase, rather than wiping it under their thumb. It
+     returns to card 1 with the supplier focused (decision 137). It is also the start-over shortcut
+     for a form that was filled and not saved.
    - **Focus at the till (v0.13.1, decision 151): nothing is focused when the page opens.** The till used
      to land on the supplier as soon as it was ready; on a real phone that raised the on-screen keyboard,
      the browser scrolled the focused field above it, and the Purchase / Fuel / Balance / Move tab strip
@@ -763,7 +776,9 @@ Home = four big actions:
    - **Focus order once the household is typing:** supplier → amount → Next → category. Focus moves only
      as the answer to something they did: tapping a suggestion moves to Amount, Enter in Supplier moves to
      Amount, Next moves to the category, "+ Note" focuses the note it just opened, and "Add another"
-     returns to Supplier on card 1. The keyboard's Enter/Go never saves from card 1: in Supplier it moves
+     returns to Supplier on card 1. **A save is not one of those answers** (decision 174): it clears the
+     form without moving focus or the card, so the confirmation is read where it was left and the
+     keyboard stays down. The keyboard's Enter/Go never saves from card 1: in Supplier it moves
      to Amount, in Amount (or the note) it is Next.
    - **Card switching (mobile only, v0.11.0):** the cards sit side by side in a clipped viewport and move
      with a short `translateX` slide. They are not a native scroll container. They switch on **Next**, the
@@ -798,6 +813,11 @@ Home = four big actions:
    - **The save answers with the mpg:** one sentence under the form — e.g. "Vehicle A: 41.2 mpg over 312
      miles since the last full tank. 40.12 L at 142.9p/L." — or, when mpg cannot be worked out yet, why
      (part fill: worked out at the next full tank; first full tank noted; a reading or litres missing).
+   - **After a save the form is handed back blank too (decision 174)**, the same as the purchase form:
+     amount, litres, odometer, supplier, date and note clear, the **"Filled to full" tick goes back to
+     off** (a tick left behind would measure the next fill as a full tank), and **Save fuel greys out**
+     until the next fill has an amount. The mpg answer stays on screen. **Pot, Vehicle and Paid by stay
+     as they are** — the same car is usually filled again. A failed save clears nothing.
 3. **Update Balance** — pick pot (defaults to least-recently-updated), enter figure, save. Optional effective
    date. Two fields in the common case.
 4. **Move Money** — between the household's own pots (a cash handover included), borrowing and
