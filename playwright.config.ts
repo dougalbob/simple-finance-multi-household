@@ -146,6 +146,13 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
+      // Own project (v0.25.0): creates, ticks and reopens tasks, and logs a
+      // follow-up on a supplier card. Mutates the seed, so runs before backup.
+      name: 'tasks',
+      testMatch: /tasks\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
       name: 'backup',
       testMatch: /backup\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },

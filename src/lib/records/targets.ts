@@ -90,3 +90,49 @@ export function purchaseLineSummary(
     extraLines: Math.max(lines.length - 1, 0),
   };
 }
+
+/**
+ * What a task is **about** (SPEC §25, decision 175) — a different question
+ * from who a spend was *for*, so it has its own vocabulary and its own label
+ * helper. `targetLabel()` above answers "household" for any kind it does not
+ * know, which is right for a spend (an allocation with no named target *is*
+ * the household's) and wrong for a task: a task about a supplier would
+ * silently read "household". Tasks therefore never go through it.
+ */
+export interface SubjectRef {
+  subjectKind: string;
+  subjectId: number | null;
+}
+
+/**
+ * Id → words for each named subject kind, built by the page from what it
+ * loads. `purchases` holds only purchases that still stand: a voided
+ * purchase is left out, so its tasks read "purchase".
+ */
+export interface SubjectNames {
+  suppliers: ReadonlyMap<number, string>;
+  vehicles: ReadonlyMap<number, string>;
+  purchases: ReadonlyMap<number, string>;
+}
+
+/**
+ * `EnergyCo` / `Vehicle A` / `£84.20 at EnergyCo on 1 Sep` / `household`.
+ * A subject that has gone (a voided purchase) degrades to the bare kind; an
+ * unknown kind prints that kind, never `household` — a task about something
+ * this version does not recognise must not claim to be the household's.
+ */
+export function subjectLabel(subject: SubjectRef, names: SubjectNames): string {
+  const id = subject.subjectId;
+  switch (subject.subjectKind) {
+    case 'household':
+      return 'household';
+    case 'supplier':
+      return (id === null ? undefined : names.suppliers.get(id)) ?? 'supplier';
+    case 'vehicle':
+      return (id === null ? undefined : names.vehicles.get(id)) ?? 'vehicle';
+    case 'purchase':
+      return (id === null ? undefined : names.purchases.get(id)) ?? 'purchase';
+    default:
+      return subject.subjectKind.trim() === '' ? 'unknown' : subject.subjectKind;
+  }
+}

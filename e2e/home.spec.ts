@@ -895,6 +895,7 @@ test.describe('mobile quick entry', () => {
       'Settings',
       'Suppliers',
       'Contracts & Renewals',
+      'Tasks',
     ];
     for (const label of [...daily, ...more]) {
       await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible();

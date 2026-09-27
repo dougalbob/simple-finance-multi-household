@@ -4,7 +4,7 @@ import path from 'node:path';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { recordAudit, type DbTx } from '../audit';
 import type { Db } from '../db/client';
-import { attachments, purchases, receipts } from '../db/schema';
+import { attachments, purchases, receipts, suppliers } from '../db/schema';
 
 /**
  * Receipt/invoice attachments (SPEC §23). One shared, framework-free pipeline
@@ -116,16 +116,23 @@ export function sanitizeOriginalName(raw: string): string {
 
 /**
  * What a document is attached to (decision 138): a purchase (receipts,
- * invoices) or, since v0.10.0, an income record (payslips). Exactly one.
+ * invoices), since v0.10.0 an income record (payslips), and since v0.25.0 a
+ * supplier (letters, policy documents, terms — decision 175). Exactly one;
+ * the table's CHECK says the same thing.
  */
-export type AttachmentOwner = { kind: 'purchase'; id: number } | { kind: 'receipt'; id: number };
+export type AttachmentOwner =
+  | { kind: 'purchase'; id: number }
+  | { kind: 'receipt'; id: number }
+  | { kind: 'supplier'; id: number };
 
 export interface StoreAttachmentInput {
   db: Db;
-  /** A purchase's receipt or invoice. Give this or `receiptId`, never both. */
+  /** A purchase's receipt or invoice. Give exactly one of the three owner ids. */
   purchaseId?: number;
   /** An income record's document — a payslip, typically (v0.10.0). */
   receiptId?: number;
+  /** A supplier's letter, policy document or terms (v0.25.0). */
+  supplierId?: number;
   originalName: string;
   bytes: Buffer;
   actor: string;
@@ -188,6 +195,7 @@ export async function storeAttachment(input: StoreAttachmentInput): Promise<Stor
       .values({
         purchaseId: owner.kind === 'purchase' ? owner.id : null,
         receiptId: owner.kind === 'receipt' ? owner.id : null,
+        supplierId: owner.kind === 'supplier' ? owner.id : null,
         fileKey,
         originalName,
         mime,
@@ -367,15 +375,59 @@ export function listStoredReceiptAttachments(
   return byReceipt;
 }
 
-function resolveOwner(input: { purchaseId?: number; receiptId?: number }): AttachmentOwner {
-  const hasPurchase = input.purchaseId !== undefined;
-  const hasReceipt = input.receiptId !== undefined;
-  if (hasPurchase === hasReceipt) {
-    throw new AttachmentInputError('A document belongs to exactly one purchase or income record.');
+/**
+ * Stored documents of many suppliers at once (v0.25.0), oldest first per
+ * supplier — the Suppliers page builds every card in one request.
+ */
+export function listStoredSupplierAttachments(
+  db: Db,
+  supplierIds: readonly number[],
+): Map<number, StoredAttachment[]> {
+  const bySupplier = new Map<number, StoredAttachment[]>();
+  if (supplierIds.length === 0) return bySupplier;
+  const rows = db
+    .select({
+      supplierId: attachments.supplierId,
+      id: attachments.id,
+      fileKey: attachments.fileKey,
+      originalName: attachments.originalName,
+      mime: attachments.mime,
+      sizeBytes: attachments.sizeBytes,
+      sha256: attachments.sha256,
+    })
+    .from(attachments)
+    .where(and(inArray(attachments.supplierId, [...supplierIds]), eq(attachments.state, 'stored')))
+    .orderBy(asc(attachments.id))
+    .all();
+  for (const { supplierId, ...attachment } of rows) {
+    if (supplierId === null) continue;
+    const list = bySupplier.get(supplierId) ?? [];
+    list.push(attachment);
+    bySupplier.set(supplierId, list);
   }
-  return hasPurchase
-    ? { kind: 'purchase', id: input.purchaseId as number }
-    : { kind: 'receipt', id: input.receiptId as number };
+  return bySupplier;
+}
+
+function resolveOwner(input: {
+  purchaseId?: number;
+  receiptId?: number;
+  supplierId?: number;
+}): AttachmentOwner {
+  const owners: AttachmentOwner[] = [
+    ...(input.purchaseId !== undefined
+      ? [{ kind: 'purchase' as const, id: input.purchaseId }]
+      : []),
+    ...(input.receiptId !== undefined ? [{ kind: 'receipt' as const, id: input.receiptId }] : []),
+    ...(input.supplierId !== undefined
+      ? [{ kind: 'supplier' as const, id: input.supplierId }]
+      : []),
+  ];
+  if (owners.length !== 1) {
+    throw new AttachmentInputError(
+      'A document belongs to exactly one purchase, income record or supplier.',
+    );
+  }
+  return owners[0] as AttachmentOwner;
 }
 
 function assertOwnerExists(db: Db, owner: AttachmentOwner): void {
@@ -388,13 +440,27 @@ function assertOwnerExists(db: Db, owner: AttachmentOwner): void {
     if (row === undefined) throw new AttachmentInputError('That purchase no longer exists.');
     return;
   }
+  if (owner.kind === 'supplier') {
+    const row = db
+      .select({ id: suppliers.id })
+      .from(suppliers)
+      .where(eq(suppliers.id, owner.id))
+      .get();
+    if (row === undefined) throw new AttachmentInputError('That supplier no longer exists.');
+    return;
+  }
   const row = db.select({ id: receipts.id }).from(receipts).where(eq(receipts.id, owner.id)).get();
   if (row === undefined) throw new AttachmentInputError('That income record no longer exists.');
 }
 
-function ownerOfRow(row: { purchaseId: number | null; receiptId: number | null }): AttachmentOwner {
+function ownerOfRow(row: {
+  purchaseId: number | null;
+  receiptId: number | null;
+  supplierId: number | null;
+}): AttachmentOwner {
   if (row.purchaseId !== null) return { kind: 'purchase', id: row.purchaseId };
-  // The CHECK constraint guarantees one of the two is set.
+  if (row.supplierId !== null) return { kind: 'supplier', id: row.supplierId };
+  // The CHECK constraint guarantees exactly one of the three is set.
   return { kind: 'receipt', id: row.receiptId as number };
 }
 

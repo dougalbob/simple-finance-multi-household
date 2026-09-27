@@ -155,11 +155,19 @@ const CHANNELS: Array<{ value: string; label: string }> = [
 ];
 
 /**
- * "+ Create interaction" (SPEC §21.2): what was said, the optional outcome and
- * an optional follow-up date that surfaces on the Contracts & renewals page so
- * a promise does not quietly evaporate.
+ * "+ Create interaction" (SPEC §21.2): what was said and the optional
+ * outcome. A promised follow-up — a date, some words, or both — becomes a
+ * task about the supplier, saved in the same transaction as the interaction
+ * (decision 175), so it stays listed until someone ticks it, even after the
+ * date has passed.
  */
-export function SupplierInteractionForm({ supplierId }: { supplierId: number }) {
+export function SupplierInteractionForm({
+  supplierId,
+  supplierName,
+}: {
+  supplierId: number;
+  supplierName: string;
+}) {
   const [state, formAction, pending] = useActionState(
     addSupplierInteractionAction,
     initialActionState,
@@ -182,15 +190,6 @@ export function SupplierInteractionForm({ supplierId }: { supplierId: number }) 
             </option>
           ))}
         </select>
-        <label className="sr-only" htmlFor={`interaction-follow-up-${supplierId}`}>
-          Follow-up date
-        </label>
-        <input
-          id={`interaction-follow-up-${supplierId}`}
-          name="followUpDate"
-          type="date"
-          className="rounded border border-border-strong px-2 py-1 text-xs"
-        />
       </div>
       <label className="sr-only" htmlFor={`interaction-summary-${supplierId}`}>
         Summary
@@ -211,6 +210,32 @@ export function SupplierInteractionForm({ supplierId }: { supplierId: number }) 
         placeholder="Outcome (optional)"
         className="w-full rounded border border-border-strong px-2 py-1 text-xs"
       />
+      <fieldset className="rounded border border-border-hairline px-2 pb-2 pt-1">
+        <legend className="px-1 text-xs text-ink-soft">
+          Promised to follow up? It becomes a task you can tick off.
+        </legend>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <label className="text-xs text-ink-soft" htmlFor={`interaction-follow-up-${supplierId}`}>
+            Follow up by
+          </label>
+          <input
+            id={`interaction-follow-up-${supplierId}`}
+            name="followUpDate"
+            type="date"
+            className="rounded border border-border-strong px-2 py-1 text-xs"
+          />
+          <label className="sr-only" htmlFor={`interaction-follow-up-title-${supplierId}`}>
+            Follow-up task (optional)
+          </label>
+          <input
+            id={`interaction-follow-up-title-${supplierId}`}
+            name="followUpTitle"
+            maxLength={200}
+            placeholder={`Follow up with ${supplierName}`}
+            className="min-w-0 flex-1 rounded border border-border-strong px-2 py-1 text-xs"
+          />
+        </div>
+      </fieldset>
       <div className="flex items-center gap-3">
         <button
           type="submit"

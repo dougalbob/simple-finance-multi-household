@@ -245,7 +245,12 @@ export default async function InsightsPage({
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {vehicles.map((vehicle) => (
-                <div key={vehicle.vehicleId} className="rounded-lg bg-canvas p-3">
+                // The anchor a vehicle task's "About:" link lands on (decision 175).
+                <div
+                  key={vehicle.vehicleId}
+                  id={`vehicle-${vehicle.vehicleId}`}
+                  className="scroll-mt-24 rounded-lg bg-canvas p-3"
+                >
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="font-semibold">{vehicle.label}</p>
                     <p className="text-lg font-semibold tabular-nums">

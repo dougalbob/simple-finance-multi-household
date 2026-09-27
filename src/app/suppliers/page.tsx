@@ -1,21 +1,31 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SupplierCardData, SupplierCardList } from '@/components/supplier-card';
+import { TaskDueBadge } from '@/components/task-forms';
 import { currentUserFromRequest } from '@/lib/auth/next';
 import { getDbHandle } from '@/lib/db/client';
-import { listStoredAttachments } from '@/lib/records/attachments';
+import { listStoredAttachments, listStoredSupplierAttachments } from '@/lib/records/attachments';
 import { categoryTree } from '@/lib/records/categories';
 import { listPeople } from '@/lib/records/people';
 import { listPurchases } from '@/lib/records/purchases';
-import { listSupplierInteractions, listSupplierReferences } from '@/lib/records/supplier-details';
+import {
+  INTERACTION_CHANNEL_LABELS,
+  listSupplierInteractions,
+  listSupplierReferences,
+  type InteractionChannel,
+} from '@/lib/records/supplier-details';
 import {
   hasSupplierFocus,
   resolveSupplierFocus,
+  supplierCardHref,
   supplierFocusKey,
 } from '@/lib/records/supplier-focus';
 import { listSuppliers } from '@/lib/records/suppliers';
 import { purchaseLineSummary, targetNames } from '@/lib/records/targets';
+import { compareTasksByDue, tasksByInteraction, taskDue } from '@/lib/records/tasks';
+import { actorLabel, getTasksBySubject } from '@/lib/records/tasks-view';
 import { listVehicles } from '@/lib/records/vehicles';
-import { toLocalDateString } from '@/lib/time';
+import { formatShortLocalDateWithYear, toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,16 +45,33 @@ export default async function SuppliersPage({
   if (user === null) redirect('/unauthorized');
 
   const { db } = getDbHandle();
-  const today = toLocalDateString(new Date());
+  const now = new Date();
+  const today = toLocalDateString(now);
   const suppliers = listSuppliers(db);
   const params = await searchParams;
+
+  // Tasks and documents for every card at once (decision 175), and the names
+  // behind the sign-in emails that wrote each log entry.
+  const people = listPeople(db);
+  const tasksBySupplier = getTasksBySubject(db, 'supplier', now);
+  const documentsBySupplier = listStoredSupplierAttachments(
+    db,
+    suppliers.map((supplier) => supplier.id),
+  );
+  const actorNames = new Map(
+    people.flatMap((person) =>
+      person.email === null || person.email === ''
+        ? []
+        : [[person.email.toLowerCase(), person.label] as const],
+    ),
+  );
 
   // Who each recent purchase was for (decision 161). One supplier can hold a
   // contract per person — three mobile contracts with one carrier — and the
   // card is the only list that used to show `date · amount` alone. The child
   // category is enough here: the supplier already names the parent in effect,
   // and the card is half a column wide on a laptop (SPEC §21.4).
-  const names = targetNames({ people: listPeople(db), vehicles: listVehicles(db) });
+  const names = targetNames({ people, vehicles: listVehicles(db) });
   const categoryNames = new Map(
     categoryTree(db).flatMap((parent) =>
       parent.children.map((child) => [child.id, child.name] as const),
@@ -53,6 +80,11 @@ export default async function SuppliersPage({
 
   const cards: SupplierCardData[] = suppliers.map((supplier) => {
     const purchases = listPurchases(db, { supplierId: supplier.id, limit: 5 });
+    const interactions = listSupplierInteractions(db, supplier.id, 20);
+    const followUps = tasksByInteraction(
+      db,
+      interactions.map((interaction) => interaction.id),
+    );
     return {
       supplier: {
         id: supplier.id,
@@ -65,7 +97,45 @@ export default async function SuppliersPage({
         notes: supplier.notes,
       },
       references: listSupplierReferences(db, supplier.id),
-      interactions: listSupplierInteractions(db, supplier.id, 20),
+      // Every line labelled and every date in words (decision 175): a bare
+      // "2026-11-01" under a call read as nothing in particular.
+      interactions: interactions.map((interaction) => {
+        const task = followUps.get(interaction.id);
+        return {
+          id: interaction.id,
+          channelLabel:
+            INTERACTION_CHANNEL_LABELS[interaction.channel as InteractionChannel] ??
+            interaction.channel,
+          occurredOnLabel: formatShortLocalDateWithYear(
+            toLocalDateString(interaction.occurredAt),
+            today,
+          ),
+          summary: interaction.summary,
+          outcome: interaction.outcome,
+          loggedBy: actorLabel(interaction.createdBy, actorNames),
+          followUp:
+            task === undefined
+              ? null
+              : {
+                  title: task.title,
+                  dueDateLabel:
+                    task.dueDate === null
+                      ? null
+                      : formatShortLocalDateWithYear(task.dueDate, today),
+                  stateWords:
+                    task.completedAt !== null
+                      ? `Done ${formatShortLocalDateWithYear(toLocalDateString(task.completedAt), today)}`
+                      : taskDue(task.dueDate, today).label,
+                },
+        };
+      }),
+      tasks: tasksBySupplier.get(supplier.id) ?? {
+        open: [],
+        doneRecently: [],
+        openCount: 0,
+        overdueCount: 0,
+      },
+      documents: documentsBySupplier.get(supplier.id) ?? [],
       recentPurchases: purchases.map(({ purchase, allocations }) => {
         const summary = purchaseLineSummary(allocations, categoryNames, names);
         return {
@@ -81,18 +151,12 @@ export default async function SuppliersPage({
     };
   });
 
+  // Every open task about a supplier, overdue first. Until v0.25.0 this
+  // banner read the interaction log's follow-up dates filtered to `>= today`,
+  // so a promise vanished the day after it fell due (decision 175).
   const followUps = cards
-    .flatMap((card) =>
-      card.interactions
-        .filter((interaction) => interaction.followUpDate !== null)
-        .map((interaction) => ({
-          supplier: card.supplier.name,
-          date: interaction.followUpDate!,
-          summary: interaction.summary,
-        })),
-    )
-    .filter((item) => item.date >= today)
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .flatMap((card) => card.tasks.open.map((task) => ({ supplier: card.supplier, task })))
+    .sort((a, b) => compareTasksByDue(a.task, b.task, today));
 
   // "Supplier card" links (Recurring, Contracts & Renewals) name the supplier
   // they came from: the page opens with that card filtered, expanded and in
@@ -127,14 +191,24 @@ export default async function SuppliersPage({
           <h2 id="supplier-follow-ups" className="text-sm font-semibold text-warning-900">
             Promised follow-ups
           </h2>
-          <ul className="mt-2 space-y-1 text-sm text-warning-900">
-            {followUps.map((item, index) => (
-              <li key={index}>
-                <span className="font-medium tabular-nums">{item.date}</span> · {item.supplier} —{' '}
-                {item.summary}
+          <ul className="mt-2 space-y-1.5 text-sm text-warning-900">
+            {followUps.map(({ supplier, task }) => (
+              <li key={task.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <TaskDueBadge task={task} />
+                <Link className="font-medium hover:underline" href={supplierCardHref(supplier.id)}>
+                  {supplier.name}
+                </Link>
+                <span>— {task.title}</span>
               </li>
             ))}
           </ul>
+          <p className="mt-2 text-xs text-warning-900">
+            Tick them off on each card, or see everything on{' '}
+            <Link className="font-medium underline" href="/tasks">
+              Tasks
+            </Link>
+            .
+          </p>
         </section>
       ) : null}
 

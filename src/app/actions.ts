@@ -117,6 +117,15 @@ import {
 } from '@/lib/records/external-movements';
 import { AlreadyVoidError, RecordVoidedError, VersionConflictError } from '@/lib/records/errors';
 import {
+  completeTask,
+  createTask,
+  editTask,
+  InvalidTaskInputError,
+  reopenTask,
+  TaskNotFoundError,
+  TaskStateError,
+} from '@/lib/records/tasks';
+import {
   createReceipt,
   editReceipt,
   InvalidReceiptInputError,
@@ -152,6 +161,10 @@ import {
   scheduleEntrySchema,
   supplierContactEntrySchema,
   supplierInteractionEntrySchema,
+  taskCompleteEntrySchema,
+  taskCreateEntrySchema,
+  taskEditEntrySchema,
+  taskVersionEntrySchema,
   supplierReferenceEntrySchema,
   swapEntrySchema,
   transferEntrySchema,
@@ -224,24 +237,37 @@ export async function addSupplierInteractionAction(
     summary: String(formData.get('summary') ?? ''),
     outcome: textOrNull(formData.get('outcome')),
     followUpDate: textOrNull(formData.get('followUpDate')),
+    followUpTitle: textOrNull(formData.get('followUpTitle')),
   });
   if (!parsed.success)
     return { status: 'error', message: firstIssue(parsed.error, 'Check the interaction.') };
   try {
-    addSupplierInteraction(getDbHandle().db, {
+    // One transaction (decision 175): the interaction and the follow-up task
+    // it promised are saved together or not at all.
+    const { followUpTask } = addSupplierInteraction(getDbHandle().db, {
       supplierId: parsed.data.supplierId,
       channel: parsed.data.channel,
       summary: parsed.data.summary,
       outcome: parsed.data.outcome,
       followUpDate: parsed.data.followUpDate,
+      followUpTitle: parsed.data.followUpTitle,
       actor: user.email,
     });
-    revalidatePath('/suppliers');
-    revalidatePath('/contracts');
+    revalidateTaskPages();
     revalidatePath('/overview');
-    return { status: 'ok', message: 'Interaction logged.' };
+    if (followUpTask === null) return { status: 'ok', message: 'Interaction logged.' };
+    return {
+      status: 'ok',
+      message:
+        `Interaction logged, and the task “${followUpTask.title}” added` +
+        (followUpTask.dueDate === null ? ' (no due date).' : ` for ${followUpTask.dueDate}.`),
+    };
   } catch (err) {
-    if (err instanceof InvalidSupplierDetailError || err instanceof SupplierNotFoundError)
+    if (
+      err instanceof InvalidSupplierDetailError ||
+      err instanceof SupplierNotFoundError ||
+      err instanceof InvalidTaskInputError
+    )
       return { status: 'error', message: err.message };
     throw err;
   }
@@ -295,12 +321,15 @@ export async function uploadAttachmentAction(
 ): Promise<ActionState> {
   const user = await currentUserFromRequest();
   if (!user) return NOT_SIGNED_IN;
-  // A purchase's receipt, or (v0.10.0, decision 138) an income record's
-  // document — the form posts exactly one of the two ids.
+  // A purchase's receipt, (v0.10.0, decision 138) an income record's
+  // document, or (v0.25.0, decision 175) a supplier's letter or policy — the
+  // form posts exactly one of the three ids.
   const purchaseId = positiveNumber(formData.get('purchaseId'));
   const receiptId = positiveNumber(formData.get('receiptId'));
+  const supplierId = positiveNumber(formData.get('supplierId'));
+  const ownerCount = [purchaseId, receiptId, supplierId].filter((id) => id !== null).length;
   const file = formData.get('file');
-  if ((purchaseId === null) === (receiptId === null) || !(file instanceof File) || file.size === 0)
+  if (ownerCount !== 1 || !(file instanceof File) || file.size === 0)
     return { status: 'error', message: 'Choose a file to attach.' };
 
   const bytes = Buffer.from(await file.arrayBuffer());
@@ -310,7 +339,11 @@ export async function uploadAttachmentAction(
     // cannot drift apart.
     const stored = await storeAttachment({
       db: getDbHandle().db,
-      ...(purchaseId !== null ? { purchaseId } : { receiptId: receiptId as number }),
+      ...(purchaseId !== null
+        ? { purchaseId }
+        : supplierId !== null
+          ? { supplierId }
+          : { receiptId: receiptId as number }),
       originalName: file.name,
       bytes,
       actor: user.email,
@@ -324,7 +357,7 @@ export async function uploadAttachmentAction(
   }
 }
 
-/** Every page that lists documents: purchases (receipts) and income (payslips). */
+/** Every page that lists documents: purchases (receipts), income (payslips), suppliers. */
 function revalidateAttachmentPages(): void {
   revalidatePath('/purchases');
   revalidatePath('/overview');
@@ -376,6 +409,151 @@ export async function deleteAttachmentAction(
     }
     console.error('[attachments] deleteAttachmentAction failed', err);
     return { status: 'error', message: 'The receipt could not be removed. Please try again.' };
+  }
+}
+
+/**
+ * Tasks (SPEC §25, decision 175). Every page that shows one: the Tasks page,
+ * the supplier card, the Contracts & Renewals follow-ups and the purchase row.
+ */
+function revalidateTaskPages(): void {
+  revalidatePath('/tasks');
+  revalidatePath('/suppliers');
+  revalidatePath('/contracts');
+  revalidatePath('/purchases');
+}
+
+/** `household`, `supplier:3`, `vehicle:2`, `purchase:17` → kind and id. */
+function taskSubjectFromForm(value: FormDataEntryValue | null): {
+  subjectKind: string;
+  subjectId: number | null;
+} {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (text === '' || text === 'household') return { subjectKind: 'household', subjectId: null };
+  const [kind, id] = text.split(':');
+  const subjectId = numberOrNull(id ?? null);
+  return { subjectKind: kind ?? '', subjectId };
+}
+
+function taskErrorMessage(err: unknown): string | null {
+  if (
+    err instanceof InvalidTaskInputError ||
+    err instanceof TaskStateError ||
+    err instanceof TaskNotFoundError ||
+    err instanceof VersionConflictError
+  ) {
+    return err.message;
+  }
+  return null;
+}
+
+export async function createTaskAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = taskCreateEntrySchema.safeParse({
+    title: String(formData.get('title') ?? ''),
+    detail: textOrNull(formData.get('detail')),
+    dueDate: textOrNull(formData.get('dueDate')),
+    ...taskSubjectFromForm(formData.get('subject')),
+  });
+  if (!parsed.success)
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the task.') };
+  try {
+    const task = createTask(getDbHandle().db, { ...parsed.data, actor: user.email });
+    revalidateTaskPages();
+    return {
+      status: 'ok',
+      message: `Added “${task.title}”${task.dueDate === null ? '' : ` for ${task.dueDate}`}.`,
+    };
+  } catch (err) {
+    const message = taskErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function completeTaskAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = taskCompleteEntrySchema.safeParse({
+    id: Number(formData.get('id')),
+    expectedVersion: Number(formData.get('expectedVersion')),
+    note: textOrNull(formData.get('note')),
+  });
+  if (!parsed.success)
+    return {
+      status: 'error',
+      message: firstIssue(parsed.error, 'That task link is incomplete. Refresh and try again.'),
+    };
+  try {
+    const task = completeTask(getDbHandle().db, { ...parsed.data, actor: user.email });
+    revalidateTaskPages();
+    return { status: 'ok', message: `Done: “${task.title}”.` };
+  } catch (err) {
+    // A stale box (someone else ticked or moved it first) must not look
+    // ticked: refresh the pages so the current state is what renders.
+    revalidateTaskPages();
+    const message = taskErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function reopenTaskAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = taskVersionEntrySchema.safeParse({
+    id: Number(formData.get('id')),
+    expectedVersion: Number(formData.get('expectedVersion')),
+  });
+  if (!parsed.success)
+    return { status: 'error', message: 'That task link is incomplete. Refresh and try again.' };
+  try {
+    const task = reopenTask(getDbHandle().db, { ...parsed.data, actor: user.email });
+    revalidateTaskPages();
+    return { status: 'ok', message: `Reopened “${task.title}”.` };
+  } catch (err) {
+    revalidateTaskPages();
+    const message = taskErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function editTaskAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = taskEditEntrySchema.safeParse({
+    id: Number(formData.get('id')),
+    expectedVersion: Number(formData.get('expectedVersion')),
+    title: String(formData.get('title') ?? ''),
+    detail: textOrNull(formData.get('detail')),
+    dueDate: textOrNull(formData.get('dueDate')),
+  });
+  if (!parsed.success)
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the task.') };
+  try {
+    const { id, expectedVersion, ...patch } = parsed.data;
+    const task = editTask(getDbHandle().db, { id, expectedVersion, patch, actor: user.email });
+    revalidateTaskPages();
+    return { status: 'ok', message: `Saved “${task.title}”.` };
+  } catch (err) {
+    revalidateTaskPages();
+    const message = taskErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
   }
 }
 
@@ -1075,6 +1253,7 @@ const PAGE_PATHS = [
   '/charts',
   '/income',
   '/settings',
+  '/tasks',
 ];
 
 function revalidatePages(): void {

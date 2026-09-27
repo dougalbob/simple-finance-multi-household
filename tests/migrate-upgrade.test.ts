@@ -8,7 +8,10 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { describe, it } from 'node:test';
+import { openDatabase } from '../src/lib/db/client';
 import { repairMigrationJournal } from '../src/lib/db/migrate-repair';
+import { completeTask, listTasks, taskDue } from '../src/lib/records/tasks';
+import { migrationsFolderBefore } from './helpers';
 
 /**
  * The v0.23.0 incident, pinned forever.
@@ -243,5 +246,196 @@ describe('migration upgrade path (v0.23.0 incident regression)', () => {
       rmSync(cjsDir, { recursive: true, force: true });
       rmSync(tsDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('migration 0013: follow-up dates become tasks (decision 175)', () => {
+  const T0 = Date.UTC(2026, 8, 20, 9, 0, 0); // 2026-09-20T09:00:00Z
+
+  function tableColumns(raw: Database.Database, table: string): string[] {
+    return (raw.pragma(`table_info(${table})`) as Array<{ name: string }>).map(
+      (column) => column.name,
+    );
+  }
+
+  it('a v0.24.0 database upgrades: dated follow-ups become open tasks, the column goes', async () => {
+    const dir = tmpDataDir('sf-upgrade-0013-');
+    const databasePath = path.join(dir, 'db.sqlite');
+    buildDatabase(databasePath, await migrationsFolderBefore('0013_tasks_and_supplier_documents'));
+
+    // Seed it the way the household's looks: one interaction carrying a
+    // follow-up date, plus the shapes the old free column could hold.
+    const seed = new Database(databasePath);
+    try {
+      assert.ok(tableColumns(seed, 'supplier_interactions').includes('follow_up_date'));
+      assert.ok(!tableColumns(seed, 'attachments').includes('supplier_id'));
+      seed
+        .prepare(
+          'INSERT INTO suppliers (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run(1, 'EnergyCo', 'energyco', T0, T0);
+      const interaction = seed.prepare(
+        `INSERT INTO supplier_interactions
+           (id, supplier_id, occurred_at, channel, summary, follow_up_date, created_by, created_at)
+         VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
+      );
+      interaction.run(
+        1,
+        T0,
+        'call',
+        'Asked about a cheaper tariff',
+        '2026-11-01',
+        'alex@example.com',
+        T0,
+      );
+      interaction.run(
+        2,
+        T0 + 1000,
+        'email',
+        'Sent the meter reading',
+        null,
+        'sam@example.com',
+        T0 + 1000,
+      );
+      interaction.run(
+        3,
+        T0 + 2000,
+        'letter',
+        'Old note',
+        'next week',
+        'alex@example.com',
+        T0 + 2000,
+      );
+      interaction.run(4, T0 + 3000, 'other', 'Blank follow-up', '', 'alex@example.com', T0 + 3000);
+      seed
+        .prepare(
+          'INSERT INTO pots (id, label, kind, created_at, updated_at) VALUES (1, ?, ?, ?, ?)',
+        )
+        .run('Main', 'bank', T0, T0);
+      seed
+        .prepare(
+          `INSERT INTO purchases (id, pot_id, total_pence, occurred_at, occurred_date, entered_by, created_at, updated_at)
+           VALUES (7, 1, 8420, ?, '2026-09-20', 'alex@example.com', ?, ?)`,
+        )
+        .run(T0, T0, T0);
+      seed
+        .prepare(
+          `INSERT INTO attachments (id, purchase_id, file_key, original_name, mime, size_bytes, sha256, created_by, created_at)
+           VALUES (5, 7, 'receipts/abc.pdf', 'receipt.pdf', 'application/pdf', 1234, ?, 'alex@example.com', ?)`,
+        )
+        .run('a'.repeat(64), T0);
+    } finally {
+      seed.close();
+    }
+
+    const output = runProductionRunner(dir);
+    assert.match(output, /\[migrate\] database is up to date/);
+    assertEveryJournalEntryAppliedExactlyOnce(databasePath);
+
+    const raw = new Database(databasePath);
+    try {
+      assert.ok(
+        !tableColumns(raw, 'supplier_interactions').includes('follow_up_date'),
+        'follow_up_date is dropped',
+      );
+      assert.equal(
+        (raw.prepare('SELECT COUNT(*) AS n FROM supplier_interactions').get() as { n: number }).n,
+        4,
+        'every interaction survives',
+      );
+      const migrated = raw
+        .prepare(
+          `SELECT title, detail, due_date, subject_kind, subject_id, related_interaction_id,
+                  created_by, created_at, completed_at, version
+             FROM tasks ORDER BY related_interaction_id`,
+        )
+        .all();
+      assert.deepEqual(migrated, [
+        {
+          title: 'Follow up with EnergyCo',
+          detail: 'Asked about a cheaper tariff',
+          due_date: '2026-11-01',
+          subject_kind: 'supplier',
+          subject_id: 1,
+          related_interaction_id: 1,
+          created_by: 'alex@example.com',
+          created_at: T0,
+          completed_at: null,
+          version: 1,
+        },
+        {
+          // Not a date: kept as an undated task rather than dropped.
+          title: 'Follow up with EnergyCo',
+          detail: 'Old note',
+          due_date: null,
+          subject_kind: 'supplier',
+          subject_id: 1,
+          related_interaction_id: 3,
+          created_by: 'alex@example.com',
+          created_at: T0 + 2000,
+          completed_at: null,
+          version: 1,
+        },
+      ]);
+      const audit = raw
+        .prepare("SELECT actor, entity, action FROM audit_entries WHERE action = 'task.migrate'")
+        .all();
+      assert.deepEqual(audit, [
+        { actor: 'system', entity: 'task', action: 'task.migrate' },
+        { actor: 'system', entity: 'task', action: 'task.migrate' },
+      ]);
+
+      // The rebuilt attachments table kept the receipt, and now takes a
+      // supplier owner — but still exactly one owner.
+      assert.deepEqual(
+        raw.prepare('SELECT id, purchase_id, receipt_id, supplier_id FROM attachments').all(),
+        [{ id: 5, purchase_id: 7, receipt_id: null, supplier_id: null }],
+      );
+      const attach = raw.prepare(
+        `INSERT INTO attachments (purchase_id, supplier_id, file_key, original_name, mime, size_bytes, sha256, created_by, created_at)
+         VALUES (?, ?, ?, 'terms.pdf', 'application/pdf', 10, ?, 'alex@example.com', ?)`,
+      );
+      attach.run(null, 1, 'suppliers/terms.pdf', 'b'.repeat(64), T0);
+      assert.throws(() => attach.run(7, 1, 'x/both.pdf', 'c'.repeat(64), T0), /CHECK constraint/);
+      assert.throws(
+        () => attach.run(null, null, 'x/none.pdf', 'd'.repeat(64), T0),
+        /CHECK constraint/,
+      );
+      assert.deepEqual(raw.pragma('foreign_key_check'), []);
+      assert.equal(raw.pragma('integrity_check', { simple: true }), 'ok');
+    } finally {
+      raw.close();
+    }
+
+    // Through the app: the household's follow-up is an open task that is
+    // overdue on 2 November — the day the old list silently dropped it — and
+    // it can be closed like any other.
+    const handle = openDatabase(databasePath);
+    try {
+      const open = listTasks(handle.db);
+      const followUp = open.find((task) => task.dueDate === '2026-11-01');
+      assert.ok(followUp !== undefined);
+      assert.equal(taskDue(followUp.dueDate, '2026-11-02').label, 'Overdue by 1 day');
+      const done = completeTask(handle.db, {
+        id: followUp.id,
+        expectedVersion: followUp.version,
+        actor: 'alex@example.com',
+      });
+      assert.equal(done.version, 2);
+    } finally {
+      handle.raw.close();
+    }
+
+    // Idempotent: a second start applies nothing and migrates nothing twice.
+    const second = runProductionRunner(dir);
+    assert.match(second, /\[migrate\] database is up to date/);
+    assertEveryJournalEntryAppliedExactlyOnce(databasePath);
+    const again = new Database(databasePath, { readonly: true });
+    try {
+      assert.equal((again.prepare('SELECT COUNT(*) AS n FROM tasks').get() as { n: number }).n, 2);
+    } finally {
+      again.close();
+    }
+    rmSync(dir, { recursive: true, force: true });
   });
 });

@@ -1,8 +1,9 @@
-import { asc, desc, eq, isNotNull } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import { recordAudit, type DbTx } from '../audit';
 import type { Db } from '../db/client';
 import { supplierInteractions, supplierReferences, suppliers } from '../db/schema';
 import { SupplierNotFoundError } from './suppliers';
+import { createTaskInTransaction, MAX_TASK_TITLE_LENGTH, type Task } from './tasks';
 import { isValidLocalDate } from '../time';
 
 /**
@@ -17,6 +18,15 @@ import { isValidLocalDate } from '../time';
 
 export const INTERACTION_CHANNELS = ['call', 'email', 'letter', 'in_person', 'other'] as const;
 export type InteractionChannel = (typeof INTERACTION_CHANNELS)[number];
+
+/** How each channel reads on the supplier card's log. */
+export const INTERACTION_CHANNEL_LABELS: Record<InteractionChannel, string> = {
+  call: 'Phone call',
+  email: 'Email',
+  letter: 'Letter',
+  in_person: 'In person',
+  other: 'Other',
+};
 
 export const MAX_REFERENCE_LABEL_LENGTH = 100;
 export const MAX_REFERENCE_VALUE_LENGTH = 500;
@@ -99,8 +109,18 @@ export interface AddSupplierInteractionInput {
   channel: string;
   summary: string;
   outcome?: string | null;
-  /** Local date ('YYYY-MM-DD') of a promised follow-up, or null. */
+  /**
+   * Local date ('YYYY-MM-DD') by which the household promised to follow up,
+   * or null. Since v0.25.0 this creates a task (decision 175) rather than
+   * being stored on the interaction.
+   */
   followUpDate?: string | null;
+  /**
+   * The follow-up task's words, e.g. "Ring back about the refund". Blank
+   * means "Follow up with <supplier>". Words with no date still make a task —
+   * an undated promise is still a promise.
+   */
+  followUpTitle?: string | null;
   occurredAt?: Date;
   relatedPurchaseId?: number | null;
   relatedRenewalId?: number | null;
@@ -108,15 +128,23 @@ export interface AddSupplierInteractionInput {
   now?: Date;
 }
 
+export interface AddedSupplierInteraction {
+  interaction: SupplierInteraction;
+  /** The task the follow-up created, or null when none was asked for. */
+  followUpTask: Task | null;
+}
+
 /**
- * One interaction: what was said or sent, who recorded it and when, and the
- * optional follow-up date the Contracts & renewals panel can surface
- * (SPEC §21.2 — no notification, decision 19).
+ * One interaction: what was said or sent, and who recorded it and when
+ * (SPEC §21.2). A follow-up date (or follow-up words) creates an open task
+ * about the supplier **in the same transaction** — the call and the promise
+ * it produced are saved together or not at all — and the task points back at
+ * the interaction. Nothing is sent to anyone (decision 19).
  */
 export function addSupplierInteraction(
   db: Db,
   input: AddSupplierInteractionInput,
-): SupplierInteraction {
+): AddedSupplierInteraction {
   const now = input.now ?? new Date();
   if (!INTERACTION_CHANNELS.includes(input.channel as InteractionChannel)) {
     throw new InvalidSupplierDetailError('Choose how the conversation happened.');
@@ -128,12 +156,15 @@ export function addSupplierInteraction(
     true,
   )!;
   const outcome = input.outcome
-    ? cleanText(input.outcome, MAX_INTERACTION_OUTCOME_LENGTH, 'The outcome', false)
+    ? cleanText(input.outcome, MAX_INTERACTION_OUTCOME_LENGTH, 'Outcome', false)
     : null;
   const followUpDate = input.followUpDate?.trim() ? input.followUpDate.trim() : null;
   if (followUpDate !== null && !isValidLocalDate(followUpDate)) {
     throw new InvalidSupplierDetailError('Enter the follow-up date as a calendar date.');
   }
+  const followUpTitle = input.followUpTitle
+    ? cleanText(input.followUpTitle, MAX_TASK_TITLE_LENGTH, 'Follow-up task', false)
+    : null;
   const occurredAt = input.occurredAt ?? now;
 
   return db.transaction((tx) => {
@@ -146,7 +177,6 @@ export function addSupplierInteraction(
         channel: input.channel,
         summary,
         outcome,
-        followUpDate,
         relatedPurchaseId: input.relatedPurchaseId ?? null,
         relatedRenewalId: input.relatedRenewalId ?? null,
         createdBy: input.actor,
@@ -154,16 +184,31 @@ export function addSupplierInteraction(
       })
       .returning()
       .get();
+    const followUpTask =
+      followUpDate === null && followUpTitle === null
+        ? null
+        : createTaskInTransaction(tx, {
+            title: followUpTitle ?? `Follow up with ${supplier.name}`,
+            detail: summary,
+            dueDate: followUpDate,
+            subjectKind: 'supplier',
+            subjectId: supplier.id,
+            relatedInteractionId: inserted.id,
+            actor: input.actor,
+            now,
+          });
     recordAudit(tx, {
       actor: input.actor,
       action: 'supplier.interaction',
       entity: 'supplier',
       entityId: input.supplierId,
-      summary: `Logged a ${input.channel.replace('_', ' ')} with supplier “${supplier.name}”`,
-      after: { summary, outcome, followUpDate },
+      summary:
+        `Logged a ${input.channel.replace('_', ' ')} with supplier “${supplier.name}”` +
+        (followUpTask === null ? '' : ` and added the task “${followUpTask.title}”`),
+      after: { summary, outcome, followUpDate, followUpTaskId: followUpTask?.id ?? null },
       now,
     });
-    return inserted;
+    return { interaction: inserted, followUpTask };
   });
 }
 
@@ -190,35 +235,4 @@ export function listSupplierInteractions(
     .orderBy(desc(supplierInteractions.occurredAt), desc(supplierInteractions.id))
     .limit(top)
     .all();
-}
-
-/**
- * Follow-up dates still ahead of `today` (inclusive), soonest first — the
- * "promises do not evaporate" line SPEC §21.2 puts in the Contracts &
- * renewals panel.
- */
-export interface UpcomingSupplierFollowUp {
-  supplierId: number;
-  supplierName: string;
-  followUpDate: string;
-  summary: string;
-  channel: string;
-}
-
-export function upcomingSupplierFollowUps(db: Db, today: string): UpcomingSupplierFollowUp[] {
-  return db
-    .select({
-      supplierId: supplierInteractions.supplierId,
-      supplierName: suppliers.name,
-      followUpDate: supplierInteractions.followUpDate,
-      summary: supplierInteractions.summary,
-      channel: supplierInteractions.channel,
-    })
-    .from(supplierInteractions)
-    .innerJoin(suppliers, eq(suppliers.id, supplierInteractions.supplierId))
-    .where(isNotNull(supplierInteractions.followUpDate))
-    .all()
-    .filter((row): row is UpcomingSupplierFollowUp => row.followUpDate !== null)
-    .filter((row) => row.followUpDate >= today)
-    .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
 }

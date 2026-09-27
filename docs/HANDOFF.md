@@ -1,3 +1,93 @@
+# Handoff: v0.25.0 — tasks: a real follow-up model, labelled dates, supplier documents (decision 175)
+
+**Branch:** `arena/01a0e3b7-simple-finance`, from `main` @ `6e22b5d` (the v0.24.0 merge). The session
+implemented the prepared brief "Next session: Tasks — a real follow-up model, labelled dates, and what
+'prompt me' means". The release is the single pull request (decision 173).
+
+## v0.24.0 — verified post-merge facts (recorded here per decision 173)
+
+Merge commit `6e22b5d725ca413aec5e63f2ff31321066500e68` (PR #85); annotated tag `v0.24.0` on it; Publish
+run `36331056044` (2026-09-27, success); digest
+`sha256:ab0e90bb397a0498400d71548cd27affd5fb331e6a6ac4af580d2a041d0ccf01` on `v0.24.0` / `latest` /
+`sha-6e22b5d`; the GitHub release `v0.24.0` exists, is Latest, and carries those facts.
+
+## What changed
+
+- **Schema — migration `0013_tasks_and_supplier_documents`** (drizzle-kit real-clock stamp
+  `1790527814635`, decision 172): new `tasks` table; each `supplier_interactions.follow_up_date` value
+  becomes an open task (title "Follow up with <supplier>", detail = summary, undated when not a real
+  date) with a `task.migrate` audit row by `system`; the column is dropped; `attachments` is rebuilt
+  on the 0009 pattern with `supplier_id` and a three-owner exactly-one CHECK.
+- **Domain:** `src/lib/records/tasks.ts` (create / edit / complete / reopen — versioned, audited,
+  never deleted; pure `taskDue`, `sortTasksByDue`, `groupTasksByDue`, `countOpenTasks`);
+  `subjectLabel()` in `targets.ts`; `src/lib/records/tasks-view.ts` (display rows, deep links, "The
+  app has noticed", page views); `keyDateHref()` / `keyDateStateWords()` in `keydates.ts`;
+  `formatShortLocalDateWithYear()` in `time.ts`. `addSupplierInteraction` returns
+  `{ interaction, followUpTask }` and writes both in one transaction; `upcomingSupplierFollowUps` is
+  gone. Attachments take a supplier owner (`listStoredSupplierAttachments`).
+- **Actions:** `createTaskAction`, `completeTaskAction`, `reopenTaskAction`, `editTaskAction`
+  (`revalidateTaskPages()`), `addSupplierInteractionAction` (follow-up words, task message), and the
+  upload action accepts exactly one of purchase / receipt / supplier.
+- **UI:** `/tasks` (new; `NAV_ITEMS` and the drawer's More group); `src/components/task-forms.tsx`
+  (checkbox, reopen, edit/reschedule/close-with-note, create form, lists, `TaskDueBadge`); the
+  supplier card (Tasks section, header badge, labelled log, Documents, follow-up words); Suppliers
+  banner and Contracts "Follow-ups you promised" from open tasks; purchase rows "Add a task"; anchors
+  `renewal-{id}` on Contracts and `vehicle-{id}` on Insights.
+- **Docs:** SPEC §25 (new) and §21.2 / §22.3 / §23 wording; decision 175; OQ10 and OQ11 resolved;
+  OQ14 (stale pot) opened; `docs/RELEASE_NOTES_v0.25.0.md`; version 0.25.0 in all five places.
+
+## Calls made without the household's answer
+
+The household skipped this session's questions ("carry on and I will wait for you to finish"), so:
+
+1. **The stale-pot noticed item is excluded** — OQ14 records the 7-day / 14-day choice for them.
+2. **Supplier attachments ship in this release's migration** (resolving OQ10), PDF/JPEG/PNG only.
+
+## What a future session should know
+
+1. **Never reuse `targetKind`/`targetId`/`targetLabel()` for tasks.** `targetLabel()` answers
+   "household" for any kind it does not know. `subjectLabel()` degrades to the bare kind (a voided
+   purchase reads "purchase") and prints an unknown kind as itself. Adding a subject kind means
+   `TASK_SUBJECT_KINDS`, `subjectLabel`, `taskSubjectHref` (tasks-view) and the write-time existence
+   check in `tasks.ts` — the database only enforces `(subject_kind = 'household') = (subject_id IS
+   NULL)`; `subject_id` has no FK because it is polymorphic.
+2. **Keep `tasks-view.ts` apart from `tasks.ts`.** `supplier-details.ts` imports the write path; the
+   view reads the key-date and fuel engines (via `money-view`) and must not be dragged into it.
+3. **0013 was hand-corrected from drizzle's output before shipping:** the generated attachments
+   rebuild selected a non-existent `supplier_id` from the old table and qualified CHECK columns with
+   `"__new_attachments".`. Now that it ships, its SQL must never change (decision 172).
+4. **Attachments' FKs are now no-action** (drizzle's default in the rebuild), where 0009 had
+   cascade. Nothing deletes a purchase, receipt or supplier today; any feature that ever does must
+   deal with its attachments explicitly.
+5. **ICU prints September as "Sept"** in en-GB here (`tests/time.test.ts` already pins it). Do not
+   hard-code "Sep" in assertions; weekday names are real — 1 Sept 2026 is a Tuesday.
+6. **The checkbox is controlled (`ticked || pending`) and unticks itself on an error;**
+   `completeTaskAction`/`reopenTaskAction`/`editTaskAction` revalidate even when they refuse, so a
+   stale box re-renders the current state instead of looking done.
+7. **e2e `tasks` project** runs before `backup` and uses a per-attempt unique title (CI retries share
+   the database). "Done in the last 30 days" sits *inside* the "Your tasks" section, so assert on the
+   task's checkbox, not on `li` counts; a task made from a call carries the call's summary as its
+   detail, so select log entries by their "Interaction:" label.
+8. **OQ14, if the household chooses:** add a derived item in `getNoticedItems()` for bank/cash pots
+   whose latest checkpoint is older than N days — link-only, like the others.
+9. **Sandbox:** SANDBOX entry 8 still holds (`/tmp/pwbrowsers`, the throwaway, un-ignored
+   `playwright.local.config.ts`). Running `node scripts/migrate.cjs` without `DATA_DIR` creates
+   `data/simple-finance.sqlite` in the repo — ignored, but delete it.
+
+## Gates at close
+
+`npm test` **568 passed** / 132 suites · `npm run typecheck` clean · `npm run format:check` clean ·
+`npm run build` clean (`next-env.d.ts` restored afterwards). Playwright **95 passed** across every
+project via the SANDBOX entry 8 overlay (92 before + 3 in the new `tasks` project).
+
+## Housekeeping still open
+
+- OQ14 — the stale-pot item, 7 or 14 days — is the household's call.
+- The next working session records v0.25.0's post-merge verified facts (merge SHA, digest, run IDs)
+  at the top of this file, as decision 173 requires.
+
+---
+
 # Handoff: v0.24.0 — a saved purchase clears the till (decision 174)
 
 **Branch:** `arena/01a0e36d-simple-finance`, from `main` @ `1081025` (the v0.23.1 merge). The previous

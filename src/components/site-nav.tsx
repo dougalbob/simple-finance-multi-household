@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/settings', label: 'Settings' },
   { href: '/suppliers', label: 'Suppliers' },
   { href: '/contracts', label: 'Contracts & Renewals' },
+  { href: '/tasks', label: 'Tasks' },
 ];
 
 const NAV_GROUPS = [
@@ -44,6 +45,7 @@ const NAV_GROUPS = [
       { href: '/settings', label: 'Settings' },
       { href: '/suppliers', label: 'Suppliers' },
       { href: '/contracts', label: 'Contracts & Renewals' },
+      { href: '/tasks', label: 'Tasks' },
     ],
   },
 ];

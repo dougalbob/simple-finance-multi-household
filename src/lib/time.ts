@@ -77,6 +77,18 @@ export function formatShortLocalDate(dateString: string): string {
 }
 
 /**
+ * `formatShortLocalDate`, plus the year when the date is not in `today`'s
+ * year: "Sun 1 Nov" this year, "Tue 5 Jan 2027" next. A task due next
+ * January or an interaction logged last spring must not read as this year's.
+ */
+export function formatShortLocalDateWithYear(dateString: string, today: string): string {
+  const match = DATE_ONLY_PATTERN.exec(dateString);
+  if (match === null) return dateString;
+  const short = formatShortLocalDate(dateString);
+  return today.slice(0, 4) === match[1] ? short : `${short} ${match[1]}`;
+}
+
+/**
  * Local calendar date of an instant as 'YYYY-MM-DD' in the business timezone.
  * Assembled from formatToParts so the shape never depends on locale order.
  */

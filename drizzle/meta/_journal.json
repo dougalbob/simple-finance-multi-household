@@ -92,6 +92,13 @@
       "when": 1790506141836,
       "tag": "0012_credit_card_pots",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1790527814635,
+      "tag": "0013_tasks_and_supplier_documents",
+      "breakpoints": true
     }
   ]
 }

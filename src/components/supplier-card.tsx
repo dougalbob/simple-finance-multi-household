@@ -7,23 +7,16 @@ import {
   SupplierInteractionForm,
   SupplierReferenceForm,
 } from '@/components/supplier-forms';
+import { DoneTaskList, OpenTaskList, TaskCreateForm } from '@/components/task-forms';
 import { formatPence } from '@/lib/money';
-import { StoredAttachment } from '@/lib/records/attachments';
+import type { StoredAttachment } from '@/lib/records/attachments';
 import {
   hasSupplierFocus,
   resolveSupplierFocus,
   SupplierFocus,
 } from '@/lib/records/supplier-focus';
-import { SupplierInteraction, SupplierReference } from '@/lib/records/supplier-details';
-import { toLocalDateString } from '@/lib/time';
-
-const CHANNEL_LABELS: Record<string, string> = {
-  call: 'Phone call',
-  email: 'Email',
-  letter: 'Letter',
-  in_person: 'In person',
-  other: 'Other',
-};
+import type { SupplierReference } from '@/lib/records/supplier-details';
+import type { TaskRowView } from '@/lib/records/tasks-view';
 
 function ChevronDownIcon({ className = 'h-5 w-5' }: { className?: string }) {
   return (
@@ -67,7 +60,17 @@ export interface SupplierCardData {
     notes: string | null;
   };
   references: SupplierReference[];
-  interactions: SupplierInteraction[];
+  /** Newest first, with every date already in words (the server knows "today"). */
+  interactions: SupplierInteractionView[];
+  /** Open tasks about this supplier (overdue first) and the recently closed ones. */
+  tasks: {
+    open: TaskRowView[];
+    doneRecently: TaskRowView[];
+    openCount: number;
+    overdueCount: number;
+  };
+  /** Letters, policy documents and terms attached to the supplier itself (v0.25.0). */
+  documents: StoredAttachment[];
   recentPurchases: Array<{
     id: number;
     date: string;
@@ -86,10 +89,54 @@ export interface SupplierCardData {
   }>;
 }
 
+/**
+ * One interaction-log entry as the card prints it (SPEC §21.2, decision 175):
+ * every line labelled — "Interaction:", "Logged by:", "Follow up by:" — so a
+ * bare date can never be mistaken for the date of the call, the date it was
+ * written down, or the date something is owed.
+ */
+export interface SupplierInteractionView {
+  id: number;
+  /** "Phone call", "Email", … */
+  channelLabel: string;
+  /** "Fri 27 Sep" (with the year when it is not this year). */
+  occurredOnLabel: string;
+  summary: string;
+  outcome: string | null;
+  loggedBy: string;
+  /** The task this interaction's follow-up created, as it stands now. */
+  followUp: {
+    title: string;
+    /** "Sun 1 Nov", or null for an undated follow-up. */
+    dueDateLabel: string | null;
+    /** "Overdue by 3 days", "In 12 days", "Done Tue 3 Nov", … */
+    stateWords: string;
+  } | null;
+}
+
+/** "2 open tasks · 1 overdue" — words, so the header never relies on colour. */
+function TaskCountBadge({ openCount, overdueCount }: { openCount: number; overdueCount: number }) {
+  if (openCount === 0) return null;
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold ${
+        overdueCount > 0
+          ? 'border-danger-300 bg-danger-50 text-danger-800'
+          : 'border-border bg-surface-muted text-ink-body'
+      }`}
+    >
+      {openCount} open {openCount === 1 ? 'task' : 'tasks'}
+      {overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}
+    </span>
+  );
+}
+
 export function SupplierCard({
   supplier,
   references,
   interactions,
+  tasks,
+  documents,
   recentPurchases,
   isExpanded,
   onToggle,
@@ -109,9 +156,12 @@ export function SupplierCard({
         aria-controls={`supplier-details-${supplier.id}`}
         className="group flex w-full cursor-pointer items-center justify-between text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 rounded-lg"
       >
-        <h2 className="text-xl font-semibold tracking-tight text-ink transition-colors group-hover:text-accent">
-          {supplier.name}
-        </h2>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="text-xl font-semibold tracking-tight text-ink transition-colors group-hover:text-accent">
+            {supplier.name}
+          </h2>
+          <TaskCountBadge openCount={tasks.openCount} overdueCount={tasks.overdueCount} />
+        </span>
         <span
           className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-faint transition-colors group-hover:bg-surface-muted group-hover:text-ink-body"
           aria-hidden="true"
@@ -196,27 +246,67 @@ export function SupplierCard({
           )}
 
           <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-ink-muted">
+            Tasks
+          </h3>
+          <p className="mb-2 text-xs text-ink-muted">
+            What you have said you will do about {supplier.name}. Tick one when it is done; an
+            overdue task stays here until it is. In the app only — nothing is sent.
+          </p>
+          <OpenTaskList
+            tasks={tasks.open}
+            showSubject={false}
+            emptyText="No open tasks for this supplier."
+          />
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
+              Add a task for {supplier.name}
+            </summary>
+            <div className="mt-2">
+              <TaskCreateForm
+                idPrefix={`supplier-${supplier.id}-task`}
+                subject={`supplier:${supplier.id}`}
+                titlePlaceholder="e.g. Research cheaper tariffs"
+              />
+            </div>
+          </details>
+          {tasks.doneRecently.length > 0 ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
+                Done recently ({tasks.doneRecently.length})
+              </summary>
+              <div className="mt-2">
+                <DoneTaskList tasks={tasks.doneRecently} showSubject={false} />
+              </div>
+            </details>
+          ) : null}
+
+          <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-ink-muted">
             Interaction log
           </h3>
-          <SupplierInteractionForm supplierId={supplier.id} />
+          <SupplierInteractionForm supplierId={supplier.id} supplierName={supplier.name} />
           {interactions.length > 0 ? (
             <ul className="space-y-2 text-sm">
               {interactions.map((interaction) => (
                 <li key={interaction.id} className="border-l-2 border-note-200 pl-3">
-                  <span className="font-medium">
-                    {CHANNEL_LABELS[interaction.channel] ?? interaction.channel}
-                  </span>{' '}
-                  · {interaction.summary}
-                  <span className="block text-xs text-ink-muted">
-                    {toLocalDateString(new Date(interaction.occurredAt))} · {interaction.createdBy}
-                  </span>
+                  <p>
+                    <span className="font-medium">Interaction:</span> {interaction.occurredOnLabel}{' '}
+                    · {interaction.channelLabel}
+                  </p>
+                  <p className="text-ink-body">{interaction.summary}</p>
                   {interaction.outcome !== null && interaction.outcome !== '' ? (
-                    <span className="block text-ink-muted">{interaction.outcome}</span>
+                    <p className="text-ink-muted">
+                      <span className="font-medium">Outcome:</span> {interaction.outcome}
+                    </p>
                   ) : null}
-                  {interaction.followUpDate !== null ? (
-                    <span className="block text-xs text-warning-700">
-                      Follow up {interaction.followUpDate}
-                    </span>
+                  <p className="text-xs text-ink-muted">
+                    <span className="font-medium">Logged by:</span> {interaction.loggedBy}
+                  </p>
+                  {interaction.followUp !== null ? (
+                    <p className="text-xs text-ink-soft">
+                      <span className="font-medium">Follow up by:</span>{' '}
+                      {interaction.followUp.dueDateLabel ?? 'no date set'} —{' '}
+                      {interaction.followUp.stateWords}
+                    </p>
                   ) : null}
                 </li>
               ))}
@@ -224,6 +314,14 @@ export function SupplierCard({
           ) : (
             <p className="text-sm text-ink-muted">No interactions yet.</p>
           )}
+
+          <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-ink-muted">
+            Documents
+          </h3>
+          <p className="text-xs text-ink-muted">
+            Letters, policy documents and terms — PDF, JPEG or PNG, up to 10 MB each.
+          </p>
+          <AttachmentForm supplierId={supplier.id} attachments={documents} />
 
           <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-ink-muted">
             Recent purchases

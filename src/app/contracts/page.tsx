@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { RenewalEditForm } from '@/components/schedule-forms';
+import { TaskDueBadge } from '@/components/task-forms';
 import { currentUserFromRequest } from '@/lib/auth/next';
 import { getDbHandle } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
@@ -11,7 +12,7 @@ import { listRenewals } from '@/lib/records/renewals';
 import { daysBetween } from '@/lib/records/dates';
 import { listSchedulesWithContractEnds } from '@/lib/records/schedules';
 import { supplierCardHref } from '@/lib/records/supplier-focus';
-import { upcomingSupplierFollowUps } from '@/lib/records/supplier-details';
+import { getOpenSupplierTaskRows } from '@/lib/records/tasks-view';
 import { listSuppliers } from '@/lib/records/suppliers';
 import { targetLabel, targetNames } from '@/lib/records/targets';
 import { getContractEndWarningLeadDays, getRenewalWarningLeadDays } from '@/lib/records/settings';
@@ -23,8 +24,8 @@ export const dynamic = 'force-dynamic';
 /**
  * Contracts & Renewals (SPEC §22.3): the full list — renewal records with
  * their per-item leads and the fixed-term contract ends carried by DD/SO
- * schedules, plus the interaction follow-up dates from the Suppliers page and
- * the history the annual advance leaves behind.
+ * schedules, plus the open tasks about suppliers (the follow-ups promised on
+ * a call, decision 175) and the history the annual advance leaves behind.
  *
  * Both lists are informational. Nothing here stops a bank instruction: past
  * contract end dates read "rolled / awaiting review" because the household's
@@ -35,7 +36,8 @@ export default async function ContractsPage() {
   if (user === null) redirect('/unauthorized');
 
   const { db } = getDbHandle();
-  const today = toLocalDateString(new Date());
+  const now = new Date();
+  const today = toLocalDateString(now);
   const renewals = listRenewals(db);
   const contracts = listSchedulesWithContractEnds(db);
   const creditCards = listPots(db).filter((pot) => pot.kind === 'credit-card');
@@ -45,7 +47,7 @@ export default async function ContractsPage() {
   const vehicles = listVehicles(db);
   const defaultRenewalLead = getRenewalWarningLeadDays(db);
   const contractLead = getContractEndWarningLeadDays(db);
-  const followUps = upcomingSupplierFollowUps(db, today);
+  const followUps = getOpenSupplierTaskRows(db, now);
 
   const names = targetNames({ people, vehicles });
 
@@ -224,7 +226,7 @@ export default async function ContractsPage() {
                 const days = daysBetween(today, renewal.nextRenewalDate);
                 const inWindow = days >= 0 && days <= renewal.warnDaysBefore;
                 return (
-                  <li key={renewal.id} className="py-3">
+                  <li key={renewal.id} id={`renewal-${renewal.id}`} className="scroll-mt-24 py-3">
                     <div className="flex flex-wrap items-baseline gap-x-3">
                       <span className="font-medium">{renewal.label}</span>
                       <span className="text-sm text-ink-soft">
@@ -296,29 +298,35 @@ export default async function ContractsPage() {
             Follow-ups you promised
           </h2>
           <p className="mt-1 text-xs text-ink-muted">
-            From the supplier interaction log — so a date agreed on a phone call does not evaporate.
-            No notification is sent for these (in-app only, by design).
+            Every open task about a supplier — including the follow-up dates agreed on a call —
+            overdue first, so a promise does not evaporate once its date has passed. Tick them off
+            on the supplier card or on{' '}
+            <Link className="text-accent hover:underline" href="/tasks">
+              Tasks
+            </Link>
+            . No notification is sent for these (in-app only, by design).
           </p>
           {followUps.length === 0 ? (
             <p className="mt-3 text-sm text-ink-muted">
-              Nothing pending. Follow-up dates are added on the{' '}
+              Nothing pending. Log a call with a follow-up date on the{' '}
               <Link className="text-accent hover:underline" href="/suppliers">
                 Suppliers
               </Link>{' '}
-              page.
+              page and it appears here as a task.
             </p>
           ) : (
-            <ul className="mt-3 space-y-1 text-sm">
-              {followUps.map((followUp, index) => (
-                <li key={index}>
-                  <span className="font-medium tabular-nums">{followUp.followUpDate}</span> ·{' '}
-                  <Link
-                    className="text-accent hover:underline"
-                    href={supplierCardHref(followUp.supplierId)}
-                  >
-                    {followUp.supplierName}
-                  </Link>{' '}
-                  — {followUp.summary}
+            <ul className="mt-3 space-y-1.5 text-sm">
+              {followUps.map((task) => (
+                <li key={task.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <TaskDueBadge task={task} />
+                  {task.subjectHref === null ? (
+                    <span className="font-medium">{task.subjectLabel}</span>
+                  ) : (
+                    <Link className="text-accent hover:underline" href={task.subjectHref}>
+                      {task.subjectLabel}
+                    </Link>
+                  )}
+                  <span>— {task.title}</span>
                 </li>
               ))}
             </ul>
