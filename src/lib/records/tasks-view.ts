@@ -56,6 +56,10 @@ export interface TaskRowView {
   completedOnLabel: string | null;
   completedBy: string | null;
   completionNote: string | null;
+  /** Who the task is for (v0.26.0): null = household, else an email lower-cased. */
+  assignedTo: string | null;
+  /** Label for who the task is for, in words (e.g. "Everyone", "Only for Alex"). */
+  assignedToLabel: string | null;
 }
 
 export interface TaskViewContext {
@@ -171,6 +175,15 @@ export function actorLabel(actor: string, actorNames: ReadonlyMap<string, string
   return actorNames.get(actor.trim().toLowerCase()) ?? actor;
 }
 
+export function assignedToLabel(
+  assignedTo: string | null,
+  actorNames: ReadonlyMap<string, string>,
+): string | null {
+  if (assignedTo === null) return null;
+  const name = actorNames.get(assignedTo.trim().toLowerCase()) ?? assignedTo;
+  return `Only for ${name}`;
+}
+
 export function taskRowView(task: Task, context: TaskViewContext): TaskRowView {
   const { today } = context;
   const facts =
@@ -200,6 +213,8 @@ export function taskRowView(task: Task, context: TaskViewContext): TaskRowView {
     completedBy:
       task.completedBy === null ? null : actorLabel(task.completedBy, context.actorNames),
     completionNote: task.completionNote,
+    assignedTo: task.assignedTo ?? null,
+    assignedToLabel: assignedToLabel(task.assignedTo ?? null, context.actorNames),
   };
 }
 

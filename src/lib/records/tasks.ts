@@ -85,6 +85,12 @@ export interface CreateTaskInput {
   subjectId?: number | null;
   /** Set by `addSupplierInteraction`: the logged call this promise came from. */
   relatedInteractionId?: number | null;
+  /**
+   * Who the task is for (v0.26.0, decision 176). Null = household (both
+   * people count it). A lower-cased email = only that person counts it in
+   * the bell. The task itself stays visible to both (SPEC §3).
+   */
+  assignedTo?: string | null;
   actor: string;
   now?: Date;
 }
@@ -109,6 +115,7 @@ export function createTaskInTransaction(tx: DbTx, input: CreateTaskInput): Task 
     subjectKind,
     subjectId,
   );
+  const assignedTo = checkedAssignedTo(input.assignedTo ?? null);
 
   const inserted = tx
     .insert(tasks)
@@ -119,6 +126,7 @@ export function createTaskInTransaction(tx: DbTx, input: CreateTaskInput): Task 
       subjectKind,
       subjectId,
       relatedInteractionId,
+      assignedTo,
       createdBy: actor,
       createdAt: now,
       updatedAt: now,
@@ -151,6 +159,11 @@ export interface EditTaskPatch {
   detail?: string | null;
   /** undefined = unchanged; null or '' = no due date. Moving it is rescheduling. */
   dueDate?: string | null;
+  /**
+   * Who the task is for. Undefined = unchanged; null or '' = household
+   * (both). An email = only that person counts it in the bell.
+   */
+  assignedTo?: string | null;
 }
 
 export interface TaskVersionInput {
@@ -177,9 +190,11 @@ export function editTask(db: Db, input: TaskVersionInput & { patch: EditTaskPatc
     const title = patch.title === undefined ? current.title : checkedTitle(patch.title);
     const detail = patch.detail === undefined ? current.detail : checkedDetail(patch.detail);
     const dueDate = patch.dueDate === undefined ? current.dueDate : checkedDueDate(patch.dueDate);
+    const assignedTo =
+      patch.assignedTo === undefined ? current.assignedTo : checkedAssignedTo(patch.assignedTo);
     const updated = tx
       .update(tasks)
-      .set({ title, detail, dueDate, updatedAt: now, version: current.version + 1 })
+      .set({ title, detail, dueDate, assignedTo, updatedAt: now, version: current.version + 1 })
       .where(eq(tasks.id, current.id))
       .returning()
       .get();
@@ -512,6 +527,23 @@ function checkedDueDate(raw: string | null): string | null {
   if (value === '') return null;
   if (!isValidLocalDate(value)) {
     throw new InvalidTaskInputError('Enter the due date as a calendar date, or leave it empty.');
+  }
+  return value;
+}
+
+function checkedAssignedTo(raw: string | null): string | null {
+  if (raw === null) return null;
+  const value = raw.trim().toLowerCase();
+  if (value === '') return null;
+  if (value.length > 320) {
+    throw new InvalidTaskInputError('That email is too long.');
+  }
+  // Very small email sanity check — the app's identity is an email from
+  // Cloudflare Access, but we do not enforce allowlist here.
+  if (!value.includes('@') || value.startsWith('@') || value.endsWith('@')) {
+    throw new InvalidTaskInputError(
+      'Enter an email for who the task is for, or leave it empty for everyone.',
+    );
   }
   return value;
 }

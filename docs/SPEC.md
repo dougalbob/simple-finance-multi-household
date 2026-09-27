@@ -1521,9 +1521,11 @@ plus context; where the renewal is also a payment (annual premium), that is a sc
   `>= today`, so a promise vanished the day after its date; an overdue one now leads the list until ticked.
   Every alert in its window is also listed under "The app has noticed" on the Tasks page (§25.4).
 - **Channel: in-app for v1 — confirmed by the product owner 2026-09-20**, consistent with decision 19 and
-  with the users' 4–5-day checkpoint cadence (a 21-day window guarantees several sightings). An optional
-  **email alert channel is a recorded v2 roadmap item** (SMTP configuration, delivery-failure handling,
-  tested delivery — scoped separately when reached). It is deliberately not a v1 blocker.
+  with the users' 4–5-day checkpoint cadence (a 21-day window guarantees several sightings). The in-app
+  surface is the **bell** in the header (§26): overdue/today tasks (filtered by who they are for, §25.1)
+  and today/past/rolled key dates. An optional **email alert channel is a recorded v2 roadmap item** (SMTP
+  configuration, delivery-failure handling, tested delivery — scoped separately when reached). It is
+  deliberately not a v1 blocker.
 
 ## 23. Receipt and invoice attachments
 
@@ -1717,9 +1719,102 @@ Recurring; a card date its pot on Accounts & Pots.
 - **Not recurring.** Annual things are already covered: renewals repeat annually and carry their own lead
   (§22.2), and contract ends and card dates raise key-date alerts (§22–§24). A repeating chore list is out
   of scope.
-- **Not notifications.** Nothing is emailed, pushed or shown by the browser (decision 19; §22.3's channel).
-  There is no bell or count badge in the header in this release.
+- **Not external notifications.** Nothing is emailed, pushed or shown by the browser (decision 19; §22.3's
+  channel). The bell (§26) is in-app only.
 - **Never a money movement.** A task moves no money and changes no balance, estimate or projection.
 - **The stale-pot item is not included.** Whether "The app has noticed" should also list a pot with no
-  balance checkpoint for 7 or 14 days is an open question (plan OQ14), deliberately left for the household.
+  balance checkpoint for 7 or 14 days is an open question (plan OQ14), deferred by the household in v0.26.0
+  — they will road-test the app and decide in a few weeks.
+
+## 26. The bell — an in-app "needs attention" prompt (v0.26.0, decision 176)
+
+The header holds a **bell button** on every signed-in page (desktop: at the right-hand end of the bar;
+phone: in the top bar next to the menu button; hidden on `/unauthorized` and when signed out). It is a
+`<button>`, not a link inside `nav[aria-label="Pages"]`. The number is **"needs attention now"**, shared
+by both people in its default, but filtered by who a task is for (§25.1, §26.2).
+
+### 26.1 What counts
+
+- **Open tasks overdue or due today** — `taskDue` against Europe/London today — where `assigned_to` is
+  null (household, both people) or equals the current user (only that person counts it, e.g. "Query brake
+  disc invoice on Mercedes" only for one of us). A task assigned to the other person does **not** count
+  for me, and does not appear in my bell lists; it stays visible to both on the Tasks page (SPEC §3 —
+  full mutual visibility).
+- **Key-date alerts** in state **today**, **past** or **rolled-awaiting-review** (renewals, contract ends
+  and card dates — §22, §24). These are household-wide.
+- **Not counted:** tasks coming up (due tomorrow or later), tasks with no due date, and key dates merely
+  inside their warning window (`in-window`). Otherwise the badge would stay lit for three weeks and stop
+  meaning anything.
+- **Zero means no badge.** The button's accessible name carries the count in words, e.g. "Needs attention:
+  3 — 2 overdue, 1 due today", or "Nothing needs attention". Words, never colour alone (SPEC §16.7).
+
+### 26.2 Who a task is for
+
+- **Default: everyone.** A new task is for the household — both people see it in the bell count.
+- **Optional: only me.** When adding or editing a task, the form offers "Everyone" (default) and "Only me".
+  "Only me" stores the current user's lower-cased email in `tasks.assigned_to`. That task only counts in
+  that person's bell; the other person's bell does not count it and does not list it. The task itself stays
+  visible to both on `/tasks` and on its subject card, with a label "Only for <name>" when the email is
+  linked in Settings (else the email).
+- **No assignee beyond that.** There is no "assign to Sam" picker in this release; the household has two
+  people, and "Only me" covers the stated case. A later decision could add a full person picker.
+
+### 26.3 The panel
+
+Clicking the bell opens a panel. On a laptop it is a popover; on a phone, a sheet under the top bar.
+`aria-expanded`, Escape closes and returns focus to the bell, and a click outside closes it.
+
+1. **Needs attention:** the counted items. Tasks reuse `TaskCheckbox` and `TaskDueBadge` and link to their
+   subject; key dates use `keyDateMessage` and `keyDateHref`.
+2. **Coming up in the next 7 days:** tasks due in the next 7 days (relevant to me, as above) and
+   in-window key dates, listed but not counted.
+3. **Footer:** one line, "N things the app has noticed →" linking to `/tasks#noticed-heading`, then
+   "All tasks →" linking to `/tasks`.
+
+The bell must stay fresh without a reload (the main trap, §26.5).
+
+### 26.4 Since you last looked
+
+A small **"new" dot**, not part of the number, shows when the other person did something since you last
+opened the bell. The accessible name carries "2 new since you last looked".
+
+- **Source:** `audit_entries` rows where `entity = 'task'` and `action` is `task.create`, `task.complete`
+  or `task.reopen`.
+- **Filtered:** `actor` ≠ me (case-insensitively), and `actor` ≠ `system` (the 0013 migration).
+- **Window:** `createdAt` > my last-seen time. A person with no row yet looks back 7 days at most, so a
+  first open is not flooded.
+- **Worded with names:** "Sam added “Chase the refund”", "Sam ticked “Follow up with EnergyCo”". A person's
+  name comes from `people.email` when linked, else the email.
+- **Cap:** 20 entries.
+- **Storage:** `bell_seen (email TEXT PRIMARY KEY, seen_at INTEGER NOT NULL)` — lower-cased email. This
+  is **UI state, not a record: not audited**, same as the theme cookie. Opening the panel marks it seen
+  via `POST /api/attention/seen`, fired on open. The "new" list is worked out *before* updating `seen_at`,
+  so it stays visible while the panel is open. Phone and laptop agree because the timestamp lives on the
+  server.
+
+### 26.5 Freshness and implementation rules
+
+- **The root layout persists across client navigation.** A count computed in `layout.tsx` and passed to
+  `SiteNav` would go stale: after navigating, at midnight (Europe/London), or when the other person changes
+  something.
+- **Route:** `GET /api/attention` (`dynamic = 'force-dynamic'`, `cache: 'no-store'`, 401 JSON when signed
+  out) returns counts and panel items. A client `Bell` inside `SiteNav` fetches it with a relative URL on
+  mount, on pathname change, and when the tab becomes visible again (`visibilitychange`). It also refetches
+  on a `window` event `sf:tasks-changed` (dispatched by task forms after a successful action) and every
+  5 minutes while visible.
+- **Rules in one pure function:** `attentionView(tasks, alerts, auditRows, me, seenAt, today, now)` — unit
+  tested — with the route as a thin wrapper.
+- **Midnight is Europe/London midnight:** `toLocalDateString()` and `daysBetween`, never UTC dates.
+- **E2e has one identity:** the dev bypass signs in as `alex@example.com`. To test "the other person",
+  seed one task (and so its audit row) with actor `sam@example.com`.
+- **No email, push, browser or sound notifications** (decision 19), and no service worker (decisions
+  122–123). The bell stays in-app.
+
+### 26.6 What the bell is not
+
+- **Not a full notification centre.** It does not list every task, only what needs attention now and what is
+  coming up soon. The full list lives on `/tasks`.
+- **Not a filter for "my tasks only" on the Tasks page.** The Tasks page shows all open tasks to both
+  people; the bell's personal filtering is about the count and its own lists. A dedicated "only mine"
+  filter on the Tasks page would be a later decision if the household wants it.
 

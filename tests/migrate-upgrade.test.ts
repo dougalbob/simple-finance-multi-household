@@ -439,3 +439,99 @@ describe('migration 0013: follow-up dates become tasks (decision 175)', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe('migration 0014: bell_seen and task assignee (decision 176)', () => {
+  const T0 = Date.UTC(2026, 8, 20, 9, 0, 0);
+
+  function tableColumns(raw: Database.Database, table: string): string[] {
+    return (raw.pragma(`table_info(${table})`) as Array<{ name: string }>).map(
+      (column) => column.name,
+    );
+  }
+
+  it('a v0.25.0 database upgrades: bell_seen table and tasks.assigned_to column', async () => {
+    const dir = tmpDataDir('sf-upgrade-0014-');
+    const databasePath = path.join(dir, 'db.sqlite');
+    buildDatabase(databasePath, await migrationsFolderBefore('0014_bell_and_task_assignee'));
+
+    const seed = new Database(databasePath);
+    try {
+      assert.ok(!tableColumns(seed, 'tasks').includes('assigned_to'), 'assigned_to not yet');
+      assert.equal(
+        seed.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='bell_seen'").all()
+          .length,
+        0,
+        'bell_seen not yet',
+      );
+      seed
+        .prepare(
+          'INSERT INTO suppliers (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run(1, 'EnergyCo', 'energyco', T0, T0);
+      seed
+        .prepare(
+          `INSERT INTO tasks (id, title, subject_kind, created_by, created_at, updated_at, version)
+           VALUES (1, 'Old task', 'household', 'alex@example.com', ?, ?, 1)`,
+        )
+        .run(T0, T0);
+    } finally {
+      seed.close();
+    }
+
+    const output = runProductionRunner(dir);
+    assert.match(output, /\[migrate\] database is up to date/);
+    assertEveryJournalEntryAppliedExactlyOnce(databasePath);
+
+    const raw = new Database(databasePath);
+    try {
+      assert.ok(tableColumns(raw, 'tasks').includes('assigned_to'), 'assigned_to added');
+      const tables = raw
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='bell_seen'")
+        .all() as Array<{ name: string }>;
+      assert.equal(tables.length, 1, 'bell_seen exists');
+      const tasks = raw.prepare('SELECT id, assigned_to FROM tasks').all() as Array<{
+        id: number;
+        assigned_to: string | null;
+      }>;
+      assert.deepEqual(tasks, [{ id: 1, assigned_to: null }]);
+
+      // Can insert a task with assigned_to and a bell_seen row
+      raw
+        .prepare(
+          `INSERT INTO tasks (title, subject_kind, assigned_to, created_by, created_at, updated_at, version) VALUES (?, 'household', ?, 'sam@example.com', ?, ?, 1)`,
+        )
+        .run('Personal', 'sam@example.com', T0, T0);
+      raw
+        .prepare(`INSERT INTO bell_seen (email, seen_at) VALUES (?, ?)`)
+        .run('alex@example.com', T0);
+      const seen = raw.prepare('SELECT email, seen_at FROM bell_seen').all();
+      assert.equal(seen.length, 1);
+      assert.equal((seen[0] as { email: string }).email, 'alex@example.com');
+    } finally {
+      raw.close();
+    }
+
+    // Through the app: can create a personal task and set seen
+    const handle = openDatabase(databasePath);
+    try {
+      const { createTask } = await import('../src/lib/records/tasks');
+      const { getBellSeenAt, setBellSeenAt } = await import('../src/lib/records/bell-seen');
+      const personal = createTask(handle.db, {
+        title: 'Only mine',
+        actor: 'alex@example.com',
+        assignedTo: 'alex@example.com',
+      });
+      assert.equal(personal.assignedTo, 'alex@example.com');
+      setBellSeenAt(handle.db, 'alex@example.com', new Date(T0 + 1000));
+      const seenAt = getBellSeenAt(handle.db, 'alex@example.com');
+      assert.ok(seenAt !== null);
+    } finally {
+      handle.raw.close();
+    }
+
+    const second = runProductionRunner(dir);
+    assert.match(second, /\[migrate\] database is up to date/);
+    assertEveryJournalEntryAppliedExactlyOnce(databasePath);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

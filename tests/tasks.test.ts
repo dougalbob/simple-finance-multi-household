@@ -675,3 +675,74 @@ describe('"The app has noticed" (derived, never stored)', () => {
     }
   });
 });
+
+describe('tasks — assigned to (v0.26.0, decision 176)', () => {
+  it('creates a task for everyone by default, and for only me when asked', async () => {
+    const fx = await createHouseholdFixture(ALEX, NOW);
+    try {
+      const shared = createTask(fx.db, { title: 'Shared task', actor: ALEX, now: NOW });
+      assert.equal(shared.assignedTo, null);
+
+      const mine = createTask(fx.db, {
+        title: 'Only mine',
+        actor: ALEX,
+        assignedTo: ALEX,
+        now: NOW,
+      });
+      assert.equal(mine.assignedTo, 'alex@example.com');
+
+      const lower = createTask(fx.db, {
+        title: 'Lowercased',
+        actor: ALEX,
+        assignedTo: 'ALEX@EXAMPLE.COM',
+        now: NOW,
+      });
+      assert.equal(lower.assignedTo, 'alex@example.com');
+
+      const empty = createTask(fx.db, {
+        title: 'Empty means everyone',
+        actor: ALEX,
+        assignedTo: '',
+        now: NOW,
+      });
+      assert.equal(empty.assignedTo, null);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('edits assigned_to and validates it', async () => {
+    const fx = await createHouseholdFixture(ALEX, NOW);
+    try {
+      const task = createTask(fx.db, { title: 'Edit me', actor: ALEX, now: NOW });
+      const assigned = editTask(fx.db, {
+        id: task.id,
+        expectedVersion: 1,
+        actor: ALEX,
+        patch: { assignedTo: SAM },
+      });
+      assert.equal(assigned.assignedTo, 'sam@example.com');
+
+      const backToEveryone = editTask(fx.db, {
+        id: task.id,
+        expectedVersion: 2,
+        actor: ALEX,
+        patch: { assignedTo: null },
+      });
+      assert.equal(backToEveryone.assignedTo, null);
+
+      assert.throws(
+        () =>
+          editTask(fx.db, {
+            id: task.id,
+            expectedVersion: 3,
+            actor: ALEX,
+            patch: { assignedTo: 'not-an-email' },
+          }),
+        InvalidTaskInputError,
+      );
+    } finally {
+      fx.close();
+    }
+  });
+});

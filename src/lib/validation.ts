@@ -790,6 +790,22 @@ export const taskCreateEntrySchema = z.object({
     error: 'Choose what the task is about.',
   }),
   subjectId: positiveIdSchema.nullable(),
+  assignedTo: z
+    .string()
+    .trim()
+    .max(320)
+    .nullable()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value === null) return null;
+      const trimmed = value.trim();
+      return trimmed === '' ? null : trimmed.toLowerCase();
+    })
+    .refine(
+      (value) =>
+        value === null || (value.includes('@') && !value.startsWith('@') && !value.endsWith('@')),
+      'Enter an email for who the task is for, or leave it empty for everyone.',
+    ),
 });
 
 export const taskVersionEntrySchema = z.object({
@@ -810,4 +826,23 @@ export const taskEditEntrySchema = taskVersionEntrySchema.extend({
     .max(200, 'Keep the task to 200 characters — put the rest in the detail.'),
   detail: nullableText(2000, 'The detail'),
   dueDate: localDateSchema.nullable(),
+  assignedTo: z
+    .string()
+    .trim()
+    .max(320)
+    .nullable()
+    .optional()
+    .transform((value) => {
+      if (value === undefined) return undefined;
+      if (value === null) return null;
+      const trimmed = value.trim();
+      return trimmed === '' ? null : trimmed.toLowerCase();
+    })
+    .refine(
+      (value) =>
+        value === undefined ||
+        value === null ||
+        (value.includes('@') && !value.startsWith('@') && !value.endsWith('@')),
+      'Enter an email for who the task is for, or leave it empty for everyone.',
+    ),
 });
