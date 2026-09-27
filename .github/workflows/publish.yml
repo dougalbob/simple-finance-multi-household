@@ -4,7 +4,18 @@ name: Publish
 # merging a PR does not publish anything — the release tag does.
 #
 # The image is smoke-tested BEFORE it is pushed: a broken image must not reach
-# the registry just because its tag exists. Tags published for a release:
+# the registry just because its tag exists. That includes the upgrade path:
+# previously published release images are upgraded to this build on the same
+# volume and the migrated database must have every journal entry applied
+# exactly once (v0.23.0 shipped an upgrade-only migration failure; see
+# docs/RELEASE_NOTES_v0.23.1.md).
+#
+# After the registry is verified, the workflow creates the GitHub release from
+# the checked-in notes document (docs/RELEASE_PROCESS.md): the Arena session
+# that merged the release PR ends at the merge, so nothing here may depend on
+# post-merge session work.
+#
+# Tags published for a release:
 #   ghcr.io/<repo>:vX.Y.Z      (the release tag)
 #   ghcr.io/<repo>:latest      (what Unraid's Force Update pulls)
 #   ghcr.io/<repo>:sha-<short> (commit identifier for traceability)
@@ -19,8 +30,10 @@ on:
         description: 'Version tag to publish (must already exist, e.g. v0.1.0)'
         required: true
 
+# contents: write is needed for the final step, which creates the GitHub
+# release from the checked-in notes document (docs/RELEASE_PROCESS.md).
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -30,6 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Full history: the upgrade smoke resolves previously published
+          # release tags, and the release step needs the notes document.
+          fetch-depth: 0
           ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Resolve version and image name
@@ -79,6 +95,78 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upgrade smoke test (previously published releases must migrate cleanly)
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -eu
+          AUTH_ENV="-e AUTH_ISSUER=https://example.cloudflareaccess.com -e AUTH_AUDIENCE=dummy-audience -e AUTH_ALLOWED_EMAILS=alex@example.com,sam@example.com"
+          # v0.23.0 shipped with an out-of-order migration journal stamp that
+          # silently skipped migration 0012 on upgraded databases while fresh
+          # installs stayed green (docs/RELEASE_NOTES_v0.23.1.md). The upgrade
+          # path is therefore smoked against real previously published images
+          # before anything is pushed: the two most recent release tags other
+          # than this one are started on a fresh volume, stopped, and restarted
+          # as the new image; the upgraded database must end healthy with every
+          # journal entry applied exactly once at the journal's stamp.
+          BASE_TAGS="$(git tag --sort=-v:refname | grep -v "^${VERSION}$" | head -2 || true)"
+          if [ -z "$BASE_TAGS" ]; then
+            echo "no previously published tag found - skipping upgrade smoke"
+            exit 0
+          fi
+          for BASE_TAG in $BASE_TAGS; do
+            echo "=== upgrade smoke: $BASE_TAG -> $VERSION ==="
+            docker pull "$IMAGE:$BASE_TAG"
+            VOL="sf-upg-$(echo "$BASE_TAG" | tr '.' '-')"
+            docker run -d --name sf-upg-base -p 3000:3000 -v "$VOL":/data $AUTH_ENV "$IMAGE:$BASE_TAG"
+            for i in $(seq 1 40); do
+              if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
+              sleep 1
+            done
+            curl -fsS http://127.0.0.1:3000/api/health
+            echo "base $BASE_TAG: healthy, database created"
+            docker rm -f sf-upg-base
+            docker run -d --name sf-upg-new -p 3000:3000 -v "$VOL":/data $AUTH_ENV "$IMAGE:$VERSION"
+            for i in $(seq 1 40); do
+              if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
+              sleep 1
+            done
+            curl -fsS http://127.0.0.1:3000/api/health
+            echo "upgraded $BASE_TAG -> $VERSION: healthy"
+            docker exec sf-upg-new node -e '
+              const fs = require("fs");
+              const crypto = require("crypto");
+              const Database = require("better-sqlite3");
+              const folder = "/app/drizzle";
+              const journal = JSON.parse(fs.readFileSync(folder + "/meta/_journal.json", "utf8"));
+              const db = new Database("/data/simple-finance.sqlite", { readonly: true });
+              const rows = db.prepare("SELECT hash, created_at FROM __drizzle_migrations").all();
+              const byHash = new Map();
+              for (const row of rows) byHash.set(row.hash, Number(row.created_at));
+              let bad = 0;
+              for (const entry of journal.entries) {
+                const sql = fs.readFileSync(folder + "/" + entry.tag + ".sql", "utf8");
+                const hash = crypto.createHash("sha256").update(sql).digest("hex");
+                const at = byHash.get(hash);
+                if (at === undefined) { console.log("NOT APPLIED:", entry.tag); bad += 1; }
+                else if (at !== entry.when) { console.log("STAMP MISMATCH:", entry.tag, "db=" + at, "journal=" + entry.when); bad += 1; }
+              }
+              db.close();
+              if (bad > 0) { console.log(bad + " journal entries are not applied exactly once"); process.exit(1); }
+              console.log("all " + journal.entries.length + " journal entries applied exactly once");
+            '
+            docker rm -f sf-upg-new
+            docker volume rm "$VOL"
+          done
+
       - name: Smoke test the built image (start, health, unprivileged, persistence)
         env:
           IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
@@ -122,13 +210,6 @@ jobs:
           done
           docker rm -f sf-pwa
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Push the verified image
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
@@ -142,6 +223,7 @@ jobs:
           echo "### Published $IMAGE:$VERSION (latest, sha-$SHORT_SHA)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify the registry tags resolve
+        id: verify
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
           VERSION: ${{ steps.meta.outputs.version }}
@@ -159,4 +241,50 @@ jobs:
             echo "Registry digest ($REMOTE_DIGEST) does not match the built image ($LOCAL_ONLY)" >&2
             exit 1
           }
+          echo "digest=$REMOTE_DIGEST" >> "$GITHUB_OUTPUT"
           echo "### Registry digest $REMOTE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create the GitHub release from the checked-in notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+          DIGEST: ${{ steps.verify.outputs.digest }}
+        run: |
+          set -eu
+          # The Arena session that merged the release PR ends at the merge, so
+          # the release itself is created here, by the workflow, from the notes
+          # document that shipped in the release PR. The document must exist
+          # and start with '# Release notes — vX.Y.Z — <subject>' (em dashes,
+          # as written by the notes documents); its first line becomes the
+          # release title, and the verified facts (date, merge commit, image
+          # tags, digest) are prepended.
+          # See docs/RELEASE_PROCESS.md and decision 173.
+          NOTES="docs/RELEASE_NOTES_${VERSION}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "$NOTES is missing - a release requires checked-in release notes" >&2
+            exit 1
+          fi
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub release $VERSION already exists - leaving it untouched."
+            exit 0
+          fi
+          TITLE="$(sed -n '1s/^# Release notes — //p' "$NOTES")"
+          if [ -z "$TITLE" ]; then
+            echo "The first line of $NOTES must be '# Release notes — $VERSION — <subject>'" >&2
+            exit 1
+          fi
+          {
+            echo "**Published:** $(date -u +%Y-%m-%d) by Publish run ${GITHUB_RUN_ID}."
+            echo "**Merge commit:** \`${GITHUB_SHA}\` (short SHA \`$SHORT_SHA\`)."
+            echo "**Image tags:** \`$IMAGE:$VERSION\` · \`$IMAGE:latest\` · \`$IMAGE:sha-$SHORT_SHA\`."
+            echo "**Digest:** \`$DIGEST\`, shared by all three tags and verified against the registry by this run."
+            echo
+            cat "$NOTES"
+            echo
+            echo "[Release notes document](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/RELEASE_NOTES_${VERSION}.md)"
+          } > /tmp/release-body.md
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --title "$TITLE" --notes-file /tmp/release-body.md --latest
+          echo "### GitHub release $VERSION created and marked Latest" >> "$GITHUB_STEP_SUMMARY"

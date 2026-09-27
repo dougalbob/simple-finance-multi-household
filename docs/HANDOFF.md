@@ -1,8 +1,90 @@
+# Handoff: v0.23.1 — the upgrade migration repair and the release-process rework (decisions 172–173)
+
+**Branch:** `arena/01a0e2fe-simple-finance`, from `main` @ `aed1c12` (the v0.23.0 merge). v0.23.0
+was published broken on upgrade: every install updated from v0.20.0+ silently skipped migration
+`0012_credit_card_pots` at startup and then failed on any pots query with
+`no such column: credit_card_payment_day_of_month`. Fresh installs were fine, so all of CI was
+green — the upgrade path was simply never tested. This sitting fixes that, adds the missing tests
+and smoke checks, and reworks the release process so nothing needs a second session after merge.
+Everything ships in the one release PR, because the Arena session ends when its PR merges.
+
+## What happened (root cause, reproduced before fixing)
+
+drizzle-orm 0.45.2's better-sqlite3 migrator applies a journal entry only when its `when` stamp is
+newer than the **single newest** `created_at` recorded in `__drizzle_migrations`
+(`ORDER BY created_at DESC LIMIT 1`). Journal entry 0011 had been hand-stamped with the round,
+future-dated `1790600000000` (2026-09-28 13:06 UTC) while 0012 carried its real generation stamp
+`1790506141836` (2026-09-27 10:49 UTC) — numerically smaller — so upgraded databases skipped 0012
+and fresh databases applied everything. Sandbox reproduction of the exact Unraid upgrade: 12
+journal rows before, 12 after, no column.
+
+## What changed
+
+- `drizzle/meta/_journal.json`: 0011 re-dated to `1790504000000`. The journal is now strictly
+  increasing and entirely in the past, so drizzle-kit's future real-clock stamps sort correctly
+  after 0012 forever.
+- `src/lib/db/migrate-repair.ts` (canonical) and `scripts/migrate-repair.cjs` (production twin,
+  production deps only): before the migrator runs, any `__drizzle_migrations` row recorded at a
+  stamp the journal no longer carries is re-dated to the journal's value, matched by sha256 of the
+  migration `.sql` (the same value drizzle stores — never row id, which is NULL: drizzle declares
+  `id SERIAL PRIMARY KEY`, not INTEGER PRIMARY KEY). Wired into `scripts/migrate.cjs` and into
+  `applyMigrations` (dev open path), so dev databases converge too.
+- `tests/migrate-journal.test.ts`: the journal must be strictly increasing and never
+  future-stamped. `tests/migrate-upgrade.test.ts`: builds a real v0.22.1-era database (0011 at the
+  old stamp) and upgrades it through the actual production runner; covers fresh-v0.23.0 and
+  brand-new databases; proves the CJS and TS repairs agree. Both fail in milliseconds on the
+  pre-fix journal.
+- `.github/workflows/ci.yml` (docker job): upgrades the most recently published release image to
+  the build under test on the same volume and requires every journal entry applied exactly once.
+  `.github/workflows/publish.yml`: same check against the two most recent published images before
+  push, plus it now **creates the GitHub release** from `docs/RELEASE_NOTES_vX.Y.Z.md` (title from
+  its first line, verified facts prepended) — no post-merge session work remains.
+- Version 0.23.1 in the five places; release notes for v0.23.0 (honest record of the broken
+  release) and v0.23.1; `RELEASE_PROCESS.md` reworked; blueprint §7 journal rule; decisions 172
+  and 173; README's badly stale v0.8.0 status lines refreshed. PR #83 (the docs-only follow-up
+  from the previous session) is closed unmerged — its verified v0.23.0 facts were folded into
+  `RELEASE_NOTES_v0.23.0.md`; that second-PR pattern is what decision 173 retires.
+
+## Verification (this branch, local)
+
+`npm test` green including the new suites; `npm run typecheck`, `npm run format:check` and
+`npm run build` clean. CI on the PR runs the full gates, browser acceptance and the Docker job
+with the new upgrade smoke; the Publish workflow then upgrades the two most recent published
+images (v0.23.0 and v0.22.1 — both affected populations) before pushing.
+
+## What a future session should know
+
+1. **Migration journal `when` stamps are ordering keys.** drizzle's migrator orders by the single
+   newest recorded stamp, not by journal position. Stamps must be strictly increasing and never in
+   the future; `tests/migrate-journal.test.ts` enforces it. Never hand-stamp a round number — let
+   drizzle-kit generate the entry, or pick a real past instant strictly between the neighbours.
+2. **Fresh-database tests cannot catch upgrade failures.** Any migration change needs an
+   upgrade-path test (`tests/migrate-upgrade.test.ts` has the harness: build a legacy journal
+   folder, migrate a DB with it, then run the production runner) and the Docker smoke now covers
+   it end to end.
+3. **A release is one pull request.** All documentation — release notes, this handoff, blueprint,
+   plan decisions, version bumps — lands before merge. The Publish workflow creates the GitHub
+   release automatically; the notes document must exist and start with
+   `# Release notes — vX.Y.Z — <subject>`. Post-merge verified facts (digest, run IDs) belong in
+   the next working session's handoff block, never a dedicated docs-only PR (decision 173).
+4. **Never re-date or edit a published journal entry's SQL** — only its ordering stamp, and only
+   alongside a repair that converges fielded databases (this release is the worked example). The
+   hash drizzle stores is the sha256 of the `.sql` content; changing the SQL orphans every fielded
+   database row.
+5. The household is waiting on v0.23.1: backup, then Force Update. The first start's log should
+   show `[migrate-repair] re-dated 0011_schedule_excluded_months: 1790600000000 -> 1790504000000`,
+   then `[migrate] database is up to date`, and the badge should read `v0.23.1 · pre-release`.
+
+---
+
 # Handoff: Credit-card pots and liquid-only projections (decision 171)
 
-**Branch:** `arena/01a0e259-simple-finance`. Feature A is implemented and submitted for review in PR #82;
-it has not been merged or released. Do not put real provider, limit, balance or offer terms in tracked
-files or test data.
+**Branch:** `arena/01a0e259-simple-finance`. Feature A was merged as PR #82 and published as
+**v0.23.0** (merge `aed1c12`, digest `sha256:42cb4c…`, facts in
+[`RELEASE_NOTES_v0.23.0.md`](RELEASE_NOTES_v0.23.0.md)) — but v0.23.0 is **broken on upgrade**:
+migration 0012 was silently skipped on databases upgraded from v0.20.0+. The v0.23.1 block above
+is the repair; read it before touching migrations. Do not put real provider, limit, balance or
+offer terms in tracked files or test data.
 
 ## What changed
 
@@ -41,8 +123,10 @@ files or test data.
    unchanged after any build.
 2. If any code changes are made after this verification, rerun the full gates, including the complete
    SANDBOX-recipe Playwright suite; card UI coverage is already in place.
-3. The household has authorized release v0.23.0; complete `docs/RELEASE_PROCESS.md` end to end before
-   telling them to update Unraid. Release notes still need the final merge SHA and verified image digest.
+3. v0.23.0 was released on 2026-09-27 and is broken on upgrade; the record lives in
+   [`RELEASE_NOTES_v0.23.0.md`](RELEASE_NOTES_v0.23.0.md) and the repair in the v0.23.1 block above.
+   The release notes now carry the final merge SHA and verified digest; no follow-up documentation
+   remains open for this release.
 
 ---
 
