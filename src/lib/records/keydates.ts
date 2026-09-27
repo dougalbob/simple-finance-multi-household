@@ -116,3 +116,37 @@ function minimumPaymentText(alert: KeyDateAlert): string {
     ? ''
     : ` — statement minimum ${formatPence(alert.minimumPaymentPence)}`;
 }
+
+/**
+ * Where a key date is dealt with — the deep link the Tasks page ("The app has
+ * noticed", SPEC §25.4) puts on each alert: a renewal's row (and its edit
+ * form) on Contracts & Renewals, a contract end's schedule editor on
+ * Recurring, a card date's pot on Pots.
+ */
+export function keyDateHref(
+  alert: Pick<KeyDateItem, 'kind' | 'id' | 'scheduleId' | 'potId'>,
+): string {
+  switch (alert.kind) {
+    case 'renewal':
+      return `/contracts#renewal-${alert.id}`;
+    case 'contract-end':
+      return `/recurring#schedule-edit-${alert.scheduleId ?? alert.id}`;
+    case 'credit-card-payment':
+    case 'credit-card-promo-end':
+      return `/pots#pot-${alert.potId ?? alert.id}-heading`;
+  }
+}
+
+/** The alert's state as a short word or two, printed beside the sentence. */
+export function keyDateStateWords(alert: Pick<KeyDateAlert, 'state' | 'daysUntil'>): string {
+  switch (alert.state) {
+    case 'today':
+      return 'Today';
+    case 'in-window':
+      return alert.daysUntil === 1 ? 'Tomorrow' : `In ${alert.daysUntil} days`;
+    case 'rolled-awaiting-review':
+      return 'Awaiting review';
+    case 'past':
+      return 'Date passed';
+  }
+}

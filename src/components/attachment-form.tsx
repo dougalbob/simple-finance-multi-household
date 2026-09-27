@@ -19,8 +19,10 @@ function formatSize(bytes: number): string {
 }
 
 /**
- * Wording for the two kinds of owner (decision 138): a purchase carries
- * receipts and invoices, an income record carries payslips and similar.
+ * Wording for each kind of owner (decision 138): a purchase carries receipts
+ * and invoices, an income record carries payslips and similar, and since
+ * v0.25.0 a supplier carries letters, policy documents and terms (decision
+ * 175).
  */
 const OWNER_WORDS = {
   purchase: {
@@ -35,14 +37,22 @@ const OWNER_WORDS = {
     attach: 'Attach payslip',
     noun: 'document',
   },
+  supplier: {
+    field: 'supplierId',
+    fileLabel: 'Letter, policy or terms file',
+    attach: 'Attach document',
+    noun: 'document',
+  },
 } as const;
 
 /**
  * Documents already attached to a record, plus the capture/upload control
- * (SPEC §23.1, §23.4). A purchase's receipts, or since v0.10.0 an income
- * record's payslips (pass `receiptId` instead of `purchaseId`). Viewing, attaching and removing are authenticated; the
- * attachment lifecycle is independent of the purchase save, so this form never
- * blocks entry and a receipt can be added or removed later.
+ * (SPEC §23.1, §23.4). A purchase's receipts, since v0.10.0 an income
+ * record's payslips (pass `receiptId`), and since v0.25.0 a supplier's
+ * letters and policy documents (pass `supplierId`) — exactly one owner id.
+ * Viewing, attaching and removing are authenticated; the attachment lifecycle
+ * is independent of the record's save, so this form never blocks entry and a
+ * document can be added or removed later.
  *
  * The chip is a container, not a link wrapping a button: a button inside an
  * anchor is invalid HTML and hydration-hostile. Removal is a two-click
@@ -51,19 +61,21 @@ const OWNER_WORDS = {
 export function AttachmentForm({
   purchaseId,
   receiptId,
+  supplierId,
   attachments,
   allowUpload = true,
 }: {
   purchaseId?: number;
   receiptId?: number;
+  supplierId?: number;
   attachments: readonly AttachmentSummary[];
   /** False hides the upload control (a voided income record keeps its documents, gains none). */
   allowUpload?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(uploadAttachmentAction, initialActionState);
-  const kind = receiptId !== undefined ? 'receipt' : 'purchase';
+  const kind = supplierId !== undefined ? 'supplier' : receiptId !== undefined ? 'receipt' : 'purchase';
   const words = OWNER_WORDS[kind];
-  const ownerId = (receiptId ?? purchaseId) as number;
+  const ownerId = (supplierId ?? receiptId ?? purchaseId) as number;
   const inputId = `attachment-file-${kind}-${ownerId}`;
   return (
     <div className="mt-2 space-y-1 text-xs">
@@ -104,9 +116,9 @@ export function AttachmentForm({
             type="file"
             accept="image/png,image/jpeg,application/pdf"
             // A till receipt is photographed on the spot, so purchases open the
-            // camera. A payslip is as often a PDF from the employer's portal as a
-            // sheet of paper, so income leaves the phone's own choice (files,
-            // photos or camera) alone.
+            // camera. A payslip or a supplier's letter is as often a PDF from a
+            // portal or an email as a sheet of paper, so those leave the phone's
+            // own choice (files, photos or camera) alone.
             capture={kind === 'purchase' ? 'environment' : undefined}
             required
             className="max-w-[190px] text-xs"

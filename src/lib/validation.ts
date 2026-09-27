@@ -768,5 +768,46 @@ export const supplierInteractionEntrySchema = z.object({
   }),
   summary: z.string().trim().min(1, 'Say what happened.').max(1000, 'Summary too long.'),
   outcome: z.string().max(1000, 'Outcome too long.').nullable(),
-  followUpDate: z.string().nullable(),
+  /** Since v0.25.0 either field creates a task (decision 175). */
+  followUpDate: localDateSchema.nullable(),
+  followUpTitle: nullableText(200, 'The follow-up task'),
+});
+
+/**
+ * Tasks (SPEC §25, decision 175). The form posts the subject as one value —
+ * `household`, `supplier:3`, `vehicle:2` or `purchase:17` — which the action
+ * splits; the domain re-checks that the subject exists.
+ */
+export const taskCreateEntrySchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, 'Say what needs doing.')
+    .max(200, 'Keep the task to 200 characters — put the rest in the detail.'),
+  detail: nullableText(2000, 'The detail'),
+  dueDate: localDateSchema.nullable(),
+  subjectKind: z.enum(['supplier', 'purchase', 'vehicle', 'household'], {
+    error: 'Choose what the task is about.',
+  }),
+  subjectId: positiveIdSchema.nullable(),
+});
+
+export const taskVersionEntrySchema = z.object({
+  id: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+});
+
+export const taskCompleteEntrySchema = taskVersionEntrySchema.extend({
+  note: nullableText(500, 'The note'),
+});
+
+/** Editing or rescheduling an open task; an empty due date clears it. */
+export const taskEditEntrySchema = taskVersionEntrySchema.extend({
+  title: z
+    .string()
+    .trim()
+    .min(1, 'Say what needs doing.')
+    .max(200, 'Keep the task to 200 characters — put the rest in the detail.'),
+  detail: nullableText(2000, 'The detail'),
+  dueDate: localDateSchema.nullable(),
 });

@@ -514,6 +514,15 @@ export const supplierReferences = sqliteTable('supplier_references', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
+/**
+ * The interaction log (SPEC §21.2): a record of conversations — what was said
+ * or sent, and who wrote it down. It is not a to-do list. Until v0.25.0 a
+ * promised follow-up was a nullable `follow_up_date` column here, which three
+ * pages each read differently and nothing could close; migration 0013 moved
+ * every such date into `tasks` (decision 175) and dropped the column. Saving
+ * an interaction with a follow-up date now creates a task in the same
+ * transaction, pointing back here through `tasks.related_interaction_id`.
+ */
 export const supplierInteractions = sqliteTable('supplier_interactions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   supplierId: integer('supplier_id')
@@ -523,18 +532,86 @@ export const supplierInteractions = sqliteTable('supplier_interactions', {
   channel: text('channel').notNull(),
   summary: text('summary').notNull(),
   outcome: text('outcome'),
-  followUpDate: text('follow_up_date'),
   relatedPurchaseId: integer('related_purchase_id'),
   relatedRenewalId: integer('related_renewal_id'),
   createdBy: text('created_by').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
+
+/**
+ * Tasks (SPEC §25, decision 175): things the household has committed to do —
+ * "Research cheaper tariffs", "Chase the refund", "Ring the broker back".
+ *
+ * - **About something, not *for* someone.** `subject_kind`/`subject_id` name
+ *   what the task concerns: a supplier, a purchase, a vehicle, or the
+ *   household (the only kind with no id). Deliberately NOT `target_kind`:
+ *   that vocabulary is SPEC §9.2 "who was this spend for", and its helper
+ *   prints `household` for any kind it does not know — a supplier task would
+ *   silently read "household". There is no foreign key on `subject_id` (one
+ *   generic pair, so a new kind never needs a table rebuild); the domain layer
+ *   checks the subject exists when a task is created, and `subjectLabel()`
+ *   degrades to the bare kind if it has gone since.
+ * - **An undated task is still a task:** `due_date` ('YYYY-MM-DD', local) is
+ *   nullable. There is no recurrence — the yearly case is renewals and key
+ *   dates, which already roll themselves.
+ * - **Closed, never deleted.** `completed_at`/`completed_by` (and an optional
+ *   note) close a task; reopening clears them. Both are versioned and audited,
+ *   exactly like renewals. A promise that is no longer needed is closed with a
+ *   note, not removed.
+ * - `related_interaction_id` is provenance: the logged call whose follow-up
+ *   date created this task.
+ */
+export const tasks = sqliteTable(
+  'tasks',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Short and imperative: "Research cheaper tariffs". */
+    title: text('title').notNull(),
+    /** Optional longer note — research, a reference, what was agreed. */
+    detail: text('detail'),
+    /** Local calendar date the task is due by, or null for an undated task. */
+    dueDate: text('due_date'),
+    subjectKind: text('subject_kind', {
+      enum: ['supplier', 'purchase', 'vehicle', 'household'],
+    })
+      .notNull()
+      .default('household'),
+    /** Null only for 'household'. No FK — resolved in the domain layer. */
+    subjectId: integer('subject_id'),
+    relatedInteractionId: integer('related_interaction_id').references(
+      () => supplierInteractions.id,
+    ),
+    /** Null while the task is open. */
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+    completedBy: text('completed_by'),
+    /** Optional words recorded when the task was closed ("switched to FixCo"). */
+    completionNote: text('completion_note'),
+    createdBy: text('created_by').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    check(
+      'tasks_subject_shape',
+      sql`(${table.subjectKind} = 'household') = (${table.subjectId} IS NULL)`,
+    ),
+    check(
+      'tasks_completion_pair',
+      sql`(${table.completedAt} IS NULL) = (${table.completedBy} IS NULL)`,
+    ),
+    index('tasks_open_due_idx').on(table.completedAt, table.dueDate),
+    index('tasks_subject_idx').on(table.subjectKind, table.subjectId),
+  ],
+);
 /**
  * Documents attached to a record (SPEC §23): receipts and invoices on a
- * purchase, and since v0.10.0 payslips and similar on an income record
- * (a `receipts` row — decision 138). Exactly one owner per row, enforced by
- * a CHECK (migration 0009). One table keeps one pipeline: the serving route,
- * the backup manifest and the restore check never need to know the owner.
+ * purchase, since v0.10.0 payslips and similar on an income record (a
+ * `receipts` row — decision 138), and since v0.25.0 letters and policy
+ * documents on a supplier (decision 175). Exactly one owner per row, enforced
+ * by a CHECK (migration 0009, widened to three owners by 0013). One table
+ * keeps one pipeline: the serving route, the backup manifest and the restore
+ * check never need to know the owner.
  */
 export const attachments = sqliteTable(
   'attachments',
@@ -542,6 +619,7 @@ export const attachments = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     purchaseId: integer('purchase_id').references(() => purchases.id),
     receiptId: integer('receipt_id').references(() => receipts.id),
+    supplierId: integer('supplier_id').references(() => suppliers.id),
     fileKey: text('file_key').notNull().unique(),
     originalName: text('original_name').notNull(),
     mime: text('mime').notNull(),
@@ -554,10 +632,11 @@ export const attachments = sqliteTable(
   (table) => [
     check(
       'attachments_one_owner',
-      sql`(${table.purchaseId} IS NULL) != (${table.receiptId} IS NULL)`,
+      sql`((${table.purchaseId} IS NOT NULL) + (${table.receiptId} IS NOT NULL) + (${table.supplierId} IS NOT NULL)) = 1`,
     ),
     index('attachments_purchase_idx').on(table.purchaseId),
     index('attachments_receipt_idx').on(table.receiptId),
+    index('attachments_supplier_idx').on(table.supplierId),
   ],
 );
 
