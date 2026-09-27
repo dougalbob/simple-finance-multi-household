@@ -1437,9 +1437,21 @@ change like every record.
 ### 21.2 Interactions
 
 **"+ Create Interaction"** on any supplier: date/time (defaults now), channel (call / email / letter /
-in person / other), summary of what was said or sent, optional outcome, optional **follow-up date** (surfaces
-in the Contracts & renewals panel so promises don't evaporate; no notification — decision 19), optional link
-to a related purchase or renewal. `recorded_by` is audited; both users see and add interactions.
+in person / other), summary of what was said or sent, optional outcome, optional link to a related purchase or
+renewal. `recorded_by` is audited; both users see and add interactions.
+
+**A promised follow-up is a task (v0.25.0, decision 175).** The form's optional **Follow up by** date and
+optional follow-up words (default "Follow up with <supplier>") create a **task** about the supplier (§25) in
+the same transaction as the interaction — both are saved or neither is. The task stays listed, overdue first,
+until someone ticks it; it no longer disappears the day after its date, which is what the v0.24.0 date column
+did. No notification is sent (decision 19). Existing follow-up dates were migrated into tasks by migration
+0013, which dropped the old column.
+
+**Every line of a log entry is labelled** — "Interaction: Sun 27 Sept · Phone call", "Outcome: …", "Logged
+by: Alex", "Follow up by: Sat 3 Oct — In 6 days" (or "— Done …") — and dates are printed in words with
+the year added when it is not this year. A bare "2026-11-01" under a call could be read as the day of the
+call, the day it was written down or the day something was owed; it no longer appears. "Logged by" shows
+the person's name when their sign-in email is linked in Settings, else the email.
 
 ### 21.2a Deep links to a supplier card (v0.12.1)
 
@@ -1503,8 +1515,11 @@ plus context; where the renewal is also a payment (annual premium), that is a sc
 - **Overview panel "Contracts & renewals":** every item inside its warning window, soonest first, each one
   tap from the supplier contact card and the related schedule/renewal. Credit-card payment-review and
   promotional-end dates are also included and link to the card pot (§24).
-- **Contracts & Renewals page:** the full list, leads, follow-up dates from interactions, history, and card
-  payment/promotion reviews (§24).
+- **Contracts & Renewals page:** the full list, leads, history, card payment/promotion reviews (§24), and
+  **"Follow-ups you promised"** — every open task about a supplier (§25), overdue first, each naming and
+  linking its supplier card. Until v0.25.0 this list read the interaction log's follow-up dates filtered to
+  `>= today`, so a promise vanished the day after its date; an overdue one now leads the list until ticked.
+  Every alert in its window is also listed under "The app has noticed" on the Tasks page (§25.4).
 - **Channel: in-app for v1 — confirmed by the product owner 2026-09-20**, consistent with decision 19 and
   with the users' 4–5-day checkpoint cadence (a 21-day window guarantees several sightings). An optional
   **email alert channel is a recorded v2 roadmap item** (SMTP configuration, delivery-failure handling,
@@ -1519,8 +1534,15 @@ multiple per purchase; per-file size limit (10 MB, plan OQ12). A household can r
 typically a one-page payslip, and as many as needed. They go through exactly the same pipeline (sniffed
 PNG/JPEG/PDF, 10 MB, private serving, audit, backup and restore, removal as §23.4). The file picker does not
 force the camera there: a payslip is as often a PDF from the employer's portal as a sheet of paper. A voided
-income record keeps its documents viewable but takes no new ones. Each attachment belongs to exactly one
-purchase or one income record, never both.
+income record keeps its documents viewable but takes no new ones.
+
+**Suppliers too (v0.25.0, decision 175; resolves plan OQ10).** A supplier card has a **Documents** section
+for letters, policy documents and terms that belong to the supplier rather than to one purchase — same
+pipeline, same rules: sniffed PNG/JPEG/PDF only (no `text/plain`: a policy number belongs in a reference
+pair, §21.1), 10 MB, private serving, audited against the supplier, in the backup, removable as §23.4.
+
+Each attachment belongs to **exactly one** purchase, income record or supplier; the table's CHECK constraint
+enforces the same rule as the upload action.
 
 ### 23.1 Capture flows
 
@@ -1614,3 +1636,90 @@ Payment-review and promotional-end alerts appear in the Overview key-date panel 
 review page, alongside other in-app key dates (§22.3). The relevant card link opens Accounts & Pots. Alerts are
 advisory and in-app only; no external notification, statement fetch, provider connection or payment verification
 is implied.
+
+## 25. Tasks: follow-ups that stay until they are done (v0.25.0)
+
+A **task** is something one of us has said we will do: "Follow up with EnergyCo", "Chase the refund",
+"Research cheaper tariffs". It is a record like any other (decision 175): created, changed and closed through
+one validated, audited write path, with optimistic concurrency, and **never deleted**. It exists because a
+follow-up date typed on a supplier call did nothing — it fell off every list the day after its date and could
+not be closed or moved.
+
+### 25.1 What a task holds
+
+- **Title** (required, up to 200 characters), optional **detail** (up to 2,000), optional **due date** (a
+  calendar date in the household's timezone; a task may be undated).
+- **What it is about** — the *subject*: the household (the default), a **supplier**, a **vehicle** or a
+  **purchase**. The subject must exist when the task is written; a voided purchase takes no new task. A
+  task created from a logged interaction also remembers that interaction.
+- **Who wrote it and when; who closed it, when, and an optional closing note.**
+- A version number: a stale tick, edit or reopen (someone else changed the task first) is refused with a
+  plain message, and the page shows the current state. A box never looks ticked when it is not.
+
+Every create, edit, completion and reopen writes an audit entry. **Reopen** is allowed (a mis-tick is undone
+from "Done in the last 30 days") and audited; the earlier completion stays in the history.
+
+### 25.2 Where tasks are written
+
+- **Tasks page:** "Add a task" with an optional due date and a choice of subject (household, a supplier or
+  a vehicle).
+- **Supplier card:** the interaction form's follow-up (§21.2) — one transaction with the interaction — and
+  "Add a task for <supplier>" in the card's Tasks section.
+- **Purchase row (Purchases page):** "Add a task" — "Chase the refund", "Return the faulty kettle". A
+  purchase's open tasks are listed on its row with their boxes. Tracking a purchase as a *case* (states such
+  as reported → refund promised → refunded, linked refunds) is **a later decision**; it would grow from
+  `tasks`, not replace it.
+
+Each open task can be ticked, rescheduled or reworded ("Reschedule, edit or close with a note") wherever it
+is shown; a closed task cannot be edited until it is reopened.
+
+### 25.3 Due state and order
+
+The state is computed from the due date and the household's today (`daysBetween`, §6 timezone rules) and is
+always printed as **words** — "Overdue by 3 days · was due Thu 24 Sept", "Due today", "Due tomorrow",
+"In 12 days", "No due date". Colour repeats what the words say and is never the only signal (§16.7).
+Open tasks are ordered **overdue → due today → later → undated**, soonest first within each, then in the order
+they were written. An overdue task stays at the top until someone closes it.
+
+### 25.4 The Tasks page
+
+One page (`/tasks`, in the desktop bar and the drawer's "More" group) with two visibly separate groups:
+
+- **Your tasks** — the stored tasks, each with a checkbox, grouped Overdue / Due today / Coming up / No due
+  date, each row saying what it is about and linking there; below them "Done in the last 30 days" with who
+  closed each one, the note, and **Reopen**.
+- **The app has noticed** — items **derived** from the records, links only, **no checkboxes**: key dates
+  inside their warning window (renewals, contract ends and card dates — §22, §24), recent fuel fills missing
+  their litres or mileage, and a vehicle whose recent fills have no full tank marked (so no mpg can be
+  worked out). Each goes away when the thing itself is dealt with — the renewal reviewed, the litres added —
+  and none is ever stored as a task.
+
+The same open supplier tasks drive the Suppliers page's "Promised follow-ups" banner and the Contracts &
+Renewals "Follow-ups you promised" list (§22.3); a supplier card's header shows "2 open tasks · 1
+overdue" in words.
+
+### 25.5 Subjects in words, and links
+
+A task's subject is printed by `subjectLabel()` — the supplier's or vehicle's name, or "£84.20 at EnergyCo on
+Tue 1 Sept" for a purchase. When the subject has gone (a voided purchase), the label **degrades to the bare
+kind** ("purchase", marked "voided") and the task stays listed and closable; an unrecognised kind prints
+itself, **never "household"**. Tasks deliberately do not reuse the spend lines' `targetKind`/`targetId`:
+`targetLabel()` answers "household" for anything it does not recognise, which would silently misfile a
+task.
+
+Links: a supplier opens its card through `supplierCardHref()` (§21.2a — the one resolver); a purchase opens
+Purchases filtered to its day with the row in view (voided ones with "voided only"); a vehicle opens its
+running-costs card on Insights; a renewal its row on Contracts & Renewals; a contract end its schedule on
+Recurring; a card date its pot on Accounts & Pots.
+
+### 25.6 What tasks are not
+
+- **Not recurring.** Annual things are already covered: renewals repeat annually and carry their own lead
+  (§22.2), and contract ends and card dates raise key-date alerts (§22–§24). A repeating chore list is out
+  of scope.
+- **Not notifications.** Nothing is emailed, pushed or shown by the browser (decision 19; §22.3's channel).
+  There is no bell or count badge in the header in this release.
+- **Never a money movement.** A task moves no money and changes no balance, estimate or projection.
+- **The stale-pot item is not included.** Whether "The app has noticed" should also list a pot with no
+  balance checkpoint for 7 or 14 days is an open question (plan OQ14), deliberately left for the household.
+

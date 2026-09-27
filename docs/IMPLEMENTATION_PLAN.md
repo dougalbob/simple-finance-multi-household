@@ -1555,10 +1555,11 @@ the keyboard.
 | OQ7 | ~~PWA installability~~ | **Resolved v0.8.0 (decisions 122–123): manifest + icons shipped without a service worker; bypass surface equals the files that exist.** |
 | OQ8 | Unraid host port | Pick a free port at first install; template documents it (never inherit 3005). |
 | OQ9 | Phone camera formats: accept HEIC directly, or rely on browser JPEG capture? | v1 accepts PNG/JPEG/PDF; document the iPhone "Most Compatible"/JPEG camera setting; server-side HEIC conversion only if real devices demand it. |
-| OQ10 | Supplier-level document attachments (e.g. a policy PDF not tied to a purchase)? | Defer; v1 attaches to purchases only. Renewals/suppliers hold references + notes meanwhile. **v0.10.0 (decision 138): income records take documents too (payslips); supplier-level documents stay deferred.** |
-| OQ11 | Interaction follow-up dates surfaced in the key-dates panel — useful? | Include the optional field and panel display (proposed); no notifications either way. |
+| OQ10 | ~~Supplier-level document attachments (e.g. a policy PDF not tied to a purchase)?~~ | **Resolved v0.25.0 (decision 175): a supplier card has a Documents section** — `attachments.supplier_id`, the exactly-one-owner CHECK widened to three owners, PDF/JPEG/PNG only (no `text/plain`), same pipeline, audit, backup and removal. (v0.10.0, decision 138, had added income-record documents.) |
+| OQ11 | ~~Interaction follow-up dates surfaced in the key-dates panel — useful?~~ | **Resolved v0.25.0 (decision 175): a follow-up is a task, not a key date.** It is listed — overdue first, until ticked — on the Tasks page, the supplier card, the Suppliers banner and Contracts & Renewals. The key-date engine and the Overview panel are unchanged; no notifications either way. |
 | OQ12 | Attachment size limit and retention guidance | 10 MB per file; README guidance on archive growth; no server-side pruning in v1. User-initiated removal of one receipt is decision 89 — still no automatic pruning. |
 | OQ13 | 29 February renewal dates under annual advance | Land on 28 February in non-leap years; visible and editable. |
+| OQ14 | Should the Tasks page's "The app has noticed" also list a **stale pot** — a bank or cash pot with no balance checkpoint for N days? | **Not in v0.25.0 (decision 175); awaiting the household.** Options: **7 days** (about one and a half of the household's 4–5-day checkpoint cycles — prompts early) or **14 days** (quieter; only a pot that has clearly been forgotten). Derived and link-only either way, like the other noticed items. |
 
 ## Release history
 
@@ -2288,3 +2289,75 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     disabled, then enabled again once the next entry is complete) and the identical-consecutive-save
     case. `e2e/fuel.spec.ts` gains the same for the Fuel tab. No server action, schema or migration
     changes; `npm test` is unaffected.
+
+175. **Tasks: a real follow-up model, labelled dates, and what "prompt me" means (2026-09-27,
+    v0.25.0).** The defect: a follow-up dated 2026-11-01 on a supplier call did nothing. The
+    Suppliers page's "Promised follow-ups" and Contracts & Renewals' `upcomingSupplierFollowUps`
+    both filtered to `>= today`, so on 2 November the promise vanished; the supplier card went on
+    printing a bare, unlabelled "Follow up 2026-11-01"; nothing could complete or reschedule it.
+    The household asked for the task model and **not** a bell.
+
+    **The model.** A first-class `tasks` table (migration `0013_tasks_and_supplier_documents`):
+    title, optional detail and due date, a *subject* (`household` | `supplier` | `vehicle` |
+    `purchase` + id; `(subject_kind = 'household') = (subject_id IS NULL)` is a CHECK), an optional
+    `related_interaction_id`, creator and times, completion (`completed_at`/`completed_by` paired by
+    CHECK, optional note) and `version`. `src/lib/records/tasks.ts` copies the renewals shape:
+    create / edit / complete / reopen, each versioned (`VersionConflictError` on a stale version) and
+    audited (`task.create|edit|complete|reopen`); tasks are never deleted; **reopen is allowed** and
+    audited, and a closed task must be reopened before it can be edited. Subjects are validated on
+    write (the row exists; a voided purchase takes no new task; a related interaction must belong to
+    the same supplier); `subject_id` carries no FK because it is polymorphic, and nothing in the app
+    deletes suppliers, vehicles or purchases. Ordering is overdue → today → later → undated via
+    `daysBetween`, and the state is always words ("Overdue by 3 days", "Due today", "In 12 days",
+    "No due date") — colour is never the only signal (SPEC §16.7). **Not** `targetKind`/`targetId`:
+    `targetLabel()` silently answers "household" for a kind it does not know. A new pure
+    `subjectLabel()` beside it degrades to the bare kind when the subject has gone (a voided purchase
+    reads "purchase", marked voided) and never returns "household" for an unknown kind. **No
+    recurrence:** renewals repeat annually and key dates cover contract ends and card dates.
+
+    **Migration 0013.** Each `supplier_interactions.follow_up_date` row with a value becomes an open
+    task — title "Follow up with <supplier>", detail = the interaction's summary, due = the date when
+    it is a real `YYYY-MM-DD` (else undated rather than dropped), creator and time copied, linked to
+    the interaction — with one `task.migrate` audit entry each (actor `system`); then the column is
+    dropped (the household has one such row). The same migration rebuilds `attachments` on the 0009
+    pattern with `supplier_id` and the exactly-one-owner CHECK widened to three owners (its FKs are
+    now no-action rather than 0009's cascade — nothing deletes an owner). Stamp from drizzle-kit's
+    real clock (decision 172); upgrade-tested from a v0.24.0-shaped database through the production
+    runner (`tests/migrate-upgrade.test.ts`), idempotent on a second start.
+
+    **Where tasks live.** The supplier interaction form's **Follow up by** date (and optional words)
+    creates the task in one transaction with the interaction (`addSupplierInteraction` now returns
+    `{ interaction, followUpTask }`; a failing task insert takes the interaction with it). The
+    interaction log labels every line — "Interaction:", "Outcome:", "Logged by:", "Follow up
+    by:" — with dates in words from `formatShortLocalDate()` (plus the year when it is not this
+    year, `formatShortLocalDateWithYear()`), replacing raw `toLocalDateString` output. The card gains
+    a Tasks section (a checkbox per open task, add, reschedule/edit/close-with-note, done recently
+    with Reopen) and a header badge "2 open tasks · 1 overdue"; the Suppliers banner and Contracts
+    "Follow-ups you promised" read open supplier tasks, overdue first. A purchase row gains "Add a
+    task" ("Chase the refund"); **case tracking** for purchases is a later decision that would grow
+    from `tasks`. `/tasks` (desktop bar and the drawer's More group) shows "Your tasks" grouped with
+    checkboxes, and **"The app has noticed"** — derived, links only, no checkboxes: key dates in their
+    window (`getKeyDateAlerts()` + `keyDateMessage()`, new `keyDateHref()`), fuel fills missing litres
+    or mileage and a run of fills with no full tank (`getFuelEconomyView()`). Supplier links use
+    `supplierCardHref()` (no second resolver); purchases link to Purchases filtered to their day with
+    `#purchase-{id}`; vehicles to a new `#vehicle-{id}` on Insights; renewals to a new
+    `#renewal-{id}` on Contracts & Renewals.
+
+    **Supplier documents (resolves OQ10).** `attachments.supplier_id`, the upload action accepts
+    exactly one of purchase / income record / supplier, the card has a Documents section; PDF, JPEG
+    and PNG only — no `text/plain`.
+
+    **Not this release:** the bell/count badge, purchase case tracking, email/push/browser
+    notifications (decision 19, SPEC §21.2/§22.3), anything that moves money, and the stale-pot
+    noticed item (OQ14 — 7 or 14 days, awaiting the household). The household skipped the session's
+    questions and asked the work to carry on, so two calls were made without their answer and are
+    recorded here: the stale-pot item is **excluded**, and supplier attachments **ship** in this
+    release's migration.
+
+    Tests: `tests/tasks.test.ts` (due words, ordering, completion, stale-version refusal, reopen,
+    edit rules, voided subject, the interaction→task transaction including a forced rollback, derived
+    items), a 0013 block in `tests/migrate-upgrade.test.ts`, supplier documents in
+    `tests/attachment-pipeline.test.ts`, supplier-details follow-ups as tasks, and an `e2e/tasks.spec.ts`
+    project before `backup` (create → tick → survives reload → reopen; a follow-up promised on a call
+    becomes a task on the card; a purchase task links back to its row).
+
