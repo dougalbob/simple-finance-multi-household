@@ -1,8 +1,8 @@
 # Handoff: Credit-card pots and liquid-only projections (decision 171)
 
-**Branch:** `arena/01a0e259-simple-finance`. Feature A is implemented in the working tree but has not
-been committed, pushed, opened as a PR or released. Do not put real provider, limit, balance or offer
-terms in tracked files or test data.
+**Branch:** `arena/01a0e259-simple-finance`. Feature A is implemented and submitted for review in PR #82;
+it has not been merged or released. Do not put real provider, limit, balance or offer terms in tracked
+files or test data.
 
 ## What changed
 
