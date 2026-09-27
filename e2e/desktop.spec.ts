@@ -54,6 +54,7 @@ test.describe('desktop review', () => {
       'Settings',
       'Suppliers',
       'Contracts & Renewals',
+      'Tasks',
     ]) {
       await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible();
     }

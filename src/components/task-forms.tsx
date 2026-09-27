@@ -354,7 +354,7 @@ export function TaskCreateForm({
           />
         </div>
         <div className="flex items-center gap-1.5">
-          <label className="text-xs text-ink-soft" htmlFor={`${idPrefix}-due`}>
+          <label className="whitespace-nowrap text-xs text-ink-soft" htmlFor={`${idPrefix}-due`}>
             Due by
           </label>
           <input id={`${idPrefix}-due`} name="dueDate" type="date" className={FIELD_CLASS} />
