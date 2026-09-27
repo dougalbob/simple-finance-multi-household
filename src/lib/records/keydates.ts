@@ -1,3 +1,4 @@
+import { formatPence } from '../money';
 import { daysBetween } from './dates';
 
 /**
@@ -12,7 +13,8 @@ import { daysBetween } from './dates';
  * renewals module before this engine runs.
  */
 
-export type KeyDateKind = 'renewal' | 'contract-end';
+export type KeyDateKind =
+  'renewal' | 'contract-end' | 'credit-card-payment' | 'credit-card-promo-end';
 
 export interface KeyDateItem {
   id: number;
@@ -25,6 +27,9 @@ export interface KeyDateItem {
   supplierId?: number | null;
   targetLabel?: string | null;
   scheduleId?: number | null;
+  potId?: number | null;
+  /** Copied from the current card statement; never calculated by this app. */
+  minimumPaymentPence?: number | null;
 }
 
 export type KeyDateState = 'today' | 'in-window' | 'rolled-awaiting-review' | 'past';
@@ -76,14 +81,38 @@ export function computeKeyDateAlerts(items: readonly KeyDateItem[], today: strin
 export function keyDateMessage(alert: KeyDateAlert): string {
   switch (alert.state) {
     case 'today':
+      if (alert.kind === 'credit-card-payment') {
+        return `Review ${alert.label} payment today${minimumPaymentText(alert)}`;
+      }
+      if (alert.kind === 'credit-card-promo-end') {
+        return `0% offer on ${alert.label} ends today — check the card terms and remaining balance`;
+      }
       return alert.kind === 'renewal' ? `${alert.label} renews today` : `${alert.label} ends today`;
     case 'in-window':
+      if (alert.kind === 'credit-card-payment') {
+        return `${alert.label} payment due in ${alert.daysUntil} ${alert.daysUntil === 1 ? 'day' : 'days'}${minimumPaymentText(alert)} — check the statement and choose an amount`;
+      }
+      if (alert.kind === 'credit-card-promo-end') {
+        return `0% offer on ${alert.label} ends in ${alert.daysUntil} ${alert.daysUntil === 1 ? 'day' : 'days'} — review the remaining balance`;
+      }
       return alert.kind === 'renewal'
         ? `${alert.label} renews in ${alert.daysUntil} ${alert.daysUntil === 1 ? 'day' : 'days'}`
         : `${alert.label} ends in ${alert.daysUntil} ${alert.daysUntil === 1 ? 'day' : 'days'} — time to shop around`;
     case 'rolled-awaiting-review':
       return `${alert.label} ended on ${alert.date} — rolled / awaiting review`;
     case 'past':
+      if (alert.kind === 'credit-card-payment') {
+        return `${alert.label} payment due date passed — check the provider; the app cannot verify payment`;
+      }
+      if (alert.kind === 'credit-card-promo-end') {
+        return `0% offer on ${alert.label} ended on ${alert.date} — check the current card terms and balance`;
+      }
       return `${alert.label} was due on ${alert.date} — review it`;
   }
+}
+
+function minimumPaymentText(alert: KeyDateAlert): string {
+  return alert.minimumPaymentPence === null || alert.minimumPaymentPence === undefined
+    ? ''
+    : ` — statement minimum ${formatPence(alert.minimumPaymentPence)}`;
 }

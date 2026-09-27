@@ -2200,6 +2200,30 @@ export async function editPotAction(
     thresholdRaw === null || String(thresholdRaw).trim() === ''
       ? null
       : parsePence(String(thresholdRaw));
+  const cardMinimumRaw = formData.get('creditCardStatementMinimum');
+  const cardMinimum =
+    cardMinimumRaw === null || String(cardMinimumRaw).trim() === ''
+      ? null
+      : parsePence(String(cardMinimumRaw));
+  const paymentDayRaw = formData.get('creditCardPaymentDayOfMonth');
+  const paymentDay = numberOrNull(paymentDayRaw);
+  const warningDaysRaw = formData.get('creditCardWarningDays');
+  const warningDays = numberOrNull(warningDaysRaw);
+  if (limitRaw !== null && String(limitRaw).trim() !== '' && limit === null) {
+    return { status: 'error', message: 'Enter a valid limit amount.' };
+  }
+  if (thresholdRaw !== null && String(thresholdRaw).trim() !== '' && threshold === null) {
+    return { status: 'error', message: 'Enter a valid warning threshold.' };
+  }
+  if (cardMinimumRaw !== null && String(cardMinimumRaw).trim() !== '' && cardMinimum === null) {
+    return { status: 'error', message: 'Enter a valid statement minimum amount.' };
+  }
+  if (paymentDayRaw !== null && String(paymentDayRaw).trim() !== '' && paymentDay === null) {
+    return { status: 'error', message: 'Enter a payment due day from 1 to 31.' };
+  }
+  if (warningDaysRaw !== null && String(warningDaysRaw).trim() !== '' && warningDays === null) {
+    return { status: 'error', message: 'Enter a whole-number reminder lead.' };
+  }
   const parsed = editPotEntrySchema.safeParse({
     potId: numberOrNull(formData.get('potId')),
     expectedVersion: numberOrNull(formData.get('version')),
@@ -2207,6 +2231,11 @@ export async function editPotAction(
     kind: textOrNull(formData.get('kind')) ?? 'bank',
     overdraftLimitPence: limit,
     warningThresholdPence: threshold,
+    creditCardPaymentDayOfMonth: paymentDay,
+    creditCardWarningDays: warningDays ?? 3,
+    creditCardPromotionalEndDate: textOrNull(formData.get('creditCardPromotionalEndDate')),
+    creditCardStatementDueDate: textOrNull(formData.get('creditCardStatementDueDate')),
+    creditCardStatementMinimumPence: cardMinimum,
   });
   if (!parsed.success) {
     return { status: 'error', message: firstIssue(parsed.error, 'Check the pot fields.') };
@@ -2221,6 +2250,11 @@ export async function editPotAction(
         kind: parsed.data.kind,
         overdraftLimitPence: parsed.data.overdraftLimitPence,
         warningThresholdPence: parsed.data.warningThresholdPence,
+        creditCardPaymentDayOfMonth: parsed.data.creditCardPaymentDayOfMonth,
+        creditCardWarningDays: parsed.data.creditCardWarningDays,
+        creditCardPromotionalEndDate: parsed.data.creditCardPromotionalEndDate,
+        creditCardStatementDueDate: parsed.data.creditCardStatementDueDate,
+        creditCardStatementMinimumPence: parsed.data.creditCardStatementMinimumPence,
       },
     });
     revalidatePages();

@@ -31,8 +31,9 @@
     Private household spending tracker for two people: fast mobile entry at the
     till, recurring payments with a read-only month calendar, honest "available
     now" estimates and a payday-to-payday projection, per-vehicle running costs,
-    supplier contact cards, contract-end and renewal alerts, receipt/invoice
-    attachments, and encrypted downloadable backups.
+    supplier contact cards, contract-end and renewal alerts, credit-card pots
+    with statement and promotional-date reminders, receipt/invoice attachments,
+    and encrypted downloadable backups.
 
     Access is through Cloudflare Tunnel + Access (Google sign-in) with an
     allowlist of exactly two identities; the app verifies the Access JWT
@@ -49,7 +50,7 @@
   <DonateText/>
   <DonateLink/>
   <Description>
-    Simple Finance (v0.22.1). Internal port 3000; choose a free host port.
+    Simple Finance (v0.23.0). Internal port 3000; choose a free host port.
     Data lives in /mnt/user/appdata/simple-finance (database, .env, documents,
     logging). Health endpoint: /api/health. Backups: Settings → Backup &amp;
     restore (encrypted archive of the database and every attachment).

@@ -41,6 +41,7 @@ import {
   type ScheduleKind,
 } from './schedules';
 import { latestCheckpointPerPot, listPots, type Checkpoint, type Pot } from './pots';
+import { creditCardPaymentReminderDate } from './credit-cards';
 import { listPeople } from './people';
 import { listVehicles } from './vehicles';
 
@@ -91,8 +92,10 @@ export function ensureScheduleState(db: Db, nowArg?: Date): EnsureStateResult {
 }
 
 /**
- * The per-pot and household "available now" estimates (SPEC §7.1).
- * Runs the due pass first so converted schedule records are included.
+ * The per-pot and household-net "available now" estimates (SPEC §7.1).
+ * Credit-card liabilities remain in the household total; liquidity projections
+ * derive a separate bank-and-cash sum below. Runs the due pass first so
+ * converted schedule records are included.
  */
 export function getMoneySnapshot(db: Db, nowArg?: Date): MoneySnapshot {
   const now = nowArg ?? new Date();
@@ -245,16 +248,20 @@ export interface ProjectionView {
 }
 
 /**
- * The to-payday projection view (SPEC §7.2–§7.5, §8). Returns null when no
- * pot has been checkpointed — with no estimate there is nothing to project
- * and the UI must say so rather than imply a figure.
+ * The to-payday liquidity view (SPEC §7.2–§7.5, §8). Returns null when no
+ * bank or cash pot has been checkpointed — a card-only net liability is not
+ * a liquid starting estimate.
  */
 export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null {
   const now = nowArg ?? new Date();
   const snapshot = getMoneySnapshot(db, now);
-  if (snapshot.householdAvailablePence === null) return null;
+  const availableLiquidPence = liquidAvailablePence(snapshot);
+  if (availableLiquidPence === null) return null;
 
   const today = toLocalDateString(now);
+  const liquidPotIds = new Set(
+    snapshot.pots.filter((entry) => entry.pot.kind !== 'credit-card').map((entry) => entry.pot.id),
+  );
   const potLabel = new Map(snapshot.pots.map((pot) => [pot.pot.id, pot.pot.label]));
 
   // Salary receipts anchor the cycle; borrowed support stays inside it (decision 166).
@@ -289,8 +296,12 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
       scheduleKind: row.scheduleKind,
     }));
 
-  const commitmentRows = windowLines(db, 'commitment', today, paydayDate);
-  const receiptRows = windowLines(db, 'receipt', today, paydayDate);
+  const commitmentRows = windowLines(db, 'commitment', today, paydayDate).filter((row) =>
+    liquidPotIds.has(row.potId),
+  );
+  const receiptRows = windowLines(db, 'receipt', today, paydayDate).filter((row) =>
+    liquidPotIds.has(row.potId),
+  );
 
   const commitments = commitmentRows.map((row) => ({
     scheduleId: row.scheduleId,
@@ -299,6 +310,9 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
     amountPence: row.amountPence,
     dueDate: row.dueDate,
   }));
+  const expectedReceipts = expectedInflowLines(db, today, today, windowUpper).filter((line) =>
+    liquidPotIds.has(line.potId),
+  );
   const receiptLines = [
     ...receiptRows.map((row) => ({
       scheduleId: row.scheduleId,
@@ -307,17 +321,14 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
       amountPence: row.amountPence,
       dueDate: row.dueDate,
     })),
-    // Debt expected inflows join the window as receipts flagged expected —
-    // "expected support" is a planning figure, never received income
-    // (SPEC §10.2 stays true: borrowed money is never income). The anchor is
-    // today (exclusive) so a support day due tomorrow (= windowLower) lands
-    // exactly like a receipt instance due tomorrow (gte).
-    ...expectedInflowLines(db, today, today, windowUpper),
+    // Expected support into a card reduces card debt, not liquid funds.
+    ...expectedReceipts,
   ];
 
   // Warning threshold (SPEC §8): the most protective configured value.
   const thresholds = snapshot.pots
-    .map((pot) => pot.pot.warningThresholdPence)
+    .filter((entry) => entry.pot.kind === 'bank')
+    .map((entry) => entry.pot.warningThresholdPence)
     .filter((value): value is number => value !== null);
   const warningThresholdPence = thresholds.length === 0 ? null : Math.min(...thresholds);
 
@@ -329,7 +340,7 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
   const dayToDaySplit = splitDayToDayEvents(dayToDayEvents);
 
   const potWatches: PotWatchInput[] = snapshot.pots
-    .filter((pot) => pot.estimatePence !== null)
+    .filter((pot) => pot.pot.kind !== 'credit-card' && pot.estimatePence !== null)
     .map((pot) => ({
       potId: pot.pot.id,
       estimatePence: pot.estimatePence,
@@ -338,7 +349,7 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
 
   const result = projectToPayday({
     now,
-    availableNowPence: snapshot.householdAvailablePence,
+    availableNowPence: availableLiquidPence,
     paydayDate,
     commitments,
     receipts: receiptLines,
@@ -355,12 +366,12 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
     paydayScheduleName: income.scheduleName,
     paydayScheduleId: payday === null ? null : payday.scheduleId,
     commitmentLines: toLines(commitmentRows),
-    receiptLines: [...toLines(receiptRows), ...expectedInflowLines(db, today, today, windowUpper)],
+    receiptLines: [...toLines(receiptRows), ...expectedReceipts],
     dayToDayEvents,
     potLabels: potLabel,
     otherPotEstimates: new Map(
       snapshot.pots
-        .filter((pot) => pot.estimatePence !== null)
+        .filter((pot) => pot.pot.kind !== 'credit-card' && pot.estimatePence !== null)
         .map((pot) => [pot.pot.id, pot.estimatePence as number]),
     ),
   };
@@ -423,7 +434,15 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
   const income = nextExpectedIncome(db, today);
   const potLabel = new Map(snapshot.pots.map((entry) => [entry.pot.id, entry.pot.label]));
 
-  const commitmentRows = income === null ? [] : windowLines(db, 'commitment', today, income.date);
+  const liquidPotIds = new Set(
+    snapshot.pots.filter((entry) => entry.pot.kind !== 'credit-card').map((entry) => entry.pot.id),
+  );
+  const commitmentRows =
+    income === null
+      ? []
+      : windowLines(db, 'commitment', today, income.date).filter((row) =>
+          liquidPotIds.has(row.potId),
+        );
   const dayToDayEvents = income === null ? [] : projectDayToDayEvents(db, today, income.date);
   const commitments = commitmentRows.map((row) => ({
     name: row.name,
@@ -442,7 +461,9 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
     // estimate still shows on the review pages; this one stays silent rather
     // than pretending an endless window.
     const spendablePence =
-      income === null || entry.estimatePence === null ? null : entry.estimatePence - ownPence;
+      income === null || entry.pot.kind === 'credit-card' || entry.estimatePence === null
+        ? null
+        : entry.estimatePence - ownPence;
     return {
       potId: entry.pot.id,
       estimatePence: entry.estimatePence,
@@ -479,6 +500,16 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
 
 function sumPence(lines: Array<{ amountPence: number }>): number {
   return lines.reduce((total, line) => total + line.amountPence, 0);
+}
+
+/** Bank and cash balances are liquid funds; card pots are net liabilities, not cash. */
+function liquidAvailablePence(snapshot: MoneySnapshot): number | null {
+  const estimates = snapshot.pots
+    .filter((entry) => entry.pot.kind !== 'credit-card' && entry.estimatePence !== null)
+    .map((entry) => entry.estimatePence as number);
+  return estimates.length === 0
+    ? null
+    : sumPence(estimates.map((amountPence) => ({ amountPence })));
 }
 
 /** Engine-shaped lines for projected day-to-day events (pot-less, id-less). */
@@ -607,10 +638,10 @@ interface NextIncome {
 }
 
 /**
- * The earliest unconverted **receipt schedule** instance strictly after
- * today — scheduled income only (the salary), already weekend-shifted.
- * Shared by `nextExpectedIncome` and `nextScheduledIncomeDate` so there is
- * one query for "the next payday on a schedule".
+ * The earliest unconverted **receipt schedule** instance into a bank or cash
+ * pot strictly after today — scheduled income only (the salary), already
+ * weekend-shifted. Card-pot receipts are not liquid payday anchors. Shared by
+ * `nextExpectedIncome` and `nextScheduledIncomeDate` so there is one query.
  */
 function nextReceiptScheduleInstance(
   db: Db,
@@ -624,10 +655,12 @@ function nextReceiptScheduleInstance(
     })
     .from(scheduleInstances)
     .innerJoin(schedules, eq(schedules.id, scheduleInstances.scheduleId))
+    .innerJoin(pots, eq(pots.id, schedules.potId))
     .where(
       and(
         eq(scheduleInstances.state, 'upcoming'),
         eq(schedules.kind, 'receipt'),
+        or(eq(pots.kind, 'bank'), eq(pots.kind, 'cash')),
         gte(scheduleInstances.dueDate, addDaysLocal(today, 1)),
       ),
     )
@@ -751,6 +784,33 @@ export function getKeyDateAlerts(db: Db, nowArg?: Date): KeyDateAlert[] {
       scheduleId: schedule.id,
     });
   }
+  for (const pot of listPots(db).filter((entry) => entry.kind === 'credit-card')) {
+    const paymentDate = creditCardPaymentReminderDate(pot, today);
+    if (paymentDate !== null) {
+      items.push({
+        id: pot.id,
+        kind: 'credit-card-payment',
+        label: pot.label,
+        date: paymentDate,
+        leadDays: pot.creditCardWarningDays,
+        potId: pot.id,
+        minimumPaymentPence:
+          pot.creditCardStatementDueDate === paymentDate
+            ? pot.creditCardStatementMinimumPence
+            : null,
+      });
+    }
+    if (pot.creditCardPromotionalEndDate !== null) {
+      items.push({
+        id: pot.id,
+        kind: 'credit-card-promo-end',
+        label: pot.label,
+        date: pot.creditCardPromotionalEndDate,
+        leadDays: pot.creditCardWarningDays,
+        potId: pot.id,
+      });
+    }
+  }
   return computeKeyDateAlerts(items, today);
 }
 
@@ -816,8 +876,10 @@ export interface HorizonProjectionView {
   totalReceiptsPence: number;
   /** False when day-to-day is excluded — the page relabels the headline. */
   dayToDayIncluded: boolean;
-  /** The household's own `availableNowPence` across the selected pots. */
+  /** The selected pots' liquid starting balance; zero is valid. */
   availableNowPence: number;
+  /** False when none of the selected bank/cash pots has a reported checkpoint. */
+  hasSelectedCheckpoint: boolean;
 }
 
 /**
@@ -839,7 +901,9 @@ export function getHorizonProjectionView(
   const snapshot = getMoneySnapshot(db, now);
   const today = toLocalDateString(now);
 
-  const potsAll = listPots(db);
+  // Horizon is a liquidity forecast: credit-card liabilities stay in the
+  // household net total but are not liquid pots that can pay bills.
+  const potsAll = listPots(db).filter((pot) => pot.kind !== 'credit-card');
   const selection =
     potIds.length === 0
       ? potsAll.map((pot) => ({ pot, selected: true }))
@@ -975,12 +1039,17 @@ export function getHorizonProjectionView(
     availablePence.length === 0 ? 0 : availablePence.reduce((a, b) => a + b, 0);
 
   const thresholds = selectedPots
+    .filter((pot) => pot.kind === 'bank')
     .map((pot) => pot.warningThresholdPence)
     .filter((value): value is number => value !== null);
   const warningThresholdPence = thresholds.length === 0 ? null : Math.min(...thresholds);
 
   const potWatches: PotWatchInput[] = selectedPots
-    .filter((pot) => snapshot.pots.find((entry) => entry.pot.id === pot.id)?.estimatePence != null)
+    .filter(
+      (pot) =>
+        pot.kind !== 'credit-card' &&
+        snapshot.pots.find((entry) => entry.pot.id === pot.id)?.estimatePence != null,
+    )
     .map((pot) => ({
       potId: pot.id,
       estimatePence: snapshot.pots.find((entry) => entry.pot.id === pot.id)
@@ -1014,6 +1083,7 @@ export function getHorizonProjectionView(
     totalReceiptsPence: result.totalReceiptsPence,
     dayToDayIncluded: includeDayToDay,
     availableNowPence,
+    hasSelectedCheckpoint: availablePence.length > 0,
   };
 }
 

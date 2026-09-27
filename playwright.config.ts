@@ -150,6 +150,12 @@ export default defineConfig({
       testMatch: /backup\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
+    {
+      // Own project, deliberately last: it adds a card pot and statement terms to the shared seed.
+      name: 'credit-card-pots',
+      testMatch: /credit-card-pots\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
   ],
   webServer: {
     command: 'node --import tsx scripts/e2e-server.mts',

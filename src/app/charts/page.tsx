@@ -163,23 +163,23 @@ function ForecastSection({ view }: { view: ForecastChartView }) {
     { key: 'out', label: 'Out', align: 'right' as const },
     { key: 'balance', label: 'Balance', align: 'right' as const },
   ];
-  const caption = `Today's ${formatPence(series.startPence)} is your own reported figure plus recorded activity; every later day is projected from schedules and the day-to-day model. Not a bank feed.${
+  const caption = `Today's ${formatPence(series.startPence)} is estimated liquid funds in bank and cash pots; later days apply expected cash commitments, receipts and day-to-day estimates. Credit-card debt is included in the household total, not this projection. Not a bank feed.${
     series.overdraftLimitPence !== null && !overdraftDrawn
       ? ` The ${formatPence(series.overdraftLimitPence)} of overdraft room is off the bottom of this chart — nothing next month goes near it.`
       : ''
   }`;
 
-  if (view.unavailable && series.days.length <= 1) {
+  if (view.unavailable) {
     return (
       <ChartCard
         id="forecast"
         eyebrow="A · Forecast"
-        title="Where the balance goes, today to a month ahead"
+        title="Where liquid funds go, today to a month ahead"
         className="lg:col-span-2"
       >
         <p className="text-sm text-ink-soft">
-          The forecast needs at least one balance checkpoint. Record one on the till and it appears
-          here.
+          The liquid-funds forecast needs a bank or cash balance checkpoint. Record one on the till
+          and it appears here.
         </p>
       </ChartCard>
     );
@@ -189,7 +189,7 @@ function ForecastSection({ view }: { view: ForecastChartView }) {
     <ChartCard
       id="forecast"
       eyebrow="A · Forecast"
-      title="Where the balance goes, today to a month ahead"
+      title="Where liquid funds go, today to a month ahead"
       className="lg:col-span-2"
     >
       <div className="lg:hidden">
@@ -208,7 +208,7 @@ function ForecastSection({ view }: { view: ForecastChartView }) {
             domain={domain}
             width={PHONE_WIDTH}
             height={220}
-            ariaLabel={`Projected household balance to ${formatShortLocalDate(series.throughDate)}. ${series.headline}`}
+            ariaLabel={`Projected liquid funds in bank and cash pots to ${formatShortLocalDate(series.throughDate)}. ${series.headline}`}
             xTicks={weeklyTicks(points.map((point) => point.date))}
             lowIndex={lowIndex < 0 ? null : lowIndex}
             lowLabel={`${formatPence(series.lowPence)} · ${shortDayMonth(series.lowDate)}`}
@@ -252,7 +252,7 @@ function ForecastSection({ view }: { view: ForecastChartView }) {
             domain={domain}
             width={LAPTOP_WIDTH}
             height={300}
-            ariaLabel={`Projected household balance to ${formatShortLocalDate(series.throughDate)}. ${series.headline}`}
+            ariaLabel={`Projected liquid funds in bank and cash pots to ${formatShortLocalDate(series.throughDate)}. ${series.headline}`}
             xTicks={weeklyTicks(points.map((point) => point.date))}
             lowIndex={lowIndex < 0 ? null : lowIndex}
             lowLabel={`${formatPence(series.lowPence)} · ${shortDayMonth(series.lowDate)}`}

@@ -288,17 +288,22 @@ it('migration gives an existing v0.19 schedule an empty exclusion list without t
   const handle = openDatabase(path.join(await makeTempDir('sf-month-migration-'), 'old.sqlite'));
   try {
     applyMigrations(handle.db, await migrationsFolderBefore('0011_schedule_excluded_months'));
-    const pot = createPot(handle.db, {
-      label: 'Main account',
-      kind: 'bank',
-      actor: 'alex@example.com',
-    });
+    // Seed the pre-0011 pot directly: current createPot writes the v0.23 card columns,
+    // which this intentionally pre-migration database does not have yet.
+    const potId = Number(
+      handle.raw
+        .prepare(
+          `INSERT INTO pots (label, kind, sort_order, overdraft_limit_pence, warning_threshold_pence, created_at, updated_at, version)
+           VALUES ('Main account', 'bank', 0, NULL, NULL, 0, 0, 1)`,
+        )
+        .run().lastInsertRowid,
+    );
     handle.raw
       .prepare(
         `INSERT INTO schedules (name, kind, frequency, due_day_of_month, amount_pence,
       pot_id, active_from, created_by, created_at, updated_at) VALUES ('Legacy', 'receipt', 'monthly', 1, 10000, ?, '2027-01-01', 'alex@example.com', 0, 0)`,
       )
-      .run(pot.id);
+      .run(potId);
     handle.raw.exec(
       `INSERT INTO schedule_instances (schedule_id, due_date) VALUES (1, '2027-02-01')`,
     );

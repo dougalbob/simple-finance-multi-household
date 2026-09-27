@@ -15,7 +15,11 @@
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
+# Use the headers already shipped in the official Node image. Otherwise node-gyp
+# tries a second download from nodejs.org, which can fail independently of npm
+# (for example, with ECONNRESET while building the production image).
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    npm_config_nodedir=/usr/local
 # Native module toolchain: better-sqlite3 compiles from source during npm ci
 # (the slim base ships no compiler; libstdc++6 needed at runtime is included
 # in the base image). Blueprint §7: build in a compatible stage, carry the

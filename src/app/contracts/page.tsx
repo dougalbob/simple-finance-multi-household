@@ -4,6 +4,8 @@ import { RenewalEditForm } from '@/components/schedule-forms';
 import { currentUserFromRequest } from '@/lib/auth/next';
 import { getDbHandle } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
+import { creditCardPaymentReminderDate } from '@/lib/records/credit-cards';
+import { listPots } from '@/lib/records/pots';
 import { listPeople } from '@/lib/records/people';
 import { listRenewals } from '@/lib/records/renewals';
 import { daysBetween } from '@/lib/records/dates';
@@ -36,6 +38,7 @@ export default async function ContractsPage() {
   const today = toLocalDateString(new Date());
   const renewals = listRenewals(db);
   const contracts = listSchedulesWithContractEnds(db);
+  const creditCards = listPots(db).filter((pot) => pot.kind === 'credit-card');
   const suppliers = listSuppliers(db);
   const supplierNames = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
   const people = listPeople(db);
@@ -52,9 +55,9 @@ export default async function ContractsPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Plan ahead</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Contracts &amp; Renewals</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          Dates are reminders only. The app never changes a bank instruction and never stops a
-          direct debit on its own — an end date tells you it is time to shop around, and the
-          payments keep being forecast until you edit or cancel the schedule here.
+          Dates are reminders only. The app never changes a bank instruction, sends a payment, or
+          verifies a card payment with its provider. Credit-card payments are recorded as transfers,
+          not spending.
         </p>
       </header>
 
@@ -122,6 +125,76 @@ export default async function ContractsPage() {
                 );
               })}
             </div>
+          )}
+        </section>
+
+        <section
+          aria-labelledby="card-payments-heading"
+          className="rounded-xl border border-border bg-surface p-5 shadow-sm"
+        >
+          <h2 id="card-payments-heading" className="text-lg font-semibold">
+            Credit-card payment reviews
+          </h2>
+          <p className="mt-1 text-xs text-ink-muted">
+            Monthly reminders use the due day and lead you set on each card. Enter the minimum and
+            exact due date from the provider&apos;s statement; the app does not calculate it. A
+            recorded transfer is not provider confirmation.
+          </p>
+          {creditCards.length === 0 ? (
+            <p className="mt-3 text-sm text-ink-muted">
+              No credit-card pots yet. Add one on{' '}
+              <Link className="text-accent hover:underline" href="/pots">
+                Accounts &amp; Pots
+              </Link>
+              .
+            </p>
+          ) : (
+            <ul className="mt-3 divide-y divide-border-hairline">
+              {creditCards.map((card) => {
+                const paymentDate = creditCardPaymentReminderDate(card, today);
+                const paymentDays = paymentDate === null ? null : daysBetween(today, paymentDate);
+                const promoDate = card.creditCardPromotionalEndDate;
+                const promoDays = promoDate === null ? null : daysBetween(today, promoDate);
+                return (
+                  <li key={card.id} className="py-3">
+                    <div className="flex flex-wrap items-baseline gap-x-3">
+                      <Link
+                        href={`/pots#pot-${card.id}-heading`}
+                        className="font-medium text-accent hover:underline"
+                      >
+                        {card.label}
+                      </Link>
+                      <span className="text-sm text-ink-soft">
+                        {paymentDate === null
+                          ? 'monthly due day not set'
+                          : `payment due ${paymentDate}`}
+                        {card.creditCardStatementDueDate === paymentDate &&
+                        card.creditCardStatementMinimumPence !== null
+                          ? ` · statement minimum ${formatPence(card.creditCardStatementMinimumPence)}`
+                          : ''}
+                        {card.creditCardPaymentDayOfMonth !== null
+                          ? ` · usual day ${card.creditCardPaymentDayOfMonth} · warn ${card.creditCardWarningDays} days before`
+                          : ''}
+                      </span>
+                      {paymentDays !== null && paymentDays < 0 ? (
+                        <span className="rounded-full bg-warning-50 px-2 py-0.5 text-xs font-semibold text-warning">
+                          date passed — check provider
+                        </span>
+                      ) : paymentDays !== null && paymentDays <= card.creditCardWarningDays ? (
+                        <span className="rounded-full bg-warning-50 px-2 py-0.5 text-xs font-semibold text-warning">
+                          {paymentDays === 0 ? 'review today' : `in ${paymentDays} days`}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-sm text-ink-soft">
+                      {promoDate === null
+                        ? 'No promotional end date set.'
+                        : `0% offer ends ${promoDate}${promoDays !== null && promoDays < 0 ? ' — check the current card terms' : promoDays === 0 ? ' — today' : promoDays !== null && promoDays <= card.creditCardWarningDays ? ` — in ${promoDays} days` : ''}.`}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </section>
 

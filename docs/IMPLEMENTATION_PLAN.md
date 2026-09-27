@@ -2160,3 +2160,31 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     month has — plus the 2026-09-27 regression as a worked example. A future seed edit that
     reintroduces a date bomb now fails `npm test` in milliseconds instead of failing the browser suite
     on one particular day of the month, months later, for whoever happens to open a pull request then.
+
+171. **Credit cards are net liabilities, not liquid pots (v0.23.0 scope, 2026-09-27).** Add generic
+    credit-card pot support for one or more cards, with no real provider, limit, balance or offer details
+    in tracked docs, fixtures or seed data. Purchases charged to a card are spending; bank-to-card
+    payments are transfers, not spending. The household headline remains net of card debt, with total
+    owed shown as separate context.
+
+    The household selected distinct projection semantics: payday, Horizon, overdraft warnings and
+    §7.5 transfer-shortfall watches use bank and cash pots only. Card debt and card-assigned scheduled
+    commitments/receipts/expected inflows cannot claim a bank overdraft or trigger a bank-pot transfer
+    watch. Card credit limits and near-limit thresholds are separate usage context, never overdraft
+    terminology. This intentionally supersedes §7.2/§7.6's former use of the all-pot household sum as
+    the projection starting point; that all-pot sum remains the net household headline.
+
+    Each card may store its usual due day (clamped in short months), a configurable reminder lead
+    (default three days), the provider-statement minimum and exact due date as a paired manually copied
+    snapshot, and the actual promotional end date. In-app key-date alerts prompt statement review and
+    promo-term review; the app does not calculate issuer minimums, assume full repayment, schedule or
+    send payments, verify provider receipt, assume a promo duration, calculate interest, or add
+    card-specific interest/repaid totals. The later non-binding cash-flow scenario tool remains out of
+    scope. Multiple cards are supported generically. No card/provider terms are included in demo or
+    test data; tests use invented neutral labels and dates.
+
+    Implementation uses pot settings plus migration `0012_credit_card_pots`; product rules are in
+    SPEC §§4, 7, 8, 22.3 and 24. Test the signed estimate/transfer behavior, distinct net-vs-liquid
+    figures, card exclusion from every liquidity projection and warning/watch path, manually supplied
+    statement dates/minimums, month-end clamping, promo alert and inability to verify payment. Recheck
+    migration snapshot/journal consistency and all release gates before publishing.

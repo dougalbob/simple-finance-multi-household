@@ -103,8 +103,11 @@ The household's shape (names are user-configurable labels):
 Rules:
 
 - Every pot has independent checkpoints and an independent estimate (§6–§7).
-- **Overdraft configuration is per-pot.** In this household only the Main account has an authorised overdraft
+- **Overdraft configuration is per bank pot.** In this household only the Main account has an authorised overdraft
   (a configurable limit figure, used for context/display) and a configurable **warning threshold** (§8).
+- A household may add one or more **credit-card pots**. Their signed balance represents money owed (normally
+  negative); limit and near-limit threshold are card-usage context, never overdraft context. Card terms and
+  statement details are private per-pot settings (§24).
 - Cash pots are checkpointed whenever the users count them ("as-needed"); the UI shows each pot's
   *last updated* age so staleness is always visible, never hidden.
 - Transfers between pots (§10) are expected and routine (Salary → Main "as we need to"). The app **never**
@@ -163,8 +166,12 @@ Schedule-generated records are ordinary spending records and appear here once co
 External movements move the estimate like receipts (in) and spending (out) — the household
 total genuinely moves, because the money really entered or left (unlike an internal transfer).
 
-**household_available_now = Σ estimate(P) over all pots.** This is the headline figure. Because it sums pots,
-internal transfers can never distort it.
+**household_available_now = Σ estimate(P) over all pots.** This is the headline net household figure; a
+credit-card liability is negative and reduces it. Because it sums pots, internal transfers can never distort it.
+
+**liquid_available_now = Σ estimate(P) over checkpointed bank and cash pots.** This separate figure is the
+starting point for payday and Horizon liquidity projections. Card balances remain in the household net total,
+but are not cash available to pay bills. A card-only checkpoint cannot start a liquidity projection.
 
 Comparison precision: where both a record and a checkpoint carry times of day, compare by timestamp (mobile
 entry auto-timestamps). Where a record is date-only and shares the checkpoint's date, the date alone does
@@ -199,12 +206,17 @@ same date-stamped records.
 
 ```
 days = payday − today   (whole days, local date arithmetic)
-projection starts from household_available_now and applies, day by day until payday inclusive:
+the payday liquidity projection starts from liquid_available_now (bank and cash pots only) and applies,
+day by day until payday inclusive:
   + expected receipts due that day        (income schedules not yet converted, and a debt's expected support, §10.2)
   − expected commitments due that day     (DD/SO schedule instances not yet converted)
   − projected day-to-day events due that day (see 7.3)
 projected_low = the minimum running value within the window
 ```
+
+Only bank and cash pots are liquid projection inputs: card balances and scheduled card-pot movements are
+excluded even though purchases charged to a card remain ledger spending. The separate household headline
+remains net of card debt (§24).
 
 **Salary anchors the window (decision 166).** Use the next scheduled salary receipt date,
 with the existing weekend shift, never the next debt expectation. No new setting: the household's
@@ -217,8 +229,9 @@ shop and fuel, so the pace is explicitly **on top of the planned shop and fuel**
 would touch zero at the lowest point, not preserve a cushion. Protect zero, not the overdraft.
 For a negative low state the shortfall and no allowance; for zero state no allowance; when the low
 is today do not invent a weekly number. All three surfaces share the same calculation and wording.
-Phone home, Overview and the panel's starting line call the same estimate **Household total now**,
-with the quiet reminder that it is not a bank balance. Decision 165's estimate arithmetic is unchanged.
+Phone home and Overview call `household_available_now` **Household total now** (net of card debt), with
+card debt shown separately as context. The payday and Horizon projections label their starting point
+**Liquid funds now** and exclude credit-card pots. Decision 165's estimate arithmetic is unchanged.
 
 `projected_low` normally occurs just before salary lands. The projection **includes** expected income; it is
 not a spending-only forecast.
@@ -282,18 +295,21 @@ never claims precision it does not have.**
 
 ### 7.5 Pot-level "plan a transfer" watch (distinct from household warnings)
 
-The household projection can look healthy while the Main account alone cannot cover the commitments due from
-it — because the money is sitting in the Salary account and transfers are manual. So, separately:
+The bank-and-cash liquidity projection can look healthy while the Main account alone cannot cover the
+commitments due from it — because the money is sitting in the Salary account and transfers are manual.
+So, separately:
 
 ```
 pot_watch(P) = estimate(P) − Σ expected commitments due from P between now and payday
 ```
 
-If `pot_watch(P) < 0`, the Overview shows a distinct, non-alarming **"plan a transfer"** notice naming the pot,
-the shortfall and the earliest due commitment (fictional example: *"Main account is projected £666.08 short of
-the DDs due from it before payday — Mortgage and Council Tax leave on the 1st; Salary account holds £520.00."*).
-This is a planning nudge, not an overdraft warning; the pot-level watch deliberately excludes day-to-day
-projection (groceries/fuel vary by pot and payment method and would muddy a transfer-planning signal).
+Only bank and cash pots can enter this watch. A credit-card balance and commitments charged to a card are
+excluded: card debt cannot trigger a bank-pot **"plan a transfer"** warning. If `pot_watch(P) < 0`, Overview
+shows a distinct, non-alarming notice naming the liquid pot, shortfall and earliest due commitment (fictional
+example: *"Main account is projected £666.08 short of the DDs due from it before payday — Mortgage and Council
+Tax leave on the 1st; Salary account holds £520.00."*). This is a planning nudge, not an overdraft warning;
+the pot-level watch deliberately excludes day-to-day projection (groceries/fuel vary by pot and payment method
+and would muddy a transfer-planning signal).
 
 ### 7.6 Horizon (how far the money would go) — v0.5.0
 
@@ -305,8 +321,8 @@ field **opens on the day before the next scheduled income** (v0.13.0, decision 1
 answers *"where would we land the day before the salary lands?"*.
 
 ```days = throughDate − today             (whole days, local date arithmetic, today < throughDate ≤ today + 400)
-where_we'd_land = household_available_now
-                  + Σ expected receipts due in (today, throughDate]   (income, and expected debt inflows)
+where_we'd_land = liquid_available_now (selected bank and cash pots)
+                  + Σ expected receipts due in (today, throughDate]   (only receipts landing in selected liquid pots)
                   − Σ expected commitments due in (today, throughDate] (DD/SO instances)
                   − projected day-to-day events due in (today, throughDate]   (§7.3; toggleable, on by default)
 ```
@@ -330,8 +346,9 @@ where_we'd_land = household_available_now
   *not* settled and projects from the day the plan was set (fixing the v0.5.0 gap where a brand-new debt, £0
   and no movements, projected nothing at all).
 - **The default date (v0.13.0, decision 150).** With no `?through=` (whatever else is in the URL), the date is
-  **the day before the next scheduled income** — the earliest upcoming instance of a *receipt schedule*,
-  already moved off a weekend (§11.3). Only scheduled income counts: a debt's expected support is borrowed
+  **the day before the next scheduled income** — the earliest upcoming instance of a *receipt schedule* into
+  a bank or cash pot, already moved off a weekend (§11.3). A card-pot receipt cannot anchor a liquidity payday.
+  Only scheduled income counts: a debt's expected support is borrowed
   money, never income (§10.2), so it never sets the default, even when it lands first. The payday window (§7.2) and till (§7.7) now share this salary anchor, while still including support within their windows. The default is
   clamped into the selectable window: income **tomorrow** ⇒ tomorrow (the income day itself, so that window
   includes the salary — preferred to jumping to five weeks); income **beyond 400 days** ⇒ today + 400. With
@@ -343,8 +360,9 @@ where_we'd_land = household_available_now
   submits on the date's `change`), carrying the pots and Day-to-day chosen above it. Pots and Day-to-day do
   **not** apply on their own — the button is their explicit control, and the whole path without JavaScript.
   Clearing the date, or an invalid/out-of-range date, never submits (HTML validation still applies).
-- **Every pot is selected by default**; the household untick to scope the projection. A debt's expected
-  inflow counts only while the pot its loan movements actually go through is selected.
+- **Every bank and cash pot is selected by default**; credit-card pots are not selectable in a liquidity
+  projection. The household may untick liquid pots to scope the projection. A debt's expected inflow counts
+  only while it lands in a selected bank or cash pot.
 - **Search-params persistence:** the through date, pot selection and day-to-day toggle ride in the URL
   (`?through=…&pots=…&daytoday=…`), so a look-ahead can be shared and survives a refresh. The chosen date is
   clamped to the window on load, exactly as the transaction window clamps its dates. An empty pot selection
@@ -375,18 +393,19 @@ spending allowance. The checkpoint stays the reported figure, never edited. Cash
 
 ## 8. Warnings (two tiers)
 
-Evaluated against `projected_low` (§7.2), household-wide:
+Evaluated against the projected low of bank-and-cash liquid funds (§7.2), household-wide. Credit-card debt
+and card near-limit thresholds do not participate:
 
 | Tier | Condition | Presentation |
 |---|---|---|
 | Heads-up | `projected_low < £0` | Calm, distinct colour **and** label: "Projected to dip below zero before payday." |
 | Warning | `projected_low ≤ −warning_threshold` | Stronger (still calm) colour and label: "Projected to be more than £W overdrawn before payday." |
 
-- `warning_threshold` is a private per-installation config on the Main account's overdraft context. In the
-  users' real installation it is set well inside their authorised limit (real figures never appear in this
-  repo; fictional example: threshold £250 against an authorised limit of £800).
-- The authorised limit itself is stored for context and shown alongside warnings so the distance to the limit
-  is visible; crossing £0 is tier 1, the configured threshold is tier 2. No third tier in v1.
+- `warning_threshold` is selected from configured **bank-pot** overdraft warning thresholds only; credit-card
+  near-limit thresholds are shown on their card pot but never enter household overdraft warnings. No card
+  balance can cause the app to say a bank account is overdrawn.
+- The authorised bank overdraft limit is stored for context and shown alongside warnings so the distance to the
+  limit is visible; crossing £0 is tier 1, the configured threshold is tier 2. No third tier in v1.
 - Colours are never the only signal (blueprint §5 accessibility rule).
 
 ## 9. Purchases, splits and attribution
@@ -1462,8 +1481,10 @@ plus context; where the renewal is also a payment (annual premium), that is a sc
 ### 22.3 Where alerts appear — and the delivery channel
 
 - **Overview panel "Contracts & renewals":** every item inside its warning window, soonest first, each one
-  tap from the supplier contact card and the related schedule/renewal.
-- **Contracts & Renewals page:** the full list, leads, follow-up dates from interactions, and history.
+  tap from the supplier contact card and the related schedule/renewal. Credit-card payment-review and
+  promotional-end dates are also included and link to the card pot (§24).
+- **Contracts & Renewals page:** the full list, leads, follow-up dates from interactions, history, and card
+  payment/promotion reviews (§24).
 - **Channel: in-app for v1 — confirmed by the product owner 2026-09-20**, consistent with decision 19 and
   with the users' 4–5-day checkpoint cadence (a 21-day window guarantees several sightings). An optional
   **email alert channel is a recorded v2 roadmap item** (SMTP configuration, delivery-failure handling,
@@ -1530,3 +1551,46 @@ purchase record stays. There is no undelete in the app.
   lists it as missing. An archive taken before the removal still restores that receipt (§18.2).
 - The purchase's History list shows who removed it and when. The chip disappears from every page that
   renders stored receipts.
+
+## 24. Credit-card pots, statement reviews and promotional dates
+
+A credit card is a pot for accurate bookkeeping, not a source of liquidity:
+
+- The card pot's estimate is signed. A purchase charged to it is spending and reduces the estimate (making
+  debt more negative). The household's net `household_available_now` includes that liability; the overview
+  shows total card debt separately as context.
+- Paying the provider is a transfer from a bank pot to the card pot. It is not spending and leaves the
+  household net total unchanged. No payment is created automatically.
+- The credit limit and configurable near-limit threshold are shown as card-usage context on that card's
+  Accounts & Pots panel. They are never called an overdraft and do not participate in the bank-pot warning
+  thresholds (§8).
+- Payday and Horizon are **liquidity** projections over bank and cash pots. Card balances, DD/SO commitments
+  charged to a card, receipts into a card, and expected support landing in a card are excluded from their
+  liquid starting balance and cash movement lines. Credit cards are not selectable Horizon pots. A card
+  liability must not trigger the §7.5 bank-pot "plan a transfer" watch. A purchase on a card is still spending
+  in spending insights; excluding it from cash projection does not erase it from the ledger.
+
+### 24.1 Monthly payment review reminder
+
+Each card may store its usual due day of month and a configurable reminder lead (initial default: **3 days**).
+The due day is clamped to the last day of a short month. When available, the exact due date and minimum amount
+from the current provider statement override the recurring date and are shown together. The household copies
+those values from the statement; the app never calculates, validates or predicts the issuer's minimum formula.
+The current statement fields are paired and may be cleared/updated after review. A reminder asks the household
+to check the statement and choose an amount; it is not a fixed repayment, an autopayment, or a presumption of
+full repayment. A recorded bank-to-card transfer only records what the household entered — it does not verify
+that the provider received or credited a payment.
+
+### 24.2 Promotional end date
+
+Each card may store the actual promotional end date from its accepted terms. A separate in-app key-date alert
+uses that date and the configured lead; the app assumes no promotional duration. At or after the date, the
+alert asks the household to check current card terms and the remaining balance. The product does not calculate
+interest, interest paid, or a payoff schedule, and does not infer the date from a balance or a monthly payment.
+
+### 24.3 Alert placement
+
+Payment-review and promotional-end alerts appear in the Overview key-date panel and the Contracts & Renewals
+review page, alongside other in-app key dates (§22.3). The relevant card link opens Accounts & Pots. Alerts are
+advisory and in-app only; no external notification, statement fetch, provider connection or payment verification
+is implied.

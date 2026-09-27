@@ -16,6 +16,7 @@ import {
   getKeyDateAlerts,
 } from '@/lib/records/money-view';
 import { keyDateMessage } from '@/lib/records/keydates';
+import { creditCardOwedPence, potEstimateLabel } from '@/lib/records/pots';
 import { toLocalDateString } from '@/lib/time';
 import { ProjectionSection } from './projection-panel';
 
@@ -46,6 +47,8 @@ export default async function OverviewPage() {
   const keyDates = getKeyDateAlerts(db, now).map((alert) => ({
     ...alert,
     message: keyDateMessage(alert),
+    href:
+      alert.potId === null || alert.potId === undefined ? null : `/pots#pot-${alert.potId}-heading`,
   }));
   const monthView = getMonthComparisonView(db, now);
   const vehicleView = getVehicleCostsView(db, now);
@@ -78,9 +81,10 @@ export default async function OverviewPage() {
                 Payday projection
               </h2>
               <p className="mt-1 text-sm text-ink-soft">
-                The projection appears once the household has a balance checkpoint and an expected
-                income schedule (for example a monthly salary). Record a checkpoint in Quick Entry →
-                Balance or on Accounts &amp; Pots, then add the income schedule in Recurring.
+                The liquidity projection appears once a bank or cash pot has a balance checkpoint
+                and an expected income schedule (for example a monthly salary). Record a checkpoint
+                in Quick Entry → Balance or on Accounts &amp; Pots, then add the income schedule in
+                Recurring.
               </p>
             </section>
           )}
@@ -126,6 +130,11 @@ function MoneyRow({
   money: ReturnType<typeof getMoneySnapshot>;
   outlook: ReturnType<typeof getCycleOutlook>;
 }) {
+  const cardDebtPence = money.pots.reduce(
+    (total, view) =>
+      view.pot.kind === 'credit-card' ? total + creditCardOwedPence(view.estimatePence) : total,
+    0,
+  );
   return (
     <section
       aria-labelledby="money-heading"
@@ -137,6 +146,11 @@ function MoneyRow({
             ? 'Waiting for your first checkpoint'
             : `Household total now: ${formatPence(money.householdAvailablePence)}`}
         </h2>
+        {cardDebtPence > 0 ? (
+          <p className="w-full text-xs text-ink-soft">
+            Includes {formatPence(cardDebtPence)} owed on credit cards.
+          </p>
+        ) : null}
         <Link href="/pots" className="text-sm font-medium text-accent hover:underline">
           Accounts &amp; Pots →
         </Link>
@@ -156,7 +170,7 @@ function MoneyRow({
                 <p className="text-sm text-ink-faint">no checkpoint</p>
               ) : (
                 <p className="text-sm font-semibold tabular-nums">
-                  {formatPence(view.estimatePence)}
+                  {potEstimateLabel(view.pot.kind, view.estimatePence)}
                 </p>
               )}
               <PotOutlookLine
@@ -345,7 +359,11 @@ function DueThisWeekSection({
   );
 }
 
-function KeyDatesSection({ items }: { items: Array<{ message: string; date: string }> }) {
+function KeyDatesSection({
+  items,
+}: {
+  items: Array<{ message: string; date: string; href: string | null }>;
+}) {
   return (
     <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
       <h2 className="mb-2 text-lg font-semibold">Key dates</h2>
@@ -357,7 +375,13 @@ function KeyDatesSection({ items }: { items: Array<{ message: string; date: stri
         <ul className="divide-y divide-border-hairline">
           {items.map((item, index) => (
             <li key={`${item.date}-${index}`} className="py-1.5 text-sm">
-              {item.message}
+              {item.href === null ? (
+                item.message
+              ) : (
+                <Link href={item.href} className="text-accent hover:underline">
+                  {item.message}
+                </Link>
+              )}
             </li>
           ))}
         </ul>

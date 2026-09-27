@@ -19,12 +19,21 @@ import {
 export const pots = sqliteTable('pots', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   label: text('label').notNull(),
-  kind: text('kind', { enum: ['bank', 'cash'] }).notNull(),
+  kind: text('kind', { enum: ['bank', 'cash', 'credit-card'] }).notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
-  /** Authorised overdraft facility (pence); only set on pots that have one */
+  /** Bank overdraft facility or credit-card limit (pence). */
   overdraftLimitPence: integer('overdraft_limit_pence'),
-  /** Warning threshold inside the overdraft (pence); SPEC §8 */
+  /** Bank warning threshold or card balance-usage threshold (pence). */
   warningThresholdPence: integer('warning_threshold_pence'),
+  /** Usual monthly payment due day for a credit card (1–31). */
+  creditCardPaymentDayOfMonth: integer('credit_card_payment_day_of_month'),
+  /** Lead for card payment and promotional-end reminders; defaults to 3 days. */
+  creditCardWarningDays: integer('credit_card_warning_days').notNull().default(3),
+  /** The actual promotional end date from the card agreement/statement. */
+  creditCardPromotionalEndDate: text('credit_card_promotional_end_date'),
+  /** Current statement details, copied from the provider (not calculated). */
+  creditCardStatementDueDate: text('credit_card_statement_due_date'),
+  creditCardStatementMinimumPence: integer('credit_card_statement_minimum_pence'),
   archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),

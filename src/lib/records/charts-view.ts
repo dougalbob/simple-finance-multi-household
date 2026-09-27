@@ -64,13 +64,14 @@ export interface ForecastChartView {
 }
 
 /**
- * The household total from today to one month ahead (decision 152: no
+ * Liquid bank-and-cash funds from today to one month ahead (decision 152: no
  * per-pot lines — the per-pot question is answered by the pot watch on
- * /overview, and one line stays readable at 320px).
+ * /overview, and one line stays readable at 320px). Card liabilities remain
+ * in the separate household net total, not this forecast.
  *
- * Today's point is the household's reported figure; every later point is
- * projected from schedules and the day-to-day model. Empty `potIds` is every
- * pot, which is exactly the household total.
+ * Today's point is the reported liquid estimate; every later point is
+ * projected from liquid-pot schedules and the day-to-day model. Empty
+ * `potIds` selects every bank and cash pot.
  */
 export function getForecastChartView(db: Db, nowArg?: Date): ForecastChartView {
   const now = nowArg ?? new Date();
@@ -79,7 +80,10 @@ export function getForecastChartView(db: Db, nowArg?: Date): ForecastChartView {
   const view = getHorizonProjectionView(db, throughDate, [], true, now);
 
   const overdraftPots = view.selection
-    .filter((entry) => entry.selected && entry.pot.overdraftLimitPence !== null)
+    .filter(
+      (entry) =>
+        entry.selected && entry.pot.kind === 'bank' && entry.pot.overdraftLimitPence !== null,
+    )
     .map((entry) => ({
       label: entry.pot.label,
       limitPence: entry.pot.overdraftLimitPence as number,
@@ -135,7 +139,7 @@ export function getForecastChartView(db: Db, nowArg?: Date): ForecastChartView {
     overdraftPots,
     overdraftLabel,
     details: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)),
-    unavailable: view.selection.every((entry) => !entry.selected) || view.availableNowPence === 0,
+    unavailable: !view.hasSelectedCheckpoint,
   };
 }
 

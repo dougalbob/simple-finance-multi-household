@@ -75,8 +75,8 @@ export interface EntryDueLine {
 export interface EntryPotOption {
   id: number;
   label: string;
-  /** Bank pots show a reported balance; cash pots never do (SPEC §15.1). */
-  kind: 'bank' | 'cash';
+  /** Cash hides stale balances; card estimates are shown as amounts owed. */
+  kind: 'bank' | 'cash' | 'credit-card';
   /** The last reported balance (SPEC §5); null when never checkpointed, or for cash. */
   checkpoint: EntryCheckpoint | null;
   /** Available now (SPEC §7.1); null when the pot has no checkpoint. */
@@ -699,7 +699,10 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                 name="potId"
                 value={potId}
                 onChange={setPotId}
-                options={data.pots.map((pot) => ({ value: pot.id, label: pot.label }))}
+                options={data.pots.map((pot) => ({
+                  value: pot.id,
+                  label: pot.kind === 'credit-card' ? `${pot.label} (credit card)` : pot.label,
+                }))}
               />
               {potId === '' ? (
                 <p className="text-xs font-semibold text-warning-700">
@@ -1039,6 +1042,22 @@ function PotBalance({ pot }: { pot: EntryPotOption | null }) {
       </p>
     );
   }
+  if (pot.kind === 'credit-card') {
+    const estimate = pot.estimatePence;
+    return (
+      <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
+        {estimate === null
+          ? 'Credit card — no checkpoint yet, so there is no estimate.'
+          : estimate < 0
+            ? `Estimated amount owed: ${formatPence(-estimate)}.`
+            : estimate > 0
+              ? `Estimated card credit: ${formatPence(estimate)}.`
+              : 'Estimated card balance: nothing owed.'}{' '}
+        Enter an amount owed as a negative checkpoint. Record a bank-to-card payment in Move as a
+        transfer, not a purchase.
+      </p>
+    );
+  }
   const firstDue = pot.dueBeforeIncome[0];
   return (
     <div className="rounded-lg bg-canvas p-2.5">
@@ -1109,7 +1128,8 @@ function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
         {cycle.paceText} Salary on {cycle.incomeDateLabel} is not counted as money you can spend.
       </p>
       <p className="mt-1 text-xs text-ink-muted">
-        A projection of the records in this app — never a bank balance.
+        Projected liquid funds across bank and cash pots, not household net total — never a bank
+        balance.
       </p>
     </div>
   );
@@ -1519,7 +1539,10 @@ function FuelForm({ data }: { data: QuickEntryData }) {
           name="potId"
           value={potId}
           onChange={setPotId}
-          options={data.pots.map((pot) => ({ value: pot.id, label: pot.label }))}
+          options={data.pots.map((pot) => ({
+            value: pot.id,
+            label: pot.kind === 'credit-card' ? `${pot.label} (credit card)` : pot.label,
+          }))}
         />
         <p className="text-xs text-ink-muted">
           Category is fixed to Vehicle Running / Fuel. Tap the other vehicle when it was the one
@@ -1592,6 +1615,7 @@ function BalanceForm({ data }: { data: QuickEntryData }) {
   const [amount, setAmount] = useState('');
   const [effectiveDate, setEffectiveDate] = useState('');
   const [note, setNote] = useState('');
+  const selectedPot = data.pots.find((pot) => pot.id.toString() === potId) ?? null;
   const submitGuard = useRef(false);
   useEffect(() => {
     if (!pending) submitGuard.current = false;
@@ -1611,11 +1635,21 @@ function BalanceForm({ data }: { data: QuickEntryData }) {
             name="potId"
             value={potId}
             onChange={setPotId}
-            options={data.pots.map((pot) => ({ value: pot.id, label: pot.label }))}
+            options={data.pots.map((pot) => ({
+              value: pot.id,
+              label: pot.kind === 'credit-card' ? `${pot.label} (credit card)` : pot.label,
+            }))}
           />
           {/* No autofocus here either (decision 151): the pot comes first and
               the household taps the figure when they are ready. */}
-          <Field label="Balance now" hint="Ledger balance for a bank; counted amount for cash.">
+          <Field
+            label={selectedPot?.kind === 'credit-card' ? 'Amount owed now' : 'Balance now'}
+            hint={
+              selectedPot?.kind === 'credit-card'
+                ? 'Enter the amount owed as a negative figure, e.g. -123.45.'
+                : 'Ledger balance for a bank; counted amount for cash.'
+            }
+          >
             <input
               name="amount"
               value={amount}

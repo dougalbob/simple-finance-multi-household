@@ -85,6 +85,13 @@
       "when": 1790600000000,
       "tag": "0011_schedule_excluded_months",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1790506141836,
+      "tag": "0012_credit_card_pots",
+      "breakpoints": true
     }
   ]
 }

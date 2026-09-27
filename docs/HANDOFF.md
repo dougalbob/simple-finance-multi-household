@@ -1,3 +1,51 @@
+# Handoff: Credit-card pots and liquid-only projections (decision 171)
+
+**Branch:** `arena/01a0e259-simple-finance`. Feature A is implemented and submitted for review in PR #82;
+it has not been merged or released. Do not put real provider, limit, balance or offer terms in tracked
+files or test data.
+
+## What changed
+
+- Added the generic `credit-card` pot kind, card limit/near-limit context, configurable monthly review
+  lead, current statement minimum + due date copied as a pair, and actual promotional end date. Migration
+  `0012_credit_card_pots.sql` adds five private per-pot fields; its snapshot and journal entry are checked
+  in.
+- Card purchases remain spending; a bank-to-card repayment is a transfer. The household headline remains
+  the sum of all estimated pots (therefore net of card debt) and shows card debt separately.
+- Per the household's settled choice, payday, Horizon and Charts forecast **liquid bank/cash only**.
+  Card debt, card-pot schedules/receipts/expected support and card near-limit thresholds do not enter the
+  liquid projection; a card receipt cannot define payday. Card pots cannot trigger a bank overdraft warning
+  or a §7.5 pot shortfall watch. Horizon/Charts do not invent a zero liquid checkpoint when only a card
+  balance is known.
+- Added in-app monthly payment-review and promotional-end key dates, linked to Accounts & Pots and listed
+  on Overview and Contracts & Renewals. Minimum/date are copied from the provider statement; no issuer
+  formula, full repayment assumption, fixed payment, payment automation/verification, assumed offer length,
+  interest calculator or scenario planner is included.
+- Updated `docs/SPEC.md` §§4, 7, 8, 22.3 and 24 and appended decision 171 to the implementation plan.
+
+## Verification
+
+- `npm run typecheck` — passed.
+- `npm run format:check` — passed.
+- `npm test` — **539 passed, 0 failed** (122 suites).
+- `npm run build` — passed. Build rewrites `next-env.d.ts`; that generated-only change was restored, and
+  should not be included.
+- Playwright via the SANDBOX §8 local Chromium overlay — **89 passed** across all projects, including the
+  new `e2e/credit-card-pots.spec.ts`. The database/domain suite includes new card tests and older-backup/
+  schema-migration tests. `npm ci --ignore-scripts` was used for dependencies earlier in this session; npm
+  reported 4 moderate vulnerabilities then.
+
+## Next checks if continuing
+
+1. Review `git diff` for product wording and schema/migration consistency. `next-env.d.ts` should remain
+   unchanged after any build.
+2. If any code changes are made after this verification, rerun the full gates, including the complete
+   SANDBOX-recipe Playwright suite; card UI coverage is already in place.
+3. The household has authorized release v0.23.0; complete `docs/RELEASE_PROCESS.md` end to end before
+   telling them to update Unraid. Release notes still need the final merge SHA and verified image digest.
+
+---
+
 # Handoff: v0.22.1 category picker, debt deletion, honest loan status (decisions 167–170)
 
 **Branch:** `arena/01a0e1ea-simple-finance`, from `main` @ `0f7070f` (v0.22.0 merge). This branch
