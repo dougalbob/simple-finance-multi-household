@@ -35,14 +35,13 @@ test.describe('debt deletion — empty mistaken setup', () => {
     await expect(debtRow).toBeVisible();
     await expect(innerDeleteBtn).toBeVisible();
 
-    // Now actually delete
+    // Now actually delete — persisted result is row disappearance
     await innerDeleteBtn.click();
     await expect(outerDelete.getByText(`Permanently delete “${counterparty}”`)).toBeVisible();
     await expect(outerDelete.getByText(/no movements at all — not even voided/)).toBeVisible();
     await outerDelete.getByRole('button', { name: 'Yes, permanently delete it' }).click();
-    await expect(outerDelete.getByRole('status')).toContainText(/permanently deleted/i, {
-      timeout: 30_000,
-    });
+    // After successful delete the row is removed, so status may disappear with it.
+    // Assert the persisted result: debt no longer in list and not in selectors.
     await expect(debtRow).toHaveCount(0, { timeout: 30_000 });
 
     const borrow = page.locator('section[aria-labelledby="borrow-heading"]');
@@ -91,9 +90,6 @@ test.describe('debt deletion — empty mistaken setup', () => {
     await innerDeleteBtn.click();
     await expect(outerDelete.getByText(/expected-support plan that will disappear/)).toBeVisible();
     await outerDelete.getByRole('button', { name: 'Yes, permanently delete it' }).click();
-    await expect(outerDelete.getByRole('status')).toContainText(/permanently deleted/i, {
-      timeout: 30_000,
-    });
     await expect(debts.locator('li', { hasText: counterparty })).toHaveCount(0, {
       timeout: 30_000,
     });
@@ -127,10 +123,11 @@ test.describe('debt deletion — empty mistaken setup', () => {
     await page.goto('/pots');
     const external = page.locator('section[aria-labelledby="external-history-heading"]');
     const movementRow = external.locator('li', { hasText: counterparty }).first();
-    await movementRow.locator('summary', { hasText: 'Void' }).click();
-    const voidForm = movementRow.locator('form').first();
-    await voidForm.getByLabel('Why are you voiding it?').fill('test void');
-    await voidForm.getByRole('button', { name: /Yes, void/ }).click();
+    const voidDetails = movementRow.locator('details', { hasText: 'Void' }).first();
+    await voidDetails.locator('summary').click();
+    const voidForm = voidDetails.locator('form').first();
+    await voidForm.getByLabel(/Why are you voiding/).fill('test void');
+    await voidForm.getByRole('button', { name: /Void/ }).click();
     await expect(voidForm.getByRole('status')).toContainText(/voided/i, { timeout: 30_000 });
 
     await page.goto('/pots');
