@@ -2227,3 +2227,64 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     link) and creates the GitHub release marked Latest, refusing to publish when the document is
     missing or malformed; post-merge verified facts are recorded by the next working session in
     `HANDOFF.md`, never by a dedicated PR. `docs/RELEASE_PROCESS.md` is rewritten accordingly.
+
+174. **A successful save hands the form back empty; Save is greyed out until the next entry is
+    complete (2026-09-27, v0.24.0).** The household's own words, at the till: *"for the breadcrumbs
+    from the purchase just saved to be cleared so that both entry forms (swipe screens 1 & 2) are
+    reset and become blank once more. Also, once we have pressed Save on the original purchase, can
+    that button be greyed out, as logically no save should be possible at that point until the user
+    has completed details of the 'Add another' new purchase."*
+
+    Two asks, one change: when a save succeeds the entry fields clear, so `balanced` is false, so the
+    existing `saveBlocked` rule and the existing disabled styling grey Save out on their own. No
+    "saved" flag, no new state, no new button.
+
+    What clears on a successful save: supplier, amount, date, note (and the note field closes behind
+    "+ Note" again), and the split lines back to one fresh default line with the amount-following
+    restarted. **Pot and Paid by are sticky** — the household chose to keep them, matching what
+    "Add another" has always done, because the same pot and the same person usually pay for the next
+    purchase. The Fuel tab does the same, and keeps vehicle and paid-by sticky for the same reason;
+    its "Filled to full" tick resets to off with everything else, since a tick left behind would
+    measure the next fill as a full tank (decision 147). Balance checkpoints are deliberately out of
+    scope: a repeated checkpoint is a different question, and the household's ask was about
+    purchases.
+
+    Shape of the change, in `src/components/quick-entry.tsx`:
+
+    - The effect is keyed on the `state` **object**, never on `state.message`. Two identical
+      consecutive saves carry the same message string ("Purchase saved: £12.00."), so a
+      message-keyed effect would not fire for the second one and the form would stay dirty. Every
+      action result is a new object; clearing twice is idempotent, so a StrictMode double-invoke is
+      harmless. `data` is deliberately **not** a dependency: a revalidating server action hands the
+      island a fresh props object, and re-firing on that would wipe the *next* entry half-typed.
+    - **Errors clear nothing.** `status === 'error'` keeps every value so the household can correct
+      and retry. A save that trips the duplicate notice is still `'ok'` (the purchase *was* saved)
+      and resets too; the notice and its "Void this copy" read `state` and are untouched. Server-side
+      duplicate detection is unchanged and stays as it is — what changes is that the accidental
+      double-tap, which used to write a real second purchase on the values just saved, becomes
+      unreachable.
+    - **The save moves no focus and no panel** (decision 151: focus moves only as the answer to
+      something the household did; the save is not that, and an uninvited phone keyboard is exactly
+      what 151 exists to prevent). The household confirmed this over the recommended alternative of
+      sliding back to card 1 with the supplier focused. "Add another" keeps that job.
+    - **"Add another" is offered only while the next entry has not begun** — the household's choice,
+      against keeping it up for as long as the success message shows. "Pristine" is computed from the
+      form's own typed values (supplier, amount, date, note, split amounts and line count), so it
+      needs no state: after a save the button is there, and it disappears the moment the household
+      starts typing the next purchase, instead of wiping a half-typed entry under their thumb. The
+      stickies (pot, paid-by, category, target) are deliberately *not* part of the test — changing a
+      category is not "starting an entry", and the dots and the swipe are always there to get back to
+      card 1. The success message stays on screen while the next entry is typed, as it already did
+      after "Add another".
+    - Immediately after a save, "Add another" is an idempotent no-op for the values and still does
+      the slide to card 1 with the supplier focused (decision 137). It remains the start-over
+      shortcut for a form that was *not* saved.
+
+    Tests: `e2e/home.spec.ts` — the unbalanced-split check moved *before* the save (it used to
+    assert the old sticky values after it) and the post-save half now asserts the blank form and the
+    disabled Save; "Add another starts the following over" became "saving clears the form, and Add
+    another goes back to the supplier"; two new specs cover the full post-save state (every field,
+    the stickies, the still-visible confirmation, the still-offered button, nothing focused, Save
+    disabled, then enabled again once the next entry is complete) and the identical-consecutive-save
+    case. `e2e/fuel.spec.ts` gains the same for the Fuel tab. No server action, schema or migration
+    changes; `npm test` is unaffected.
