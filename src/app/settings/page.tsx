@@ -158,8 +158,9 @@ export default async function SettingsPage() {
             Pots
           </h2>
           <p className="mb-3 text-xs text-ink-muted">
-            Overdraft limits and warning thresholds are the numbers the projection banner is built
-            from. A threshold needs a limit, and must sit at or below it.
+            Bank overdraft thresholds drive the household warning banner. Credit-card limits and
+            near-limit thresholds describe card usage only; card pots are excluded from the “plan a
+            transfer” shortfall watch.
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
             {pots.map((pot) => (
@@ -172,6 +173,11 @@ export default async function SettingsPage() {
                   kind={pot.kind}
                   overdraftLimitPence={pot.overdraftLimitPence}
                   warningThresholdPence={pot.warningThresholdPence}
+                  creditCardPaymentDayOfMonth={pot.creditCardPaymentDayOfMonth}
+                  creditCardWarningDays={pot.creditCardWarningDays}
+                  creditCardPromotionalEndDate={pot.creditCardPromotionalEndDate}
+                  creditCardStatementDueDate={pot.creditCardStatementDueDate}
+                  creditCardStatementMinimumPence={pot.creditCardStatementMinimumPence}
                 />
               </div>
             ))}

@@ -14,6 +14,7 @@ import {
   getUpcomingCommitments,
   type MoneySnapshot,
 } from '@/lib/records/money-view';
+import { creditCardOwedPence, potEstimateLabel } from '@/lib/records/pots';
 import { listPeople } from '@/lib/records/people';
 import { listVehicles } from '@/lib/records/vehicles';
 import { toLocalDateString } from '@/lib/time';
@@ -83,9 +84,9 @@ export default async function HomePage() {
               Payday projection
             </h2>
             <p className="mt-1 text-sm text-ink-soft">
-              The projection appears once the household has a balance checkpoint and an expected
-              income schedule (for example a monthly salary). Record a checkpoint in Quick Entry →
-              Balance or on{' '}
+              The liquidity projection appears once a bank or cash pot has a balance checkpoint and
+              an expected income schedule (for example a monthly salary). Record a checkpoint in
+              Quick Entry → Balance or on{' '}
               <Link href="/pots" className="font-medium text-accent hover:underline">
                 Accounts &amp; Pots
               </Link>
@@ -104,6 +105,11 @@ export default async function HomePage() {
 
 function MoneySection({ money }: { money: MoneySnapshot }) {
   if (money.pots.length === 0) return null;
+  const cardDebtPence = money.pots.reduce(
+    (total, view) =>
+      view.pot.kind === 'credit-card' ? total + creditCardOwedPence(view.estimatePence) : total,
+    0,
+  );
   return (
     <section
       aria-labelledby="money-heading"
@@ -119,6 +125,11 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
               ? 'Waiting for your first checkpoint'
               : formatPence(money.householdAvailablePence)}
           </h2>
+          {cardDebtPence > 0 ? (
+            <p className="mt-1 text-xs text-ink-soft">
+              Includes {formatPence(cardDebtPence)} owed on credit cards.
+            </p>
+          ) : null}
         </div>
         <span className="text-xs text-ink-muted">
           Your reported figures plus recorded activity — not a bank balance
@@ -142,7 +153,7 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
                 <p className="text-sm text-ink-faint">no checkpoint</p>
               ) : (
                 <p className="text-sm font-semibold tabular-nums">
-                  {formatPence(view.estimatePence)}
+                  {potEstimateLabel(view.pot.kind, view.estimatePence)}
                 </p>
               )}
             </li>

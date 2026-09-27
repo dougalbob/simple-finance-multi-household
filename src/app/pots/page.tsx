@@ -27,7 +27,12 @@ import {
   type ExternalMovement,
 } from '@/lib/records/external-movements';
 import { getMoneySnapshot } from '@/lib/records/money-view';
-import { checkpointsForPot, listPots } from '@/lib/records/pots';
+import {
+  checkpointsForPot,
+  creditCardOwedPence,
+  listPots,
+  potEstimateLabel,
+} from '@/lib/records/pots';
 import {
   getTransfer,
   listTransfers,
@@ -135,12 +140,23 @@ export default async function PotsPage({
                       {pot.label}
                     </h2>
                     <p className="text-xs text-ink-muted">
-                      {pot.kind === 'bank' ? 'Bank account' : 'Cash pot'}
+                      {pot.kind === 'bank'
+                        ? 'Bank account'
+                        : pot.kind === 'cash'
+                          ? 'Cash pot'
+                          : 'Credit card'}
                     </p>
                   </div>
                   {estimate !== null ? (
-                    <span className="rounded-full bg-positive-50 px-3 py-1 text-sm font-semibold tabular-nums text-positive-800">
-                      ≈ {formatPence(estimate)}
+                    <span
+                      className={`rounded-full px-3 py-1 text-sm font-semibold tabular-nums ${
+                        pot.kind === 'credit-card'
+                          ? 'bg-warning-50 text-warning-900'
+                          : 'bg-positive-50 text-positive-800'
+                      }`}
+                    >
+                      {pot.kind === 'credit-card' ? '' : '≈ '}
+                      {potEstimateLabel(pot.kind, estimate)}
                     </span>
                   ) : (
                     <span className="rounded-full bg-surface-muted px-3 py-1 text-sm text-ink-muted">
@@ -149,11 +165,39 @@ export default async function PotsPage({
                   )}
                 </div>
 
+                {pot.kind === 'credit-card' ? (
+                  <div className="mt-2 rounded-lg bg-canvas px-3 py-2 text-sm">
+                    {estimate === null ? (
+                      <p className="text-ink-muted">
+                        Credit-limit use is unavailable until a checkpoint is recorded.
+                      </p>
+                    ) : (
+                      <p className="font-medium tabular-nums">
+                        {pot.overdraftLimitPence === null
+                          ? `Owed ${formatPence(creditCardOwedPence(estimate))}`
+                          : `${formatPence(creditCardOwedPence(estimate))} of ${formatPence(pot.overdraftLimitPence)} credit limit used`}
+                      </p>
+                    )}
+                    {estimate !== null &&
+                    pot.overdraftLimitPence !== null &&
+                    creditCardOwedPence(estimate) > pot.overdraftLimitPence ? (
+                      <p className="mt-1 text-danger">
+                        Over the configured credit limit by{' '}
+                        {formatPence(creditCardOwedPence(estimate) - pot.overdraftLimitPence)}.
+                      </p>
+                    ) : estimate !== null &&
+                      pot.warningThresholdPence !== null &&
+                      creditCardOwedPence(estimate) >= pot.warningThresholdPence ? (
+                      <p className="mt-1 text-warning-900">Near the configured credit limit.</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {latest !== null ? (
                   <p className="mt-2 text-sm text-ink-soft">
                     Last reported{' '}
                     <span className="font-semibold tabular-nums text-ink">
-                      {formatPence(latest.amountPence)}
+                      {potEstimateLabel(pot.kind, latest.amountPence)}
                     </span>{' '}
                     {formatRelativeAge(latest.effectiveAt)} (
                     {formatInstantLocal(latest.effectiveAt)})
@@ -175,7 +219,9 @@ export default async function PotsPage({
 
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-lg bg-canvas px-3 py-2">
-                    <dt className="text-xs text-ink-muted">Overdraft limit</dt>
+                    <dt className="text-xs text-ink-muted">
+                      {pot.kind === 'credit-card' ? 'Credit limit' : 'Overdraft limit'}
+                    </dt>
                     <dd className="font-medium tabular-nums">
                       {pot.overdraftLimitPence === null
                         ? '—'
@@ -183,7 +229,9 @@ export default async function PotsPage({
                     </dd>
                   </div>
                   <div className="rounded-lg bg-canvas px-3 py-2">
-                    <dt className="text-xs text-ink-muted">Warning threshold</dt>
+                    <dt className="text-xs text-ink-muted">
+                      {pot.kind === 'credit-card' ? 'Near-limit warning at' : 'Warning threshold'}
+                    </dt>
                     <dd className="font-medium tabular-nums">
                       {pot.warningThresholdPence === null
                         ? '—'
@@ -191,6 +239,32 @@ export default async function PotsPage({
                     </dd>
                   </div>
                 </dl>
+
+                {pot.kind === 'credit-card' ? (
+                  <div className="mt-3 rounded-lg border border-border-hairline p-3 text-sm text-ink-soft">
+                    <p>
+                      Card purchases are spending against this pot. Pay the provider from your bank
+                      pot using Move → transfer; repayment is not spending.
+                    </p>
+                    <p className="mt-1">
+                      {pot.creditCardPaymentDayOfMonth === null
+                        ? 'Set the usual payment due day in Edit pot to enable monthly reminders.'
+                        : `Usual payment due day: ${pot.creditCardPaymentDayOfMonth}; reminder ${pot.creditCardWarningDays} days before.`}
+                    </p>
+                    {pot.creditCardStatementDueDate !== null &&
+                    pot.creditCardStatementMinimumPence !== null ? (
+                      <p className="mt-1 font-medium text-ink">
+                        Current statement: minimum{' '}
+                        {formatPence(pot.creditCardStatementMinimumPence)} due{' '}
+                        {pot.creditCardStatementDueDate} (copied from the provider, not calculated
+                        here).
+                      </p>
+                    ) : null}
+                    {pot.creditCardPromotionalEndDate !== null ? (
+                      <p className="mt-1">0% offer end date: {pot.creditCardPromotionalEndDate}.</p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <details className="mt-3">
                   <summary className="cursor-pointer text-sm font-medium text-ink-body">
@@ -204,6 +278,11 @@ export default async function PotsPage({
                       kind={pot.kind}
                       overdraftLimitPence={pot.overdraftLimitPence}
                       warningThresholdPence={pot.warningThresholdPence}
+                      creditCardPaymentDayOfMonth={pot.creditCardPaymentDayOfMonth}
+                      creditCardWarningDays={pot.creditCardWarningDays}
+                      creditCardPromotionalEndDate={pot.creditCardPromotionalEndDate}
+                      creditCardStatementDueDate={pot.creditCardStatementDueDate}
+                      creditCardStatementMinimumPence={pot.creditCardStatementMinimumPence}
                     />
                   </div>
                   <div className="mt-3 border-t border-border-hairline pt-3">
@@ -264,7 +343,9 @@ export default async function PotsPage({
           <h2 id="add-checkpoint-heading" className="mb-3 text-lg font-semibold">
             Record a balance checkpoint
           </h2>
-          <AddCheckpointForm pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))} />
+          <AddCheckpointForm
+            pots={pots.map((pot) => ({ id: pot.id, label: pot.label, kind: pot.kind }))}
+          />
           <p className="mt-2 text-xs text-ink-muted">
             A checkpoint is an immutable correction — it never deletes what happened before.
           </p>

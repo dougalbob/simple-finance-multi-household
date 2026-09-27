@@ -22,7 +22,7 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
         : 'border-positive-200 bg-positive-50 text-positive-800';
   const tierText =
     tier === 'warning'
-      ? `This week’s low would reach ${formatPence(result.projectedLowPence ?? 0)} — beyond the overdrawn limit of ${formatPence(result.warningThresholdPence ?? 0)}. Plan something before pay day.`
+      ? `Liquid funds would reach ${formatPence(result.projectedLowPence ?? 0)} — below the configured bank warning threshold of ${formatPence(result.warningThresholdPence ?? 0)}. Review before pay day.`
       : tier === 'heads-up'
         ? `This week’s low would reach ${formatPence(result.projectedLowPence ?? 0)} before pay lands — you would be below £0. No overdraft expected if nothing else changes.`
         : `Projected to stay above zero until pay day (lowest ${result.projectedLowPence !== null ? formatPence(result.projectedLowPence) : '—'}).`;
@@ -40,7 +40,9 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
             To pay day · {result.paydayDate} ({result.days} days)
           </h2>
         </div>
-        <span className="text-xs text-ink-muted">A projection, not a bank balance</span>
+        <span className="text-xs text-ink-muted">
+          Liquidity projection — bank and cash pots; card debt is in the household total above
+        </span>
       </div>
 
       <p className={`rounded-lg border px-3 py-2 text-sm font-medium ${tierStyles}`}>{tierText}</p>
@@ -49,7 +51,15 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
 
       <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
         <div className="flex justify-between gap-2">
-          <dt className="text-ink-soft">Household total now</dt>
+          <dt className="text-ink-soft">Household total now (net)</dt>
+          <dd className="font-semibold tabular-nums">
+            {projection.snapshot.householdAvailablePence === null
+              ? '—'
+              : formatPence(projection.snapshot.householdAvailablePence)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-ink-soft">Liquid funds now (bank + cash)</dt>
           <dd className="font-semibold tabular-nums">{formatPence(result.availableNowPence)}</dd>
         </div>
         <div className="flex justify-between gap-2">

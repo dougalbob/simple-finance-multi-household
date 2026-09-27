@@ -59,6 +59,7 @@ export function CreatePotForm() {
         >
           <option value="bank">Bank account</option>
           <option value="cash">Cash</option>
+          <option value="credit-card">Credit card</option>
         </select>
       </div>
       <button
@@ -73,7 +74,11 @@ export function CreatePotForm() {
   );
 }
 
-export function AddCheckpointForm({ pots }: { pots: Array<{ id: number; label: string }> }) {
+export function AddCheckpointForm({
+  pots,
+}: {
+  pots: Array<{ id: number; label: string; kind: 'bank' | 'cash' | 'credit-card' }>;
+}) {
   const [state, formAction, pending] = useActionState(addCheckpointAction, initialActionState);
   if (pots.length === 0) {
     return (
@@ -95,7 +100,7 @@ export function AddCheckpointForm({ pots }: { pots: Array<{ id: number; label: s
         >
           {pots.map((pot) => (
             <option key={pot.id} value={pot.id}>
-              {pot.label}
+              {pot.kind === 'credit-card' ? `${pot.label} (credit card)` : pot.label}
             </option>
           ))}
         </select>
@@ -114,7 +119,8 @@ export function AddCheckpointForm({ pots }: { pots: Array<{ id: number; label: s
           className="rounded border border-border-strong bg-surface px-3 py-2 text-base"
         />
         <p className="text-xs text-ink-muted">
-          The bank&apos;s current/ledger balance, or the counted amount for cash.
+          Enter the bank&apos;s current/ledger balance, or counted cash. For a credit card, enter
+          the amount owed as a negative figure (for example, -123.45).
         </p>
       </div>
       <div className="flex flex-col gap-1">

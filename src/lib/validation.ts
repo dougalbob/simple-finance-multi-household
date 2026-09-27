@@ -16,8 +16,8 @@ export const potLabelSchema = z
   .min(1, 'Give the pot a name')
   .max(60, 'Keep the name to 60 characters or fewer');
 
-export const potKindSchema = z.enum(['bank', 'cash'], {
-  error: 'Choose either bank or cash',
+export const potKindSchema = z.enum(['bank', 'cash', 'credit-card'], {
+  error: 'Choose bank, cash or credit card',
 });
 
 /** ±MAX_ABS_PENCE — matches parsePence bounds; bank balances may be negative (overdraft). */
@@ -458,9 +458,14 @@ export const editPotEntrySchema = z.object({
     .trim()
     .min(1, 'Give the pot a name')
     .max(60, 'Keep the name to 60 characters or fewer'),
-  kind: z.enum(['bank', 'cash']),
+  kind: z.enum(['bank', 'cash', 'credit-card']),
   overdraftLimitPence: nonNegativePenceSchema.nullable(),
   warningThresholdPence: nonNegativePenceSchema.nullable(),
+  creditCardPaymentDayOfMonth: z.number().int().min(1).max(31).nullable(),
+  creditCardWarningDays: z.number().int().min(0).max(365),
+  creditCardPromotionalEndDate: localDateSchema.nullable(),
+  creditCardStatementDueDate: localDateSchema.nullable(),
+  creditCardStatementMinimumPence: nonNegativePenceSchema.nullable(),
 });
 
 /** Household label rename (Settings page): person or vehicle, version-guarded. */

@@ -127,9 +127,14 @@ export interface PotEditFormProps {
   potId: number;
   version: number;
   label: string;
-  kind: 'bank' | 'cash';
+  kind: 'bank' | 'cash' | 'credit-card';
   overdraftLimitPence: number | null;
   warningThresholdPence: number | null;
+  creditCardPaymentDayOfMonth: number | null;
+  creditCardWarningDays: number;
+  creditCardPromotionalEndDate: string | null;
+  creditCardStatementDueDate: string | null;
+  creditCardStatementMinimumPence: number | null;
 }
 
 const penceToPounds = (pence: number | null) => (pence === null ? '' : (pence / 100).toFixed(2));
@@ -173,11 +178,14 @@ export function PotEditForm(props: PotEditFormProps) {
           >
             <option value="bank">Bank account</option>
             <option value="cash">Cash</option>
+            <option value="credit-card">Credit card</option>
           </select>
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor={`pot-${props.potId}-limit`} className={labelClass}>
-            Overdraft limit (£, blank clears)
+            {props.kind === 'credit-card'
+              ? 'Credit limit (£, blank clears)'
+              : 'Overdraft limit (£, blank clears)'}
           </label>
           <input
             id={`pot-${props.potId}-limit`}
@@ -190,7 +198,9 @@ export function PotEditForm(props: PotEditFormProps) {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor={`pot-${props.potId}-threshold`} className={labelClass}>
-            Warning threshold (£, blank clears)
+            {props.kind === 'credit-card'
+              ? 'Warn when card balance reaches (£, blank clears)'
+              : 'Warning threshold (£, blank clears)'}
           </label>
           <input
             id={`pot-${props.potId}-threshold`}
@@ -202,6 +212,83 @@ export function PotEditForm(props: PotEditFormProps) {
           />
         </div>
       </div>
+      {props.kind === 'credit-card' ? (
+        <fieldset className="rounded-lg border border-border-hairline p-3">
+          <legend className="px-1 text-sm font-semibold">Card payment reminders</legend>
+          <p className="mb-3 text-xs text-ink-muted">
+            Set the usual due day and enter the minimum and exact due date from each statement. The
+            app does not calculate the provider&apos;s minimum. Clear the statement fields when that
+            statement has been dealt with.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`pot-${props.potId}-payment-day`} className={labelClass}>
+                Usual payment due day (1–31)
+              </label>
+              <input
+                id={`pot-${props.potId}-payment-day`}
+                name="creditCardPaymentDayOfMonth"
+                type="number"
+                min="1"
+                max="31"
+                defaultValue={props.creditCardPaymentDayOfMonth ?? ''}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`pot-${props.potId}-warning-days`} className={labelClass}>
+                Reminder lead (days)
+              </label>
+              <input
+                id={`pot-${props.potId}-warning-days`}
+                name="creditCardWarningDays"
+                type="number"
+                min="0"
+                max="365"
+                defaultValue={props.creditCardWarningDays}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`pot-${props.potId}-promo-end`} className={labelClass}>
+                0% promotional end date (optional)
+              </label>
+              <input
+                id={`pot-${props.potId}-promo-end`}
+                name="creditCardPromotionalEndDate"
+                type="date"
+                defaultValue={props.creditCardPromotionalEndDate ?? ''}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`pot-${props.potId}-statement-date`} className={labelClass}>
+                Current statement due date
+              </label>
+              <input
+                id={`pot-${props.potId}-statement-date`}
+                name="creditCardStatementDueDate"
+                type="date"
+                defaultValue={props.creditCardStatementDueDate ?? ''}
+                className={inputClass}
+              />
+            </div>
+            <div className="col-span-2 flex flex-col gap-1">
+              <label htmlFor={`pot-${props.potId}-statement-minimum`} className={labelClass}>
+                Minimum payment shown on that statement (£)
+              </label>
+              <input
+                id={`pot-${props.potId}-statement-minimum`}
+                name="creditCardStatementMinimum"
+                type="text"
+                inputMode="decimal"
+                defaultValue={penceToPounds(props.creditCardStatementMinimumPence)}
+                className={inputClass}
+              />
+            </div>
+          </div>
+        </fieldset>
+      ) : null}
       <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
         {pending ? 'Saving…' : 'Save pot'}
       </button>

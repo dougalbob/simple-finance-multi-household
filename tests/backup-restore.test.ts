@@ -94,8 +94,8 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
       assert.equal(countRows(target, 'pots'), 1);
       assert.equal(countRows(target, 'checkpoints'), 2);
       assert.equal(countRows(target, 'audit_entries'), 3);
-      // One row per applied migration: 0000…0011 (twelve files).
-      assert.equal(countRows(target, '__drizzle_migrations'), 12);
+      // One row per applied migration: 0000…0012 (thirteen files).
+      assert.equal(countRows(target, '__drizzle_migrations'), 13);
     } finally {
       handle.raw.close();
     }
@@ -135,7 +135,13 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
     let backup: Awaited<ReturnType<typeof createEncryptedBackup>>;
     try {
       applyMigrations(older.db, await migrationsFolderBefore('0009_income_documents_fuel_details'));
-      createPot(older.db, { label: 'Main account', kind: 'bank', actor: 'alex@example.com' });
+      // This database intentionally predates the current pot columns, so seed its legacy row in SQL.
+      older.raw
+        .prepare(
+          `INSERT INTO pots (label, kind, sort_order, overdraft_limit_pence, warning_threshold_pence, created_at, updated_at, version)
+           VALUES ('Main account', 'bank', 0, NULL, NULL, 0, 0, 1)`,
+        )
+        .run();
       backup = await createEncryptedBackup({ handle: older, password: PASSWORD });
     } finally {
       older.raw.close();
@@ -149,7 +155,7 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
       password: PASSWORD,
       targetDatabasePath: target,
     });
-    assert.equal(countRows(target, '__drizzle_migrations'), 12);
+    assert.equal(countRows(target, '__drizzle_migrations'), 13);
     assert.equal(countRows(target, 'pots'), 1);
     const db = new Database(target, { readonly: true });
     try {
@@ -167,6 +173,11 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
         db.prepare('PRAGMA table_info(attachments)').all() as Array<{ name: string }>
       ).map((column) => column.name);
       assert.ok(attachmentColumns.includes('receipt_id'));
+      const potColumns = (
+        db.prepare('PRAGMA table_info(pots)').all() as Array<{ name: string }>
+      ).map((column) => column.name);
+      assert.ok(potColumns.includes('credit_card_payment_day_of_month'));
+      assert.ok(potColumns.includes('credit_card_statement_minimum_pence'));
     } finally {
       db.close();
     }

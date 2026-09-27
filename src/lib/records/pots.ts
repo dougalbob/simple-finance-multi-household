@@ -11,6 +11,7 @@ import {
   transfers,
 } from '../db/schema';
 import { formatPence, isValidPenceAmount } from '../money';
+import { isValidLocalDate } from '../time';
 import { InvalidOccurredError, resolveOccurred } from './occurred';
 import { VersionConflictError } from './errors';
 
@@ -20,7 +21,7 @@ import { VersionConflictError } from './errors';
  * Checkpoints are immutable: there is no update or delete path, by design.
  */
 
-export type PotKind = 'bank' | 'cash';
+export type PotKind = 'bank' | 'cash' | 'credit-card';
 
 export interface Pot {
   id: number;
@@ -29,10 +30,27 @@ export interface Pot {
   sortOrder: number;
   overdraftLimitPence: number | null;
   warningThresholdPence: number | null;
+  creditCardPaymentDayOfMonth: number | null;
+  creditCardWarningDays: number;
+  creditCardPromotionalEndDate: string | null;
+  creditCardStatementDueDate: string | null;
+  creditCardStatementMinimumPence: number | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   version: number;
+}
+
+/** Card pot estimates are signed liabilities; render the owed amount without a minus sign. */
+export function potEstimateLabel(kind: PotKind, estimatePence: number): string {
+  if (kind !== 'credit-card') return formatPence(estimatePence);
+  if (estimatePence < 0) return `Owed ${formatPence(-estimatePence)}`;
+  if (estimatePence > 0) return `Credit ${formatPence(estimatePence)}`;
+  return 'No card balance owed';
+}
+
+export function creditCardOwedPence(estimatePence: number | null): number {
+  return estimatePence === null ? 0 : Math.max(0, -estimatePence);
 }
 
 export class PotNotFoundError extends Error {
@@ -179,10 +197,15 @@ export function addCheckpoint(db: Db, input: AddCheckpointInput): Checkpoint {
 export interface EditPotPatch {
   label?: string;
   kind?: PotKind;
-  /** undefined = unchanged; null = no authorised overdraft. */
+  /** undefined = unchanged; null = no limit. */
   overdraftLimitPence?: number | null;
   /** undefined = unchanged; null = no warning threshold. */
   warningThresholdPence?: number | null;
+  creditCardPaymentDayOfMonth?: number | null;
+  creditCardWarningDays?: number;
+  creditCardPromotionalEndDate?: string | null;
+  creditCardStatementDueDate?: string | null;
+  creditCardStatementMinimumPence?: number | null;
 }
 
 export interface EditPotInput {
@@ -227,7 +250,35 @@ export function editPot(db: Db, input: EditPotInput): Pot {
       patch.warningThresholdPence === undefined
         ? current.warningThresholdPence
         : patch.warningThresholdPence;
-    assertOverdraftContext(label, limit, threshold);
+    assertPotLimitContext(kind, label, limit, threshold);
+    const cardSettings =
+      kind === 'credit-card'
+        ? checkedCreditCardSettings({
+            paymentDayOfMonth:
+              patch.creditCardPaymentDayOfMonth === undefined
+                ? current.creditCardPaymentDayOfMonth
+                : patch.creditCardPaymentDayOfMonth,
+            warningDays: patch.creditCardWarningDays ?? current.creditCardWarningDays,
+            promotionalEndDate:
+              patch.creditCardPromotionalEndDate === undefined
+                ? current.creditCardPromotionalEndDate
+                : patch.creditCardPromotionalEndDate,
+            statementDueDate:
+              patch.creditCardStatementDueDate === undefined
+                ? current.creditCardStatementDueDate
+                : patch.creditCardStatementDueDate,
+            statementMinimumPence:
+              patch.creditCardStatementMinimumPence === undefined
+                ? current.creditCardStatementMinimumPence
+                : patch.creditCardStatementMinimumPence,
+          })
+        : {
+            paymentDayOfMonth: null,
+            warningDays: current.creditCardWarningDays,
+            promotionalEndDate: null,
+            statementDueDate: null,
+            statementMinimumPence: null,
+          };
     const updated = tx
       .update(pots)
       .set({
@@ -235,6 +286,11 @@ export function editPot(db: Db, input: EditPotInput): Pot {
         kind,
         overdraftLimitPence: limit,
         warningThresholdPence: threshold,
+        creditCardPaymentDayOfMonth: cardSettings.paymentDayOfMonth,
+        creditCardWarningDays: cardSettings.warningDays,
+        creditCardPromotionalEndDate: cardSettings.promotionalEndDate,
+        creditCardStatementDueDate: cardSettings.statementDueDate,
+        creditCardStatementMinimumPence: cardSettings.statementMinimumPence,
         updatedAt: now,
         version: current.version + 1,
       })
@@ -265,36 +321,81 @@ function checkedPotLabel(raw: string): string {
   return label;
 }
 
-function checkedPotKind(raw: string): string {
-  if (raw !== 'bank' && raw !== 'cash') {
-    throw new InvalidPotInputError('Choose either bank or cash.');
+function checkedPotKind(raw: string): PotKind {
+  if (raw !== 'bank' && raw !== 'cash' && raw !== 'credit-card') {
+    throw new InvalidPotInputError('Choose bank, cash or credit card.');
   }
   return raw;
 }
 
-function assertOverdraftContext(
+function assertPotLimitContext(
+  kind: PotKind,
   label: string,
   limit: number | null,
   threshold: number | null,
 ): void {
+  const limitLabel = kind === 'credit-card' ? 'credit limit' : 'overdraft limit';
+  const thresholdLabel = kind === 'credit-card' ? 'limit warning threshold' : 'warning threshold';
   const check = (value: number | null, what: string) => {
     if (value === null) return;
     if (!isValidPenceAmount(value) || value <= 0) {
       throw new InvalidPotInputError(`The ${what} must be a positive amount like 800.00.`);
     }
   };
-  check(limit, 'overdraft limit');
-  check(threshold, 'warning threshold');
+  check(limit, limitLabel);
+  check(threshold, thresholdLabel);
   if (threshold !== null && limit === null) {
     throw new InvalidPotInputError(
-      `Set the authorised overdraft limit on “${label}” first — the warning threshold must sit inside a limit (SPEC §8).`,
+      `Set the ${limitLabel} on “${label}” first — the warning threshold must sit inside it.`,
     );
   }
   if (threshold !== null && limit !== null && threshold > limit) {
+    throw new InvalidPotInputError(`The ${thresholdLabel} cannot exceed the ${limitLabel}.`);
+  }
+}
+
+function checkedCreditCardSettings(input: {
+  paymentDayOfMonth: number | null;
+  warningDays: number;
+  promotionalEndDate: string | null;
+  statementDueDate: string | null;
+  statementMinimumPence: number | null;
+}): {
+  paymentDayOfMonth: number | null;
+  warningDays: number;
+  promotionalEndDate: string | null;
+  statementDueDate: string | null;
+  statementMinimumPence: number | null;
+} {
+  if (
+    input.paymentDayOfMonth !== null &&
+    (!Number.isInteger(input.paymentDayOfMonth) ||
+      input.paymentDayOfMonth < 1 ||
+      input.paymentDayOfMonth > 31)
+  ) {
+    throw new InvalidPotInputError('The card payment day must be a day from 1 to 31.');
+  }
+  if (!Number.isInteger(input.warningDays) || input.warningDays < 0 || input.warningDays > 365) {
+    throw new InvalidPotInputError('Card warning lead must be between 0 and 365 whole days.');
+  }
+  if (input.promotionalEndDate !== null && !isValidLocalDate(input.promotionalEndDate)) {
+    throw new InvalidPotInputError('Enter a real promotional end date in YYYY-MM-DD format.');
+  }
+  if (input.statementDueDate !== null && !isValidLocalDate(input.statementDueDate)) {
+    throw new InvalidPotInputError('Enter a real statement due date in YYYY-MM-DD format.');
+  }
+  if (
+    input.statementMinimumPence !== null &&
+    (!isValidPenceAmount(input.statementMinimumPence) || input.statementMinimumPence < 0)
+  ) {
+    throw new InvalidPotInputError('The statement minimum must be zero or a positive amount.');
+  }
+  if ((input.statementDueDate === null) !== (input.statementMinimumPence === null)) {
     throw new InvalidPotInputError(
-      'The warning threshold must sit inside the authorised overdraft limit — it is the point to warn, the limit is the edge.',
+      'Enter both the statement due date and the minimum payment from the statement, or clear both.',
     );
   }
+  return input;
 }
 
 export interface ArchivePotInput {

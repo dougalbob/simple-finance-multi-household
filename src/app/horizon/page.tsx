@@ -93,7 +93,7 @@ export default async function HorizonPage({
   // Day-to-day (groceries + fuel) is included unless the user said no.
   const includeDayToDay = params.daytoday !== '0';
 
-  const pots = listPots(db);
+  const pots = listPots(db).filter((pot) => pot.kind !== 'credit-card');
   const view = getHorizonProjectionView(db, throughDate, potIds, includeDayToDay, now);
   const { result } = view;
 
@@ -105,16 +105,20 @@ export default async function HorizonPage({
         ? 'border-warning-200 bg-warning-50 text-warning'
         : 'border-positive-200 bg-positive-50 text-positive-800';
 
-  const lowLine =
-    result.projectedLowPence === null
+  const lowLine = !view.hasSelectedCheckpoint
+    ? 'No selected bank or cash pot has a balance checkpoint, so there is no liquid starting figure to project.'
+    : result.projectedLowPence === null
       ? 'No window to project — pick a date at least one day ahead.'
       : `The lowest point would be ${formatPence(result.projectedLowPence)} on ${result.lowDate ?? '—'}.`;
-  const tierLine =
-    tier === 'warning'
-      ? ` That crosses the configured threshold of ${formatPence(result.warningThresholdPence ?? 0)} overdrawn.`
+  const tierLine = !view.hasSelectedCheckpoint
+    ? ''
+    : tier === 'warning'
+      ? ` That falls below the configured bank warning threshold of ${formatPence(result.warningThresholdPence ?? 0)}.`
       : tier === 'heads-up'
-        ? ` That dips below £0, but stays within the configured threshold.`
-        : ` The household stays above zero throughout.`;
+        ? result.warningThresholdPence === null
+          ? ` Liquid funds dip below £0; no bank warning threshold is configured.`
+          : ` Liquid funds dip below £0, but stay above the configured bank warning threshold.`
+        : ` Liquid funds stay above zero throughout.`;
 
   const detailsOpen = result.days <= 60;
   const incomeLineCount = view.receiptLines.filter((line) => !line.expected).length;
@@ -152,8 +156,9 @@ export default async function HorizonPage({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Horizon</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">How far the money would go</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          A projection of what would be left if the household only paid what is already expected —
-          commitments, expected money in, and day-to-day spending — up to a date you choose.
+          A projection of liquid funds in bank and cash pots after known commitments and projected
+          groceries/fuel. Credit-card balances remain in the household net total, but are not cash
+          available to pay bills.
         </p>
       </header>
 
@@ -169,7 +174,9 @@ export default async function HorizonPage({
           <fieldset>
             <legend className="text-xs font-medium text-ink-soft">
               Which pots count?{' '}
-              <span className="text-xs font-normal text-ink-faint">— untick to exclude</span>
+              <span className="text-xs font-normal text-ink-faint">
+                bank and cash only — untick to exclude
+              </span>
             </legend>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1.5">
               {pots.map((pot) => {
@@ -191,8 +198,8 @@ export default async function HorizonPage({
             </div>
             <p className="mt-1 text-xs text-ink-muted">
               {allSelected
-                ? 'Every pot is counted. A debt’s expected support counts only when the pot it lands in is ticked.'
-                : 'Only ticked pots are counted. A debt’s expected support counts only when the pot it lands in is ticked.'}{' '}
+                ? 'Every pot is counted. A debt’s expected support counts only when the pot it lands in is ticked. Only bank and cash pots are listed here.'
+                : 'Only ticked pots are counted. A debt’s expected support counts only when the pot it lands in is ticked. Only bank and cash pots are listed here.'}{' '}
               Unticking every pot counts every pot.
             </p>
           </fieldset>
@@ -213,56 +220,69 @@ export default async function HorizonPage({
         </HorizonLookAheadForm>
       </section>
 
-      <section className="mb-6 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-            {view.dayToDayIncluded ? 'Free to spend up to' : 'Free to spend on bills up to'}
+      {view.hasSelectedCheckpoint ? (
+        <>
+          <section className="mb-6 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                {view.dayToDayIncluded ? 'Free to spend up to' : 'Free to spend on bills up to'}
+              </p>
+              <p
+                aria-label={`${
+                  view.dayToDayIncluded ? 'Free to spend up to' : 'Free to spend on bills up to'
+                } ${view.throughDate}: ${formatPence(landPenceOf(result))}`}
+                className="mt-1 text-3xl font-semibold tabular-nums"
+              >
+                {formatPence(landPenceOf(result))}
+              </p>
+              <p className="mt-1 text-sm text-ink-soft">
+                Where we&rsquo;d land on {view.throughDate} — after commitments and expected money
+                in,
+                {view.dayToDayIncluded
+                  ? ' and day-to-day spending.'
+                  : ' without day-to-day spending.'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                Lowest point
+              </p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums">
+                {result.projectedLowPence === null ? '—' : formatPence(result.projectedLowPence)}
+              </p>
+              <p className="mt-1 text-sm text-ink-soft">
+                {result.lowDate === null ? 'No window to project.' : `on ${result.lowDate}`}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Scope</p>
+              <p className="mt-1 text-sm text-ink-body">
+                {result.days} day{result.days === 1 ? '' : 's'} ahead · {selectionText}
+              </p>
+              <p className="mt-1 text-sm text-ink-soft">
+                Available now {formatPence(view.availableNowPence)} · commitments −
+                {formatPence(view.totalCommitmentsPence)} · expected money in +
+                {formatPence(view.totalReceiptsPence)}
+                {view.dayToDayIncluded && result.dayToDayPence > 0
+                  ? ` · day-to-day −${formatPence(result.dayToDayPence)}`
+                  : ''}
+              </p>
+            </div>
+          </section>
+          <p className={`mb-4 rounded-lg border px-3 py-2 text-sm font-medium ${tierStyles}`}>
+            {lowLine} {tierLine}
           </p>
-          <p
-            aria-label={`${
-              view.dayToDayIncluded ? 'Free to spend up to' : 'Free to spend on bills up to'
-            } ${view.throughDate}: ${formatPence(landPenceOf(result))}`}
-            className="mt-1 text-3xl font-semibold tabular-nums"
-          >
-            {formatPence(landPenceOf(result))}
-          </p>
-          <p className="mt-1 text-sm text-ink-soft">
-            Where we&rsquo;d land on {view.throughDate} — after commitments and expected money in,
-            {view.dayToDayIncluded ? ' and day-to-day spending.' : ' without day-to-day spending.'}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Lowest point</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">
-            {result.projectedLowPence === null ? '—' : formatPence(result.projectedLowPence)}
-          </p>
-          <p className="mt-1 text-sm text-ink-soft">
-            {result.lowDate === null ? 'No window to project.' : `on ${result.lowDate}`}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Scope</p>
-          <p className="mt-1 text-sm text-ink-body">
-            {result.days} day{result.days === 1 ? '' : 's'} ahead · {selectionText}
-          </p>
-          <p className="mt-1 text-sm text-ink-soft">
-            Available now {formatPence(view.availableNowPence)} · commitments −
-            {formatPence(view.totalCommitmentsPence)} · expected money in +
-            {formatPence(view.totalReceiptsPence)}
-            {view.dayToDayIncluded && result.dayToDayPence > 0
-              ? ` · day-to-day −${formatPence(result.dayToDayPence)}`
-              : ''}
-          </p>
-        </div>
-      </section>
-
-      <p className={`mb-4 rounded-lg border px-3 py-2 text-sm font-medium ${tierStyles}`}>
-        {lowLine} {tierLine}
-      </p>
+        </>
+      ) : (
+        <p className="mb-4 rounded-lg border border-dashed border-border-strong bg-surface p-4 text-sm text-ink-soft">
+          {lowLine} Record one on Quick Entry → Balance or Accounts &amp; Pots. Card balances are
+          excluded from this liquidity projection.
+        </p>
+      )}
 
       {result.days <= 0 ? (
         <section className="mb-4 rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
-          Pick a date at least one day ahead to project the household&rsquo;s money to it.
+          Pick a date at least one day ahead to project liquid funds to it.
         </section>
       ) : null}
 
@@ -376,7 +396,7 @@ export default async function HorizonPage({
           </details>
         ) : null}
 
-        {result.perDay.length > 0 ? (
+        {view.hasSelectedCheckpoint && result.perDay.length > 0 ? (
           <details
             open={detailsOpen}
             className="rounded-xl border border-border bg-surface p-4 shadow-sm"
