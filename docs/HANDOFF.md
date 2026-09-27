@@ -41,8 +41,8 @@ files or test data.
    unchanged after any build.
 2. If any code changes are made after this verification, rerun the full gates, including the complete
    SANDBOX-recipe Playwright suite; card UI coverage is already in place.
-3. If the user asks to publish, follow `docs/RELEASE_PROCESS.md` end to end; current `package.json` and
-   app version metadata remain at v0.22.1 until that release work is explicitly undertaken.
+3. The household has authorized release v0.23.0; complete `docs/RELEASE_PROCESS.md` end to end before
+   telling them to update Unraid. Release notes still need the final merge SHA and verified image digest.
 
 ---
 
