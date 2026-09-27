@@ -560,6 +560,12 @@ export const supplierInteractions = sqliteTable('supplier_interactions', {
  *   note, not removed.
  * - `related_interaction_id` is provenance: the logged call whose follow-up
  *   date created this task.
+ * - `assigned_to` (v0.26.0, decision 176): who the task is for. Null means
+ *   the household — both people see it in the bell count. A lower-cased email
+ *   means only that person counts it (e.g. "Query brake disc invoice" only
+ *   for one of us). The task itself stays visible to both (SPEC §3 — full
+ *   mutual visibility); the bell filters by this field. No FK — resolved in
+ *   the domain layer, same as `created_by`.
  */
 export const tasks = sqliteTable(
   'tasks',
@@ -586,6 +592,11 @@ export const tasks = sqliteTable(
     completedBy: text('completed_by'),
     /** Optional words recorded when the task was closed ("switched to FixCo"). */
     completionNote: text('completion_note'),
+    /**
+     * Who the task is for (v0.26.0, decision 176). Null = household (both
+     * people count it in the bell). A lower-cased email = only that person.
+     */
+    assignedTo: text('assigned_to'),
     createdBy: text('created_by').notNull(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
@@ -602,8 +613,19 @@ export const tasks = sqliteTable(
     ),
     index('tasks_open_due_idx').on(table.completedAt, table.dueDate),
     index('tasks_subject_idx').on(table.subjectKind, table.subjectId),
+    index('tasks_assigned_to_idx').on(table.assignedTo),
   ],
 );
+
+/**
+ * Bell seen state (SPEC §26, decision 176): when each person last opened the
+ * bell panel. UI state, not a record — not audited, same as the theme cookie.
+ * Email is lower-cased, primary key. One row per person.
+ */
+export const bellSeen = sqliteTable('bell_seen', {
+  email: text('email').primaryKey(),
+  seenAt: integer('seen_at', { mode: 'timestamp_ms' }).notNull(),
+});
 /**
  * Documents attached to a record (SPEC §23): receipts and invoices on a
  * purchase, since v0.10.0 payslips and similar on an income record (a

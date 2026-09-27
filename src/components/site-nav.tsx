@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { APP_NAME, APP_RELEASE_STAGE, APP_VERSION } from '@/lib/version';
+import { Bell } from '@/components/bell';
 
 const NAV_ITEMS = [
   { href: '/overview', label: 'Overview' },
@@ -199,25 +200,28 @@ export function SiteNav() {
               v{APP_VERSION} · {APP_RELEASE_STAGE}
             </span>
           </Link>
-          <nav
-            aria-label="Desktop navigation"
-            className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm"
-          >
-            {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={isActive(item.href) ? 'page' : undefined}
-                className={`rounded-md px-2.5 py-1.5 font-medium transition-colors ${
-                  isActive(item.href)
-                    ? 'bg-till text-till-ink'
-                    : 'text-ink-soft hover:bg-surface-muted hover:text-ink'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <div className="flex items-center gap-x-2">
+            <nav
+              aria-label="Desktop navigation"
+              className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm"
+            >
+              {NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={isActive(item.href) ? 'page' : undefined}
+                  className={`rounded-md px-2.5 py-1.5 font-medium transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-till text-till-ink'
+                      : 'text-ink-soft hover:bg-surface-muted hover:text-ink'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+            <Bell />
+          </div>
         </div>
 
         {/* Mobile Header Bar (< lg) */}
@@ -239,6 +243,9 @@ export function SiteNav() {
                 v{APP_VERSION}
               </span>
             </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            <Bell />
           </div>
         </div>
       </header>

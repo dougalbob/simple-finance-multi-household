@@ -1559,7 +1559,7 @@ the keyboard.
 | OQ11 | ~~Interaction follow-up dates surfaced in the key-dates panel — useful?~~ | **Resolved v0.25.0 (decision 175): a follow-up is a task, not a key date.** It is listed — overdue first, until ticked — on the Tasks page, the supplier card, the Suppliers banner and Contracts & Renewals. The key-date engine and the Overview panel are unchanged; no notifications either way. |
 | OQ12 | Attachment size limit and retention guidance | 10 MB per file; README guidance on archive growth; no server-side pruning in v1. User-initiated removal of one receipt is decision 89 — still no automatic pruning. |
 | OQ13 | 29 February renewal dates under annual advance | Land on 28 February in non-leap years; visible and editable. |
-| OQ14 | Should the Tasks page's "The app has noticed" also list a **stale pot** — a bank or cash pot with no balance checkpoint for N days? | **Not in v0.25.0 (decision 175); awaiting the household.** Options: **7 days** (about one and a half of the household's 4–5-day checkpoint cycles — prompts early) or **14 days** (quieter; only a pot that has clearly been forgotten). Derived and link-only either way, like the other noticed items. |
+| OQ14 | Should the Tasks page's "The app has noticed" also list a **stale pot** — a bank or cash pot with no balance checkpoint for N days? | **Deferred by household 2026-09-27 (v0.26.0, decision 176): they will road-test the app and decide in a few weeks.** Not in v0.25.0 (decision 175) nor v0.26.0. Options: **7 days** (about one and a half of the household's 4–5-day checkpoint cycles — prompts early) or **14 days** (quieter; only a pot that has clearly been forgotten). Derived and link-only either way, like the other noticed items. |
 
 ## Release history
 
@@ -2360,4 +2360,70 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     `tests/attachment-pipeline.test.ts`, supplier-details follow-ups as tasks, and an `e2e/tasks.spec.ts`
     project before `backup` (create → tick → survives reload → reopen; a follow-up promised on a call
     becomes a task on the card; a purchase task links back to its row).
+
+176. **The bell — an in-app "needs attention" prompt, with personal tasks (2026-09-27, v0.26.0).** The
+    household asked for a bell icon that shows what needs attention now. The count is **overdue or due
+    today tasks** (filtered by who they are for, see below) plus **key-date alerts** in state **today**,
+    **past** or **rolled-awaiting-review**. Not counted: tasks coming up, undated tasks, and key dates
+    merely inside their 21-day window — otherwise the badge would stay lit for three weeks.
+
+    **Personal tasks (user clarification).** Default is both users see the bell count for tasks regardless
+    of who created. There is a method in the UI to pick "Only me" when adding or editing a task. That
+    stores `tasks.assigned_to` (lower-cased email, null = household). A personal task only counts in that
+    person's bell and only appears in that person's bell lists; it stays visible to both on `/tasks` and on
+    its subject card, labelled "Only for <name>" (name from `people.email` when linked). The field is
+    validated (must contain @) and lower-cased; empty means everyone. No "assign to Sam" picker in this
+    release — "Only me" covers the stated case ("Query brake disc invoice on Mercedes" only for one of us).
+
+    **Bell UI.** `SiteNav` (client, rendered by `layout.tsx` with no props, on every page including
+    `/unauthorized`) now holds a `Bell` button: desktop at the right-hand end of the bar, phone in the top
+    bar next to the menu button, hidden when signed out (401 from the API) or on `/unauthorized`. It is a
+    `<button>`, not a link inside `nav[aria-label="Pages"]` (the phone e2e reads that nav's links in order).
+    Accessible name carries the count in words ("Needs attention: 3 — 2 overdue, 1 due today" or "Nothing
+    needs attention") plus "2 new since you last looked" when there is a new dot. Zero means no badge; the
+    new dot is a separate small dot, not part of the number. Clicking opens a panel: laptop popover, phone
+    sheet under the top bar; `aria-expanded`, Escape closes and returns focus, click outside closes. Panel
+    groups: Needs attention (counted items, tasks reuse `TaskCheckbox`/`TaskDueBadge` + subject link, key
+    dates use `keyDateMessage`/`keyDateHref`), Coming up in next 7 days (tasks due 1..7 days + in-window key
+    dates, listed not counted), footer "N things the app has noticed →" → `/tasks#noticed-heading` and
+    "All tasks →" → `/tasks`.
+
+    **Freshness (main trap).** Root layout persists across client navigation, so a count computed in
+    `layout.tsx` would go stale after navigation, at midnight, or when the other person changes something.
+    Approach: `GET /api/attention` (`dynamic = 'force-dynamic'`, `cache: 'no-store'`, 401 JSON when signed
+    out) returns counts and panel items; client `Bell` fetches on mount, pathname change, `visibilitychange`
+    (tab becomes visible), `sf:tasks-changed` window event (task forms dispatch after success) and every
+    5 minutes while visible. Ticking a task updates the bell without reload (e2e proves it).
+
+    **Per-person "since you last looked".** Task activity by the other person since this person last opened
+    the bell. Source: `audit_entries` where `entity='task'` and action create/complete/reopen, actor ≠ me
+    (case-insensitive) and ≠ `system` (0013 migration), `createdAt` > my last-seen. Worded with names:
+    "Sam added …", "Sam ticked …". Cap 20. Stored per person on server so phone and laptop agree: new table
+    `bell_seen (email TEXT PRIMARY KEY, seen_at INTEGER NOT NULL)` — lower-cased email, UI state not a
+    record (not audited, same as theme cookie, called out in SPEC). Opening panel marks seen via
+    `POST /api/attention/seen`, fired on open; the new list is worked out before updating `seen_at`, so it
+    stays visible while open. Person with no row yet looks back 7 days at most.
+
+    **Pure rules:** `attentionView(tasks, alerts, auditRows, me, seenAt, today, now)` — unit-tested
+    (`tests/attention.test.ts`): what counts and what doesn't, own/system excluded, seen_at respected,
+    7-day look-back, 20-entry cap, assigned_to filtering. Route is thin wrapper around it, plus
+    `bell_seen` helpers.
+
+    **Migration 0014** (`bell_and_task_assignee`): `bell_seen` table and `tasks.assigned_to` column + index,
+    via drizzle-kit real-clock stamp, strictly increasing, never in future (decision 172). Upgrade-tested
+    from v0.25.0-shaped DB, idempotent.
+
+    **Housekeeping:** OQ14 deferred by household (they will road-test and decide in a few weeks) — row
+    updated, not built. v0.25.0 verified post-merge facts recorded at top of HANDOFF.md (decision 173).
+
+    **Not this session:** email/push/browser/sound notifications (decision 19), service worker (122–123),
+    full "my tasks only" filter on Tasks page (later decision), stale-pot item (OQ14), anything that moves
+    money.
+
+    Tests: `tests/attention.test.ts` (counts, assigned_to, seen_at, cap), `tests/tasks.test.ts` assigned_to
+    create/edit, migration 0014 block in `tests/migrate-upgrade.test.ts`, `tests/backup-restore.test.ts`
+    count 14→15, colour-tokens fix (text-white → text-fill-ink), e2e `bell` project before `backup`
+    (badge words, add overdue → +1, tick → back without reload, panel groups/Escape/focus, phone layout
+    bell in top bar and drawer's link list unchanged, Sam's seeded task shows under "Since you last looked"
+    and after opening and reloading is no longer new).
 

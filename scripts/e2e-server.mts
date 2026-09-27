@@ -20,6 +20,7 @@ import {
 import { createSupplier } from '../src/lib/records/suppliers';
 import { createVehicle } from '../src/lib/records/vehicles';
 import { addSupplierInteraction } from '../src/lib/records/supplier-details';
+import { createTask } from '../src/lib/records/tasks';
 import { toLocalDateString } from '../src/lib/time';
 import { recentMonthlyDueDay } from './e2e-seed-dates';
 
@@ -436,6 +437,16 @@ function seed(): void {
     outcome: 'They will write to us',
     followUpDate: localDate(today, 6),
     actor: ACTOR,
+    now,
+  });
+
+  // Seeded task by Sam for the bell's "Since you last looked" e2e (v0.26.0, decision 176).
+  // Alex signs in as alex@example.com, so Sam's activity appears as new until Alex opens the bell.
+  createTask(db, {
+    title: `Sam added a note ${Date.now()}`,
+    detail: 'Seeded for bell e2e — activity by the other person',
+    dueDate: localDate(today, 3),
+    actor: 'sam@example.com',
     now,
   });
 

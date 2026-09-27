@@ -153,6 +153,14 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
+      // Own project (v0.26.0): bell badge, panel, freshness without reload,
+      // phone layout, and Sam's seeded task for "Since you last looked".
+      // Mutates tasks and bell_seen, so runs before backup.
+      name: 'bell',
+      testMatch: /bell\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
       name: 'backup',
       testMatch: /backup\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },

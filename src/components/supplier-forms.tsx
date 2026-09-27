@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
 import {
   addSupplierInteractionAction,
   addSupplierReferenceAction,
@@ -172,6 +172,11 @@ export function SupplierInteractionForm({
     addSupplierInteractionAction,
     initialActionState,
   );
+  useEffect(() => {
+    if (state.status === 'ok') {
+      window.dispatchEvent(new CustomEvent('sf:tasks-changed'));
+    }
+  }, [state]);
   return (
     <form action={formAction} className="my-2 space-y-1">
       <input type="hidden" name="supplierId" value={supplierId} />

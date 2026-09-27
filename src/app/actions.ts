@@ -447,6 +447,17 @@ function taskErrorMessage(err: unknown): string | null {
   return null;
 }
 
+function taskAssignedToFromForm(
+  value: FormDataEntryValue | null,
+  currentUserEmail: string,
+): string | null {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (raw === '' || raw.toLowerCase() === 'household') return null;
+  if (raw.toLowerCase() === 'me') return currentUserEmail.toLowerCase();
+  // Allow an explicit email (lower-cased by validation)
+  return raw;
+}
+
 export async function createTaskAction(
   _previous: ActionState,
   formData: FormData,
@@ -458,6 +469,7 @@ export async function createTaskAction(
     detail: textOrNull(formData.get('detail')),
     dueDate: textOrNull(formData.get('dueDate')),
     ...taskSubjectFromForm(formData.get('subject')),
+    assignedTo: taskAssignedToFromForm(formData.get('assignedTo'), user.email),
   });
   if (!parsed.success)
     return { status: 'error', message: firstIssue(parsed.error, 'Check the task.') };
@@ -541,6 +553,13 @@ export async function editTaskAction(
     title: String(formData.get('title') ?? ''),
     detail: textOrNull(formData.get('detail')),
     dueDate: textOrNull(formData.get('dueDate')),
+    assignedTo: (() => {
+      const raw = formData.get('assignedTo');
+      if (raw === null) return undefined;
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      if (text === '') return undefined;
+      return taskAssignedToFromForm(raw, user.email);
+    })(),
   });
   if (!parsed.success)
     return { status: 'error', message: firstIssue(parsed.error, 'Check the task.') };

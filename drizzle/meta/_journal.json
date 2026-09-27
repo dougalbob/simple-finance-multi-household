@@ -99,6 +99,13 @@
       "when": 1790527814635,
       "tag": "0013_tasks_and_supplier_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1790534175504,
+      "tag": "0014_bell_and_task_assignee",
+      "breakpoints": true
     }
   ]
 }

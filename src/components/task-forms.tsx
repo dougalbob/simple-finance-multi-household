@@ -20,6 +20,9 @@ import type { TaskDueState } from '@/lib/records/tasks';
  * The due state is always printed as words ("Overdue by 3 days", "Due today",
  * "In 12 days", "No due date"); the colour behind it only repeats what the
  * words already say (SPEC §16.7).
+ *
+ * v0.26.0: a task can be for everyone (default) or only for me (decision
+ * 176). The task stays visible to both; the bell filters by assigned_to.
  */
 
 const FIELD_CLASS =
@@ -76,6 +79,11 @@ export function TaskCheckbox({ task }: { task: Pick<TaskRowView, 'id' | 'version
   useEffect(() => {
     if (state.status === 'error') setTicked(false);
   }, [state]);
+  useEffect(() => {
+    if (state.status === 'ok') {
+      window.dispatchEvent(new CustomEvent('sf:tasks-changed'));
+    }
+  }, [state]);
   return (
     <form ref={formRef} action={formAction} className="inline-flex items-start gap-2">
       <input type="hidden" name="id" value={task.id} />
@@ -104,6 +112,11 @@ export function TaskReopenButton({
   task: Pick<TaskRowView, 'id' | 'version' | 'title'>;
 }) {
   const [state, formAction, pending] = useActionState(reopenTaskAction, initialActionState);
+  useEffect(() => {
+    if (state.status === 'ok') {
+      window.dispatchEvent(new CustomEvent('sf:tasks-changed'));
+    }
+  }, [state]);
   return (
     <form action={formAction} className="inline-flex flex-wrap items-center gap-2">
       <input type="hidden" name="id" value={task.id} />
@@ -129,6 +142,11 @@ function TaskChangeControls({ task }: { task: TaskRowView }) {
     initialActionState,
   );
   const idPrefix = `task-${task.id}`;
+  useEffect(() => {
+    if (editState.status === 'ok' || doneState.status === 'ok') {
+      window.dispatchEvent(new CustomEvent('sf:tasks-changed'));
+    }
+  }, [editState, doneState]);
   return (
     <details className="mt-1">
       <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
@@ -159,6 +177,21 @@ function TaskChangeControls({ task }: { task: TaskRowView }) {
             defaultValue={task.dueDate ?? ''}
             className={FIELD_CLASS}
           />
+          <label
+            className="block text-xs font-medium text-ink-soft"
+            htmlFor={`${idPrefix}-assigned`}
+          >
+            For
+          </label>
+          <select
+            id={`${idPrefix}-assigned`}
+            name="assignedTo"
+            defaultValue={task.assignedTo === null ? 'household' : 'me'}
+            className={FIELD_CLASS}
+          >
+            <option value="household">Everyone</option>
+            <option value="me">Only me</option>
+          </select>
           <label className="block text-xs font-medium text-ink-soft" htmlFor={`${idPrefix}-detail`}>
             Detail
           </label>
@@ -238,6 +271,11 @@ export function OpenTaskList({
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="font-medium text-ink">{task.title}</span>
                 <TaskDueBadge task={task} />
+                {task.assignedToLabel !== null ? (
+                  <span className="inline-flex rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-soft">
+                    {task.assignedToLabel}
+                  </span>
+                ) : null}
               </div>
               {showSubject ? (
                 <p className="mt-0.5 text-xs text-ink-soft">
@@ -258,6 +296,7 @@ export function OpenTaskList({
               <p className="mt-0.5 text-xs text-ink-muted">
                 Added by {task.createdBy} on {task.createdOnLabel}
                 {task.fromInteraction ? ' · from a logged interaction' : ''}
+                {task.assignedToLabel !== null ? ` · ${task.assignedToLabel}` : ''}
               </p>
               <TaskChangeControls task={task} />
             </div>
@@ -288,6 +327,7 @@ export function DoneTaskList({
           <span className="text-xs text-ink-muted">
             Done by {task.completedBy ?? 'someone'} on {task.completedOnLabel ?? '—'}
             {task.completionNote === null ? '' : ` — ${task.completionNote}`}
+            {task.assignedToLabel !== null ? ` · ${task.assignedToLabel}` : ''}
             {showSubject ? (
               <>
                 {' · About: '}
@@ -317,6 +357,11 @@ export interface TaskSubjectChoices {
  * Add a task. On a subject's own page the subject is fixed (`subject` =
  * `supplier:3`, `purchase:17`); on the Tasks page the household chooses what
  * it is about, or leaves it as the household.
+ *
+ * v0.26.0: a task can be for everyone (default, both people count it in the
+ * bell) or only for me (only my bell counts it). The task itself stays
+ * visible to both (SPEC §3 — full mutual visibility); the bell filters by
+ * assigned_to.
  */
 export function TaskCreateForm({
   idPrefix,
@@ -335,6 +380,11 @@ export function TaskCreateForm({
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.status === 'ok') formRef.current?.reset();
+  }, [state]);
+  useEffect(() => {
+    if (state.status === 'ok') {
+      window.dispatchEvent(new CustomEvent('sf:tasks-changed'));
+    }
   }, [state]);
   return (
     <form ref={formRef} action={formAction} className="space-y-1.5">
@@ -360,39 +410,55 @@ export function TaskCreateForm({
           <input id={`${idPrefix}-due`} name="dueDate" type="date" className={FIELD_CLASS} />
         </div>
       </div>
-      {subject === undefined && choices !== undefined ? (
+      <div className="flex flex-wrap items-center gap-2">
+        {subject === undefined && choices !== undefined ? (
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-ink-soft" htmlFor={`${idPrefix}-subject`}>
+              About
+            </label>
+            <select
+              id={`${idPrefix}-subject`}
+              name="subject"
+              defaultValue="household"
+              className={`${FIELD_CLASS} w-auto`}
+            >
+              <option value="household">The household</option>
+              {choices.suppliers.length > 0 ? (
+                <optgroup label="Suppliers">
+                  {choices.suppliers.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {choices.vehicles.length > 0 ? (
+                <optgroup label="Vehicles">
+                  {choices.vehicles.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
+          </div>
+        ) : null}
         <div className="flex items-center gap-1.5">
-          <label className="text-xs text-ink-soft" htmlFor={`${idPrefix}-subject`}>
-            About
+          <label className="text-xs text-ink-soft" htmlFor={`${idPrefix}-assigned`}>
+            For
           </label>
           <select
-            id={`${idPrefix}-subject`}
-            name="subject"
+            id={`${idPrefix}-assigned`}
+            name="assignedTo"
             defaultValue="household"
-            className={FIELD_CLASS}
+            className={`${FIELD_CLASS} w-auto`}
           >
-            <option value="household">The household</option>
-            {choices.suppliers.length > 0 ? (
-              <optgroup label="Suppliers">
-                {choices.suppliers.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {choices.vehicles.length > 0 ? (
-              <optgroup label="Vehicles">
-                {choices.vehicles.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
+            <option value="household">Everyone</option>
+            <option value="me">Only me</option>
           </select>
         </div>
-      ) : null}
+      </div>
       <label className="sr-only" htmlFor={`${idPrefix}-detail`}>
         Detail
       </label>

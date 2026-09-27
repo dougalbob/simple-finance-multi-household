@@ -1,3 +1,24 @@
+# Handoff: v0.26.0 — the bell: an in-app "needs attention" prompt, with personal tasks (decision 176)
+
+**v0.25.0 — verified post-merge facts (recorded here per decision 173):**
+
+- Merge commit `71f34130fc90a36783aa351e429179bc93d6d62a` (PR #86, merged 2026-09-27T17:35:40Z).
+- PR CI run `36337203309` (gates, browser and docker all green); `main` CI run `36337522283` green.
+- Annotated tag `v0.25.0` (tag object `8ddd79f`) on that merge commit; Publish run `36337883090` succeeded,
+  including the upgrade smoke from published releases.
+- Digest `sha256:de454437d6b85aa020d46db93b7a7dcf2ee901ba47e633c9c29cf8ecac85a366` on `v0.25.0` / `latest` /
+  `sha-71f3413`. That differs from v0.24.0's `sha256:ab0e90bb397a0498400d71548cd27affd5fb331e6a6ac4af580d2a041d0ccf01`.
+- The GitHub release `v0.25.0` is marked Latest and carries those facts.
+
+**What v0.26.0 changes:** see decision 176 and SPEC §26. Bell button in header (desktop right end, phone top
+bar next to menu), count is overdue/today tasks (filtered by assigned_to — shared or only me) + today/past/rolled
+key dates; panel groups Needs attention / Coming up in next 7 days / noticed link; Since you last looked via
+audit_entries and bell_seen table (UI state, not audited). Tasks gain assigned_to column and "For: Everyone / Only me"
+UI (default both see bell count regardless of creator, personal task only counts for owner). OQ14 deferred by
+household.
+
+---
+
 # Handoff: v0.25.0 — tasks: a real follow-up model, labelled dates, supplier documents (decision 175)
 
 **Branch:** `arena/01a0e3b7-simple-finance`, from `main` @ `6e22b5d` (the v0.24.0 merge). The session
