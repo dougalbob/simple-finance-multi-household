@@ -128,7 +128,8 @@ test.describe('debt deletion — empty mistaken setup', () => {
     const voidForm = voidDetails.locator('form').first();
     await voidForm.getByLabel(/Why are you voiding/).fill('test void');
     await voidForm.getByRole('button', { name: /Void/ }).click();
-    await expect(voidForm.getByRole('status')).toContainText(/voided/i, { timeout: 30_000 });
+    // After void the form is replaced by voided text
+    await expect(movementRow.getByText(/Voided.*test void/i)).toBeVisible({ timeout: 30_000 });
 
     await page.goto('/pots');
     const debtRowAfterVoid = debts.locator('li', { hasText: counterparty });
