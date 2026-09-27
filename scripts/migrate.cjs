@@ -13,6 +13,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { drizzle } = require('drizzle-orm/better-sqlite3');
 const { migrate } = require('drizzle-orm/better-sqlite3/migrator');
+const { repairMigrationJournal } = require('./migrate-repair.cjs');
 
 function resolveDatabasePath() {
   const dataDir = (
@@ -28,9 +29,22 @@ const raw = new Database(databasePath);
 raw.pragma('journal_mode = WAL');
 raw.pragma('foreign_keys = ON');
 
+const migrationsFolder = path.join(__dirname, '..', 'drizzle');
+
+// Repair migration bookkeeping BEFORE the migrator runs: it orders by the
+// single newest recorded stamp, so a stale stamp (see v0.23.0's skipped 0012)
+// must be re-dated first or the pending migration is silently skipped again.
+const reDates = repairMigrationJournal(raw, migrationsFolder);
+for (const reDate of reDates) {
+  console.log(
+    `[migrate-repair] re-dated ${reDate.tag}: ${reDate.from ?? 'null'} -> ${reDate.to}` +
+      ' (journal stamp correction; see docs/RELEASE_NOTES_v0.23.1.md)',
+  );
+}
+
 try {
   const db = drizzle(raw);
-  migrate(db, { migrationsFolder: path.join(__dirname, '..', 'drizzle') });
+  migrate(db, { migrationsFolder });
   console.log(`[migrate] database is up to date: ${databasePath}`);
 } catch (err) {
   console.error('[migrate] FAILED:', err && err.message ? err.message : err);

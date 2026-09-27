@@ -2188,3 +2188,42 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     figures, card exclusion from every liquidity projection and warning/watch path, manually supplied
     statement dates/minimums, month-end clamping, promo alert and inability to verify payment. Recheck
     migration snapshot/journal consistency and all release gates before publishing.
+
+172. **Migration journal stamps are ordering keys; v0.23.0 silently skipped migration 0012 on
+    every upgraded database (2026-09-27).** drizzle-orm's better-sqlite3 migrator applies a journal
+    entry only when its `when` stamp is newer than the single newest `created_at` recorded in
+    `__drizzle_migrations` (`ORDER BY created_at DESC LIMIT 1`). The journal's 0011 entry had been
+    hand-stamped with the round, future-dated 1790600000000 while 0012 carried its real generation
+    stamp 1790506141836 — numerically smaller — so databases upgraded from v0.20.0+ skipped 0012 at
+    startup and failed on any pots query with `no such column: credit_card_payment_day_of_month`.
+    Fresh installs applied everything, so CI, the Docker smoke and the browser suite were all
+    green; the upgrade path was never tested. No data was lost.
+
+    Rules adopted: journal stamps must be strictly increasing and never future-dated
+    (`tests/migrate-journal.test.ts`); prefer drizzle-kit's real-clock stamps, and a hand-stamped
+    entry must take a real past instant strictly between its neighbours; a shipped migration's SQL
+    is never edited (drizzle records its sha256), while re-dating an ordering stamp is sanctioned
+    only alongside a repair that converges fielded databases. The repair re-dates recorded rows to
+    the journal's stamps by content-hash match before the migrator runs — implemented twice by
+    necessity (production CJS `scripts/migrate-repair.cjs`, dev TS `src/lib/db/migrate-repair.ts`),
+    with a parity test. The upgrade path is tested against a real v0.22.1-era database through the
+    production runner (`tests/migrate-upgrade.test.ts`), and both CI's Docker job and the Publish
+    workflow upgrade previously published images on the same volume and require every journal entry
+    applied exactly once before anything merges or is pushed. 0011 is re-dated to 1790504000000 in
+    this release; migration SQL files are untouched.
+
+173. **A release is one pull request; the Publish workflow creates the GitHub release
+    (2026-09-27).** The Arena session ends the moment its release PR merges, so the historical
+    sequence — merge, publish, then update `HANDOFF.md` with the verified facts and create the
+    GitHub release from a new session via a second, documentation-only PR — always needed a fresh
+    session for work the finishing session could have done beforehand. The household retired that
+    pattern after v0.23.0's PR #83 sat unmergeable; it was closed unmerged and its verified facts
+    folded into `docs/RELEASE_NOTES_v0.23.0.md`.
+
+    The reworked process: all documentation — release notes, handoff block, blueprint and plan
+    updates, all five version places — lands in the single release PR before merging; the notes
+    document's first line must be `# Release notes — vX.Y.Z — <subject>`; the Publish workflow
+    prepends the verified facts (published date, merge commit, image tags, registry digest, run
+    link) and creates the GitHub release marked Latest, refusing to publish when the document is
+    missing or malformed; post-merge verified facts are recorded by the next working session in
+    `HANDOFF.md`, never by a dedicated PR. `docs/RELEASE_PROCESS.md` is rewritten accordingly.
