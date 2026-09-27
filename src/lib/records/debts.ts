@@ -22,7 +22,9 @@ import { listPots } from './pots';
  * never drift from the movements it claims to summarise. No interest, no
  * schedules — repayments simply reduce the balance.
  *
- * Debts are never deleted: a settled debt (zero balance) stays as history.
+ * Debts with movements are never deleted: a settled debt (zero balance)
+ * stays as history. An empty mistaken setup with no movements at all,
+ * including voided, may be permanently deleted (decision 167).
  */
 
 export type Debt = typeof debts.$inferSelect;
@@ -39,6 +41,15 @@ export class InvalidDebtInputError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'InvalidDebtInputError';
+  }
+}
+
+export class DebtHasMovementsError extends Error {
+  constructor(debtId: number) {
+    super(
+      `Debt ${debtId} has movements and cannot be permanently deleted — void history is retained.`,
+    );
+    this.name = 'DebtHasMovementsError';
   }
 }
 
@@ -214,38 +225,101 @@ export interface DebtWithBalance {
   debt: Debt;
   /** Outstanding pence: positive = still owed, zero = settled, negative = overpaid. */
   balancePence: number;
-  /** Non-void loan movements linked to this debt. */
+  /** Non-void loan movements linked to this debt (effective history). */
   movementCount: number;
+  /** All movements including voided — used to guard permanent deletion. */
+  totalMovementCount: number;
 }
 
 /**
  * The outstanding balance of one debt, derived from its non-void loan
  * movements (voided rows never count): for `we_owe`, money in (borrowed)
  * minus money out (repaid); for `they_owe`, money out (lent) minus money
- * in (repaid to us).
+ * in (repaid to us). Also returns the total movement count including voided
+ * rows, which blocks permanent deletion (decision 167).
  */
-export function debtBalance(db: Db, debt: Debt): { balancePence: number; movementCount: number } {
+export function debtBalance(
+  db: Db,
+  debt: Debt,
+): {
+  balancePence: number;
+  movementCount: number;
+  totalMovementCount: number;
+} {
   const rows = db
     .select({
       direction: externalMovements.direction,
       amountPence: externalMovements.amountPence,
+      voidedAt: externalMovements.voidedAt,
     })
     .from(externalMovements)
-    .where(and(eq(externalMovements.debtId, debt.id), isNull(externalMovements.voidedAt)))
+    .where(eq(externalMovements.debtId, debt.id))
     .all();
   let balancePence = 0;
+  let movementCount = 0;
   for (const row of rows) {
+    if (row.voidedAt !== null) continue;
+    movementCount += 1;
     if (debt.direction === 'we_owe') {
       balancePence += row.direction === 'in' ? row.amountPence : -row.amountPence;
     } else {
       balancePence += row.direction === 'out' ? row.amountPence : -row.amountPence;
     }
   }
-  return { balancePence, movementCount: rows.length };
+  return { balancePence, movementCount, totalMovementCount: rows.length };
 }
 
 export function listDebtsWithBalances(db: Db): DebtWithBalance[] {
   return listDebts(db).map((debt) => ({ debt, ...debtBalance(db, debt) }));
+}
+
+export interface DeleteDebtInput {
+  id: number;
+  expectedVersion: number;
+  actor: string;
+  now?: Date;
+}
+
+/**
+ * Permanently delete an empty mistaken debt setup (decision 167). The safety
+ * boundary is hard: a setup with any movement records whatsoever, including
+ * voided, cannot be hard-deleted. That guard lives in the same transaction
+ * as the delete, so a movement recorded between confirmation and deletion
+ * still blocks. Existing debts with history stay — void, not delete.
+ */
+export function deleteDebt(db: Db, input: DeleteDebtInput): Debt {
+  const now = input.now ?? new Date();
+  const actor = checkedActor(input.actor);
+  return db.transaction((tx) => {
+    const current = tx.select().from(debts).where(eq(debts.id, input.id)).get();
+    if (current === undefined) {
+      throw new DebtNotFoundError(input.id);
+    }
+    if (current.version !== input.expectedVersion) {
+      throw new VersionConflictError('debt', input.id, input.expectedVersion, current.version);
+    }
+    const anyMovement = tx
+      .select({ id: externalMovements.id })
+      .from(externalMovements)
+      .where(eq(externalMovements.debtId, current.id))
+      .limit(1)
+      .all();
+    if (anyMovement.length > 0) {
+      throw new DebtHasMovementsError(current.id);
+    }
+    tx.delete(debts).where(eq(debts.id, current.id)).run();
+    recordAudit(tx, {
+      actor,
+      action: 'debt.delete',
+      entity: 'debt',
+      entityId: current.id,
+      summary: `Permanently deleted debt “${current.counterparty}” (${current.direction}) — no movements, mistaken setup`,
+      before: current,
+      after: null,
+      now,
+    });
+    return current;
+  });
 }
 
 export interface DebtsSummary {
@@ -277,10 +351,19 @@ export function debtsSummary(db: Db): DebtsSummary {
 
 /**
  * Honest one-line label for a debt balance, e.g. "we owe £200.00" /
- * "settled" / "overpaid £5.00".
+ * "settled" / "overpaid £5.00" / "Awaiting first payment".
+ *
+ * A zero balance with no effective movements is not settled — it is a loan
+ * that has not started yet (decision 168). Voided-only history counts as
+ * unstarted for display, but still blocks permanent deletion (decision 167).
  */
-export function debtBalanceLabel(debt: Debt, balancePence: number): string {
-  if (balancePence === 0) return 'settled';
+export function debtBalanceLabel(debt: Debt, balancePence: number, movementCount?: number): string {
+  if (balancePence === 0) {
+    if (movementCount !== undefined && movementCount === 0) {
+      return debt.direction === 'we_owe' ? 'Awaiting first payment' : 'Awaiting first loan';
+    }
+    return 'settled';
+  }
   if (balancePence < 0) return `overpaid ${formatPence(-balancePence)}`;
   return debt.direction === 'we_owe'
     ? `we owe ${formatPence(balancePence)}`

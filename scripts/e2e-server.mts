@@ -21,6 +21,7 @@ import { createSupplier } from '../src/lib/records/suppliers';
 import { createVehicle } from '../src/lib/records/vehicles';
 import { addSupplierInteraction } from '../src/lib/records/supplier-details';
 import { toLocalDateString } from '../src/lib/time';
+import { recentMonthlyDueDay } from './e2e-seed-dates';
 
 /**
  * E2E server (Playwright `webServer`): an isolated, fictional installation.
@@ -323,6 +324,23 @@ function seed(): void {
   // Recurring commitments: a direct debit whose contract ends inside the
   // warning window, a standing order, a monthly income schedule (the payday the
   // projection plans to) and an annual insurance renewal.
+  //
+  // The two monthly spending schedules are dated for opposite reasons, and both
+  // are load-bearing for the specs:
+  // - BroadbandCo (dd) is due in TWO DAYS so the key-date warning tests have
+  //   something to warn about. Its last conversion can therefore sit just
+  //   outside the 30-day activity window; no spec asserts on it.
+  // - Phone plan (so) must have a conversion INSIDE that window, because
+  //   `e2e/transactions.spec.ts` asserts a converted standing order row (code
+  //   SO, linked back to its schedule) in All Transactions' default last-30-days
+  //   view. A fixed due day cannot guarantee that: on the 28th, the newest
+  //   conversion was 30 days behind today on the 27th of any month whose
+  //   predecessor has 31 days, and the spec failed on a green codebase
+  //   (2026-09-27 · decision 170). Nor can the next conversion rescue it —
+  //   `e2e/desktop.spec.ts` moves this schedule to the 21st earlier in the same
+  //   run, and a cadence edit never invents past instances (decision 162).
+  //   `recentMonthlyDueDay` lands it about a week behind today on every day of
+  //   the year, and never on the 21st (see `tests/e2e-seed-dates.test.ts`).
   const dueDay = Math.min(Number(todayIso.slice(8, 10)) + 2, 28);
   createSchedule(db, {
     name: 'BroadbandCo fibre',
@@ -343,7 +361,7 @@ function seed(): void {
     name: 'Phone plan',
     kind: 'so',
     frequency: 'monthly',
-    dueDayOfMonth: Math.min(dueDay + 5, 28),
+    dueDayOfMonth: recentMonthlyDueDay(todayIso, 6, [21]),
     amountPence: 1200,
     potId: main.id,
     categoryId: insurance.id,

@@ -312,8 +312,67 @@ constant by *not* restarting the seeder between them.
 
 ---
 
+## 15. GitHub Actions **job logs cannot be downloaded** here — read failures through check-run annotations (2026-09-27)
+
+**Symptom:** both routes to a CI log die at the network layer, every time, within a second:
+
+```
+gh run view <run-id> --log-failed
+# failed to get run log: Get "https://results-receiver.actions.githubusercontent.com/rest/runs/…/logs?…": EOF
+gh api repos/dougalbob/simple-finance/actions/jobs/<job-id>/logs
+# Get "https://productionresultssa8.blob.core.windows.net/actions-results/…/job-logs.txt?…": EOF
+```
+
+`gh run view <id>` (metadata), `gh api …/actions/runs/<id>/jobs` and the run list all work — only the
+log/artifact **blob hosts** are unreachable, so this looks like a transient GitHub error and invites a
+retry loop. It is not transient.
+
+**What works here:** the suite already reports through the `github` reporter (`playwright.config.ts`),
+so every failure is a **check-run annotation** on `api.github.com`, which *is* reachable:
+
+```bash
+gh api repos/dougalbob/simple-finance/actions/runs/<run-id>/jobs --jq '.jobs[] | {name, id, conclusion}'
+gh api repos/dougalbob/simple-finance/check-runs/<job-id>/annotations \
+  --jq '.[] | {level:.annotation_level, path:.path, line:.start_line, msg:.message}'
+```
+
+The `notice` annotation carries the `1 failed / 87 passed` summary and *which* specs failed; each
+`failure` annotation carries the full Playwright message — locator, expected vs received, the source
+line and the call log. That was enough to diagnose a red `browser` job completely, with no log and no
+trace artifact.
+
+**Better still: do not diagnose through CI at all.** Entry 8 runs the whole suite locally — re-proved
+2026-09-27 on a fresh sandbox: `@sparticuz/chromium` installed in 3s, `Chromium 153.0.8010.0`,
+**88 tests across all 15 projects in ~5 minutes** (Playwright wanted 153.0.8010.12 and got .0, still
+harmless). A CI run is ~6 minutes *and* its logs are unreadable here, so a local red-to-green loop is
+both faster and better instrumented. Use annotations to confirm what CI saw, not to find out why.
+
+**Also:** `gh pr view <n>` now fails outright with
+`GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)`. Use the REST
+endpoint instead — `gh api repos/dougalbob/simple-finance/pulls/<n> --jq '{title, state, head:.head.ref, head_sha:.head.sha, mergeable, commits}'`.
+
+**Do not:** retry the log download, or conclude a job "produced no output" because the fetch came back
+empty — the fetch was blocked.
+
+---
+
 ## History
 
+- **2026-09-27 (v0.22.1, session `arena/01a0e1ea-simple-finance`):** entry 8 re-proved a fifth time on a
+  fresh sandbox — `@sparticuz/chromium` in 3s, `inflate()` wrote `/tmp/al2023`, `Chromium 153.0.8010.0`,
+  the full **88-test** suite green locally in ~5 minutes, and the failing spec reproduced locally in 2.6
+  minutes before it was fixed. Entry 15 added (CI job logs are undownloadable here; check-run annotations
+  are the readable route). Entry 14 widened: for a **pristine-`main` browser run alongside the working
+  tree**, `git worktree add /tmp/main-check origin/main` + its own `npm ci --ignore-scripts` (11s with a
+  warm cache) + a copied `playwright.local.config.ts` + `E2E_PORT=3200` works, where symlinking
+  `node_modules` panics Turbopack — that is how a red spec was proved to belong to `main` and not to the
+  branch. Two module-resolution traps found the hard way: `tsconfig.json`'s `**/*.ts` does **not** include
+  `scripts/*.mts`, so those files are never typechecked; and a typechecked `.ts` file cannot import an
+  `.mts` sibling either way — an explicit `./x.mts` path trips `TS5097` (`allowImportingTsExtensions`)
+  and extensionless `./x` does not resolve. A helper the tests must import belongs in a `.ts` file
+  (`scripts/e2e-seed-dates.ts`, imported extensionless from both `e2e-server.mts` and the test).
+  `npm ci --ignore-scripts`, `npm test` (**534 tests / 121 suites**), `tsc --noEmit` and `format:check`
+  all green locally.
 - **2026-09-26 (v0.18.0 supplier card, session `arena/01a0dcb6-simple-finance`):** entry 10's sibling
   fact needs widening — `node_modules` can come back **partially** restored, not just absent. This
   session opened with a `node_modules` directory that looked fine (`ls` listed packages) but had no

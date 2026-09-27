@@ -132,6 +132,20 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
+      // Own project (v0.22.1): the category picker bug — renaming a non-first parent/child
+      // must keep visible selection correct and version in sync. Runs before backup.
+      name: 'category-picker',
+      testMatch: /category-picker\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
+      // Own project (v0.22.1): debt deletion and honest awaiting status. Mutates debts,
+      // so runs before backup.
+      name: 'debt-lifecycle',
+      testMatch: /debt-lifecycle\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
       name: 'backup',
       testMatch: /backup\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },

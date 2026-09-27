@@ -3,6 +3,7 @@ import {
   ArchivePotForm,
   DebtEditForm,
   DebtForm,
+  DeleteDebtForm,
   ExternalMovementEditForm,
   LoanMovementForm,
   OtherMovementForm,
@@ -349,7 +350,7 @@ export default async function PotsPage({
             <p className="mb-3 text-sm text-ink-muted">No debts tracked.</p>
           ) : (
             <ul className="mb-4 divide-y divide-border-hairline">
-              {debts.map(({ debt, balancePence, movementCount }) => (
+              {debts.map(({ debt, balancePence, movementCount, totalMovementCount }) => (
                 <li key={debt.id} id={`debt-${debt.id}`} className="py-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                     <span className="font-medium">
@@ -359,14 +360,16 @@ export default async function PotsPage({
                       </span>
                     </span>
                     <span
-                      className={`tabular-nums ${balancePence === 0 ? 'text-ink-muted' : 'font-semibold text-ink'}`}
+                      className={`tabular-nums ${balancePence === 0 && movementCount === 0 ? 'text-ink-muted' : balancePence === 0 ? 'text-ink-muted' : 'font-semibold text-ink'}`}
                     >
-                      {debtBalanceLabel(debt, balancePence)}
+                      {debtBalanceLabel(debt, balancePence, movementCount)}
                     </span>
                   </div>
                   <p className="text-xs text-ink-muted">
                     {movementCount === 0
-                      ? 'no movements yet'
+                      ? totalMovementCount === 0
+                        ? 'no movements yet'
+                        : 'no effective movements — all voided'
                       : `${movementCount} movement${movementCount === 1 ? '' : 's'}`}
                     {debt.note !== null && debt.note !== '' ? ` — ${debt.note}` : ''}
                   </p>
@@ -408,6 +411,25 @@ export default async function PotsPage({
                       />
                     </div>
                   </details>
+                  {totalMovementCount === 0 ? (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs font-medium text-danger">
+                        Delete
+                      </summary>
+                      <div className="mt-2">
+                        <DeleteDebtForm
+                          debtId={debt.id}
+                          version={debt.version}
+                          counterparty={debt.counterparty}
+                          direction={debt.direction}
+                          hasExpectedInflow={
+                            debt.expectedInflowAmountPence !== null &&
+                            debt.expectedInflowDayOfMonth !== null
+                          }
+                        />
+                      </div>
+                    </details>
+                  ) : null}
                 </li>
               ))}
             </ul>
