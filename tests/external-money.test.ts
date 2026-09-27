@@ -166,8 +166,13 @@ describe('debts: tracking who owes whom (SPEC §10.2)', () => {
         actor: ACTOR,
         now: NOW,
       });
-      assert.deepEqual(debtBalance(fx.db, owe), { balancePence: 0, movementCount: 0 });
-      assert.equal(debtBalanceLabel(owe, 0), 'settled');
+      assert.deepEqual(debtBalance(fx.db, owe), {
+        balancePence: 0,
+        movementCount: 0,
+        totalMovementCount: 0,
+      });
+      assert.equal(debtBalanceLabel(owe, 0, 0), 'Awaiting first payment');
+      assert.equal(debtBalanceLabel(owe, 0, 1), 'settled');
 
       createExternalMovement(fx.db, {
         potId: fx.pots.alexCash.id,
@@ -179,8 +184,12 @@ describe('debts: tracking who owes whom (SPEC §10.2)', () => {
         actor: ACTOR,
         now: NOW,
       });
-      assert.deepEqual(debtBalance(fx.db, owe), { balancePence: 100000, movementCount: 1 });
-      assert.equal(debtBalanceLabel(owe, 100000), 'we owe £1,000.00');
+      assert.deepEqual(debtBalance(fx.db, owe), {
+        balancePence: 100000,
+        movementCount: 1,
+        totalMovementCount: 1,
+      });
+      assert.equal(debtBalanceLabel(owe, 100000, 1), 'we owe £1,000.00');
 
       createExternalMovement(fx.db, {
         potId: fx.pots.main.id,
@@ -192,7 +201,11 @@ describe('debts: tracking who owes whom (SPEC §10.2)', () => {
         actor: ACTOR,
         now: NOW,
       });
-      assert.deepEqual(debtBalance(fx.db, owe), { balancePence: 75000, movementCount: 2 });
+      assert.deepEqual(debtBalance(fx.db, owe), {
+        balancePence: 75000,
+        movementCount: 2,
+        totalMovementCount: 2,
+      });
 
       // A voided repayment is history, not a balance.
       const repaid = createExternalMovement(fx.db, {
@@ -212,7 +225,11 @@ describe('debts: tracking who owes whom (SPEC §10.2)', () => {
         reason: 'entered twice',
         now: NOW,
       });
-      assert.deepEqual(debtBalance(fx.db, owe), { balancePence: 75000, movementCount: 2 });
+      assert.deepEqual(debtBalance(fx.db, owe), {
+        balancePence: 75000,
+        movementCount: 2,
+        totalMovementCount: 3,
+      });
 
       // They-owe mirrors: out (lent) raises, in (repaid to us) lowers.
       const owed = createDebt(fx.db, {
@@ -241,8 +258,12 @@ describe('debts: tracking who owes whom (SPEC §10.2)', () => {
         actor: ACTOR,
         now: NOW,
       });
-      assert.deepEqual(debtBalance(fx.db, owed), { balancePence: -5000, movementCount: 2 });
-      assert.equal(debtBalanceLabel(owed, -5000), 'overpaid £50.00');
+      assert.deepEqual(debtBalance(fx.db, owed), {
+        balancePence: -5000,
+        movementCount: 2,
+        totalMovementCount: 2,
+      });
+      assert.equal(debtBalanceLabel(owed, -5000, 2), 'overpaid £50.00');
     } finally {
       fx.close();
     }
