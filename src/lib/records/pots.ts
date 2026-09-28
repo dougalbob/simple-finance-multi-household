@@ -1,9 +1,10 @@
 import { desc, eq, or } from 'drizzle-orm';
-import { recordAudit } from '../audit';
+import { recordAudit, type DbTx } from '../audit';
 import type { Db } from '../db/client';
 import {
   checkpoints,
   externalMovements,
+  people,
   pots,
   purchases,
   receipts,
@@ -28,6 +29,8 @@ export interface Pot {
   label: string;
   kind: PotKind;
   sortOrder: number;
+  /** The person this pot belongs to; null = shared (v0.28.0, decision 178). */
+  ownerPersonId: number | null;
   overdraftLimitPence: number | null;
   warningThresholdPence: number | null;
   creditCardPaymentDayOfMonth: number | null;
@@ -73,6 +76,8 @@ export interface CreatePotInput {
   label: string;
   kind: PotKind;
   sortOrder?: number;
+  /** The person this pot belongs to; omit/null = shared (decision 178). */
+  ownerPersonId?: number | null;
   overdraftLimitPence?: number | null;
   warningThresholdPence?: number | null;
   actor: string;
@@ -81,15 +86,25 @@ export interface CreatePotInput {
 
 export function createPot(db: Db, input: CreatePotInput): Pot {
   const now = input.now ?? new Date();
+  const ownerPersonId = input.ownerPersonId ?? null;
+  // Cash pots have no overdraft and no warning threshold — those datapoints
+  // describe a bank facility or a credit line, not counted notes (decision
+  // 178). The same rule editPot applies keeps every path consistent.
+  const limitPence = input.kind === 'cash' ? null : (input.overdraftLimitPence ?? null);
+  const thresholdPence = input.kind === 'cash' ? null : (input.warningThresholdPence ?? null);
   return db.transaction((tx) => {
+    if (ownerPersonId !== null && !personExists(tx, ownerPersonId)) {
+      throw new InvalidPotInputError('That person does not exist, so the pot cannot be theirs.');
+    }
     const inserted = tx
       .insert(pots)
       .values({
         label: input.label,
         kind: input.kind,
         sortOrder: input.sortOrder ?? 0,
-        overdraftLimitPence: input.overdraftLimitPence ?? null,
-        warningThresholdPence: input.warningThresholdPence ?? null,
+        ownerPersonId,
+        overdraftLimitPence: limitPence,
+        warningThresholdPence: thresholdPence,
         createdAt: now,
         updatedAt: now,
       })
@@ -110,6 +125,12 @@ export function createPot(db: Db, input: CreatePotInput): Pot {
     });
     return pot;
   });
+}
+
+/** A person this pot could belong to must exist (decision 178). */
+function personExists(db: Db | DbTx, personId: number): boolean {
+  const row = db.select({ id: people.id }).from(people).where(eq(people.id, personId)).get();
+  return row !== undefined;
 }
 
 export interface Checkpoint {
@@ -197,6 +218,8 @@ export function addCheckpoint(db: Db, input: AddCheckpointInput): Checkpoint {
 export interface EditPotPatch {
   label?: string;
   kind?: PotKind;
+  /** undefined = unchanged; null = shared/no owner (decision 178). */
+  ownerPersonId?: number | null;
   /** undefined = unchanged; null = no limit. */
   overdraftLimitPence?: number | null;
   /** undefined = unchanged; null = no warning threshold. */
@@ -224,11 +247,13 @@ export class InvalidPotInputError extends Error {
 }
 
 /**
- * Correct a pot's context (Settings page, SPEC §15.2): label, type and the
- * overdraft context (authorised limit + warning threshold, SPEC §4, §8).
- * Version-guarded and audited like every other shared edit; the threshold
- * must sit inside the limit — a threshold with no limit is a threshold for
- * nothing.
+ * Correct a pot's context (SPEC §15.2): label, type, owner (decision 178)
+ * and the overdraft context (authorised limit + warning threshold, SPEC §4,
+ * §8). Version-guarded and audited like every other shared edit; the
+ * threshold must sit inside the limit — a threshold with no limit is a
+ * threshold for nothing. A cash pot carries no limit or threshold at all:
+ * setting them is refused by the kind rules above, and switching a pot's
+ * kind to cash clears them rather than leaving stale numbers behind.
  */
 export function editPot(db: Db, input: EditPotInput): Pot {
   const now = input.now ?? new Date();
@@ -242,14 +267,27 @@ export function editPot(db: Db, input: EditPotInput): Pot {
     const label = patch.label === undefined ? current.label : checkedPotLabel(patch.label);
     const kind: PotKind =
       patch.kind === undefined ? current.kind : (checkedPotKind(patch.kind) as PotKind);
+    const ownerPersonId =
+      patch.ownerPersonId === undefined ? current.ownerPersonId : patch.ownerPersonId;
+    if (ownerPersonId !== null && !personExists(tx, ownerPersonId)) {
+      throw new InvalidPotInputError('That person does not exist, so the pot cannot be theirs.');
+    }
+    // Cash pots carry no overdraft and no warning threshold — hiding the
+    // fields on the page would otherwise leave stale numbers silently
+    // driving warnings (decision 178). Same shape as the card settings
+    // below: datapoints that do not apply are null by definition.
     const limit =
-      patch.overdraftLimitPence === undefined
-        ? current.overdraftLimitPence
-        : patch.overdraftLimitPence;
+      kind === 'cash'
+        ? null
+        : patch.overdraftLimitPence === undefined
+          ? current.overdraftLimitPence
+          : patch.overdraftLimitPence;
     const threshold =
-      patch.warningThresholdPence === undefined
-        ? current.warningThresholdPence
-        : patch.warningThresholdPence;
+      kind === 'cash'
+        ? null
+        : patch.warningThresholdPence === undefined
+          ? current.warningThresholdPence
+          : patch.warningThresholdPence;
     assertPotLimitContext(kind, label, limit, threshold);
     const cardSettings =
       kind === 'credit-card'
@@ -284,6 +322,7 @@ export function editPot(db: Db, input: EditPotInput): Pot {
       .set({
         label,
         kind,
+        ownerPersonId,
         overdraftLimitPence: limit,
         warningThresholdPence: threshold,
         creditCardPaymentDayOfMonth: cardSettings.paymentDayOfMonth,

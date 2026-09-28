@@ -88,7 +88,7 @@ export default async function HomePage() {
               an expected income schedule (for example a monthly salary). Record a checkpoint in
               Quick Entry → Balance or on{' '}
               <Link href="/pots" className="font-medium text-accent hover:underline">
-                Accounts &amp; Pots
+                Accounts, Pots &amp; Checkpoints
               </Link>
               , then add the income schedule in Recurring.
             </p>
@@ -139,7 +139,7 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
         <p className="text-sm text-ink-soft">
           Record a balance checkpoint in Quick Entry → Balance or on{' '}
           <Link href="/pots" className="font-medium text-accent hover:underline">
-            Accounts &amp; Pots
+            Accounts, Pots &amp; Checkpoints
           </Link>{' '}
           and the household estimate appears here. Unreported pots never get an estimate — the app
           does not guess balances.

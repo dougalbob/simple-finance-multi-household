@@ -54,6 +54,10 @@ function seed(): void {
   const todayIso = toLocalDateString(now);
   const today = new Date(`${todayIso}T12:00:00Z`);
 
+  // People come first now (decision 178): the cash pots carry an Owner, the
+  // same link the till's Checkpoint cash card reads.
+  const alex = createPerson(db, { label: 'Alex', actor: ACTOR, now });
+  const sam = createPerson(db, { label: 'Sam', actor: ACTOR, now });
   const main = createPot(db, {
     label: 'Main account',
     kind: 'bank',
@@ -63,18 +67,29 @@ function seed(): void {
     now,
   });
   const salary = createPot(db, { label: 'Salary account', kind: 'bank', actor: ACTOR, now });
-  const alexCash = createPot(db, { label: "Alex's cash", kind: 'cash', actor: ACTOR, now });
-  const samCash = createPot(db, { label: "Sam's cash", kind: 'cash', actor: ACTOR, now });
+  const alexCash = createPot(db, {
+    label: "Alex's cash",
+    kind: 'cash',
+    ownerPersonId: alex.id,
+    actor: ACTOR,
+    now,
+  });
+  const samCash = createPot(db, {
+    label: "Sam's cash",
+    kind: 'cash',
+    ownerPersonId: sam.id,
+    actor: ACTOR,
+    now,
+  });
 
   // The till form's starting pot is a setting (v0.9.0) — the seed sets it the
   // way a household would, and the specs prove the form honours it.
   setDefaultPurchasePotId(db, main.id, ACTOR, now);
 
-  const alex = createPerson(db, { label: 'Alex', actor: ACTOR, now });
-  const sam = createPerson(db, { label: 'Sam', actor: ACTOR, now });
   // "Signs in as" (v0.11.0, decision 146): the dev identity is Alex, so the
-  // till opens with Paid by = Alex and the Fuel tab on Alex's Vehicle A. The
-  // fuel spec moves the link to Sam and back to prove the default follows it.
+  // till opens with Paid by = Alex, the Fuel tab on Alex's Vehicle A, and the
+  // Checkpoint cash card locked on Alex's cash (decision 178). The fuel spec
+  // moves the link to Sam and back to prove the default follows it.
   setPersonEmail(db, { id: alex.id, email: ACTOR, allowedEmails: [ACTOR], actor: ACTOR, now });
   const vehicleA = createVehicle(db, {
     label: 'Vehicle A',

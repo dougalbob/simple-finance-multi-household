@@ -77,8 +77,17 @@ export interface EntryPotOption {
   label: string;
   /** Cash hides stale balances; card estimates are shown as amounts owed. */
   kind: 'bank' | 'cash' | 'credit-card';
+  /** The person this pot belongs to; null = shared (decision 178). */
+  ownerPersonId: number | null;
   /** The last reported balance (SPEC §5); null when never checkpointed, or for cash. */
   checkpoint: EntryCheckpoint | null;
+  /**
+   * Cash-only: when the pot was last counted, rendered on the server
+   * ("2 days ago"). The amount itself is deliberately not sent — the till
+   * never shows a stale cash figure (SPEC §15.1), but "when did I last
+   * count" is exactly what the Checkpoint cash card is for (decision 178).
+   */
+  cashLastCountedLabel: string | null;
   /** Available now (SPEC §7.1); null when the pot has no checkpoint. */
   estimatePence: number | null;
   /** What is left after this pot's own bills leave, before income lands (SPEC §7.7). */
@@ -206,6 +215,11 @@ export function QuickEntry({
           <h2 id="quick-entry-heading" className="mt-1 text-xl font-semibold">
             Record it while it is fresh
           </h2>
+          {/* Decision 178: cash checkpoints are a till-side habit, so the
+              signed-in person's own cash pot is one tap away here — a small
+              disclosure card that opens above the description, not a fifth
+              tab. Hidden entirely when the household has no cash pots. */}
+          <CashCheckpointDisclosure data={data} ready={ready} />
           <p className="mt-1 max-w-xl text-sm text-ink-ghost">
             Mobile-first entry. Reported balances stay labelled as checkpoints; nothing here is a
             bank connection.
@@ -242,6 +256,162 @@ export function QuickEntry({
         {mode === 'move' ? <MoveForm data={data} /> : null}
       </div>
     </section>
+  );
+}
+
+const CASH_CHECKPOINT_ID = 'cash-checkpoint';
+
+/**
+ * The till's cash shortcut (v0.28.0, decision 178): a collapsed
+ * "Checkpoint cash" button that opens a small card — the signed-in person's
+ * own cash pot (the pot whose Owner is them, decision 178), a counted
+ * amount, and Save. The household checks cash far more often than they
+ * expected, and digging through Balance's all-pots select every time was
+ * the friction. It is a disclosure above the description text, not a tab:
+ * the four tabs stay as they are, and the card disappears entirely for a
+ * household with no cash pots.
+ *
+ * The pot is locked (shown as a name, no picker) only when exactly one cash
+ * pot belongs to the signed-in person — the same person the Paid by default
+ * comes from (decision 146). Anything else — no owner set, sign-in not
+ * linked, more than one match — falls back to a cash-pots-only select, so
+ * the card always works; the pot it will checkpoint is always visible.
+ * The amount never shows a stale figure and the form never autofocuses
+ * (decision 151); a successful save clears the amount so a second tap
+ * cannot double-record (the spirit of decision 174).
+ */
+function CashCheckpointDisclosure({ data, ready }: { data: QuickEntryData; ready: boolean }) {
+  const [open, setOpen] = useState(false);
+  const cashPots = data.pots.filter((pot) => pot.kind === 'cash');
+  if (cashPots.length === 0) return null;
+  const myCashPots =
+    data.defaultPersonId === null
+      ? []
+      : cashPots.filter((pot) => pot.ownerPersonId === data.defaultPersonId);
+  const lockedPot = myCashPots.length === 1 ? (myCashPots[0] ?? null) : null;
+  return (
+    <div inert={!ready} className="pt-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={`${CASH_CHECKPOINT_ID}-card`}
+        onClick={() => setOpen((value) => !value)}
+        className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+          open ? 'bg-surface text-ink' : 'bg-till-inset text-till-ink ring-1 ring-accent-300/40'
+        }`}
+      >
+        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        Checkpoint cash
+      </button>
+      {open ? (
+        <CashCheckpointCard
+          id={`${CASH_CHECKPOINT_ID}-card`}
+          cashPots={cashPots}
+          lockedPot={lockedPot}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CashCheckpointCard({
+  id,
+  cashPots,
+  lockedPot,
+}: {
+  id: string;
+  cashPots: EntryPotOption[];
+  lockedPot: EntryPotOption | null;
+}) {
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(
+    addCheckpointAction,
+    initialActionState,
+  );
+  const [potId, setPotId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const submitGuard = useRef(false);
+  useEffect(() => {
+    if (!pending) submitGuard.current = false;
+  }, [pending]);
+  // A save hands the amount back empty (decision 174's rule, applied here):
+  // Save greys out until the next counted figure, so the confirmation stays
+  // on screen without an accidental second checkpoint one tap away. Keyed on
+  // the state object, never on the message — two identical saves produce the
+  // identical string — and never on `data`, which a revalidation refreshes.
+  useEffect(() => {
+    if (state.status === 'ok') {
+      setAmount('');
+      setNote('');
+    }
+  }, [state]);
+  function guardSubmit(event: FormEvent<HTMLFormElement>) {
+    if (submitGuard.current) event.preventDefault();
+    submitGuard.current = true;
+  }
+  return (
+    <div id={id} className="mt-2 max-w-md rounded-xl bg-surface p-3 text-ink shadow-sm">
+      <form action={formAction} onSubmit={guardSubmit}>
+        {lockedPot !== null ? (
+          <>
+            <input type="hidden" name="potId" value={lockedPot.id} />
+            <p className="text-sm font-semibold text-ink-emphasis">
+              {lockedPot.label}
+              <span className="ml-2 rounded-full bg-accent-100 px-2 py-0.5 text-xs font-medium text-accent-900">
+                your cash pot
+              </span>
+            </p>
+            {lockedPot.cashLastCountedLabel !== null ? (
+              <p className="mt-0.5 text-xs text-ink-muted">
+                Last counted {lockedPot.cashLastCountedLabel}.
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs text-ink-muted">Not counted yet.</p>
+            )}
+          </>
+        ) : (
+          <SelectField
+            label="Which cash pot"
+            name="potId"
+            value={potId}
+            onChange={setPotId}
+            options={cashPots.map((pot) => ({ value: pot.id, label: pot.label }))}
+          />
+        )}
+        <div className="mt-3">
+          <Field label="Counted amount" hint="Count the notes and enter the total.">
+            <input
+              name="amount"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              inputMode="decimal"
+              required
+              placeholder="0.00"
+              className={`${inputClass} text-2xl font-semibold tabular-nums`}
+            />
+          </Field>
+        </div>
+        <div className="mt-3">
+          <Field label="Note (optional)">
+            <input
+              name="note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              maxLength={280}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+        <button
+          type="submit"
+          disabled={pending || (lockedPot === null && potId === '') || parsePence(amount) === null}
+          className="mt-3 min-h-[48px] w-full rounded-lg bg-till px-5 py-3 font-semibold text-till-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        >
+          {pending ? 'Saving…' : 'Save checkpoint'}
+        </button>
+        <EntryMessage state={state} />
+      </form>
+    </div>
   );
 }
 

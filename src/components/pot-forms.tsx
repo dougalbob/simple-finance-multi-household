@@ -30,7 +30,7 @@ function FormMessage({ status, message }: { status: string; message: string | nu
   );
 }
 
-export function CreatePotForm() {
+export function CreatePotForm({ people }: { people: Array<{ id: number; label: string }> }) {
   const [state, formAction, pending] = useActionState(createPotAction, initialActionState);
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -61,6 +61,26 @@ export function CreatePotForm() {
           <option value="cash">Cash</option>
           <option value="credit-card">Credit card</option>
         </select>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="pot-owner" className="text-sm font-medium">
+          Owner (optional)
+        </label>
+        <select
+          id="pot-owner"
+          name="ownerPersonId"
+          className="rounded border border-border-strong bg-surface px-3 py-2 text-base"
+        >
+          <option value="">Shared / not assigned</option>
+          {people.map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-ink-muted">
+          A cash pot with an owner opens for that person in Quick Entry → Checkpoint cash.
+        </p>
       </div>
       <button
         type="submit"

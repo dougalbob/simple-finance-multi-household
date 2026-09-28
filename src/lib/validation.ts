@@ -459,6 +459,8 @@ export const editPotEntrySchema = z.object({
     .min(1, 'Give the pot a name')
     .max(60, 'Keep the name to 60 characters or fewer'),
   kind: z.enum(['bank', 'cash', 'credit-card']),
+  /** null = shared / no owner (decision 178). */
+  ownerPersonId: positiveIdSchema.nullable(),
   overdraftLimitPence: nonNegativePenceSchema.nullable(),
   warningThresholdPence: nonNegativePenceSchema.nullable(),
   creditCardPaymentDayOfMonth: z.number().int().min(1).max(31).nullable(),

@@ -146,7 +146,7 @@ export default async function ContractsPage() {
             <p className="mt-3 text-sm text-ink-muted">
               No credit-card pots yet. Add one on{' '}
               <Link className="text-accent hover:underline" href="/pots">
-                Accounts &amp; Pots
+                Accounts, Pots &amp; Checkpoints
               </Link>
               .
             </p>

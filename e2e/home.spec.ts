@@ -890,7 +890,7 @@ test.describe('mobile quick entry', () => {
     const more = [
       'All Transactions',
       'Income',
-      'Accounts & Pots',
+      'Accounts, Pots & Checkpoints',
       'Insights',
       'Settings',
       'Suppliers',
@@ -990,5 +990,32 @@ test.describe('mobile quick entry', () => {
     const after = await page.locator('#money-heading').textContent();
     if (after === null) throw new Error('household heading missing');
     expect(Math.round(parsePounds(after) * 100)).toBe(beforePence);
+  });
+
+  test('the till header offers Checkpoint cash for the signed-in person’s own pot', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    const disclosure = entry.getByRole('button', { name: 'Checkpoint cash' });
+    await expect(disclosure).toBeVisible();
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+
+    // The card opens between the heading and the description, above the
+    // "Mobile-first entry" line (decision 178). Locked on Alex's cash — the
+    // dev identity is Alex, and the seed marks that pot as Alex's.
+    await disclosure.click();
+    const card = entry.locator('#cash-checkpoint-card');
+    await expect(card).toBeVisible();
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    await expect(card.getByText("Alex's cash")).toBeVisible();
+    await expect(card.getByText('your cash pot')).toBeVisible();
+    await expect(entry.getByText('Mobile-first entry', { exact: false })).toBeVisible();
+
+    // Read-only on purpose here: later specs in this project assert seeded
+    // figures, so the card is closed again without saving.
+    await disclosure.click();
+    await expect(card).toHaveCount(0);
   });
 });

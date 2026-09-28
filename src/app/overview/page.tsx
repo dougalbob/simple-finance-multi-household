@@ -83,8 +83,8 @@ export default async function OverviewPage() {
               <p className="mt-1 text-sm text-ink-soft">
                 The liquidity projection appears once a bank or cash pot has a balance checkpoint
                 and an expected income schedule (for example a monthly salary). Record a checkpoint
-                in Quick Entry → Balance or on Accounts &amp; Pots, then add the income schedule in
-                Recurring.
+                in Quick Entry → Balance or on Accounts, Pots &amp; Checkpoints, then add the income
+                schedule in Recurring.
               </p>
             </section>
           )}
@@ -152,14 +152,14 @@ function MoneyRow({
           </p>
         ) : null}
         <Link href="/pots" className="text-sm font-medium text-accent hover:underline">
-          Accounts &amp; Pots →
+          Accounts, Pots &amp; Checkpoints →
         </Link>
       </div>
       {money.householdAvailablePence === null ? (
         <p className="text-sm text-ink-soft">
-          Record a balance checkpoint in Quick Entry → Balance or on Accounts &amp; Pots and the
-          household estimate appears here. Unreported pots never get an estimate — the app does not
-          guess balances.
+          Record a balance checkpoint in Quick Entry → Balance or on Accounts, Pots &amp;
+          Checkpoints and the household estimate appears here. Unreported pots never get an estimate
+          — the app does not guess balances.
         </p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">

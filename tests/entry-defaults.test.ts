@@ -12,6 +12,7 @@ import {
   InvalidPersonEmailError,
   setPersonEmail,
 } from '../src/lib/records/people';
+import { addCheckpoint } from '../src/lib/records/pots';
 import { createPurchase, voidPurchase } from '../src/lib/records/purchases';
 import { createHouseholdFixture, type HouseholdFixture } from './household';
 
@@ -202,5 +203,40 @@ describe('fuel suppliers for the Fuel form', () => {
     );
     assert.ok(data.suppliers.some((supplier) => supplier.name === 'Costa Coffee'));
     assert.equal(listFuelSupplierIds(fx.db).length, 2);
+  });
+});
+
+describe('buildEntryData — cash pot ownership and the counted label (decision 178)', () => {
+  let fx: HouseholdFixture;
+  before(async () => {
+    fx = await createHouseholdFixture();
+  });
+  after(() => fx.close());
+  const NOW = new Date('2026-09-20T17:00:00Z');
+
+  it('pots carry their owner; cash keeps the age of its last count, never the amount', () => {
+    const data = buildEntryData(fx.db, NOW, 'alex@example.com');
+    const alexCash = data.pots.find((pot) => pot.label === "Alex's cash");
+    const samCash = data.pots.find((pot) => pot.label === "Sam's cash");
+    const main = data.pots.find((pot) => pot.label === 'Main account');
+    assert.ok(alexCash && samCash && main);
+    assert.equal(alexCash.ownerPersonId, fx.people.alex.id);
+    assert.equal(samCash.ownerPersonId, fx.people.sam.id);
+    assert.equal(main.ownerPersonId, null);
+    assert.equal(alexCash.cashLastCountedLabel, null, 'never counted yet');
+    assert.equal(main.cashLastCountedLabel, null, 'bank pots do not need it');
+    assert.equal(alexCash.checkpoint, null, 'cash still hides the balance at the till');
+
+    addCheckpoint(fx.db, {
+      potId: fx.pots.alexCash.id,
+      amountPence: 4210,
+      actor: 'alex@example.com',
+      now: NOW,
+    });
+    const recounted = buildEntryData(fx.db, NOW, 'alex@example.com');
+    const countedCash = recounted.pots.find((pot) => pot.label === "Alex's cash");
+    assert.ok(countedCash);
+    assert.equal(countedCash.checkpoint, null, 'still no balance shown');
+    assert.equal(countedCash.cashLastCountedLabel, 'just now');
   });
 });

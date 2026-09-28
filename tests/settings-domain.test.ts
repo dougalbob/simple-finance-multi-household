@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { createHouseholdFixture, type HouseholdFixture } from './household';
-import { editPot, InvalidPotInputError } from '../src/lib/records/pots';
+import {
+  createPot,
+  editPot,
+  InvalidPotInputError,
+  listPotsIncludingArchived,
+} from '../src/lib/records/pots';
+import type { Db } from '../src/lib/db/client';
+
+/** The pot's current version, re-read fresh (earlier edits bump it). */
+function potVersion(db: Db, potId: number): number {
+  const pot = listPotsIncludingArchived(db).find((entry) => entry.id === potId);
+  if (pot === undefined) throw new Error(`test pot ${potId} missing`);
+  return pot.version;
+}
 import {
   createChildCategory,
   createParentCategory,
@@ -77,12 +90,13 @@ describe('settings: pot edits', () => {
 
   it('enforces the overdraft context: threshold needs a limit and sits inside it', () => {
     const { db, pots } = fixture;
-    // Threshold without a limit.
+    // Threshold without a limit (bank pot — decision 178 moved cash out of
+    // the overdraft rules entirely).
     assert.throws(
       () =>
         editPot(db, {
-          id: pots.alexCash.id,
-          expectedVersion: pots.alexCash.version,
+          id: pots.salary.id,
+          expectedVersion: pots.salary.version,
           actor: ACTOR,
           now: NOW,
           patch: { overdraftLimitPence: null, warningThresholdPence: 1000 },
@@ -93,8 +107,8 @@ describe('settings: pot edits', () => {
     assert.throws(
       () =>
         editPot(db, {
-          id: pots.alexCash.id,
-          expectedVersion: pots.alexCash.version,
+          id: pots.salary.id,
+          expectedVersion: pots.salary.version,
           actor: ACTOR,
           now: NOW,
           patch: { overdraftLimitPence: 5000, warningThresholdPence: 6000 },
@@ -105,8 +119,8 @@ describe('settings: pot edits', () => {
     assert.throws(
       () =>
         editPot(db, {
-          id: pots.alexCash.id,
-          expectedVersion: pots.alexCash.version,
+          id: pots.salary.id,
+          expectedVersion: pots.salary.version,
           actor: ACTOR,
           now: NOW,
           patch: { overdraftLimitPence: 0 },
@@ -115,8 +129,8 @@ describe('settings: pot edits', () => {
     );
     // Blank = cleared, and equal is allowed (threshold == limit).
     const cleared = editPot(db, {
-      id: pots.alexCash.id,
-      expectedVersion: pots.alexCash.version,
+      id: pots.salary.id,
+      expectedVersion: pots.salary.version,
       actor: ACTOR,
       now: NOW,
       patch: { overdraftLimitPence: null, warningThresholdPence: null },
@@ -124,13 +138,83 @@ describe('settings: pot edits', () => {
     assert.equal(cleared.overdraftLimitPence, null);
     assert.equal(cleared.warningThresholdPence, null);
     const equal = editPot(db, {
-      id: pots.alexCash.id,
+      id: pots.salary.id,
       expectedVersion: cleared.version,
       actor: ACTOR,
       now: NOW,
       patch: { overdraftLimitPence: 20000, warningThresholdPence: 20000 },
     });
     assert.equal(equal.warningThresholdPence, 20000);
+  });
+
+  it('a cash pot carries no overdraft or threshold, and an owner who exists (decision 178)', () => {
+    const { db, pots, people } = fixture;
+    // Asking for a limit/threshold on a cash pot is not an error — it is
+    // simply not a thing a cash pot has. The values land as null.
+    const cash = editPot(db, {
+      id: pots.alexCash.id,
+      expectedVersion: pots.alexCash.version,
+      actor: ACTOR,
+      now: NOW,
+      patch: { overdraftLimitPence: 5000, warningThresholdPence: 1000 },
+    });
+    assert.equal(cash.overdraftLimitPence, null);
+    assert.equal(cash.warningThresholdPence, null);
+
+    // Switching kind to cash clears any limit the pot used to carry.
+    const banked = editPot(db, {
+      id: pots.salary.id,
+      expectedVersion: potVersion(db, pots.salary.id),
+      actor: ACTOR,
+      now: NOW,
+      patch: { kind: 'cash' },
+    });
+    assert.equal(banked.kind, 'cash');
+    assert.equal(banked.overdraftLimitPence, null);
+    assert.equal(banked.warningThresholdPence, null);
+    const backToBank = editPot(db, {
+      id: pots.salary.id,
+      expectedVersion: banked.version,
+      actor: ACTOR,
+      now: NOW,
+      patch: { kind: 'bank' },
+    });
+    assert.equal(backToBank.kind, 'bank');
+
+    // Owner: a real person can be set and cleared; an unknown one is refused.
+    const owned = editPot(db, {
+      id: pots.alexCash.id,
+      expectedVersion: cash.version,
+      actor: ACTOR,
+      now: NOW,
+      patch: { ownerPersonId: people.alex.id },
+    });
+    assert.equal(owned.ownerPersonId, people.alex.id);
+    const shared = editPot(db, {
+      id: pots.alexCash.id,
+      expectedVersion: owned.version,
+      actor: ACTOR,
+      now: NOW,
+      patch: { ownerPersonId: null },
+    });
+    assert.equal(shared.ownerPersonId, null);
+    assert.throws(
+      () =>
+        editPot(db, {
+          id: pots.alexCash.id,
+          expectedVersion: shared.version,
+          actor: ACTOR,
+          now: NOW,
+          patch: { ownerPersonId: 424242 },
+        }),
+      InvalidPotInputError,
+    );
+    // createPot refuses an unknown owner too.
+    assert.throws(
+      () =>
+        createPot(db, { label: 'Ghost cash', kind: 'cash', ownerPersonId: 424242, actor: ACTOR }),
+      InvalidPotInputError,
+    );
   });
 });
 

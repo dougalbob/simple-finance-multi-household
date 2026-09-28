@@ -128,6 +128,8 @@ export interface PotEditFormProps {
   version: number;
   label: string;
   kind: 'bank' | 'cash' | 'credit-card';
+  ownerPersonId: number | null;
+  people: Array<{ id: number; label: string }>;
   overdraftLimitPence: number | null;
   warningThresholdPence: number | null;
   creditCardPaymentDayOfMonth: number | null;
@@ -140,12 +142,17 @@ export interface PotEditFormProps {
 const penceToPounds = (pence: number | null) => (pence === null ? '' : (pence / 100).toFixed(2));
 
 /**
- * Pot editor (label, type, overdraft limit and warning threshold — decision
- * 68). Blank limit/threshold clears the value; the domain layer enforces
- * “threshold requires a limit, threshold ≤ limit”.
+ * Pot editor (label, type, owner — decision 178 — overdraft limit and
+ * warning threshold — decision 68). Blank limit/threshold clears the value;
+ * the domain layer enforces “threshold requires a limit, threshold ≤ limit”.
+ * Cash pots show no limit/threshold fields: those datapoints describe a bank
+ * facility or a credit line, not counted notes, and the domain clears them
+ * for cash (decision 178). Changing the type select does not reveal the
+ * fields in this render — save the kind change first and edit again.
  */
 export function PotEditForm(props: PotEditFormProps) {
   const [state, formAction, pending] = useActionState(editPotAction, initialActionState);
+  const cashPot = props.kind === 'cash';
   return (
     <form action={formAction} className="flex flex-col gap-2" id={`pot-edit-${props.potId}`}>
       <input type="hidden" name="potId" value={props.potId} />
@@ -182,35 +189,64 @@ export function PotEditForm(props: PotEditFormProps) {
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor={`pot-${props.potId}-limit`} className={labelClass}>
-            {props.kind === 'credit-card'
-              ? 'Credit limit (£, blank clears)'
-              : 'Overdraft limit (£, blank clears)'}
+          <label htmlFor={`pot-${props.potId}-owner`} className={labelClass}>
+            Owner
           </label>
-          <input
-            id={`pot-${props.potId}-limit`}
-            name="overdraftLimit"
-            type="text"
-            inputMode="decimal"
-            defaultValue={penceToPounds(props.overdraftLimitPence)}
+          <select
+            id={`pot-${props.potId}-owner`}
+            name="ownerPersonId"
+            defaultValue={props.ownerPersonId?.toString() ?? ''}
             className={inputClass}
-          />
+          >
+            <option value="">Shared / not assigned</option>
+            {props.people.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.label}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={`pot-${props.potId}-threshold`} className={labelClass}>
-            {props.kind === 'credit-card'
-              ? 'Warn when card balance reaches (£, blank clears)'
-              : 'Warning threshold (£, blank clears)'}
-          </label>
-          <input
-            id={`pot-${props.potId}-threshold`}
-            name="warningThreshold"
-            type="text"
-            inputMode="decimal"
-            defaultValue={penceToPounds(props.warningThresholdPence)}
-            className={inputClass}
-          />
-        </div>
+        {cashPot ? (
+          <div className="flex flex-col gap-1">
+            <span className={`${labelClass} opacity-70`}>Overdraft / threshold</span>
+            <span className="rounded-lg bg-canvas px-3 py-2 text-xs text-ink-muted">
+              Not used for cash — counted notes have no overdraft or warning threshold.
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`pot-${props.potId}-limit`} className={labelClass}>
+                {props.kind === 'credit-card'
+                  ? 'Credit limit (£, blank clears)'
+                  : 'Overdraft limit (£, blank clears)'}
+              </label>
+              <input
+                id={`pot-${props.potId}-limit`}
+                name="overdraftLimit"
+                type="text"
+                inputMode="decimal"
+                defaultValue={penceToPounds(props.overdraftLimitPence)}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`pot-${props.potId}-threshold`} className={labelClass}>
+                {props.kind === 'credit-card'
+                  ? 'Warn when card balance reaches (£, blank clears)'
+                  : 'Warning threshold (£, blank clears)'}
+              </label>
+              <input
+                id={`pot-${props.potId}-threshold`}
+                name="warningThreshold"
+                type="text"
+                inputMode="decimal"
+                defaultValue={penceToPounds(props.warningThresholdPence)}
+                className={inputClass}
+              />
+            </div>
+          </>
+        )}
       </div>
       {props.kind === 'credit-card' ? (
         <fieldset className="rounded-lg border border-border-hairline p-3">

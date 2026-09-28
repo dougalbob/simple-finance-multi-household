@@ -390,6 +390,14 @@ empty — the fetch was blocked.
   phone. One repo-level trap worth knowing here: the Playwright projects share one `.e2e-data` with
   `workers: 1`, so `mobile` runs before `desktop`; a "five most recent" assertion must be checked
   against the **whole** suite, not just its own project.
+- **2026-09-28 (v0.28.0 checkpoint cash, session `arena/01a0e796-simple-finance`):** entry 8
+  re-proved an eighth time in a fresh sandbox — install, `executablePath()`, hand-inflated
+  `al2023.tar.br`, `LD_LIBRARY_PATH=/tmp/al2023/lib`, throwaway overlay — and the full suite,
+  now **112 tests** across every project (new `cash-checkpoint` project), went green in ~8.5
+  minutes. One new note for phone/desktop layouts: assert **DOM order**
+  (`compareDocumentPosition`) for "card A comes before card B" — at laptop width the pots page's
+  leading cards sit side by side, so equal `getBoundingClientRect().top` is *expected*, and pixel
+  tops also raced the stylesheet on a cold first paint.
 - **2026-09-26 (v0.17.0 themes, session `arena/01a0dad7-simple-finance`):** entry 8 re-proved a seventh
   time in a fresh sandbox — install, `executablePath()`, then the full suite **74 tests green in ~4.5
   minutes** (new `theme` project). Two small notes for next time: the al2023 blob can also be inflated

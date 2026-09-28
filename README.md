@@ -116,7 +116,8 @@ configured development identity; a production build ignores the bypass entirely.
 - **At the till (phone):** Quick entry → Purchase — supplier (with its remembered category), total, split
   lines so the total matches exactly, paid-by, date, optional note, optional receipt photo.
 - **Cash and bank checks:** Quick entry → Balance ("Balance now" = ledger balance for a bank, counted
-  amount for cash). Checkpoints are labelled as checkpoints, and never as a bank balance.
+  amount for cash) — or the till's **Checkpoint cash** card, which opens the signed-in person's own
+  cash pot in one tap. Checkpoints are labelled as checkpoints, and never as a bank balance.
 - **Fuel:** Quick entry → Fuel for a vehicle.
 - **Income (laptop):** `/income` — the salary that repeats, scheduled for its day of the month and
   corrected in place (a change applies from the next instance onward), plus one-off money recorded by
