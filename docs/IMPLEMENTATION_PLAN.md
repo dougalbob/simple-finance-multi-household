@@ -2482,3 +2482,15 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     header, page order, cash-card fields and the no-owner fallback through the real Edit pot form.
 
     No new open question (next available remains OQ15).
+
+179. **Overview panel names link to the Purchases behind their figures (2026-09-28, v0.29.0).**
+
+    The month-to-date "Spending, by parent" names are real links to `/purchases?categoryId=<live
+    parent id>&from=<first of this month>&to=<today>`. IDs come from the live `categoryTree(db)`, not
+    names baked into code; Purchases already expands a parent to its children (`childrenOfParent`).
+    Vehicle names in "Running costs" link to `/purchases?targetKind=vehicle&targetId=<vehicle id>&from=<rolling12From>&to=<today>`.
+    Both windows are pinned to the figures (chosen default: yes), rather than inheriting Purchases'
+    last-30-days default. Anchors keep the category or vehicle name as their accessible name. These
+    are navigation-only: no calculation or counted-record rule changes. Desktop browser coverage
+    verifies the links and dates and follows a parent-category link into the filtered list. No schema
+    change or migration; next open question remains OQ15.

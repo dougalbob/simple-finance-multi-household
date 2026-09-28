@@ -879,7 +879,7 @@ Menu pages:
 
 | Page | Contents |
 |---|---|
-| **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; to-payday projection panel (payday date, expected receipts, commitments due, projected day-to-day events, projected low) with "what's in this forecast" expansions including the dated shops/fills list and a debt's expected support when one is in the window (v0.7.0); pot-level "plan a transfer" notice (§7.5); due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars; vehicle rolling-12. Quick-add always visible. Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
+| **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; to-payday projection panel (payday date, expected receipts, commitments due, projected day-to-day events, projected low) with "what's in this forecast" expansions including the dated shops/fills list and a debt's expected support when one is in the window (v0.7.0); pot-level "plan a transfer" notice (§7.5); due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Quick-add always visible. Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
 | **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); inline editing; refund/void/correct with audit trail visible; split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
 | **All Transactions** | Read-only activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. No add, edit or void on the page (§15.3). |
 | **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance, state, contract end date where set); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below; renewals sit under the schedules (beside projection). On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row. |
@@ -1051,11 +1051,14 @@ picker in Settings. Not one page, component or chart changed to make that possib
 ## 16. Insights (initial scope — small and useful)
 
 1. **Month vs previous month** — total spending and by parent category (calendar months), with child
-   drill-down.
+   drill-down. On Overview, each month-to-date parent name links to Purchases filtered to that live
+   parent category (including its children) from the first of the month through today (decision 179); the
+   comparison figures and their counting rules are unchanged.
 2. **Personal comparison** — each person's for-person allocations (e.g. Clothing, Hobbies), side by side,
    per month. Household allocations are **never** attributed to whoever happened to pay.
 3. **Vehicle running costs** — per vehicle: monthly totals and rolling 12-month, by child category
-   (fuel/insurance/maintenance/road tax/parking).
+   (fuel/insurance/maintenance/road tax/parking). On Overview, each vehicle name links to Purchases
+   filtered to that vehicle from `rolling12From` through today (decision 179).
 4. **Projection feedback (honesty loop)** — configured weekly grocery and per-vehicle monthly fuel figures vs
    recent actuals (last 4–8 weeks), so drift is visible and fixable.
 5. **To-payday projection strip** — lives on Overview (§15.2) with the two warning tiers and the pot-level

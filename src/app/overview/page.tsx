@@ -5,6 +5,7 @@ import { QuickEntry } from '@/components/quick-entry';
 import { formatPence } from '@/lib/money';
 import { currentUserFromRequest } from '@/lib/auth/next';
 import { getDbHandle } from '@/lib/db/client';
+import { categoryTree } from '@/lib/records/categories';
 import { getMonthComparisonView, getVehicleCostsView } from '@/lib/records/insights-view';
 import { addDaysLocal } from '@/lib/records/dates';
 import { buildEntryData } from '@/lib/records/entry-view';
@@ -52,6 +53,10 @@ export default async function OverviewPage() {
   }));
   const monthView = getMonthComparisonView(db, now);
   const vehicleView = getVehicleCostsView(db, now);
+  // Month comparison rows carry names only. Resolve parent IDs from the live
+  // category tree so these links remain correct if the household renames a category.
+  const parentCategoryIds = new Map(categoryTree(db).map((parent) => [parent.name, parent.id]));
+  const monthFrom = `${monthView.today.slice(0, 7)}-01`;
   const entryData = buildEntryData(db, now, user.email);
 
   return (
@@ -99,22 +104,41 @@ export default async function OverviewPage() {
             kicker="Spending, by parent"
             caption={`vs ${formatMonthLabel(monthView.previous.month)}`}
           >
-            <MonthBars current={monthView.monthToDate} previous={monthView.previous.summary} />
+            <MonthBars
+              current={monthView.monthToDate}
+              previous={monthView.previous.summary}
+              parentCategoryIds={parentCategoryIds}
+              from={monthFrom}
+              to={monthView.today}
+            />
           </SectionShell>
           <SectionShell title="Vehicles" kicker="Running costs" caption="rolling 12 months">
             <ul className="space-y-2">
-              {vehicleView.map((vehicle) => (
-                <li key={vehicle.vehicleId} className="text-sm">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-medium">{vehicle.label}</span>
-                    <span className="tabular-nums">{formatPence(vehicle.rolling12Pence)}</span>
-                  </div>
-                  <p className="text-xs text-ink-muted">
-                    this month {formatPence(vehicle.monthPence)} · previous{' '}
-                    {formatPence(vehicle.previousMonthPence)} · since {vehicle.rolling12From}
-                  </p>
-                </li>
-              ))}
+              {vehicleView.map((vehicle) => {
+                const params = new URLSearchParams({
+                  targetKind: 'vehicle',
+                  targetId: String(vehicle.vehicleId),
+                  from: vehicle.rolling12From,
+                  to: today,
+                });
+                return (
+                  <li key={vehicle.vehicleId} className="text-sm">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Link
+                        href={`/purchases?${params.toString()}`}
+                        className="font-medium text-accent hover:underline"
+                      >
+                        {vehicle.label}
+                      </Link>
+                      <span className="tabular-nums">{formatPence(vehicle.rolling12Pence)}</span>
+                    </div>
+                    <p className="text-xs text-ink-muted">
+                      this month {formatPence(vehicle.monthPence)} · previous{' '}
+                      {formatPence(vehicle.previousMonthPence)} · since {vehicle.rolling12From}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           </SectionShell>
         </div>
@@ -257,9 +281,15 @@ function formatMonthLabel(month: { year: number; month: number }): string {
 function MonthBars({
   current,
   previous,
+  parentCategoryIds,
+  from,
+  to,
 }: {
   current: import('@/lib/records/insights').SpendingSummary;
   previous: import('@/lib/records/insights').SpendingSummary;
+  parentCategoryIds: Map<string, number>;
+  from: string;
+  to: string;
 }) {
   const parentNames = new Set<string>([
     ...current.byParent.map((entry) => entry.parent),
@@ -282,10 +312,21 @@ function MonthBars({
           {current.byParent.map((entry) => {
             const prevAmount =
               previous.byParent.find((p) => p.parent === entry.parent)?.amountPence ?? 0;
+            const parentId = parentCategoryIds.get(entry.parent);
+            const params = new URLSearchParams({ categoryId: String(parentId), from, to });
             return (
               <li key={entry.parent}>
                 <div className="flex items-baseline justify-between gap-2 text-xs">
-                  <span className="text-ink-soft">{entry.parent}</span>
+                  {parentId === undefined ? (
+                    <span className="text-ink-soft">{entry.parent}</span>
+                  ) : (
+                    <Link
+                      href={`/purchases?${params.toString()}`}
+                      className="text-accent hover:underline"
+                    >
+                      {entry.parent}
+                    </Link>
+                  )}
                   <span className="tabular-nums text-ink-body">
                     {formatPence(entry.amountPence)}
                     <span className="ml-1 text-ink-faint">
