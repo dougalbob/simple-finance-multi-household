@@ -1,3 +1,40 @@
+# Handoff: v0.29.0 — Overview panel names link into filtered Purchases (decision 179)
+
+**v0.28.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `34c785b87ec547ac198385afb6893f1e7b742f9b` (PR #89, from `arena/01a0e796-simple-finance`).
+- PR CI run `36414694257` and `main` CI run `36415738551` green.
+- Annotated tag `v0.28.0` points to that merge commit; Publish run `36416711842` succeeded.
+- Digest `sha256:da74bb0b3132515da7c66445f2f14ef781379121f4110f5d3876918144d6c474` on `v0.28.0` / `latest` / `sha-34c785b`, differing from v0.27.0's `sha256:d037f522…`.
+
+## What changed in v0.29.0
+
+- Overview's month-to-date parent names are real links, named accessibly for the category, to Purchases filtered by the current parent ID from the live `categoryTree(db)` (never hard-coded names or IDs). Purchases' existing parent expansion includes all children.
+- Overview's vehicle names are real links, named accessibly for the vehicle, to Purchases filtered by `targetKind=vehicle` and its `vehicleId`.
+- Chosen default for decision 179: **pin the date windows** to the panel figures. Month-to-date uses the first of this month through today; rolling vehicle costs use `rolling12From` through today. No figure or counting rule changed.
+- No schema change or migration. SPEC §15.2 and §16, decision 179, the five version places, and `docs/RELEASE_NOTES_v0.29.0.md` updated.
+
+## Gates at close
+
+`npm test`: **586 passed** / 139 suites · `npm run typecheck` clean · `npm run format:check` clean ·
+`npm run build` clean (`next-env.d.ts` restored) · `npm audit --omit=dev` zero · Playwright **112 passed**
+across every project via SANDBOX entry 8, including the desktop link/window assertions. The first browser
+run caught an over-escaped digit regex in the new assertion; after correction, the full suite passed.
+
+## What a future session should know
+
+1. **Record v0.29.0's post-merge facts at the top of this file** (merge commit, PR CI and main CI run IDs,
+   annotated tag, Publish run, registry digest and comparison with v0.28.0), per decision 173. This is
+   intentionally the next session's post-merge handoff step.
+2. The parent link resolver is name→ID over the live `categoryTree(db)`, because the month summary rows
+   contain only names. Category names are unique among parent siblings; category records are not deleted.
+3. The query strings deliberately include inclusive `from` and `to` dates so Purchases does not silently
+   fall back to last 30 days. Browser assertions cover both windows and the category link's filtered form.
+4. No data-mutating e2e test was added; all 112 existing project tests pass in their established order.
+5. OQ15 remains the next open question; OQ14 (stale-pot noticed item) is still the household's call.
+
+---
+
 # Handoff: v0.28.0 — checkpoint cash at the till, pot owners, and the renamed pots page (decision 178)
 
 ## What changed

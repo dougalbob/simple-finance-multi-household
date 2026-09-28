@@ -1,6 +1,11 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { addDaysIso, londonToday, waitForFilters, waitForTill } from './support';
 
+function rolling12Start(today: string): string {
+  const [year, month] = today.split('-').map(Number);
+  return new Date(Date.UTC(year ?? 0, (month ?? 1) - 12, 1)).toISOString().slice(0, 10);
+}
+
 /** The schedule list scrolls inside the calendar-height panel (decision 164). */
 async function scheduleRow(page: Page, name: string): Promise<Locator> {
   const row = page
@@ -36,6 +41,37 @@ test.describe('desktop review', () => {
     await expect(page.getByRole('heading', { name: 'Add a pot' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Balance checkpoint' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Recent checkpoints' })).toHaveCount(0);
+
+    // Overview's parent categories and vehicles are honest links to the money
+    // behind their figures, with the same date windows as each panel.
+    const today = londonToday();
+    const monthFrom = `${today.slice(0, 7)}-01`;
+    const groceries = page.getByRole('link', { name: 'Groceries', exact: true });
+    await expect(groceries).toBeVisible();
+    const groceriesUrl = new URL((await groceries.getAttribute('href')) ?? '', 'http://test');
+    expect(groceriesUrl.pathname).toBe('/purchases');
+    expect(groceriesUrl.searchParams.get('categoryId')).toMatch(/^\d+$/);
+    expect(groceriesUrl.searchParams.get('from')).toBe(monthFrom);
+    expect(groceriesUrl.searchParams.get('to')).toBe(today);
+
+    for (const label of ['Vehicle A', 'Vehicle B']) {
+      const vehicleLink = page.getByRole('link', { name: label, exact: true });
+      await expect(vehicleLink).toBeVisible();
+      const vehicleUrl = new URL((await vehicleLink.getAttribute('href')) ?? '', 'http://test');
+      expect(vehicleUrl.pathname).toBe('/purchases');
+      expect(vehicleUrl.searchParams.get('targetKind')).toBe('vehicle');
+      expect(vehicleUrl.searchParams.get('targetId')).toMatch(/^\d+$/);
+      expect(vehicleUrl.searchParams.get('from')).toBe(rolling12Start(today));
+      expect(vehicleUrl.searchParams.get('to')).toBe(today);
+    }
+
+    await groceries.click();
+    await expect(page.getByRole('heading', { name: 'Every recorded purchase' })).toBeVisible();
+    await expect(page.getByLabel('Category')).toHaveValue(
+      groceriesUrl.searchParams.get('categoryId') ?? '',
+    );
+    await expect(page.getByLabel('From date')).toHaveValue(monthFrom);
+    await expect(page.getByLabel('To date')).toHaveValue(today);
   });
 
   test('the desktop bar still lists every page', async ({ page }) => {
