@@ -2427,3 +2427,28 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     bell in top bar and drawer's link list unchanged, Sam's seeded task shows under "Since you last looked"
     and after opening and reloading is no longer new).
 
+
+177. **Closable documents and automatic split remainder (2026-09-28, v0.27.0).**
+
+    Defaults chosen from the household's paste-ready brief without another question: native in-app
+    modal instead of another route (preserves page/scroll), and £100 minus £80 means £20 on Line 1.
+    The contradictory older "+ Add split stops following" sentence is superseded: adding/removing
+    splits preserves auto remainder; manually editing Line 1 takes over until a fresh entry.
+    Assign remaining on Line 1 is also takeover; on another line it recalculates the auto remainder.
+
+    AttachmentViewer uses the authenticated uncached API, a revocable blob URL, native dialog focus
+    trapping, Close/Escape/backdrop, focus return, background scroll lock, filename/size, download,
+    conditional native file sharing, image preview and native PDF iframe with fallback wording.
+    No new tabs, schema, dependency or offline cache. Printing uses the downloaded/native PDF viewer.
+    API failures now explicitly carry private, no-store as well as successful responses.
+
+    Pure remainderLineAmount uses integer pence, treats blank extra drafts as zero, holds on invalid
+    drafts, clears on blank/zero Total, and clamps over-allocation to zero with a warning. Existing
+    exact-total and positive-line validation remains. Tests cover phone/desktop, manual takeover,
+    removal, extra splits, over-allocation, precision and invalid drafts. Viewer tests cover image/PDF,
+    Close/Escape, focus, scroll, API cache policy and a failed load. Full suite also exposed an old
+    supplier-suggestion assertion tied to seed ordering; it now checks a recent option exists before
+    testing the specific filtered matches.
+
+    Single-pass release continues under RELEASE_PROCESS.md, with local Playwright via SANDBOX.md
+    entry 8; temporary config removed before commit. No new open question (next available remains OQ15).

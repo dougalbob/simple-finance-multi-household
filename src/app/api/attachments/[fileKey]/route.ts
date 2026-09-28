@@ -23,10 +23,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   // Route handlers guard themselves from the Request, not from a page context
   // (src/lib/auth/next.ts documents why — this is the same verification path).
   const user = await getCurrentUser(request.headers, loadAppConfig());
-  if (user === null) return new Response('Unauthorized', { status: 401 });
+  if (user === null)
+    return new Response('Unauthorized', {
+      status: 401,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
 
   const { fileKey } = await params;
-  if (!isSafeFileKey(fileKey)) return new Response('Not found', { status: 404 });
+  if (!isSafeFileKey(fileKey))
+    return new Response('Not found', {
+      status: 404,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
 
   const row = getDbHandle()
     .db.select()
@@ -34,7 +42,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     .where(eq(attachments.fileKey, fileKey))
     .get();
   if (row === undefined || row.state !== 'stored') {
-    return new Response('Not found', { status: 404 });
+    return new Response('Not found', {
+      status: 404,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
   }
 
   try {
@@ -51,6 +62,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
       },
     });
   } catch {
-    return new Response('Not found', { status: 404 });
+    return new Response('Not found', {
+      status: 404,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
   }
 }

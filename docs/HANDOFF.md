@@ -1,3 +1,39 @@
+# Handoff: v0.27.0 — closable documents and automatic split remainder (decision 177)
+
+## What changed
+
+- Shared attachment modal fixes the installed-phone PWA trap for purchases, income and suppliers.
+  Close/Escape/backdrop returns to the originating link and scroll; preview, filename/size, Download,
+  and native Share where supported. Failed loads remain closable. Auth/private no-store unchanged;
+  errors now explicitly carry the cache policy too. No offline cache or schema changes.
+- Quick Entry Line 1 remains the remainder after adding splits and changing Total, until explicitly
+  edited. Blank extra lines count as zero only for calculating the remainder; Save validation remains
+  strict. Exhausted/overallocated remainder is zero, never negative, with a warning.
+- Calls made without an answer: modal rather than route; £100 minus £80 means £20; adding splits does
+  not take over (resolves contradictory brief); native PDF preview with download/share fallback,
+  printing through the downloaded file/native viewer, not a separate unreliable mobile print control.
+- Next decision: 178; next OQ: OQ15. See SPEC §15.1 / §23.2 and decision 177.
+- Local browser recipe: docs/SANDBOX.md entry 8. Native iOS PDF rendering/share sheets still require
+  household road-testing; Chromium phone/desktop coverage does not claim real iOS device verification.
+
+## Local verification
+
+583 unit tests and 103 full-suite browser tests passed. After hardening focus return to use the
+explicit originating link (also for touch browsers that do not focus links), the three attachment/
+remainder browser tests passed again. Typecheck, format check, production build and production
+dependency audit passed (zero production vulnerabilities). Temporary Playwright config removed
+before commit. PR/main CI and Publish verification follow through GitHub; final run IDs and digest
+belong in the next session's handoff, per decision 173.
+
+## v0.26.0 — verified previous-release facts
+
+At session start GitHub Latest is v0.26.0, and package API reports one digest
+`sha256:32d3ab66f49e774aabf6a257312d9ecf3c775f2f962462fc6b0c53699f5f8420` carrying
+`v0.26.0`, `latest`, `sha-c1bacc2`. Merge commit is the session base
+`c1bacc277c3fa1c414690c8a79e235c138ee881f`; previous v0.25.0 digest differs.
+
+---
+
 # Handoff: v0.26.0 — the bell: an in-app "needs attention" prompt, with personal tasks (decision 176)
 
 **v0.25.0 — verified post-merge facts (recorded here per decision 173):**
