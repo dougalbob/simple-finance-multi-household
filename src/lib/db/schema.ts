@@ -21,6 +21,13 @@ export const pots = sqliteTable('pots', {
   label: text('label').notNull(),
   kind: text('kind', { enum: ['bank', 'cash', 'credit-card'] }).notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
+  /**
+   * The person this pot belongs to (v0.28.0, decision 178) — the cash-pot
+   * counterpart of a vehicle's Owner. Null = shared/household pot. Only the
+   * Quick Entry "Checkpoint cash" card reads it: the till opens the signed-in
+   * person's own cash pot (decision 146's "who is holding the phone").
+   */
+  ownerPersonId: integer('owner_person_id').references(() => people.id),
   /** Bank overdraft facility or credit-card limit (pence). */
   overdraftLimitPence: integer('overdraft_limit_pence'),
   /** Bank warning threshold or card balance-usage threshold (pence). */

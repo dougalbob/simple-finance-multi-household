@@ -535,3 +535,103 @@ describe('migration 0014: bell_seen and task assignee (decision 176)', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe('migration 0015: pot owner and cash-pot normalisation (decision 178)', () => {
+  const T0 = Date.UTC(2026, 8, 20, 9, 0, 0);
+
+  function tableColumns(raw: Database.Database, table: string): string[] {
+    return (raw.pragma(`table_info(${table})`) as Array<{ name: string }>).map(
+      (column) => column.name,
+    );
+  }
+
+  it('a v0.27.0 database upgrades: pots.owner_person_id, cash limits cleared', async () => {
+    const dir = tmpDataDir('sf-upgrade-0015-');
+    const databasePath = path.join(dir, 'db.sqlite');
+    buildDatabase(databasePath, await migrationsFolderBefore('0015_pot_owner'));
+
+    const seed = new Database(databasePath);
+    try {
+      assert.ok(!tableColumns(seed, 'pots').includes('owner_person_id'), 'owner_person_id not yet');
+      // A pre-0015 cash pot could carry overdraft context (it was never
+      // meaningful, and nothing stopped it). The migration must clear it.
+      seed
+        .prepare(
+          `INSERT INTO pots (label, kind, overdraft_limit_pence, warning_threshold_pence, created_at, updated_at, version)
+           VALUES ('Alex''s cash', 'cash', 5000, 1000, ?, ?, 1)`,
+        )
+        .run(T0, T0);
+      seed
+        .prepare(
+          `INSERT INTO pots (label, kind, overdraft_limit_pence, warning_threshold_pence, created_at, updated_at, version)
+           VALUES ('Main account', 'bank', 80000, 25000, ?, ?, 1)`,
+        )
+        .run(T0, T0);
+    } finally {
+      seed.close();
+    }
+
+    const output = runProductionRunner(dir);
+    assert.match(output, /\[migrate\] database is up to date/);
+    assertEveryJournalEntryAppliedExactlyOnce(databasePath);
+
+    const raw = new Database(databasePath);
+    try {
+      assert.ok(tableColumns(raw, 'pots').includes('owner_person_id'), 'owner_person_id added');
+      const rows = raw
+        .prepare('SELECT label, kind, owner_person_id, overdraft_limit_pence FROM pots ORDER BY id')
+        .all() as Array<{
+        label: string;
+        kind: string;
+        owner_person_id: number | null;
+        overdraft_limit_pence: number | null;
+      }>;
+      assert.deepEqual(rows, [
+        { label: "Alex's cash", kind: 'cash', owner_person_id: null, overdraft_limit_pence: null },
+        {
+          label: 'Main account',
+          kind: 'bank',
+          owner_person_id: null,
+          overdraft_limit_pence: 80000,
+        },
+      ]);
+    } finally {
+      raw.close();
+    }
+
+    // Through the app: an owner can be set on a pot, and a cash pot still
+    // refuses to carry overdraft context.
+    const handle = openDatabase(databasePath);
+    try {
+      const { createPot, editPot } = await import('../src/lib/records/pots');
+      const { createPerson } = await import('../src/lib/records/people');
+      const alex = createPerson(handle.db, {
+        label: 'Alex',
+        actor: 'alex@example.com',
+        now: new Date(T0),
+      });
+      const cashPot = createPot(handle.db, {
+        label: 'Pocket cash',
+        kind: 'cash',
+        ownerPersonId: alex.id,
+        actor: 'alex@example.com',
+        now: new Date(T0),
+      });
+      assert.equal(cashPot.ownerPersonId, alex.id);
+      const owned = editPot(handle.db, {
+        id: cashPot.id,
+        expectedVersion: cashPot.version,
+        actor: 'alex@example.com',
+        patch: { ownerPersonId: null },
+      });
+      assert.equal(owned.ownerPersonId, null);
+    } finally {
+      handle.raw.close();
+    }
+
+    const second = runProductionRunner(dir);
+    assert.match(second, /\[migrate\] database is up to date/);
+    assertEveryJournalEntryAppliedExactlyOnce(databasePath);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

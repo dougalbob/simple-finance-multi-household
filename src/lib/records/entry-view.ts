@@ -108,7 +108,7 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
     };
   });
   return {
-    pots: pots.map(({ id, label, kind }) => {
+    pots: pots.map(({ id, label, kind, ownerPersonId }) => {
       const potView = snapshot.pots.find((entry) => entry.pot.id === id);
       const checkpoint = potView?.latestCheckpoint ?? null;
       const potOutlook = outlook.pots.find((entry) => entry.potId === id);
@@ -116,6 +116,9 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
         id,
         label,
         kind,
+        // The pot's owner (decision 178): the Checkpoint cash card opens the
+        // signed-in person's own cash pot without a pot picker.
+        ownerPersonId,
         // Cash pots show no balance at all (SPEC §15.1): the household counts
         // the notes, and a stale number would be worse than none.
         checkpoint:
@@ -127,6 +130,12 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
                 ageLabel: formatRelativeAge(checkpoint.effectiveAt, now),
                 reportedAtLabel: formatInstantLocal(checkpoint.effectiveAt),
               },
+        // Cash keeps one honest crumb of its checkpoint: when it was counted,
+        // never the amount (decision 178).
+        cashLastCountedLabel:
+          kind === 'cash' && checkpoint !== null
+            ? formatRelativeAge(checkpoint.effectiveAt, now)
+            : null,
         estimatePence: potView?.estimatePence ?? null,
         spendablePence: potOutlook?.spendablePence ?? null,
         shortfallPence: potOutlook?.shortfallPence ?? null,

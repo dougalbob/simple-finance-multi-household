@@ -44,6 +44,11 @@ export async function createHouseholdFixture(
   applyMigrations(handle.db);
   const db = handle.db;
 
+  // People first (decision 178): each cash pot carries an Owner, the link
+  // the till's Checkpoint cash card reads.
+  const alex = createPerson(handle.db, { label: 'Alex', actor, now });
+  const sam = createPerson(handle.db, { label: 'Sam', actor, now });
+
   const main = createPot(handle.db, {
     label: 'Main account',
     kind: 'bank',
@@ -64,6 +69,7 @@ export async function createHouseholdFixture(
     label: "Alex's cash",
     kind: 'cash',
     sortOrder: 2,
+    ownerPersonId: alex.id,
     actor,
     now,
   });
@@ -71,12 +77,10 @@ export async function createHouseholdFixture(
     label: "Sam's cash",
     kind: 'cash',
     sortOrder: 3,
+    ownerPersonId: sam.id,
     actor,
     now,
   });
-
-  const alex = createPerson(handle.db, { label: 'Alex', actor, now });
-  const sam = createPerson(handle.db, { label: 'Sam', actor, now });
 
   const vehicleA = createVehicle(handle.db, {
     label: 'Vehicle A',

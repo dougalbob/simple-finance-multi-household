@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { href: '/recurring', label: 'Recurring' },
   { href: '/horizon', label: 'Horizon' },
   { href: '/income', label: 'Income' },
-  { href: '/pots', label: 'Accounts & Pots' },
+  { href: '/pots', label: 'Accounts, Pots & Checkpoints' },
   { href: '/insights', label: 'Insights' },
   { href: '/charts', label: 'Charts' },
   { href: '/settings', label: 'Settings' },
@@ -41,7 +41,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/transactions', label: 'All Transactions' },
       { href: '/income', label: 'Income' },
-      { href: '/pots', label: 'Accounts & Pots' },
+      { href: '/pots', label: 'Accounts, Pots & Checkpoints' },
       { href: '/insights', label: 'Insights' },
       { href: '/settings', label: 'Settings' },
       { href: '/suppliers', label: 'Suppliers' },

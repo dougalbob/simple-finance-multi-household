@@ -160,7 +160,8 @@ export default async function SettingsPage() {
           <p className="mb-3 text-xs text-ink-muted">
             Bank overdraft thresholds drive the household warning banner. Credit-card limits and
             near-limit thresholds describe card usage only; card pots are excluded from the “plan a
-            transfer” shortfall watch.
+            transfer” shortfall watch. Cash pots have neither — a cash pot’s Owner is what gives
+            them their pot in Quick Entry → Checkpoint cash.
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
             {pots.map((pot) => (
@@ -171,6 +172,8 @@ export default async function SettingsPage() {
                   version={pot.version}
                   label={pot.label}
                   kind={pot.kind}
+                  ownerPersonId={pot.ownerPersonId}
+                  people={people.map(({ id, label }) => ({ id, label }))}
                   overdraftLimitPence={pot.overdraftLimitPence}
                   warningThresholdPence={pot.warningThresholdPence}
                   creditCardPaymentDayOfMonth={pot.creditCardPaymentDayOfMonth}

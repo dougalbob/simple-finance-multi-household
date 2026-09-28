@@ -1,3 +1,66 @@
+# Handoff: v0.28.0 — checkpoint cash at the till, pot owners, and the renamed pots page (decision 178)
+
+## What changed
+
+- **Checkpoint cash (the brief's ask #1):** a collapsed "Checkpoint cash" button in the Quick
+  Entry header, between the heading and the "Mobile-first entry…" line (the household chose this
+  placement from options). It opens a small card locked on the **signed-in person's own cash pot**
+  via the new pot Owner link; a counted amount, optional note, Save. Locked = exactly one cash pot
+  owned by the viewer person (the decision-146 person, `data.defaultPersonId`); anything else falls
+  back to a cash-pots-only select (the household chose this over hiding the card). The card shows
+  the last count's **age only** — cash balances still never appear at the till (§15.1). A save
+  clears the amount (decision 174's rule) and keeps the card open on its confirmation.
+- **Pots gain an optional `owner_person_id` (migration `0015_pot_owner`):** drizzle-kit generated,
+  then extended before shipping with `UPDATE pots SET overdraft/warning = NULL WHERE kind='cash'`
+  (normalisation; editing pre-ship SQL is legal, shipped SQL is not — decision 172). Domain rules:
+  create/edit validate the owner exists; cash pots carry no limit/threshold on any write path
+  (kind switched to cash clears them, like card settings for non-card kinds).
+- **Cash pot cards hide the overdraft/threshold `dl`** on /pots, and the PotEditForm hides the two
+  inputs for cash (a note explains; converting kind needs a second edit to set a limit — stated).
+- **/pots order (the brief's ask #3):** Record a balance checkpoint card, then Add a pot, then the
+  pot cards. **Label (ask #4):** eyebrow "Accounts, pots & checkpoints"; nav/prose "Accounts, Pots
+  & Checkpoints" — site-nav (bar + drawer), /pots header, and the prose links on home, Overview,
+  Horizon and Contracts all updated; the two nav assertions in e2e updated to match.
+
+## Calls made without the household's answer
+
+None — the three open choices (owner-on-pot vs setting vs no link; label wording; no-owner
+fallback) were asked and answered in-session. Everything else follows standing decisions.
+
+## What a future session should know
+
+1. **The `checkpoint` e2e project's spec still posts through the /pots checkpoint card** — it now
+   sits above the pot cards; the locator is `aria-labelledby`, so order didn't break it.
+2. **The new `cash-checkpoint` e2e project** (before `backup`): saves a £42.10 checkpoint on Alex's
+   cash, then rewrites Alex's cash Owner to Shared and back. Projects after it see Owner set.
+   `home.spec`'s new disclosure test is deliberately read-only (opens and closes the card).
+3. **`buildEntryData` now sends `ownerPersonId` and `cashLastCountedLabel` per pot** — cash keeps
+   `checkpoint: null` (no amount at the till) but gains the age label. The household fixture and
+   the e2e seed both link Alex's cash→Alex and Sam's cash→Sam now (people are created first).
+4. **Two `__drizzle_migrations` counts in tests/backup-restore.test.ts moved 15→16** — the next
+   migration bump moves them again; they say "one row per applied migration".
+5. **Backup/restore of a 0015 database is unchanged** (column travels inside the snapshot). A
+   restore of an *older* archive onto a new installation re-runs 0015 on startup via the entrypoint
+   — the upgrade test covers the production runner path.
+6. The label rename touched prose in five page files; a future rename should start from
+   `grep -rn "Accounts" src` plus the site-nav entries and the two e2e nav assertions.
+
+## Gates at close
+
+`npm test` **586 passed** / 139 suites · `npm run typecheck` clean · `npm run format:check` clean ·
+`npm run build` clean (`next-env.d.ts` restored afterwards) · `npm audit --omit=dev` zero.
+Playwright **112 passed** across every project via the SANDBOX entry 8 overlay (103 before, plus 4
+in the new `cash-checkpoint` project and 1 in `home.spec`; the temporary
+`playwright.local.config.ts` was removed before commit).
+
+## Housekeeping still open
+
+- OQ15 remains the next open question; OQ14 (stale-pot noticed item) is still the household's call.
+- The next working session records v0.28.0's post-merge verified facts (merge SHA, digest, run IDs)
+  at the top of this file, as decision 173 requires.
+
+---
+
 # Handoff: v0.27.0 — closable documents and automatic split remainder (decision 177)
 
 ## What changed

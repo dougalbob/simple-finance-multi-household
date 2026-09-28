@@ -48,7 +48,7 @@ test.describe('desktop review', () => {
       'Recurring',
       'Horizon',
       'Income',
-      'Accounts & Pots',
+      'Accounts, Pots & Checkpoints',
       'Insights',
       'Charts',
       'Settings',

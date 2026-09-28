@@ -2452,3 +2452,33 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
 
     Single-pass release continues under RELEASE_PROCESS.md, with local Playwright via SANDBOX.md
     entry 8; temporary config removed before commit. No new open question (next available remains OQ15).
+
+178. **Checkpoint cash at the till; pots gain an owner; cash cards lose the overdraft fields; the pots page leads with recording (2026-09-28, v0.28.0).**
+
+    The household's brief, answered in one conversation: they reach for cash checkpoints far more
+    often than expected, so the till needed a shortcut; the pots page should lead with recording;
+    cash pot cards should not show overdraft/threshold datapoints; and the page label should say
+    what the page now does. Chosen from the options offered (household picked explicitly): the
+    person→pot link lives **on the pot** as an optional Owner — the vehicle-Owner pattern — rather
+    than a per-person setting or no link at all, because the project never guesses from labels
+    (v0.9.0) and only an explicit link can make the card "open my pot". No-owner fallback: a
+    cash-pots-only select (household's pick over hiding the card). Label: "Accounts, pots &
+    checkpoints" (eyebrow) / "Accounts, Pots & Checkpoints" (nav and prose).
+
+    Migration 0015 is drizzle-kit generated (`owner_person_id` nullable FK to people) with the
+    cash-pot normalisation (`UPDATE … SET limit/threshold = NULL WHERE kind='cash'`) added before
+    shipping — the 0013 rule only forbids changing a *shipped* migration. The domain applies the
+    same rule on every write: a cash pot's limit/threshold are null by definition (the shape
+    card settings already use), and an owner must be an existing person. editPot clears
+    limit/threshold when the kind becomes cash; the UI hides the fields for cash but converting a
+    kind needs a second edit to set a limit — deliberate, stated on the form.
+
+    The till card is a disclosure between the Quick Entry heading and the description (the
+    household's requested placement), not a fifth tab: locked to the signed-in person's single
+    owned cash pot (shown as a name + "your cash pot" chip + last-counted age, never a stale
+    amount — §15.1 stands), else a cash-only select. A save clears the amount (decision 174's
+    double-tap rule), opens nothing, focuses nothing (decision 151), and revalidates in place.
+    e2e grew a `cash-checkpoint` project (runs before backup) covering lock, save-in-place, phone
+    header, page order, cash-card fields and the no-owner fallback through the real Edit pot form.
+
+    No new open question (next available remains OQ15).

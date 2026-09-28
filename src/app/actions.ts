@@ -602,14 +602,19 @@ export async function createPotAction(
   if (!kind.success) {
     return { status: 'error', message: kind.error.issues[0]?.message ?? 'Invalid pot type' };
   }
+  const ownerPersonId = positiveNumber(formData.get('ownerPersonId'));
 
   try {
     createPot(getDbHandle().db, {
       label: label.data,
       kind: kind.data,
+      ownerPersonId,
       actor: user.email,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof InvalidPotInputError) {
+      return { status: 'error', message: err.message };
+    }
     return { status: 'error', message: 'The pot could not be saved. Please try again.' };
   }
   revalidatePages();
@@ -2403,6 +2408,13 @@ export async function editPotAction(
     cardMinimumRaw === null || String(cardMinimumRaw).trim() === ''
       ? null
       : parsePence(String(cardMinimumRaw));
+  // Owner (decision 178): the form always posts the select, so '' clears.
+  const ownerRaw = formData.get('ownerPersonId');
+  const ownerPersonId =
+    ownerRaw === null || String(ownerRaw).trim() === '' ? null : numberOrNull(ownerRaw);
+  if (ownerRaw !== null && String(ownerRaw).trim() !== '' && ownerPersonId === null) {
+    return { status: 'error', message: 'Choose an owner from the list, or leave it unassigned.' };
+  }
   const paymentDayRaw = formData.get('creditCardPaymentDayOfMonth');
   const paymentDay = numberOrNull(paymentDayRaw);
   const warningDaysRaw = formData.get('creditCardWarningDays');
@@ -2427,6 +2439,7 @@ export async function editPotAction(
     expectedVersion: numberOrNull(formData.get('version')),
     label: typeof formData.get('label') === 'string' ? formData.get('label') : '',
     kind: textOrNull(formData.get('kind')) ?? 'bank',
+    ownerPersonId,
     overdraftLimitPence: limit,
     warningThresholdPence: threshold,
     creditCardPaymentDayOfMonth: paymentDay,
@@ -2446,6 +2459,7 @@ export async function editPotAction(
       patch: {
         label: parsed.data.label,
         kind: parsed.data.kind,
+        ownerPersonId: parsed.data.ownerPersonId,
         overdraftLimitPence: parsed.data.overdraftLimitPence,
         warningThresholdPence: parsed.data.warningThresholdPence,
         creditCardPaymentDayOfMonth: parsed.data.creditCardPaymentDayOfMonth,

@@ -27,6 +27,7 @@ import {
   type ExternalMovement,
 } from '@/lib/records/external-movements';
 import { getMoneySnapshot } from '@/lib/records/money-view';
+import { listPeople } from '@/lib/records/people';
 import {
   checkpointsForPot,
   creditCardOwedPence,
@@ -44,10 +45,14 @@ import { formatInstantLocal, formatRelativeAge, toLocalDateString } from '@/lib/
 export const dynamic = 'force-dynamic';
 
 /**
- * Accounts & Pots (SPEC §15.2): every pot with its reported figure,
- * estimate, overdraft context, edit form and checkpoint history.
+ * Accounts, pots & checkpoints (SPEC §15.2): every pot with its reported
+ * figure, estimate, overdraft context, edit form and checkpoint history.
  * Checkpoints are immutable — correcting the balance records a new
- * checkpoint; the old one stays (blueprint §4).
+ * checkpoint; the old one stays (blueprint §4). The checkpoint and add-pot
+ * cards come first (decision 178): recording a figure is this page's most
+ * frequent job, ahead of reviewing the pots the figures belong to. Cash pot
+ * cards show no overdraft or warning threshold — those datapoints describe
+ * a bank facility or a credit line, not counted notes.
  *
  * Also home to the household boundary (SPEC §10.2): informal debts with
  * their derived balances, and the borrowing/repayment/swap/other movements
@@ -67,6 +72,8 @@ export default async function PotsPage({
   const today = toLocalDateString(now);
   const params = await searchParams;
   const pots = listPots(db);
+  const people = listPeople(db);
+  const peopleById = new Map(people.map((person) => [person.id, person.label]));
   const money = getMoneySnapshot(db, now);
   const debts = listDebtsWithBalances(db);
   const recentExternal = listExternalMovements(db, { includeVoided: true, limit: 20 });
@@ -107,7 +114,7 @@ export default async function PotsPage({
     <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
       <header className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-          Accounts &amp; pots
+          Accounts, pots &amp; checkpoints
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Where the money sits</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
@@ -116,13 +123,41 @@ export default async function PotsPage({
         </p>
       </header>
 
+      {/* Decision 178: record first, review second. The checkpoint card and
+          the add-pot card lead the page in that order; the pot cards follow. */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section
+          aria-labelledby="add-checkpoint-heading"
+          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+        >
+          <h2 id="add-checkpoint-heading" className="mb-3 text-lg font-semibold">
+            Record a balance checkpoint
+          </h2>
+          <AddCheckpointForm
+            pots={pots.map((pot) => ({ id: pot.id, label: pot.label, kind: pot.kind }))}
+          />
+          <p className="mt-2 text-xs text-ink-muted">
+            A checkpoint is an immutable correction — it never deletes what happened before.
+          </p>
+        </section>
+        <section
+          aria-labelledby="add-pot-heading"
+          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+        >
+          <h2 id="add-pot-heading" className="mb-3 text-lg font-semibold">
+            Add a pot
+          </h2>
+          <CreatePotForm people={people.map(({ id, label }) => ({ id, label }))} />
+        </section>
+      </div>
+
       {pots.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
-          No pots yet. Add the household&apos;s pots below — a typical setup has two bank accounts
+        <p className="mt-6 rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
+          No pots yet. Add the household&apos;s pots above — a typical setup has two bank accounts
           and a cash pot each.
         </p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
           {pots.map((pot) => {
             const view = money.pots.find((entry) => entry.pot.id === pot.id);
             const latest = view?.latestCheckpoint ?? null;
@@ -145,6 +180,9 @@ export default async function PotsPage({
                         : pot.kind === 'cash'
                           ? 'Cash pot'
                           : 'Credit card'}
+                      {pot.ownerPersonId !== null && peopleById.get(pot.ownerPersonId) !== undefined
+                        ? ` · ${peopleById.get(pot.ownerPersonId)}`
+                        : ''}
                     </p>
                   </div>
                   {estimate !== null ? (
@@ -217,28 +255,34 @@ export default async function PotsPage({
                   </a>
                 ) : null}
 
-                <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-lg bg-canvas px-3 py-2">
-                    <dt className="text-xs text-ink-muted">
-                      {pot.kind === 'credit-card' ? 'Credit limit' : 'Overdraft limit'}
-                    </dt>
-                    <dd className="font-medium tabular-nums">
-                      {pot.overdraftLimitPence === null
-                        ? '—'
-                        : formatPence(pot.overdraftLimitPence)}
-                    </dd>
-                  </div>
-                  <div className="rounded-lg bg-canvas px-3 py-2">
-                    <dt className="text-xs text-ink-muted">
-                      {pot.kind === 'credit-card' ? 'Near-limit warning at' : 'Warning threshold'}
-                    </dt>
-                    <dd className="font-medium tabular-nums">
-                      {pot.warningThresholdPence === null
-                        ? '—'
-                        : formatPence(pot.warningThresholdPence)}
-                    </dd>
-                  </div>
-                </dl>
+                {/* Decision 178: overdraft and warning threshold describe a
+                    bank facility or a credit line. A cash pot's card leaves
+                    them out entirely instead of showing two meaningless
+                    dashes, and the domain layer keeps them null. */}
+                {pot.kind !== 'cash' ? (
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg bg-canvas px-3 py-2">
+                      <dt className="text-xs text-ink-muted">
+                        {pot.kind === 'credit-card' ? 'Credit limit' : 'Overdraft limit'}
+                      </dt>
+                      <dd className="font-medium tabular-nums">
+                        {pot.overdraftLimitPence === null
+                          ? '—'
+                          : formatPence(pot.overdraftLimitPence)}
+                      </dd>
+                    </div>
+                    <div className="rounded-lg bg-canvas px-3 py-2">
+                      <dt className="text-xs text-ink-muted">
+                        {pot.kind === 'credit-card' ? 'Near-limit warning at' : 'Warning threshold'}
+                      </dt>
+                      <dd className="font-medium tabular-nums">
+                        {pot.warningThresholdPence === null
+                          ? '—'
+                          : formatPence(pot.warningThresholdPence)}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : null}
 
                 {pot.kind === 'credit-card' ? (
                   <div className="mt-3 rounded-lg border border-border-hairline p-3 text-sm text-ink-soft">
@@ -276,6 +320,8 @@ export default async function PotsPage({
                       version={pot.version}
                       label={pot.label}
                       kind={pot.kind}
+                      ownerPersonId={pot.ownerPersonId}
+                      people={people.map(({ id, label }) => ({ id, label }))}
                       overdraftLimitPence={pot.overdraftLimitPence}
                       warningThresholdPence={pot.warningThresholdPence}
                       creditCardPaymentDayOfMonth={pot.creditCardPaymentDayOfMonth}
@@ -325,32 +371,6 @@ export default async function PotsPage({
           })}
         </div>
       )}
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <section
-          aria-labelledby="add-pot-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <h2 id="add-pot-heading" className="mb-3 text-lg font-semibold">
-            Add a pot
-          </h2>
-          <CreatePotForm />
-        </section>
-        <section
-          aria-labelledby="add-checkpoint-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <h2 id="add-checkpoint-heading" className="mb-3 text-lg font-semibold">
-            Record a balance checkpoint
-          </h2>
-          <AddCheckpointForm
-            pots={pots.map((pot) => ({ id: pot.id, label: pot.label, kind: pot.kind }))}
-          />
-          <p className="mt-2 text-xs text-ink-muted">
-            A checkpoint is an immutable correction — it never deletes what happened before.
-          </p>
-        </section>
-      </div>
 
       <section
         aria-labelledby="transfers-heading"

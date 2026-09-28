@@ -110,6 +110,13 @@ Rules:
   statement details are private per-pot settings (§24).
 - Cash pots are checkpointed whenever the users count them ("as-needed"); the UI shows each pot's
   *last updated* age so staleness is always visible, never hidden.
+- **A cash pot belongs to a person (v0.28.0, decision 178).** An optional Owner — the same explicit
+  link a vehicle has — is set when the pot is added or edited; the link is never guessed from a
+  label (§15.1's v0.9.0 rule). It does one job: the till's **Checkpoint cash** card
+  (§15.1) opens the signed-in person's own cash pot without a picker. A pot with no owner is
+  shared. Cash pots carry **no overdraft and no warning threshold** — those datapoints describe a
+  bank facility or a credit line, not counted notes — so their cards leave the fields out and the
+  domain layer keeps the values null.
 - Transfers between pots (§10) are expected and routine (Salary → Main "as we need to"). The app **never**
   assumes a transfer happens; transfers are only real when the user records them.
 
@@ -827,6 +834,18 @@ Home = four big actions:
      as they are** — the same car is usually filled again. A failed save clears nothing.
 3. **Update Balance** — pick pot (defaults to least-recently-updated), enter figure, save. Optional effective
    date. Two fields in the common case.
+   - **Checkpoint cash (v0.28.0, decision 178).** Cash is checked far more often than the
+     household expected, so the till header carries a collapsed **Checkpoint cash** button between
+     the heading and the description line. It opens a small card, not a fifth tab: the signed-in
+     person's **own cash pot** — the one whose Owner is them (§4) — with a counted amount, an
+     optional note, and Save. The pot is shown as a locked name (with a "your cash pot" chip and
+     the age of the last count, never a stale amount), so the card has one field in the common
+     case. When the sign-in is not linked to a person who owns exactly one cash pot, the card
+     falls back to a cash-pots-only select so it always works. A save hands the amount back empty
+     (decision 174's rule) and the card stays open on its confirmation; nothing is ever focused as
+     a side-effect of opening it (decision 151). Checkpoints stay checkpoints — labelled as such,
+     never a bank connection. The card is hidden entirely for a household with no cash pots, and
+     the full **Balance** tab remains for every other pot.
 4. **Move Money** — between the household's own pots (a cash handover included), borrowing and
    repayments against a tracked debt, a swap with someone outside the household, or other money
    in/out with a note. Recorded in the moment, like everything else here.
@@ -868,9 +887,9 @@ Menu pages:
 | **Income** | Money coming in: the scheduled income (salary) that converts itself, editable in place from the next instance onward; one-off income recorded by hand with an optional source; and one list of everything received — scheduled and one-off together, with inline correction, void and the retained history. Income is desktop-shaped by the household's choice: it is not a till-side task, so nothing here is squeezed into the mobile quick-entry panel. |
 | **Suppliers** | Supplier list + detail: contact card (phone, email, website, address, label→value reference pairs such as policy numbers, notes), interaction log with "+ Create Interaction", linked purchases (§21), including removing a receipt from a linked purchase (§23.4). Tap-to-call on mobile. |
 | **Contracts & Renewals** | Key dates: renewal records with per-item warning leads and annual advance; schedules' contract end dates; everything inside its warning window first, sorted by date; history of past renewals (§22). |
-| **Accounts & Pots** | Per-pot checkpoint timeline and current estimates; transfer records; staleness of every pot; overdraft context (limit, threshold) for the Main account; informal debts with derived balances and an optional expected-support plan (amount, day-of-month, until date — editable forward-looking, v0.7.0); borrow/repay/swap/other entry and history; archiving for empty pots. |
+| **Accounts, Pots & Checkpoints** (was **Accounts & Pots**; renamed v0.28.0) | Leads with the **Record a balance checkpoint** card, then **Add a pot** (both v0.28.0, decision 178 — recording is the page's most frequent job), then a card per pot: reported figure, estimate, owner (decision 178), checkpoint timeline, edit form; **cash pot cards show no overdraft or warning threshold** (decision 178); transfer records; staleness of every pot; overdraft context (limit, threshold) for the Main account; informal debts with derived balances and an optional expected-support plan (amount, day-of-month, until date — editable forward-looking, v0.7.0); borrow/repay/swap/other entry and history; archiving for empty pots. |
 | **Insights** | §16 panels. |
-| **Settings** | Household labels; pots; category-tree editor; projection figures; thresholds; payday/income config; default warning lead for renewals/contract ends; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **"Signs in as"** per person (v0.11.0 — which allowlisted `AUTH_ALLOWED_EMAILS` sign-in is that person; drives the till's Paid by and Fuel vehicle defaults; audited, unique, stored only in the private database); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
+| **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; default warning lead for renewals/contract ends; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **"Signs in as"** per person (v0.11.0 — which allowlisted `AUTH_ALLOWED_EMAILS` sign-in is that person; drives the till's Paid by and Fuel vehicle defaults; audited, unique, stored only in the private database); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
 
 **Calendar (agreed: read-only month view).** A month grid on Recurring Payments showing due DD/SO instances and
 expected receipts — another view of the same schedule data, never a second database. Clicking a day shows that
@@ -1623,7 +1642,7 @@ A credit card is a pot for accurate bookkeeping, not a source of liquidity:
 - Paying the provider is a transfer from a bank pot to the card pot. It is not spending and leaves the
   household net total unchanged. No payment is created automatically.
 - The credit limit and configurable near-limit threshold are shown as card-usage context on that card's
-  Accounts & Pots panel. They are never called an overdraft and do not participate in the bank-pot warning
+  Accounts, Pots & Checkpoints panel. They are never called an overdraft and do not participate in the bank-pot warning
   thresholds (§8).
 - Payday and Horizon are **liquidity** projections over bank and cash pots. Card balances, DD/SO commitments
   charged to a card, receipts into a card, and expected support landing in a card are excluded from their
@@ -1652,7 +1671,7 @@ interest, interest paid, or a payoff schedule, and does not infer the date from 
 ### 24.3 Alert placement
 
 Payment-review and promotional-end alerts appear in the Overview key-date panel and the Contracts & Renewals
-review page, alongside other in-app key dates (§22.3). The relevant card link opens Accounts & Pots. Alerts are
+review page, alongside other in-app key dates (§22.3). The relevant card link opens Accounts, Pots & Checkpoints. Alerts are
 advisory and in-app only; no external notification, statement fetch, provider connection or payment verification
 is implied.
 
@@ -1729,7 +1748,7 @@ task.
 Links: a supplier opens its card through `supplierCardHref()` (§21.2a — the one resolver); a purchase opens
 Purchases filtered to its day with the row in view (voided ones with "voided only"); a vehicle opens its
 running-costs card on Insights; a renewal its row on Contracts & Renewals; a contract end its schedule on
-Recurring; a card date its pot on Accounts & Pots.
+Recurring; a card date its pot on Accounts, Pots & Checkpoints.
 
 ### 25.6 What tasks are not
 

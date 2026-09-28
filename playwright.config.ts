@@ -161,6 +161,14 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
+      // Own project (v0.28.0): the till's Checkpoint cash card and the
+      // Accounts, Pots & Checkpoints page order. Checkpoints Alex's cash and
+      // rewrites a pot owner, so it runs before the backup project's restore.
+      name: 'cash-checkpoint',
+      testMatch: /cash-checkpoint\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
       name: 'backup',
       testMatch: /backup\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
