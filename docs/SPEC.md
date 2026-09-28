@@ -752,6 +752,13 @@ Home = four big actions:
      (decision 151) — a save is not a tap on a field.
      Changing Paid by re-targets any line still on the old payer's default (their car, themselves);
      lines pointed elsewhere by hand stay put.
+   - **Automatic remainder (v0.27.0, decision 177):** Total is the source of truth. Line 1
+     follows Total minus the other split amounts, including after adding/removing splits or correcting
+     Total. Empty new splits count as zero for this calculation but still block Save until complete.
+     The label says "auto remainder". Results are clamped to zero; an exhausted remainder warns and
+     zero-value lines still block Save. Empty Total clears Line 1; incomplete/invalid input holds the
+     last valid remainder and cannot save. Editing Line 1 (including Assign remaining on it) takes
+     control until a fresh entry. Adding a split no longer stops following (supersedes the old rule).
    - **"Add another" (decision 174)** sits next to Save while the confirmation is up **and the next
      entry has not begun** — it is offered when the form is still blank, and steps aside as soon as
      the household starts typing the next purchase, rather than wiping it under their thumb. It
@@ -1564,6 +1571,16 @@ Files live under `/data/documents/` (§18.1) with server-generated storage keys 
 The database stores the original filename (for display/download naming only), MIME type, size, sha256,
 uploader and timestamp. Viewing/downloading an attachment requires authentication; responses are private and
 uncached, with `Content-Disposition` using a sanitized display name.
+
+**In-app viewer (v0.27.0, decision 177):** attachment links open a native modal on phone and desktop,
+not a new tab or a browser window inside the installed PWA. Its own header shows Close, filename, size,
+Download and Share when file sharing is supported. Images use the browser's normal zoom; PDFs use its
+embedded viewer with a Download/Share fallback when unsupported. Close, Escape and backdrop dismissal
+return focus to the originating link without navigating or losing scroll. The modal traps keyboard focus
+and locks background scrolling. Loading and unavailable/offline states keep Close usable. Bytes are
+fetched through the same independently authenticated API with `no-store`, held only in a temporary blob
+URL and revoked on close. No offline document cache or PDF.js dependency is added. Printing remains via
+the browser/OS PDF viewer or downloaded file rather than an unreliable mobile print button.
 
 ### 23.3 Integrity and security rules
 

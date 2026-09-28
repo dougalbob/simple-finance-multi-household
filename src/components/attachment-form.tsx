@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react';
 import { deleteAttachmentAction, uploadAttachmentAction } from '@/app/actions';
+import { AttachmentViewer } from './attachment-viewer';
 import { initialActionState } from '@/lib/action-state';
 
 export interface AttachmentSummary {
@@ -72,6 +73,10 @@ export function AttachmentForm({
   /** False hides the upload control (a voided income record keeps its documents, gains none). */
   allowUpload?: boolean;
 }) {
+  const [viewing, setViewing] = useState<{
+    attachment: AttachmentSummary;
+    trigger: HTMLAnchorElement;
+  } | null>(null);
   const [state, formAction, pending] = useActionState(uploadAttachmentAction, initialActionState);
   const kind =
     supplierId !== undefined ? 'supplier' : receiptId !== undefined ? 'receipt' : 'purchase';
@@ -80,6 +85,13 @@ export function AttachmentForm({
   const inputId = `attachment-file-${kind}-${ownerId}`;
   return (
     <div className="mt-2 space-y-1 text-xs">
+      {viewing ? (
+        <AttachmentViewer
+          attachment={viewing.attachment}
+          trigger={viewing.trigger}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
       {attachments.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {attachments.map((attachment) => (
@@ -87,8 +99,10 @@ export function AttachmentForm({
               <span className="inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 font-medium text-warning">
                 <a
                   href={`/api/attachments/${attachment.fileKey}`}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setViewing({ attachment, trigger: event.currentTarget });
+                  }}
                   className="inline-flex items-center gap-1 hover:underline"
                 >
                   <span aria-hidden="true">📎</span>

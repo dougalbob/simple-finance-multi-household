@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   editDistance,
   followedLineAmount,
+  remainderLineAmount,
   nearestSupplierName,
   normalizeSupplierQuery,
   rankSupplierMatches,
@@ -118,5 +119,29 @@ describe('supplier typeahead ranking', () => {
     assert.equal(editDistance('corner', 'corner'), 0);
     assert.equal(editDistance('corner', 'corners'), 1);
     assert.equal(editDistance('corner', 'kormer'), 2); // two substitutions, still a prompt
+  });
+});
+
+describe('remainderLineAmount', () => {
+  it('subtracts splits in integer pence, with blank new lines treated as zero', () => {
+    for (const [others, amount] of [
+      [[], '100.00'],
+      [[''], '100.00'],
+      [['80'], '20.00'],
+      [['80', '10'], '10.00'],
+      [['0.01', '0.02'], '99.97'],
+    ] as const) {
+      assert.deepEqual(remainderLineAmount('100', others), { action: 'set', amount });
+    }
+  });
+  it('clamps exhausted and excessive splits, never a negative first line', () => {
+    assert.deepEqual(remainderLineAmount('100', ['100']), { action: 'set', amount: '0.00' });
+    assert.deepEqual(remainderLineAmount('100', ['101']), { action: 'set', amount: '0.00' });
+  });
+  it('clears deleted total and holds incomplete or invalid drafts', () => {
+    assert.deepEqual(remainderLineAmount('', ['80']), { action: 'clear' });
+    for (const amount of ['80.', '-1', 'abc'])
+      assert.deepEqual(remainderLineAmount('100', [amount]), { action: 'hold' });
+    assert.deepEqual(remainderLineAmount('100.', ['80']), { action: 'hold' });
   });
 });

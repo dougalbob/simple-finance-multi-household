@@ -39,6 +39,75 @@ test.describe('removing a receipt', () => {
     await expect(viewLink).toBeVisible({ timeout: 30_000 });
     const href = await viewLink.getAttribute('href');
     expect(href).toMatch(/^\/api\/attachments\/[0-9a-f-]+\.png$/);
+    // Same page and scroll, including a phone-sized installed-app layout.
+    for (const viewport of [
+      { width: 1400, height: 950 },
+      { width: 393, height: 727 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await viewLink.scrollIntoViewIfNeeded();
+      const before = await page.evaluate(() => window.scrollY);
+      const location = page.url();
+      await viewLink.click();
+      const viewer = page.getByRole('dialog', { name: `Document: ${RECEIPT_NAME}` });
+      await expect(viewer.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+      await expect(viewer.getByRole('img', { name: RECEIPT_NAME })).toBeVisible();
+      await expect(viewer.getByRole('link', { name: 'Download' })).toHaveAttribute(
+        'download',
+        RECEIPT_NAME,
+      );
+      await viewer.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(viewer).toHaveCount(0);
+      await expect(viewLink).toBeFocused();
+      expect(page.url()).toBe(location);
+      expect(await page.evaluate(() => window.scrollY)).toBe(before);
+      await viewLink.click();
+      await page.keyboard.press('Escape');
+      await expect(viewer).toHaveCount(0);
+    }
+    await page.setViewportSize({ width: 1400, height: 950 });
+    const bytes = await page.request.get(href!);
+    expect(bytes.headers()['cache-control']).toBe('private, no-store');
+    await page.route(`**${href}`, (route) => route.fulfill({ status: 404, body: 'Not found' }));
+    await viewLink.click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Document unavailable');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+    await page.unroute(`**${href}`);
+
+    // A generated blank PDF exercises the PDF branch without household data.
+    const objects = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
+    ];
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    objects.forEach((object, i) => {
+      offsets.push(Buffer.byteLength(pdf));
+      pdf += `${i + 1} 0 obj\n${object}\nendobj\n`;
+    });
+    const xref = Buffer.byteLength(pdf);
+    pdf += `xref\n0 4\n0000000000 65535 f \n${offsets
+      .slice(1)
+      .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
+      .join('')}trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    await row.locator('input[type="file"]').setInputFiles({
+      name: 'fictional.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from(pdf),
+    });
+    await row.getByRole('button', { name: 'Attach receipt' }).click();
+    const pdfLink = row.getByRole('link', { name: /fictional.pdf/ });
+    await expect(pdfLink).toBeVisible();
+    for (const width of [393, 1400]) {
+      await page.setViewportSize({ width, height: 950 });
+      await pdfLink.click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.locator('iframe')).toHaveAttribute('src', /^blob:/);
+      await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(pdfLink).toBeFocused();
+    }
 
     await page.goto('/suppliers');
     const supplierCard = page.getByRole('article').filter({

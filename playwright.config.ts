@@ -56,7 +56,7 @@ export default defineConfig({
       // up by mobile/desktop/backup. Runs before backup so a restore in that
       // project cannot hide a missing receipt-removal control.
       name: 'attachments',
-      testMatch: /attachments\.spec\.ts/,
+      testMatch: /(?:attachments|remainder)\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {

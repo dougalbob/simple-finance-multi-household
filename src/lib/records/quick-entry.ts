@@ -127,3 +127,17 @@ export function editDistance(left: string, right: string): number {
   }
   return row[right.length] ?? 99;
 }
+
+/** Empty split drafts count as zero; invalid in-flight input holds the last remainder. */
+export function remainderLineAmount(total: string, others: readonly string[]): FollowedLineAmount {
+  const base = followedLineAmount(total);
+  if (base.action !== 'set') return base;
+  let allocated = 0;
+  for (const amount of others) {
+    if (amount.trim() === '') continue;
+    const parsed = parsePence(amount);
+    if (parsed === null || parsed < 0) return { action: 'hold' };
+    allocated += parsed;
+  }
+  return { action: 'set', amount: penceInput(Math.max(0, parsePence(total)! - allocated)) };
+}

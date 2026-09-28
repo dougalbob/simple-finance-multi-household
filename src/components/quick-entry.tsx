@@ -18,7 +18,7 @@ import {
 import { formatPence, parsePence, penceInput } from '@/lib/money';
 import { formatPencePerLitre, parseLitres } from '@/lib/records/fuel-economy';
 import {
-  followedLineAmount,
+  remainderLineAmount,
   nearestSupplierName,
   normalizeSupplierQuery,
   rankSupplierMatches,
@@ -400,15 +400,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
   const [panel, setPanel] = useState(0);
   const wide = useWideLayout();
   const [lines, setLines] = useState<LineDraft[]>(() => [newLine(data.defaultCategoryId, data)]);
-  /**
-   * Mobile Quick Entry (SPEC §15.1): Line 1 follows the amount typed at the
-   * till, so the household types the total once and Save can enable without
-   * retyping it on the split line. The flag turns off for good when the user
-   * takes the line over — editing the Line 1 amount, "+ Add split", or Assign
-   * remaining — and only a fresh entry starts the following again: "Add
-   * another", or a successful save, which hands the form back blank
-   * (decision 174).
-   */
+  /** Line 1 is the remainder until its amount is explicitly taken over. */
   const [lineFollowsTotal, setLineFollowsTotal] = useState(true);
   const submitGuard = useRef(false);
   const supplierRef = useRef<HTMLInputElement | null>(null);
@@ -619,27 +611,29 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
   function changeTotal(value: string) {
     setTotal(value);
     if (!lineFollowsTotal) return;
-    const followed = followedLineAmount(value);
-    if (followed.action === 'hold') return;
-    const amount = followed.action === 'set' ? followed.amount : '';
-    setLines((current) => {
-      const first = current[0];
-      // One line only: an extra line means the user is splitting deliberately.
-      if (current.length !== 1 || first === undefined || first.amount === amount) return current;
-      return [{ ...first, amount }];
-    });
+    setLines((current) => followRemainder(current, value));
+  }
+
+  function followRemainder(current: LineDraft[], value = total): LineDraft[] {
+    const followed = remainderLineAmount(
+      value,
+      current.slice(1).map((line) => line.amount),
+    );
+    if (followed.action === 'hold') return current;
+    return current.map((line, index) =>
+      index === 0 ? { ...line, amount: followed.action === 'set' ? followed.amount : '' } : line,
+    );
   }
 
   function updateLineAmount(index: number, amount: string) {
     if (index === 0) setLineFollowsTotal(false);
-    updateLine(index, { amount });
+    setLines((current) => {
+      const next = current.map((line, i) => (i === index ? { ...line, amount } : line));
+      return index !== 0 && lineFollowsTotal ? followRemainder(next) : next;
+    });
   }
 
   function addSplit() {
-    // "+ Add split" stops the following for good: the new line stays empty and
-    // Line 1 is neither cleared nor shrunk, even if the extra line is removed
-    // again. Only a fresh entry starts it over — "Add another", or a save.
-    setLineFollowsTotal(false);
     setLines((current) => [...current, newLine(data.defaultCategoryId, data)]);
   }
 
@@ -918,6 +912,10 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                       </label>
                       <label className="min-w-0 text-xs font-semibold text-ink-soft">
                         {lines.length > 1 ? `Line ${index + 1} amount` : 'Amount'}
+                        {index === 0 && lineFollowsTotal ? <span> (auto remainder)</span> : null}
+                        {index === 0 && lineFollowsTotal && line.amount === '0.00' ? (
+                          <span role="status"> No remainder left — adjust the splits.</span>
+                        ) : null}
                         <input
                           aria-label={`Line ${index + 1} amount`}
                           value={line.amount}
@@ -1025,7 +1023,11 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                         type="button"
                         onClick={() =>
                           setLines((current) =>
-                            current.filter((_, lineIndex) => lineIndex !== index),
+                            lineFollowsTotal
+                              ? followRemainder(
+                                  current.filter((_, lineIndex) => lineIndex !== index),
+                                )
+                              : current.filter((_, lineIndex) => lineIndex !== index),
                           )
                         }
                         className="mt-2 block text-xs font-semibold text-danger underline"
