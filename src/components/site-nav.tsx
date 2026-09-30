@@ -191,7 +191,7 @@ export function SiteNav() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 shadow-sm backdrop-blur">
         {/* Desktop Navbar (lg and up) */}
         <div className="mx-auto hidden max-w-7xl items-center justify-between gap-x-4 px-4 py-2 lg:flex">
           <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight text-ink">

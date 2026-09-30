@@ -1,4 +1,41 @@
+# Handoff: v0.30.0 preparation — a more dimensional, theme-aware interface (decision 180)
+
+## What changed
+
+- The global canvas has a broad, faint accent wash, driven by the active theme.
+- The household-total card on `/` and `/overview` now gets a restrained accent gradient, more deliberate figure hierarchy and the stronger shared elevation token.
+- `shadow-sm` and `shadow-md` now use theme-derived till colours with a subtle top edge, so common cards feel raised in both light and dark modes; the sticky header uses the same language.
+- Home-page destination links lift by 2px on hover-capable devices only, disable motion for `prefers-reduced-motion`, and expose a keyboard focus ring.
+- No theme catalogue changes, data or calculation changes, schema/migration, new dependency or backup-format change. SPEC §15.2, decision 180, release notes, and all five version places are updated.
+
+## Gates at PR preparation
+
+`npm test`: **586 passed** / 139 suites · `npm run typecheck` clean · `npm run format:check` clean ·
+`npm run themes:check` clean · `npm run build` clean (`next-env.d.ts` restored) ·
+`npm audit --omit=dev` zero · Playwright **113 passed** across every project via SANDBOX entry 8,
+including the actual Overview card's light/dark gradient and shadow assertion. PR #91 is open from
+the fixed session branch. Its first CI run, `36672731548`, passed all three jobs (gates, browser and
+Docker/upgrade smoke); this handoff update will trigger another run, which must pass before merge.
+The release-image publish and registry verification remain after merge.
+
+## Delivery status
+
+- The Arena/GitHub connector is active; v0.29.0's post-merge facts are verified below. PR #91 is the
+  v0.30.0 release PR.
+- OQ15 remains the next open question. No unrelated OQ14 work is included.
+
+---
+
 # Handoff: v0.29.0 — Overview panel names link into filtered Purchases (decision 179)
+
+**v0.29.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `60da8ce39fb36db6672e3caf91bb4882a4bc5d53` (PR #90, merged 2026-09-28T12:29:24Z).
+- PR CI run `36421342611` and `main` CI run `36422157028` green; all three jobs passed in both runs.
+- Annotated tag `v0.29.0` points to that merge commit; Publish run `36423242855` succeeded, including
+  registry-tag verification and GitHub release creation.
+- Digest `sha256:426ad0313aaa4d3927e4ff628f3dd85958d19e674467abd87ecc3db4bb5445b3` on `v0.29.0` /
+  `latest` / `sha-60da8ce`, differing from v0.28.0's `sha256:da74bb0b…`.
 
 **v0.28.0 — verified post-merge facts (recorded per decision 173):**
 
@@ -23,8 +60,8 @@ run caught an over-escaped digit regex in the new assertion; after correction, t
 
 ## What a future session should know
 
-1. **Record v0.29.0's post-merge facts at the top of this file** (merge commit, PR CI and main CI run IDs,
-   annotated tag, Publish run, registry digest and comparison with v0.28.0), per decision 173. This is
+1. **Record v0.30.0's post-merge facts at the top of this file** (merge commit, PR CI and main CI run IDs,
+   annotated tag, Publish run, registry digest and comparison with v0.29.0), per decision 173. This is
    intentionally the next session's post-merge handoff step.
 2. The parent link resolver is name→ID over the live `categoryTree(db)`, because the month summary rows
    contain only names. Category names are unique among parent siblings; category records are not deleted.
