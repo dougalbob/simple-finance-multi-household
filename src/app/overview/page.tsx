@@ -162,19 +162,26 @@ function MoneyRow({
   return (
     <section
       aria-labelledby="money-heading"
-      className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+      className="sf-feature-card rounded-xl border border-border bg-surface p-4 shadow-md"
     >
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="money-heading" className="text-xl font-semibold">
-          {money.householdAvailablePence === null
-            ? 'Waiting for your first checkpoint'
-            : `Household total now: ${formatPence(money.householdAvailablePence)}`}
-        </h2>
-        {cardDebtPence > 0 ? (
-          <p className="w-full text-xs text-ink-soft">
-            Includes {formatPence(cardDebtPence)} owed on credit cards.
-          </p>
-        ) : null}
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id="money-heading" className="tracking-tight">
+            <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-positive">
+              Household total now
+            </span>
+            <span className="mt-1 block text-2xl font-semibold tabular-nums sm:text-3xl">
+              {money.householdAvailablePence === null
+                ? 'Waiting for your first checkpoint'
+                : formatPence(money.householdAvailablePence)}
+            </span>
+          </h2>
+          {cardDebtPence > 0 ? (
+            <p className="mt-1 text-xs text-ink-soft">
+              Includes {formatPence(cardDebtPence)} owed on credit cards.
+            </p>
+          ) : null}
+        </div>
         <Link href="/pots" className="text-sm font-medium text-accent hover:underline">
           Accounts, Pots &amp; Checkpoints →
         </Link>

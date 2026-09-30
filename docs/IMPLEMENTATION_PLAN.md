@@ -2494,3 +2494,19 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     are navigation-only: no calculation or counted-record rule changes. Desktop browser coverage
     verifies the links and dates and follows a parent-category link into the filtered list. No schema
     change or migration; next open question remains OQ15.
+
+180. **Theme-aware depth for the shared UI (2026-09-29, v0.30.0).** The household agreed to add
+    tastefully implemented gradients and shadows after describing the UI as too flat. The chosen
+    direction is restrained: a broad, faint accent wash on the page canvas; a soft accent gradient
+    and clearer figure hierarchy on the household-total card on `/` and `/overview`; slightly more
+    legible shared card/header elevation; and a subtle hover lift only on the home-page destination
+    links. Respect reduced-motion preferences and provide a visible keyboard focus ring.
+
+    **Theme contract:** keep all visual colour inside the existing token system. The global canvas
+    and featured gradient use `--color-accent-*` and `--color-surface`; the shadow utilities use
+    theme-derived `--color-till` and `--color-till-ink`, not a fixed black. The 28 generated themes
+    remain unchanged. No gradients or shadows signal financial status; no data, calculation,
+    navigation, schema, migration or dependency changes. Unit/theme guards, a light/dark browser
+    assertion on the actual Overview card, and the complete Playwright suite cover the treatment.
+    Release is v0.30.0 so the household can take a backup and Force Update after publish; OQ15
+    remains open.

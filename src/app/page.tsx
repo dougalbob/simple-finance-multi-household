@@ -113,14 +113,14 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
   return (
     <section
       aria-labelledby="money-heading"
-      className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+      className="sf-feature-card rounded-xl border border-border bg-surface p-4 shadow-md"
     >
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-positive">
             Household total now
           </p>
-          <h2 id="money-heading" className="text-xl font-semibold">
+          <h2 id="money-heading" className="text-2xl font-semibold tracking-tight sm:text-3xl">
             {money.householdAvailablePence === null
               ? 'Waiting for your first checkpoint'
               : formatPence(money.householdAvailablePence)}

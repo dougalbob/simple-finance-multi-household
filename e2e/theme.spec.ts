@@ -90,6 +90,31 @@ test.describe('appearance', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', CHOSEN);
   });
 
+  test('the Overview feature card carries theme-aware gradient and elevation', async ({
+    page,
+    baseURL,
+  }) => {
+    await page.goto('/overview');
+    const card = page.locator('section[aria-labelledby="money-heading"]');
+    const light = await card.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+    });
+    expect(light.backgroundImage).toContain('linear-gradient');
+    expect(light.boxShadow).not.toBe('none');
+
+    await deviceRemembers(page.context(), baseURL, CHOSEN);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', CHOSEN);
+    const dark = await card.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+    });
+    expect(dark.backgroundImage).toContain('linear-gradient');
+    expect(dark.backgroundImage).not.toBe(light.backgroundImage);
+    expect(dark.boxShadow).not.toBe('none');
+  });
+
   test('another device — or a stale cookie — gets Classic', async ({ page, baseURL }) => {
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('data-theme', DEFAULT_THEME_ID);

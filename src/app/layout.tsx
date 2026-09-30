@@ -37,7 +37,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const theme = await currentTheme();
   return (
     <html lang="en-GB" data-theme={theme.id}>
-      <body className="min-h-screen bg-canvas text-ink antialiased">
+      <body className="sf-app-canvas min-h-screen bg-canvas text-ink antialiased">
         <SiteNav />
         {children}
         <footer className="mx-auto mt-12 max-w-3xl px-4 pb-8 text-center text-xs text-ink-faint">

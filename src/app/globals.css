@@ -177,6 +177,57 @@
    * moves the tint with it. */
   --color-chart-line-fill: color-mix(in srgb, var(--color-chart-1) 14%, transparent);
   --color-chart-danger-tint: color-mix(in srgb, var(--color-chart-danger) 8%, transparent);
+
+  /* --- Elevation (decision 180) -----------------------------------------
+   * Shadows follow the theme's always-dark till hue rather than a fixed
+   * black, with a restrained top edge that remains visible on dark surfaces.
+   * Tailwind's `shadow-sm` and `shadow-md` utilities consume these values.
+   */
+  --shadow-sm:
+    0 1px 2px color-mix(in srgb, var(--color-till) 10%, transparent),
+    0 5px 14px -4px color-mix(in srgb, var(--color-till) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-till-ink) 12%, transparent);
+  --shadow-md:
+    0 2px 5px -1px color-mix(in srgb, var(--color-till) 12%, transparent),
+    0 14px 28px -6px color-mix(in srgb, var(--color-till) 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-till-ink) 14%, transparent);
+}
+
+/*
+ * Global page atmosphere and the Overview/Home focal card stay within the
+ * active theme. The glow is intentionally broad and faint; the featured
+ * surface gets the more visible accent wash.
+ */
+.sf-app-canvas {
+  background-image: radial-gradient(
+    ellipse 72rem 34rem at 50% 0%,
+    color-mix(in srgb, var(--color-accent-200) 18%, transparent),
+    transparent 78%
+  );
+  background-attachment: fixed;
+}
+
+.sf-feature-card {
+  background-image: linear-gradient(
+    118deg,
+    color-mix(in srgb, var(--color-accent-100) 58%, var(--color-surface)) 0%,
+    var(--color-surface) 76%
+  );
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .sf-lift-card {
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      border-color 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .sf-lift-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
 }
 
 /*

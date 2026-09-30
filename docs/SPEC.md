@@ -875,6 +875,15 @@ Dense and efficient: useful information per screen, minimal scrolling — but **
 functionality** (agreed correction to the original one-screen proposal). Readable text, real click targets,
 clear grouping; dense is not cramped, and this is not a spreadsheet with tiny targets.
 
+**Visual depth (v0.30.0, decision 180).** The canvas may carry a broad, faint wash from the active
+accent; ordinary cards use a shared, theme-aware soft elevation; and the phone-home and Overview
+household-total cards may receive a restrained accent gradient and stronger shadow to establish a
+clear focal point. The sticky header and genuinely interactive destination cards can use the same
+elevation language. Gradient and shadow colours come from the existing theme tokens, so all 28
+light/dark themes remain supported. Hover lift is limited to hover-capable devices and is suppressed
+for reduced-motion preferences. Tables, forms and status treatments stay calm: decoration never
+replaces legible borders, focus indication or the existing words and signs that explain money states.
+
 Menu pages:
 
 | Page | Contents |
