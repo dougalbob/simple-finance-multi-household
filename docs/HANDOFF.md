@@ -13,13 +13,15 @@
 `npm test`: **586 passed** / 139 suites · `npm run typecheck` clean · `npm run format:check` clean ·
 `npm run themes:check` clean · `npm run build` clean (`next-env.d.ts` restored) ·
 `npm audit --omit=dev` zero · Playwright **113 passed** across every project via SANDBOX entry 8,
-including the actual Overview card's light/dark gradient and shadow assertion. Pull-request CI and
-release-image upgrade verification remain to run through GitHub.
+including the actual Overview card's light/dark gradient and shadow assertion. PR #91 is open from
+the fixed session branch. Its first CI run, `36672731548`, passed all three jobs (gates, browser and
+Docker/upgrade smoke); this handoff update will trigger another run, which must pass before merge.
+The release-image publish and registry verification remain after merge.
 
 ## Delivery status
 
-- The Arena/GitHub connector is confirmed active; v0.29.0's post-merge facts are verified below.
-  The v0.30.0 release PR will be opened from this fixed session branch.
+- The Arena/GitHub connector is active; v0.29.0's post-merge facts are verified below. PR #91 is the
+  v0.30.0 release PR.
 - OQ15 remains the next open question. No unrelated OQ14 work is included.
 
 ---
