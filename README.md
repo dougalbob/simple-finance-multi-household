@@ -148,6 +148,11 @@ configured development identity; a production build ignores the bypass entirely.
   separate, and the fixed commitments over the child categories ticked in Settings. Hand-rolled SVG, no
   client JavaScript, a table of the exact numbers under every chart, and a link from every bar to the
   purchases behind it.
+- **Projects:** `/projects` — cost a future purchase or a whole project against real quotes before
+  spending anything: materials down the side, suppliers across the top, quotes in the cells (with
+  pack sizes and product links), delivery fees and free-delivery rules per supplier, and a
+  shopping list grouped by supplier with the grand total against your target budget. Planning
+  only — it never records a purchase.
 
 ## Backup, restore and recovery
 

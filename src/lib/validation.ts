@@ -848,3 +848,156 @@ export const taskEditEntrySchema = taskVersionEntrySchema.extend({
       'Enter an email for who the task is for, or leave it empty for everyone.',
     ),
 });
+
+// ---------------------------------------------------------------------------
+// Projects — Project Costing &amp; Supplier Optimiser (SPEC §27, decision 181).
+// Amounts arrive as typed strings and are converted to integer pence by
+// parsePence before these schemas see them.
+// ---------------------------------------------------------------------------
+
+export const projectNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Give the project a name.')
+  .max(120, 'Keep the project name to 120 characters or fewer.');
+
+export const projectModeSchema = z.enum(['mix_and_match', 'compare_options'], {
+  error: 'Choose mix & match or compare options.',
+});
+
+export const projectStatusSchema = z.enum(['researching', 'ready_to_order', 'completed'], {
+  error: 'Choose a status this app knows.',
+});
+
+export const costFrequencySchema = z.enum(['one_off', 'annual', 'monthly'], {
+  error: 'Choose a cost frequency this app knows.',
+});
+
+export const fulfilmentChoiceSchema = z.enum(['delivery', 'collect'], {
+  error: 'Choose delivery or collect.',
+});
+
+/** Budgets and prices are never negative (pence) — see `nonNegativePenceSchema`. */
+
+export const projectCreateEntrySchema = z.object({
+  name: projectNameSchema,
+  projectMode: projectModeSchema,
+  targetBudgetPence: nonNegativePenceSchema.nullable(),
+  status: projectStatusSchema,
+  notes: nullableText(2000, 'Notes'),
+});
+
+export const projectIdEntrySchema = z.object({
+  projectId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+});
+
+export const projectEditEntrySchema = projectIdEntrySchema.extend({
+  name: projectNameSchema,
+  projectMode: projectModeSchema,
+  targetBudgetPence: nonNegativePenceSchema.nullable(),
+  status: projectStatusSchema,
+  notes: nullableText(2000, 'Notes'),
+});
+
+/** A material row / cost line: whole units of a named thing. */
+export const projectItemEntrySchema = z.object({
+  projectId: positiveIdSchema,
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Give the item a name.')
+    .max(120, 'Keep the item name to 120 characters or fewer.'),
+  quantity: z.coerce
+    .number({ error: 'Enter a whole quantity of 1 or more.' })
+    .int('Enter a whole quantity of 1 or more.')
+    .positive('Enter a whole quantity of 1 or more.'),
+  unit: nullableText(20, 'The unit'),
+  costFrequency: costFrequencySchema,
+  category: nullableText(200, 'The category'),
+  notes: nullableText(1000, 'Notes'),
+});
+
+export const projectItemEditEntrySchema = projectItemEntrySchema.omit({ projectId: true }).extend({
+  itemId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+});
+
+/** A quote source (supplier/merchant/candidate) with its delivery rules. */
+export const projectSupplierEntrySchema = z.object({
+  projectId: positiveIdSchema,
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Give the supplier a name.')
+    .max(120, 'Keep the supplier name to 120 characters or fewer.'),
+  phone: nullableText(200, 'Phone'),
+  websiteUrl: nullableText(500, 'The website').refine(
+    (value) => value === null || /^https?:\/\/\S+$/i.test(value),
+    'Enter a link starting with http:// or https://.',
+  ),
+  notes: nullableText(1000, 'Notes'),
+  deliveryFeePence: nonNegativePenceSchema,
+  freeDeliveryThresholdPence: nonNegativePenceSchema
+    .refine((value) => value > 0, {
+      message: 'The free delivery threshold must be more than zero.',
+    })
+    .nullable(),
+  clickAndCollectAvailable: z.boolean(),
+  fulfilmentChoice: fulfilmentChoiceSchema,
+});
+
+export const projectSupplierEditEntrySchema = projectSupplierEntrySchema
+  .omit({ projectId: true })
+  .extend({
+    supplierId: positiveIdSchema,
+    expectedVersion: positiveIdSchema,
+  })
+  .refine((value) => value.fulfilmentChoice !== 'collect' || value.clickAndCollectAvailable, {
+    message: 'This supplier cannot be set to collect — tick “Click & Collect available” first.',
+    path: ['fulfilmentChoice'],
+  });
+
+/**
+ * One matrix cell: a unit price, or pack-only pricing (pack of N at £P).
+ * At least one pricing form must be present — an empty cell is no quote.
+ */
+export const projectQuoteEntrySchema = z
+  .object({
+    projectId: positiveIdSchema,
+    itemId: positiveIdSchema,
+    supplierId: positiveIdSchema,
+    unitPricePence: nonNegativePenceSchema.nullable(),
+    packSize: z.coerce
+      .number({ error: 'Enter the pack size as a whole number.' })
+      .int('Enter the pack size as a whole number.')
+      .positive('The pack size must be 1 or more.')
+      .nullable(),
+    packPricePence: nonNegativePenceSchema.nullable(),
+    productUrl: nullableText(500, 'The product link').refine(
+      (value) => value === null || /^https?:\/\/\S+$/i.test(value),
+      'Enter a link starting with http:// or https://.',
+    ),
+    inStock: z.boolean(),
+    notes: nullableText(1000, 'Notes'),
+  })
+  .refine((value) => value.unitPricePence !== null || value.packPricePence !== null, {
+    message: 'Enter a unit price, or a pack size with a pack price — a quote needs a price.',
+    path: ['unitPricePence'],
+  })
+  .refine((value) => (value.packSize === null) === (value.packPricePence === null), {
+    message: 'Enter both the pack size and the pack price, or neither.',
+    path: ['packSize'],
+  });
+
+export const projectQuoteDeleteEntrySchema = z.object({
+  projectId: positiveIdSchema,
+  itemId: positiveIdSchema,
+  supplierId: positiveIdSchema,
+});
+
+/** The cell click: pick a supplier for a row (null clears the pick). */
+export const projectSelectionEntrySchema = z.object({
+  itemId: positiveIdSchema,
+  supplierId: positiveIdSchema.nullable(),
+});

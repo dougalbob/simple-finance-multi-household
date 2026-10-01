@@ -596,15 +596,23 @@ function renderPersonal(
             {month.label}
             {month.complete ? '' : ' (so far)'}
           </span>,
-          ...month.cells.map((cell) => (
-            <a
-              key={cell.key}
-              href={hrefFor(month.from, month.to, cell.key)}
-              className="text-accent hover:underline"
-            >
-              {formatPence(cell.amountPence)}
-            </a>
-          )),
+          ...month.cells.map((cell) =>
+            // Zero cells draw no segment (stacked-bar-chart skips them), so
+            // the table twin shows the honest £0.00 without a drill-down —
+            // "the table says what the chart draws" holds on the first of a
+            // month as well as the last (charts.spec's bar/table link twin).
+            cell.amountPence === 0 ? (
+              <span key={cell.key}>{formatPence(cell.amountPence)}</span>
+            ) : (
+              <a
+                key={cell.key}
+                href={hrefFor(month.from, month.to, cell.key)}
+                className="text-accent hover:underline"
+              >
+                {formatPence(cell.amountPence)}
+              </a>
+            ),
+          ),
           formatPence(month.totalPence),
         ],
       }))}

@@ -762,3 +762,199 @@ export const externalMovements = sqliteTable(
     index('external_movements_exchange_idx').on(table.exchangeKey),
   ],
 );
+
+/**
+ * Projects — Project Costing &amp; Supplier Optimiser (PROJECTS_IMPLEMENTATION.MD,
+ * decision 181, SPEC §27). One costing matrix serves DIY projects now and
+ * holiday/TCO comparisons later without a schema rewrite:
+ *
+ * - rows `project_items` = what you need (materials / trip legs / cost lines);
+ * - columns `project_suppliers` = merchants in 'mix_and_match' mode, or
+ *   mutually exclusive candidates in 'compare_options' mode;
+ * - cells `project_quotes` = one row's price from one column.
+ *
+ * These are planning records, not money records: they never touch pots,
+ * purchases, estimates or Insights. Money is integer pence like everywhere
+ * else; every mutable row carries a version counter and every write is
+ * audited (the standing domain rules).
+ */
+export const projects = sqliteTable(
+  'projects',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    /**
+     * 'mix_and_match' (Phase 1 default — DIY &amp; holidays: one cell per row,
+     * grouped by supplier with delivery rules) or 'compare_options' (Phase 4 —
+     * columns are whole candidates; sums run vertically by cost_frequency).
+     */
+    projectMode: text('project_mode', { enum: ['mix_and_match', 'compare_options'] })
+      .notNull()
+      .default('mix_and_match'),
+    /** Optional budget for the grand-total under/over status (pence). */
+    targetBudgetPence: integer('target_budget_pence'),
+    status: text('status', {
+      enum: ['researching', 'ready_to_order', 'completed'],
+    })
+      .notNull()
+      .default('researching'),
+    notes: text('notes'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    check(
+      'projects_budget_nonnegative',
+      sql`(${table.targetBudgetPence} IS NULL) OR (${table.targetBudgetPence} >= 0)`,
+    ),
+  ],
+);
+
+/**
+ * Columns of the costing matrix: the suppliers/merchants a project is quoting
+ * with (deliberately separate from the contact book's `suppliers`, SPEC §21 —
+ * a project supplier is a quote source for one plan, not a household record).
+ *
+ * Delivery pricing (PROJECTS_IMPLEMENTATION.MD §4.4): the flat fee is incurred
+ * once if ≥1 item is ordered from this supplier; meeting the free-delivery
+ * threshold on the materials subtotal waives it; fulfilment 'collect' waives
+ * it regardless.
+ */
+export const projectSuppliers = sqliteTable(
+  'project_suppliers',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+    name: text('name').notNull(),
+    phone: text('phone'),
+    websiteUrl: text('website_url'),
+    notes: text('notes'),
+    /** Flat delivery charge, pence, incurred once per order from this supplier. */
+    deliveryFeePence: integer('delivery_fee_pence').notNull().default(0),
+    /** Materials subtotal at or above this (pence) makes delivery free. */
+    freeDeliveryThresholdPence: integer('free_delivery_threshold_pence'),
+    clickAndCollectAvailable: integer('click_and_collect_available', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    fulfilmentChoice: text('fulfilment_choice', { enum: ['delivery', 'collect'] })
+      .notNull()
+      .default('delivery'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    check('project_suppliers_fee_nonnegative', sql`${table.deliveryFeePence} >= 0`),
+    check(
+      'project_suppliers_threshold_positive',
+      sql`(${table.freeDeliveryThresholdPence} IS NULL) OR (${table.freeDeliveryThresholdPence} > 0)`,
+    ),
+    check(
+      'project_suppliers_collect_flag',
+      sql`(${table.fulfilmentChoice} != 'collect') OR (${table.clickAndCollectAvailable} = 1)`,
+    ),
+    index('project_suppliers_project_idx').on(table.projectId, table.sortOrder),
+  ],
+);
+
+/**
+ * Rows of the costing matrix: the bill of materials / cost lines.
+ * `quantity` is whole units (boards, posts, packs, days, years); `unit` names
+ * the unit. `selected_supplier_id` stores the user's manual pick for the row —
+ * it points at a supplier that must carry a quote for this item (enforced in
+ * the domain, not by the FK). `cost_frequency` is dormant in Phase 1 and
+ * unlocks car/TCO running costs in Phase 4.
+ */
+export const projectItems = sqliteTable(
+  'project_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+    name: text('name').notNull(),
+    quantity: integer('quantity').notNull(),
+    unit: text('unit').notNull().default('each'),
+    selectedSupplierId: integer('selected_supplier_id').references(
+      (): AnySQLiteColumn => projectSuppliers.id,
+      { onDelete: 'set null' },
+    ),
+    costFrequency: text('cost_frequency', { enum: ['one_off', 'annual', 'monthly'] })
+      .notNull()
+      .default('one_off'),
+    category: text('category'),
+    notes: text('notes'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    check('project_items_quantity_positive', sql`${table.quantity} > 0`),
+    index('project_items_project_idx').on(table.projectId, table.sortOrder),
+    index('project_items_selected_idx').on(table.selectedSupplierId),
+  ],
+);
+
+/**
+ * Cells of the costing matrix: one item's quote from one supplier. Unique on
+ * (item_id, supplier_id) — one quote per cell. Pricing: either a unit price,
+ * or pack pricing (sold in packs of N at £P; required packs =
+ * ceil(quantity / pack_size)). Prices are inc. VAT, integer pence.
+ */
+export const projectQuotes = sqliteTable(
+  'project_quotes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    itemId: integer('item_id')
+      .notNull()
+      .references(() => projectItems.id, { onDelete: 'cascade' }),
+    supplierId: integer('supplier_id')
+      .notNull()
+      .references(() => projectSuppliers.id, { onDelete: 'cascade' }),
+    /** Price per unit, inc. VAT (pence). Null on a pack-only quote. */
+    unitPricePence: integer('unit_price_pence'),
+    /** Pack-only quotes: sold in packs of N … */
+    packSize: integer('pack_size'),
+    /** … at £P per pack, inc. VAT. */
+    packPricePence: integer('pack_price_pence'),
+    productUrl: text('product_url'),
+    inStock: integer('in_stock', { mode: 'boolean' }).notNull().default(true),
+    notes: text('notes'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex('project_quotes_item_supplier_uidx').on(table.itemId, table.supplierId),
+    check(
+      'project_quotes_price_form',
+      sql`(${table.unitPricePence} IS NOT NULL) OR (${table.packSize} IS NOT NULL AND ${table.packPricePence} IS NOT NULL)`,
+    ),
+    check(
+      'project_quotes_unit_nonnegative',
+      sql`(${table.unitPricePence} IS NULL) OR (${table.unitPricePence} >= 0)`,
+    ),
+    check(
+      'project_quotes_pack_positive',
+      sql`(${table.packSize} IS NULL) OR (${table.packSize} > 0)`,
+    ),
+    check(
+      'project_quotes_packprice_nonnegative',
+      sql`(${table.packPricePence} IS NULL) OR (${table.packPricePence} >= 0)`,
+    ),
+    check(
+      'project_quotes_pack_pair',
+      sql`(${table.packSize} IS NULL) = (${table.packPricePence} IS NULL)`,
+    ),
+    index('project_quotes_project_idx').on(table.projectId),
+    index('project_quotes_supplier_idx').on(table.supplierId),
+  ],
+);

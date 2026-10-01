@@ -2510,3 +2510,64 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     assertion on the actual Overview card, and the complete Playwright suite cover the treatment.
     Release is v0.30.0 so the household can take a backup and Force Update after publish; OQ15
     remains open.
+
+181. **Projects: the Project Costing & Supplier Optimiser, Phase 1 (2026-10-01, v0.31.0).** The
+    household asked for a cross between a project budget and a multi-supplier costing utility for
+    future purchases — a bill of materials down the side, suppliers across the top, quotes in the
+    cells, and delivery rules that know one fee covers a whole order. Three use cases were agreed;
+    DIY/home improvement first (the garden fence), holiday packages and car/TCO comparisons later.
+    **One costing matrix, two ways of totalling** (decision taken up front so later phases need no
+    schema rewrite): rows `project_items`, columns `project_suppliers`, cells `project_quotes`
+    (UNIQUE per item+supplier), and `projects.project_mode` = `mix_and_match` (pick one cell per
+    row; group by supplier; apply delivery rules) or `compare_options` (columns are whole
+    candidates; vertical totals by `cost_frequency` — Phase 4). `project_items.cost_frequency`
+    (`one_off`/`annual`/`monthly`) ships dormant for the same reason.
+
+    **Schema** (migration `0016_projects`, drizzle-kit generated from `src/lib/db/schema.ts`):
+    integer pence throughout, timestamp_ms instants, `version` on every mutable row, audit entries
+    in the same transaction on every write — planning records follow the money records' house
+    rules without touching pots/purchases/estimates/Insights. Delivery per supplier:
+    `delivery_fee_pence` charged once per used supplier, `free_delivery_threshold_pence` (subtotal
+    ≥ threshold → £0), `click_and_collect_available` + `fulfilment_choice` (`collect` → £0;
+    choosing collect requires the availability flag). Quote cells carry inc-VAT `unit_price_pence`
+    or pack-only pricing (`pack_size`+`pack_price`; packs = ceil(qty/size)), `product_url`,
+    `in_stock`, notes. `project_suppliers` stays separate from the §21 contact book (OQ-P1 asks
+    whether to link them later).
+
+    **Pure module** `src/lib/projects/costing.ts` (integer pence, no I/O — the single source of
+    truth for Phase 2's optimiser to reuse): line costs with pack rounding, `deliveryCost`
+    (collect / free-threshold / free / charged + "£X away" shortfall), `orderBreakdown` (one group
+    per used supplier, one delivery evaluation each), `budgetComparison`, and the `addVatPence`
+    "+20% VAT" typing helper (half-up, exact). Domain `projects.ts` (CRUD + the cell click;
+    selection requires a live quote; deleting a quote clears the selection; deleting a supplier
+    cascades its quotes and clears selections; delete is allowed and audited — OQ-P2), view
+    `projects-view.ts`, and the fictional **“Back Garden Fence Replacement”** demo
+    (`src/lib/projects/demo.ts`, shared by the e2e seed and `scripts/seed-projects-demo.ts`).
+
+    **UI:** `/projects` (list + start-a-project) and `/projects/[id]` — suppliers & delivery bar
+    (add/edit/delete with delivery rules and the collect choice), the clickable costing matrix
+    (cell = select; empty cell = inline quote form with the +20% VAT helper, pack fields, product
+    URL; "No supplier" column clears; per-row edit/delete), one quote-edit panel under the matrix,
+    and the supplier-grouped Shopping List &amp; Order Breakdown with the Grand Total vs
+    `target_budget_pence`. `compare_options` projects show an honest "arrives in a later phase"
+    note. Nav (bar + drawer) gained Projects; the two e2e nav lists were updated to match.
+
+    **Gates:** `npm test` **618 passed** / 147 suites (32 new in `tests/projects-costing.test.ts`
+    and `tests/projects.test.ts`, incl. the figure-exact fence scenario: Jewson £431.50 + Timber
+    Yard £514.00 + Wickes £128.00 materials, £10.00 delivery, £1,083.50 grand, £116.50 under the
+    £1,200 budget) · `typecheck`, `format:check`, `themes:check`, `build` clean ·
+    `npm audit --omit=dev` zero after `npm audit fix` moved `next` **16.3.5 → 16.3.8** (new
+    critical advisory GHSA-vcvr-r3jv-pc5j, RCE in `next/og` — lockfile-only change within the
+    existing `^16.3.5` range; full suite + build re-run green on the patch). Playwright **113
+    passed** locally via SANDBOX entry 8 (the bell's drawer-link count moved 14→15 for Projects).
+    The run on 1 October also exposed a pre-existing month-boundary honesty slip in the personal
+    spending chart: the table twin linked every cell while the stacked drawing skips zero segments,
+    so on the first of a month the table offered drill-downs the chart does not draw — zero cells
+    now print their £0.00 unlinked ("the table says what the chart draws"). The two
+    `__drizzle_migrations` counts in tests/backup-restore.test.ts moved 16→17.
+
+    The feature plan and its session status log live at the repo root:
+    `PROJECTS_IMPLEMENTATION.MD` (rule: that file **and** the repo docs are refreshed just before
+    any PR, every session). Phase 2 (the cheapest-combination optimiser) is next; open questions
+    OQ-P1–P3 are listed in `PROJECTS_IMPLEMENTATION.MD` §8. No change to the money pipelines,
+    backup format or the release loop.

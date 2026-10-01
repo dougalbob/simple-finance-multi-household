@@ -1,3 +1,70 @@
+# Handoff: v0.31.0 — Projects Phase 1: the DIY costing matrix & delivery rules (decision 181)
+
+**v0.30.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `5a609a51f6fd71b0b7416e611825bee5f93a8eff` (PR #91, from `arena/01a0ee6b-simple-finance`,
+  merged 2026-09-30T05:17:27Z).
+- PR CI runs `36672731548` (first) and `36673487980` (docs follow-up), `main` CI run `36674261498`
+  and Publish run `36675052878` — all three jobs green in every run.
+- Annotated tag `v0.30.0` points at that merge commit; the Publish run succeeded, including the
+  registry-tag verification and the GitHub release.
+- Digest `sha256:22d8fac6888ff1981d8de46ccdda458bf5511259e304ab3b144a31a3e47e82b8` on `v0.30.0` /
+  `latest` / `sha-5a609a5`, differing from v0.29.0's `sha256:426ad031…`.
+
+## What changed
+
+- **Projects (SPEC §27) — Phase 1 of the Project Costing & Supplier Optimiser.** A planning
+  workspace for future spending: materials down the side, per-project suppliers across the top,
+  quotes in the cells, and delivery rules that know one fee covers a whole order. The feature's
+  working plan, **session-by-session status log** and open questions live at the repo root in
+  [`PROJECTS_IMPLEMENTATION.MD`](../PROJECTS_IMPLEMENTATION.MD) — read it before touching this
+  area. It also carries the standing rule: **that file and the repo docs are refreshed just before
+  any PR, every session.**
+- Migration `0016_projects` adds `projects`, `project_items`, `project_suppliers`,
+  `project_quotes` (integer pence, `version` counters, audited writes; `project_mode` and
+  `cost_frequency` already carry the Phase 4 shape). Pure costing module
+  `src/lib/projects/costing.ts` owns line costs (pack rounding), delivery evaluation (fee once per
+  used supplier, free-delivery threshold + "£X away" hint, Click & Collect), grouped order totals
+  and the +20% VAT typing helper. Domain `projects.ts`, view `projects-view.ts`, fictional
+  "Back Garden Fence Replacement" demo `demo.ts` (e2e + preview seeds, figure-exact tests).
+- UI: `/projects` and `/projects/[id]` (suppliers & delivery bar, clickable matrix with inline
+  quote forms + the +20% VAT helper, "No supplier" clear column, supplier-grouped shopping list,
+  grand total vs target budget). Nav gained Projects (bar + drawer; the three e2e nav assertions
+  updated). A `compare_options` project shows an honest "arrives in a later phase" note.
+- **Charts honesty fix (pre-existing, exposed on 1 October):** the personal-spending table twin
+  linked £0.00 cells the stacked chart does not draw; zero cells now print unlinked.
+- **Dependency:** `npm audit fix` moved the lockfile `next` **16.3.5 → 16.3.8** (new critical
+  advisory GHSA-vcvr-r3jv-pc5j — RCE in `next/og`) within the existing `^16.3.5` range; tests and
+  build re-ran green on the patch. Full test count **586 → 618**; `__drizzle_migrations` counts in
+  tests/backup-restore.test.ts moved 16→17.
+
+## Gates at PR preparation
+
+`npm test`: **618 passed** / 147 suites (32 new across `tests/projects-costing.test.ts` and
+`tests/projects.test.ts`, incl. the figure-exact fence demo: materials £1,073.50 + delivery
+£10.00 = grand £1,083.50, £116.50 under the £1,200 budget) · `npm run typecheck` clean ·
+`npm run format:check` clean · `npm run themes:check` clean · `npm run build` clean
+(`next-env.d.ts` restored) · `npm audit --omit=dev` zero · Playwright **113 passed** across every
+project via SANDBOX entry 8 (~7 min locally), including the Projects nav assertions, the bell's
+drawer-link count (14→15) and the charts bar/table twin on a month boundary.
+
+## What a future session should know
+
+1. **Phase 2 is the "Calculate Cheapest Combination" optimiser** (PROJECTS_IMPLEMENTATION.MD §7):
+   exact subset solver over supplier combinations in `costing.ts`, with the manual-vs-auto-vs-best-
+   single action bar. The pure module's shapes were built for it — extend, don't rewrite.
+2. The demo fixture (`src/lib/projects/demo.ts`) is the shared figure-exact scenario — tests assert
+   its totals to the penny; changing its prices means changing `tests/projects.test.ts`.
+3. Project suppliers are deliberately NOT the §21 contact book (OQ-P1). Deletion is allowed and
+   audited (OQ-P2); the Phase 2 optimiser skips out-of-stock quotes (OQ-P3). All three are in
+   PROJECTS_IMPLEMENTATION.MD §8.
+4. The bell's phone drawer test counts links exactly (`toHaveCount(15)`) — the next nav entry moves
+   it again.
+5. OQ15 remains the next app-level open question; nothing here touches the money pipelines,
+   backup format or the release loop.
+
+---
+
 # Handoff: v0.30.0 preparation — a more dimensional, theme-aware interface (decision 180)
 
 ## What changed

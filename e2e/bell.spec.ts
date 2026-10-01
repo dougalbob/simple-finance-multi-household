@@ -225,12 +225,12 @@ test.describe('bell — phone layout', () => {
     const drawerNav = page.locator('nav[aria-label="Pages"]');
     await expect(drawerNav.getByRole('button', { name: /Needs attention|Nothing/ })).toHaveCount(0);
 
-    // Open drawer and check link list order unchanged (8 links in More + 6 in Daily = 14? Actually check count)
+    // Open drawer and check link list order unchanged (9 links in More + 6 in Daily = 15)
     await page.getByRole('button', { name: 'Open navigation menu' }).click();
     await expect(drawerNav).toBeVisible();
     const links = drawerNav.getByRole('link');
-    // There should be 14 links (6 Daily + 8 More) — same as before bell
-    await expect(links).toHaveCount(14);
+    // There should be 15 links (6 Daily + 9 More) — same as before bell
+    await expect(links).toHaveCount(15);
     // Bell should still be visible in top bar even when drawer open
     await expect(button).toBeVisible();
   });
