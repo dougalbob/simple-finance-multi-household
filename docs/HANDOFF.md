@@ -1,7 +1,12 @@
-# Handoff: Projects Phase 2 — the Cheapest Combination optimiser (decision 182, UNRELEASED)
+# Handoff: v0.32.0 — Projects Phase 2: the Cheapest Combination optimiser (decision 182)
 
-Work in progress on session branch `arena/01a0f975-simple-finance`; the app is still **v0.31.0**
-(no version bump, no release notes, no PR yet). The v0.31.0 block below is the last released state.
+**v0.31.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `b61477df4a5d61f3a2136e1d5f08d2bac300c2b8` (PR #92, merged 2026-10-01T14:09:38Z).
+- PR CI run `36872715966`, `main` CI run `36874163652` and Publish run `36875360817` — all green.
+- Annotated tag `v0.31.0` points at that merge commit; the GitHub release is marked Latest.
+- Digest `sha256:f82d3d31f97a4861e26f334fd043a2801c3a32326014890de7db848b2d753c9b` on `v0.31.0` /
+  `latest` / `sha-b61477d`, differing from v0.30.0's `sha256:22d8fac6…`.
 
 ## What changed
 
@@ -14,18 +19,27 @@ Work in progress on session branch `arena/01a0f975-simple-finance`; the app is s
 - No schema, migration or dependency change. SPEC §27.6–27.7, decision 182,
   `PROJECTS_IMPLEMENTATION.MD` (Phase 2 ticked, session 2 logged, OQ-P3 updated, OQ-P4 added).
 
-## Gates so far
+## Gates at PR preparation
 
-`npm test` **637 passed** · `typecheck` · `format:check` clean · new `e2e/projects.spec.ts` (own
-`projects` project in `playwright.config.ts`, before `backup`) green locally via SANDBOX entry 8.
+`npm test`: **637 passed** / 149 suites (19 new in `tests/projects-optimiser.test.ts`) · `npm run
+typecheck` clean · `npm run format:check` clean · `npm run themes:check` clean · `npm run build`
+clean (`next-env.d.ts` restored) · `npm audit --omit=dev` zero · Playwright **114 passed** across
+every project via SANDBOX entry 8 (~6 min locally), including the new `e2e/projects.spec.ts` (own
+`projects` project in `playwright.config.ts`, before `backup`).
 
-## What the release session must do
+## What a future session should know
 
-1. Run the full gates (`build`, `themes:check`, whole Playwright suite, `npm audit --omit=dev`).
-2. Bump the five version places, write `docs/RELEASE_NOTES_vX.Y.Z.md`, refresh these docs, then
-   follow `docs/RELEASE_PROCESS.md`. Remember post-merge facts for v0.31.0 are also still to be
-   recorded here by a session with GitHub access.
-3. Ask the household about OQ-P3 (out-of-stock skipped) and OQ-P4 (suggest Click & Collect?).
+1. **Record v0.32.0's post-merge facts at the top of this file** (merge commit, PR CI and main CI
+   run IDs, tag, Publish run, digest vs v0.31.0's `sha256:f82d3d31…`), per decision 173.
+2. Phase 3 (holiday/bundle refinements) and Phase 4 (`compare_options` / TCO) are next in
+   `PROJECTS_IMPLEMENTATION.MD` §7. The optimiser is `mix_and_match` only; the bar is hidden for
+   `compare_options` projects.
+3. Open household questions: OQ-P3 (out-of-stock quotes skipped — implemented, awaiting
+   confirmation) and OQ-P4 (should the optimiser suggest Click & Collect?). OQ-P1/OQ-P2 and the
+   app-level OQ15 are unchanged.
+4. The Phase 2 demo figures are asserted to the penny in `tests/projects-optimiser.test.ts` (split
+   £1,061.50, single supplier Wickes £1,152.00 over the fence fixture) — changing the demo's prices
+   means changing those tests too.
 
 ---
 

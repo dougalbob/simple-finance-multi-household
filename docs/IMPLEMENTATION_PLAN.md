@@ -2572,8 +2572,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     OQ-P1–P3 are listed in `PROJECTS_IMPLEMENTATION.MD` §8. No change to the money pipelines,
     backup format or the release loop.
 
-182. **Projects Phase 2: the Cheapest Combination optimiser (2026-10-01, unreleased — rides the next
-    release).** Pure `cheapestCombination(...)` in `src/lib/projects/costing.ts`, an
+182. **Projects Phase 2: the Cheapest Combination optimiser (2026-10-01, v0.32.0).** Pure `cheapestCombination(...)` in `src/lib/projects/costing.ts`, an
     `applyProjectSelections` domain function, an `applyProjectPlanAction` server action, the
     optimiser bar on `/projects/[id]` (`src/components/project-optimiser.tsx`) and SPEC §27.6. No
     schema change, migration or dependency.
@@ -2607,6 +2606,6 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     Yard gravel boards £142.00 + £15.00 delivery — vs the £1,083.50 manual selection, and best
     single supplier Wickes £1,152.00) · `typecheck` and `format:check` clean · new Playwright spec
     `e2e/projects.spec.ts` (own `projects` project, before `backup`) passed locally via SANDBOX
-    entry 8: the bar, Apply single → Apply split, and persistence across a reload. The full
-    Playwright suite, `build` and `themes:check` were not re-run for this unreleased slice —
-    run them before the release PR.
+    entry 8: the bar, Apply single → Apply split, and persistence across a reload. The release
+    gates (`build`, `themes:check`, `npm audit --omit=dev`, the full Playwright suite) are recorded
+    in `docs/RELEASE_NOTES_v0.32.0.md` and `docs/HANDOFF.md`.

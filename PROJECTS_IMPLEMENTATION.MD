@@ -230,7 +230,7 @@ the best single supplier that stocks everything.
       (`src/lib/projects/demo.ts`, shared by the e2e seed and the demo seeder script).
 - [x] Unit/integration tests (`tests/projects-costing.test.ts`, `tests/projects.test.ts`).
 
-### Phase 2 — The “Cheapest Combination” optimiser engine ✅ (session 2, unreleased)
+### Phase 2 — The “Cheapest Combination” optimiser engine ✅ (session 2, v0.32.0)
 
 - [x] Solver `cheapestCombination(...)` in `costing.ts`: stage 1 enumerates every supplier subset
       (2^S − 1, cheapest stocked supplier per item, delivery/threshold/collect rules applied);
@@ -252,9 +252,8 @@ the best single supplier that stocks everything.
       and out-of-stock items, Click & Collect, pack pricing, ties, determinism, node budget,
       exhaustive cross-check on 150 random matrices, figure-exact fence results, apply flow) and
       `e2e/projects.spec.ts`.
-- [ ] **Not done / for the release session:** version bump (five places), release notes
-      `docs/RELEASE_NOTES_vX.Y.Z.md`, full Playwright + `build` + `themes:check` run, PR. The code is
-      on the session branch only.
+- [x] Released as v0.32.0: five version places bumped, release notes
+      `docs/RELEASE_NOTES_v0.32.0.md`, full gates, PR and publish via `docs/RELEASE_PROCESS.md`.
 
 ### Phase 3 — Holiday / bundle refinements
 
@@ -291,4 +290,4 @@ the best single supplier that stocks everything.
 | Session | Date (Europe/London) | Branch / PR | Stage reached |
 |---|---|---|---|
 | 1 | 2026-10-01 | `arena/01a0f778-simple-finance` | **Phase 1 complete.** Repo inspected; this plan written; migration `0016_projects`; `src/lib/projects/{costing,projects,projects-view,demo}.ts`; Zod boundaries; server actions; `/projects` + `/projects/[id]` workspace (suppliers bar, clickable costing matrix with +20% VAT quote forms, supplier-grouped shopping list, grand total vs budget); “Back Garden Fence Replacement” demo project seeded in the e2e/preview seeds; tests for the pure costing module and the domain/integration flows; nav + e2e nav lists updated; docs refreshed (SPEC §27, decision 181, HANDOFF, release notes v0.31.0). Two incidental fixes on the way: the lockfile moved `next` 16.3.5 → 16.3.8 (critical `next/og` advisory), and the personal-spending chart's table twin stopped linking £0.00 cells the drawing skips (first-of-month edge). Phase 2 optimiser not started. |
-| 2 | 2026-10-01 | `arena/01a0f975-simple-finance` | **Phase 2 implemented, unreleased.** Read the repo docs; built the two-stage exact optimiser in `costing.ts`, `applyProjectSelections` in `projects.ts`, optimiser view + `computeProjectOptimiser` in `projects-view.ts`, `applyProjectPlanAction` + `projectApplyPlanEntrySchema`, the `ProjectOptimiserBar` component and its placement on `/projects/[id]`; 19 new unit/integration tests (637 total pass) and a Playwright spec that passed locally (SANDBOX entry 8). Fence demo: split £1,061.50 vs manual £1,083.50 vs single supplier (Wickes) £1,152.00. Docs refreshed (SPEC §27.6–27.7, decision 182, HANDOFF, this file). **No version bump, release notes or PR yet** — left for the release session. |
+| 2 | 2026-10-01 | `arena/01a0f975-simple-finance` | **Phase 2 complete, released as v0.32.0.** Read the repo docs; built the two-stage exact optimiser in `costing.ts`, `applyProjectSelections` in `projects.ts`, optimiser view + `computeProjectOptimiser` in `projects-view.ts`, `applyProjectPlanAction` + `projectApplyPlanEntrySchema`, the `ProjectOptimiserBar` component and its placement on `/projects/[id]`; 19 new unit/integration tests (637 total pass) and a Playwright spec that passed locally (SANDBOX entry 8). Fence demo: split £1,061.50 vs manual £1,083.50 vs single supplier (Wickes) £1,152.00. Docs refreshed (SPEC §27.6–27.7, decision 182, HANDOFF, this file). Phase 3 not started. |
