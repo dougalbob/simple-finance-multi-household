@@ -1036,6 +1036,117 @@ export function selectProjectItemSupplier(
 }
 
 // ---------------------------------------------------------------------------
+// Applying an optimiser plan (Phase 2)
+// ---------------------------------------------------------------------------
+
+export type AppliedPlanKind = 'split' | 'single-supplier';
+
+/**
+ * Apply many selections at once — the "Auto-Pick Cheapest Split" and "Best
+ * Single-Supplier" buttons. One transaction, every rule of
+ * `selectProjectItemSupplier` (item and supplier in this project, a quote must
+ * exist), a version bump per item that actually changes, and a single audit
+ * entry on the project recording the plan and the before/after picks. Items
+ * not named keep their current pick. Applying a plan that already is the
+ * selection changes nothing and writes no audit entry.
+ */
+export function applyProjectSelections(
+  db: Db,
+  input: {
+    projectId: number;
+    plan: AppliedPlanKind;
+    selections: ReadonlyArray<{ itemId: number; supplierId: number }>;
+    actor: string;
+    now?: Date;
+  },
+): { changedItemIds: number[] } {
+  const now = input.now ?? new Date();
+  return db.transaction((tx) => {
+    const project = tx.select().from(projects).where(eq(projects.id, input.projectId)).get();
+    if (project === undefined) throw new ProjectNotFoundError(input.projectId);
+    if (project.projectMode !== 'mix_and_match') {
+      throw new InvalidProjectInputError(
+        'Only mix-and-match projects can be filled in from a calculated plan.',
+      );
+    }
+
+    const supplierRows = tx
+      .select()
+      .from(projectSuppliers)
+      .where(eq(projectSuppliers.projectId, input.projectId))
+      .all();
+    const supplierById = new Map(supplierRows.map((row) => [row.id, row] as const));
+    const itemRows = tx
+      .select()
+      .from(projectItems)
+      .where(eq(projectItems.projectId, input.projectId))
+      .all();
+    const itemById = new Map(itemRows.map((row) => [row.id, row] as const));
+    const quoteKeys = new Set(
+      tx
+        .select()
+        .from(projectQuotes)
+        .where(eq(projectQuotes.projectId, input.projectId))
+        .all()
+        .map((row) => `${row.itemId}:${row.supplierId}`),
+    );
+
+    const seen = new Set<number>();
+    for (const selection of input.selections) {
+      if (seen.has(selection.itemId)) {
+        throw new InvalidProjectInputError('A plan names the same item twice.');
+      }
+      seen.add(selection.itemId);
+      if (!itemById.has(selection.itemId)) throw new ProjectItemNotFoundError(selection.itemId);
+      if (!supplierById.has(selection.supplierId)) {
+        throw new ProjectSupplierNotFoundError(selection.supplierId);
+      }
+      if (!quoteKeys.has(`${selection.itemId}:${selection.supplierId}`)) {
+        throw new InvalidProjectInputError(
+          'Only a supplier with a quote for an item can be selected for it.',
+        );
+      }
+    }
+
+    // Keyed by item id: { "<itemId>": supplierId | null }.
+    const before: Record<string, number | null> = {};
+    const after: Record<string, number | null> = {};
+    const changedItemIds: number[] = [];
+    for (const selection of input.selections) {
+      const item = itemById.get(selection.itemId);
+      if (item === undefined || item.selectedSupplierId === selection.supplierId) continue;
+      tx.update(projectItems)
+        .set({
+          selectedSupplierId: selection.supplierId,
+          updatedAt: now,
+          version: item.version + 1,
+        })
+        .where(eq(projectItems.id, item.id))
+        .run();
+      before[String(item.id)] = item.selectedSupplierId;
+      after[String(item.id)] = selection.supplierId;
+      changedItemIds.push(item.id);
+    }
+    if (changedItemIds.length === 0) return { changedItemIds };
+
+    const label = input.plan === 'split' ? 'cheapest split' : 'best single-supplier option';
+    recordAudit(tx, {
+      actor: checkedActor(input.actor),
+      action: 'project.apply-plan',
+      entity: 'project',
+      entityId: input.projectId,
+      summary: `Applied the ${label} to “${project.name}” (${changedItemIds.length} ${
+        changedItemIds.length === 1 ? 'item' : 'items'
+      } changed)`,
+      before,
+      after,
+      now,
+    });
+    return { changedItemIds };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Row adapters — database rows as the pure costing module needs them
 // ---------------------------------------------------------------------------
 

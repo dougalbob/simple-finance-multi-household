@@ -1001,3 +1001,14 @@ export const projectSelectionEntrySchema = z.object({
   itemId: positiveIdSchema,
   supplierId: positiveIdSchema.nullable(),
 });
+
+/**
+ * Apply a calculated plan (Phase 2). The browser sends only which plan and the
+ * total it was shown; the server recomputes the plan itself and refuses when
+ * the prices have moved since.
+ */
+export const projectApplyPlanEntrySchema = z.object({
+  projectId: positiveIdSchema,
+  plan: z.enum(['split', 'single-supplier'], { error: 'Choose a plan to apply.' }),
+  expectedTotalPence: z.number().int().min(0),
+});

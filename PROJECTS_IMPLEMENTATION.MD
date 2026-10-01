@@ -230,16 +230,30 @@ the best single supplier that stocks everything.
       (`src/lib/projects/demo.ts`, shared by the e2e seed and the demo seeder script).
 - [x] Unit/integration tests (`tests/projects-costing.test.ts`, `tests/projects.test.ts`).
 
-### Phase 2 — The “Cheapest Combination” optimiser engine
+### Phase 2 — The “Cheapest Combination” optimiser engine ✅ (session 2, v0.32.0)
 
-- Exact subset solver over active supplier combinations (2^S − 1): cheapest stocked supplier per
-  item within each subset, applying each supplier’s delivery fee / free-delivery threshold rules —
-  including the “pay slightly more at Supplier B to cross B’s free-delivery threshold and save a
-  delivery fee” case.
-- UI action bar above the matrix: **Your Manual Selection** vs **⚡ Auto-Pick Cheapest Split**
-  (1-click apply) vs **🚚 Best Single-Supplier Option** (cheapest supplier stocking all items,
-  showing the convenience trade-off).
-- Tests: split vs single supplier, threshold cross-over, unstocked items, click &amp; collect.
+- [x] Solver `cheapestCombination(...)` in `costing.ts`: stage 1 enumerates every supplier subset
+      (2^S − 1, cheapest stocked supplier per item, delivery/threshold/collect rules applied);
+      stage 2 is an exact branch-and-bound over all item→supplier assignments seeded with stage 1,
+      so the “pay slightly more at B to cross B's free-delivery threshold” case is solved
+      exactly, not just approximated (a pure per-subset pass misses it when A is still needed for
+      an item only A stocks). Budgeted (`exact: false` + caveat if exhausted); deterministic ties
+      (fewer suppliers, then earlier column).
+- [x] Also returned: the best single supplier that stocks everything (plus ranked alternatives),
+      the naive cheapest-price-per-row baseline (to explain the delivery saving), uncoverable
+      items and the count of out-of-stock quotes skipped (OQ-P3 as proposed).
+- [x] UI action bar above the matrix: **Your manual selection** vs **⚡ Auto-pick cheapest split**
+      vs **🚚 Best single-supplier option**, each with total, suppliers, per-supplier delivery
+      verdict and comparison sentences; one-click **Apply**.
+- [x] `applyProjectSelections` (one transaction, per-row version bump, one `project.apply-plan`
+      audit entry, no-op re-apply) + `applyProjectPlanAction` (server recomputes the plan and
+      refuses if the browser's expected total no longer matches).
+- [x] Tests: `tests/projects-optimiser.test.ts` (split vs single, threshold cross-over, unstocked
+      and out-of-stock items, Click & Collect, pack pricing, ties, determinism, node budget,
+      exhaustive cross-check on 150 random matrices, figure-exact fence results, apply flow) and
+      `e2e/projects.spec.ts`.
+- [x] Released as v0.32.0: five version places bumped, release notes
+      `docs/RELEASE_NOTES_v0.32.0.md`, full gates, PR and publish via `docs/RELEASE_PROCESS.md`.
 
 ### Phase 3 — Holiday / bundle refinements
 
@@ -261,8 +275,13 @@ the best single supplier that stocks everything.
 - **OQ-P2:** deleting a project/row/supplier is allowed in Phase 1 (it is a draft plan, not money
   history) and is audited, with cascading quote removal. A stricter “archive instead of delete”
   policy is easy to switch on if the household prefers it.
-- **OQ-P3:** when an out-of-stock quote is the cheapest, Phase 2’s optimiser will skip it (you
-  cannot order it). Confirm when Phase 2 lands.
+- **OQ-P3:** when an out-of-stock quote is the cheapest, Phase 2’s optimiser skips it (you
+  cannot order it) — implemented that way in session 2; an item with *only* out-of-stock quotes is
+  reported as uncoverable. Still awaiting the household's confirmation (the code has an
+  `includeOutOfStock` switch if they would rather see it priced).
+- **OQ-P4 (new):** the optimiser keeps each supplier's current delivery / Click & Collect choice.
+  Should it also *suggest* flipping a supplier to Click & Collect when that would be cheapest?
+  Left out of Phase 2 so the plan never contradicts what the household set.
 
 ---
 
@@ -271,3 +290,4 @@ the best single supplier that stocks everything.
 | Session | Date (Europe/London) | Branch / PR | Stage reached |
 |---|---|---|---|
 | 1 | 2026-10-01 | `arena/01a0f778-simple-finance` | **Phase 1 complete.** Repo inspected; this plan written; migration `0016_projects`; `src/lib/projects/{costing,projects,projects-view,demo}.ts`; Zod boundaries; server actions; `/projects` + `/projects/[id]` workspace (suppliers bar, clickable costing matrix with +20% VAT quote forms, supplier-grouped shopping list, grand total vs budget); “Back Garden Fence Replacement” demo project seeded in the e2e/preview seeds; tests for the pure costing module and the domain/integration flows; nav + e2e nav lists updated; docs refreshed (SPEC §27, decision 181, HANDOFF, release notes v0.31.0). Two incidental fixes on the way: the lockfile moved `next` 16.3.5 → 16.3.8 (critical `next/og` advisory), and the personal-spending chart's table twin stopped linking £0.00 cells the drawing skips (first-of-month edge). Phase 2 optimiser not started. |
+| 2 | 2026-10-01 | `arena/01a0f975-simple-finance` | **Phase 2 complete, released as v0.32.0.** Read the repo docs; built the two-stage exact optimiser in `costing.ts`, `applyProjectSelections` in `projects.ts`, optimiser view + `computeProjectOptimiser` in `projects-view.ts`, `applyProjectPlanAction` + `projectApplyPlanEntrySchema`, the `ProjectOptimiserBar` component and its placement on `/projects/[id]`; 19 new unit/integration tests (637 total pass) and a Playwright spec that passed locally (SANDBOX entry 8). Fence demo: split £1,061.50 vs manual £1,083.50 vs single supplier (Wickes) £1,152.00. Docs refreshed (SPEC §27.6–27.7, decision 182, HANDOFF, this file). Phase 3 not started. |

@@ -1867,7 +1867,7 @@ opened the bell. The accessible name carries "2 new since you last looked".
   filter on the Tasks page would be a later decision if the household wants it.
 
 
-## 27. Projects: project costing & supplier optimiser (v0.31.0, decision 181)
+## 27. Projects: project costing & supplier optimiser (v0.31.0 Phase 1, decision 181; Phase 2 decision 182)
 
 A planning workspace for **future** spending: cost a purchase or a project against real quotes from
 several suppliers before any money moves. Projects are planning records — they never touch pots,
@@ -1929,9 +1929,36 @@ plan, not money history (PROJECTS_IMPLEMENTATION.MD OQ-P2) — and is audited wi
 deleting a project removes its rows/columns/cells; deleting a row or column cascades its quotes; a
 selection pointing at a removed supplier or quote is cleared.
 
-### 27.6 Phasing
+### 27.6 The Cheapest Combination optimiser (Phase 2, decision 182)
 
-Phase 1 (this release) is the DIY matrix end-to-end above. Phase 2 adds the "Calculate Cheapest
-Combination" optimiser (exact subset solver over suppliers with delivery rules, plus the best
-single-supplier comparison); Phase 3 holiday/bundle refinements; Phase 4 the `compare_options`
-candidate/TCO mode. `PROJECTS_IMPLEMENTATION.MD` tracks the stage session by session.
+Above the matrix on a `mix_and_match` project, an action bar sets three plans side by side, each
+with its grand total (materials + delivery), who the order goes to and a plain-words comparison:
+
+- **Your manual selection** — whatever is picked in the matrix now.
+- **⚡ Auto-pick cheapest split** — the cheapest way to buy every orderable item across suppliers,
+  delivery fees and free-delivery thresholds included (so it will pay a little more on a line to
+  push one supplier over its threshold, or leave a supplier out entirely, when that is cheaper).
+  Notes say how much it saves against a *complete* manual selection (never against a partial one),
+  and against simply buying every item at its lowest price.
+- **🚚 Best single-supplier option** — the cheapest supplier that has *every* orderable item in
+  stock, with the convenience trade-off stated ("£X more than the cheapest split, but one order from
+  one supplier"), and the next-best single suppliers. If nobody stocks everything the card says
+  so.
+
+Rules: only **in-stock** quotes are candidates (OQ-P3 — you cannot order what is not there); an
+item no supplier can supply in stock is **uncoverable** — named in a caveat, left out of both plans,
+and never blocks the rest; each supplier's delivery rule is applied as set, including a Click &
+Collect choice (the optimiser does not flip that choice). Ties prefer fewer suppliers, then the
+earlier supplier column; the result is deterministic.
+
+**Apply** writes a plan into the matrix selections in one transaction (a version bump per changed
+row, one audit entry on the project). The server recomputes the plan itself and refuses — telling
+the household — if the prices moved since the plan was shown. Applying a plan the matrix already
+holds changes nothing. After applying, any cell can still be changed by hand. `compare_options`
+projects show no bar. Nothing here changes the schema.
+
+### 27.7 Phasing
+
+Phase 1 is the DIY matrix end-to-end above; Phase 2 is the optimiser above. Phase 3 is holiday/
+bundle refinements; Phase 4 the `compare_options` candidate/TCO mode. `PROJECTS_IMPLEMENTATION.MD`
+tracks the stage session by session.

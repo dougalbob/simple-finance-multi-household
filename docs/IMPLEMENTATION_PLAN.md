@@ -2571,3 +2571,41 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     any PR, every session). Phase 2 (the cheapest-combination optimiser) is next; open questions
     OQ-P1–P3 are listed in `PROJECTS_IMPLEMENTATION.MD` §8. No change to the money pipelines,
     backup format or the release loop.
+
+182. **Projects Phase 2: the Cheapest Combination optimiser (2026-10-01, v0.32.0).** Pure `cheapestCombination(...)` in `src/lib/projects/costing.ts`, an
+    `applyProjectSelections` domain function, an `applyProjectPlanAction` server action, the
+    optimiser bar on `/projects/[id]` (`src/components/project-optimiser.tsx`) and SPEC §27.6. No
+    schema change, migration or dependency.
+
+    **Decision — the solver is two-stage, deliberately not just "2^S − 1 subsets".** The plan
+    (PROJECTS_IMPLEMENTATION.MD §7) said: enumerate supplier subsets, buy each item from its
+    cheapest member. That is kept as stage 1, but it provably misses the case the same paragraph
+    asks for — *pay slightly more on one line at B so B crosses its free-delivery threshold while A
+    is still needed for a line only A stocks* (a test pins it: £93.00 vs the subset answer
+    £100.00). So stage 2 is an exact branch-and-bound over every item→supplier assignment, seeded
+    with stage 1's best and bounded by the cheapest-possible remaining materials; it proves
+    optimality, and a 400,000-node budget keeps a freak project from hanging the page — if the
+    budget is hit the result says so (`exact: false`) and the bar shows an honest caveat. Past 12
+    suppliers stage 1 tries only the full set and each single supplier. Correctness is checked
+    against an exhaustive search on 150 random matrices (sparse cells, out-of-stock quotes,
+    thresholds, Click & Collect).
+
+    **Decision — OQ-P3 implemented as proposed:** out-of-stock quotes are skipped, never ordered;
+    an item with no in-stock quote is *uncoverable* and is reported and left out of both plans.
+    The household's Click & Collect/delivery choice is an input the optimiser respects, not
+    something it flips. Savings are quoted against the manual selection only when that selection
+    covers every item the plan buys — otherwise the bar says the totals are not like-for-like.
+
+    **Decision — Apply never trusts the browser.** The form posts the plan kind and the total it
+    showed; the server recomputes the plan and refuses (and revalidates the page) if the total
+    differs. One transaction, version bump per changed row, one `project.apply-plan` audit entry
+    on the project keyed by item id; re-applying is a no-op with no audit noise.
+
+    **Gates:** `npm test` **637 passed** (19 new in `tests/projects-optimiser.test.ts`, incl. the
+    figure-exact fence results: cheapest split £1,061.50 — Jewson £904.50 free delivery + Timber
+    Yard gravel boards £142.00 + £15.00 delivery — vs the £1,083.50 manual selection, and best
+    single supplier Wickes £1,152.00) · `typecheck` and `format:check` clean · new Playwright spec
+    `e2e/projects.spec.ts` (own `projects` project, before `backup`) passed locally via SANDBOX
+    entry 8: the bar, Apply single → Apply split, and persistence across a reload. The release
+    gates (`build`, `themes:check`, `npm audit --omit=dev`, the full Playwright suite) are recorded
+    in `docs/RELEASE_NOTES_v0.32.0.md` and `docs/HANDOFF.md`.
