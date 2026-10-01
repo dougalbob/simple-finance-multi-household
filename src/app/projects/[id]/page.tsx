@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { CostingMatrix } from '@/components/project-matrix';
 import { OrderBreakdown } from '@/components/project-breakdown';
+import { ProjectOptimiserBar } from '@/components/project-optimiser';
 import {
   ProjectDeleteButton,
   ProjectEditForm,
@@ -20,8 +21,9 @@ export const dynamic = 'force-dynamic';
  * The project workspace (SPEC §27, PROJECTS_IMPLEMENTATION.MD §5): suppliers
  * and their delivery rules on top, the costing matrix in the middle (click a
  * quote cell to pick that supplier for the row), and the supplier-grouped
- * shopping list with the grand total below. The optimiser bar arrives in
- * Phase 2.
+ * shopping list with the grand total below. Above the matrix, the optimiser
+ * bar (Phase 2) sets the manual selection beside the cheapest split and the
+ * best single supplier, one click to apply.
  */
 export default async function ProjectWorkspacePage({
   params,
@@ -153,6 +155,20 @@ export default async function ProjectWorkspacePage({
         </ul>
       </section>
 
+      {view.optimiser === null ? null : (
+        <section aria-labelledby="optimiser-heading" className="mt-6">
+          <h2 id="optimiser-heading" className="text-lg font-semibold">
+            Cheapest combination
+          </h2>
+          <p className="text-sm text-ink-soft">
+            Your own picks beside what the numbers say, delivery fees and free-delivery thresholds
+            included. Applying a plan fills in the matrix below; you can still change any cell by
+            hand afterwards.
+          </p>
+          <ProjectOptimiserBar projectId={view.project.id} optimiser={view.optimiser} />
+        </section>
+      )}
+
       <section aria-labelledby="matrix-heading" className="mt-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="matrix-heading" className="text-lg font-semibold">
@@ -160,7 +176,7 @@ export default async function ProjectWorkspacePage({
           </h2>
           <p className="text-sm text-ink-soft">
             Click a quote cell to choose that supplier for the material. The first column clears a
-            choice. Phase 2 adds “Calculate Cheapest Combination”.
+            choice.
           </p>
         </div>
 

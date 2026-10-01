@@ -132,7 +132,9 @@ import {
   ReceiptNotFoundError,
   voidReceipt,
 } from '@/lib/records/receipts';
+import { computeProjectOptimiser, planForKind } from '@/lib/projects/projects-view';
 import {
+  applyProjectSelections,
   createProject,
   createProjectItem,
   createProjectSupplier,
@@ -199,6 +201,7 @@ import {
   projectQuoteEntrySchema,
   projectQuoteDeleteEntrySchema,
   projectSelectionEntrySchema,
+  projectApplyPlanEntrySchema,
 } from '@/lib/validation';
 import {
   cancelSchedule,
@@ -3149,6 +3152,72 @@ export async function selectProjectSupplierAction(
       status: 'ok',
       message:
         parsed.data.supplierId === null ? 'Selection cleared.' : 'Supplier selected for this item.',
+    };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+/**
+ * Apply the optimiser's cheapest split or best single-supplier plan to the
+ * project's selections. The plan is recomputed here from the stored matrix —
+ * the browser only says which plan it was looking at and the total it was
+ * shown, and a mismatch (prices moved in another tab) refuses to apply.
+ */
+export async function applyProjectPlanAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectApplyPlanEntrySchema.safeParse({
+    projectId: numberOrNull(formData.get('projectId')),
+    plan: formData.get('plan'),
+    expectedTotalPence: numberOrNull(formData.get('expectedTotalPence')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'That plan could not be read.') };
+  }
+  const { projectId, plan: kind, expectedTotalPence } = parsed.data;
+  try {
+    const db = getDbHandle().db;
+    const computed = computeProjectOptimiser(db, projectId);
+    if (computed === null) throw new ProjectNotFoundError(projectId);
+    if (computed.projectMode !== 'mix_and_match') {
+      return {
+        status: 'error',
+        message: 'Only mix-and-match projects can be filled in from a calculated plan.',
+      };
+    }
+    const plan = planForKind(computed.result, kind);
+    if (plan === null) {
+      return { status: 'error', message: 'There is no plan to apply — the quotes have changed.' };
+    }
+    if (plan.totals.grandTotalPence !== expectedTotalPence) {
+      revalidateProjectPages(projectId);
+      return {
+        status: 'error',
+        message:
+          'The prices changed since this plan was calculated, so it was not applied. The page now shows the up-to-date plan.',
+      };
+    }
+    const { changedItemIds } = applyProjectSelections(db, {
+      projectId,
+      plan: kind,
+      selections: plan.assignments,
+      actor: user.email,
+    });
+    revalidateProjectPages(projectId);
+    return {
+      status: 'ok',
+      message:
+        changedItemIds.length === 0
+          ? 'Your selection already matches this plan.'
+          : `Applied — ${changedItemIds.length} ${
+              changedItemIds.length === 1 ? 'item' : 'items'
+            } updated in the matrix.`,
     };
   } catch (err) {
     const message = projectErrorMessage(err);

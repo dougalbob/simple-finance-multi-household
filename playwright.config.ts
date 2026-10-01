@@ -169,6 +169,13 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
+      // Own project: applying a plan rewrites the fence demo's selections, so
+      // it runs before the backup project's restore.
+      name: 'projects',
+      testMatch: /projects\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
       name: 'backup',
       testMatch: /backup\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },

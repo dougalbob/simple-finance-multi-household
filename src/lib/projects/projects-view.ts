@@ -4,10 +4,15 @@ import { projects } from '../db/schema';
 import { formatPence } from '../money';
 import {
   budgetComparison,
+  cheapestCombination,
   lineCost,
   orderBreakdown,
+  selectionMatchesPlan,
   type BudgetComparison,
   type BudgetState,
+  type OptimiserPlan,
+  type OptimiserResult,
+  type ProjectTotals,
   type QuotePricing,
 } from './costing';
 import {
@@ -18,6 +23,7 @@ import {
   toCostingItems,
   toCostingQuotes,
   toCostingSuppliers,
+  type AppliedPlanKind,
   type CostFrequency,
   type FulfilmentChoice,
   type ProjectMode,
@@ -196,6 +202,44 @@ export interface SupplierGroupView {
   supplierTotalLabel: string;
 }
 
+export type OptimiserCardKind = 'manual' | 'split' | 'single';
+
+export interface OptimiserCardLine {
+  supplierName: string;
+  /** `£904.50 materials · Free delivery (over £300.00)`. */
+  detail: string;
+  totalLabel: string;
+}
+
+export interface OptimiserCardView {
+  kind: OptimiserCardKind;
+  title: string;
+  /** False when there is nothing to show (no selection yet, no single supplier). */
+  available: boolean;
+  /** Why the card is empty — shown instead of figures. */
+  unavailableReason: string | null;
+  /** `Jewson + Local Timber Yard` — who the order goes to. */
+  headline: string | null;
+  grandTotalLabel: string | null;
+  summaryLabel: string | null;
+  supplierCountLabel: string | null;
+  lines: OptimiserCardLine[];
+  /** Comparisons and caveats, each a plain sentence. */
+  notes: string[];
+  /** The household's current selection already is this plan. */
+  isCurrent: boolean;
+  /** Posted back with Apply so the server can refuse a plan whose prices moved. */
+  totalPence: number | null;
+}
+
+export interface OptimiserView {
+  manual: OptimiserCardView;
+  split: OptimiserCardView;
+  single: OptimiserCardView;
+  /** Plain sentences about what the optimiser left out or could not prove. */
+  caveats: string[];
+}
+
 export interface ProjectWorkspaceView {
   project: {
     id: number;
@@ -224,6 +268,8 @@ export interface ProjectWorkspaceView {
   };
   /** True when nothing is entered yet — the empty-state hint. */
   isEmpty: boolean;
+  /** The optimiser action bar (Phase 2); null for compare-options or an empty matrix. */
+  optimiser: OptimiserView | null;
 }
 
 function quotePricingLabel(quote: QuotePricing): string {
@@ -252,6 +298,239 @@ function deliveryLabelFor(
   }
 }
 
+// ---------------------------------------------------------------------------
+// The optimiser bar (Phase 2)
+// ---------------------------------------------------------------------------
+
+function deliveryDetail(group: ProjectTotals['groups'][number]): string {
+  const fee = group.delivery;
+  const threshold = group.supplier.freeDeliveryThresholdPence;
+  const delivery =
+    fee.status === 'collect'
+      ? 'Click & Collect — £0.00'
+      : fee.status === 'free-threshold'
+        ? `Free delivery (over ${formatPence(threshold ?? 0)})`
+        : fee.status === 'free'
+          ? 'Free delivery'
+          : `Delivery ${formatPence(fee.deliveryPence)}`;
+  return `${formatPence(group.materialsSubtotalPence)} materials · ${delivery}`;
+}
+
+function cardLinesFor(totals: ProjectTotals): OptimiserCardLine[] {
+  return totals.groups.map((group) => ({
+    supplierName: group.supplier.name,
+    detail: deliveryDetail(group),
+    totalLabel: formatPence(group.supplierTotalPence),
+  }));
+}
+
+function supplierCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'supplier' : 'suppliers'}`;
+}
+
+function emptyCard(
+  kind: OptimiserCardKind,
+  title: string,
+  unavailableReason: string,
+): OptimiserCardView {
+  return {
+    kind,
+    title,
+    available: false,
+    unavailableReason,
+    headline: null,
+    grandTotalLabel: null,
+    summaryLabel: null,
+    supplierCountLabel: null,
+    lines: [],
+    notes: [],
+    isCurrent: false,
+    totalPence: null,
+  };
+}
+
+function filledCard(
+  kind: OptimiserCardKind,
+  title: string,
+  totals: ProjectTotals,
+  notes: string[],
+  isCurrent: boolean,
+): OptimiserCardView {
+  return {
+    kind,
+    title,
+    available: true,
+    unavailableReason: null,
+    headline: totals.groups.map((group) => group.supplier.name).join(' + '),
+    grandTotalLabel: formatPence(totals.grandTotalPence),
+    summaryLabel: `Materials ${formatPence(totals.materialsTotalPence)} + delivery ${formatPence(totals.deliveryTotalPence)}`,
+    supplierCountLabel: supplierCountLabel(totals.groups.length),
+    lines: cardLinesFor(totals),
+    notes,
+    isCurrent,
+    totalPence: totals.grandTotalPence,
+  };
+}
+
+export interface ProjectOptimiserInputs {
+  result: OptimiserResult;
+  items: ReturnType<typeof toCostingItems>;
+  manual: ProjectTotals;
+}
+
+function buildOptimiserView(inputs: ProjectOptimiserInputs): OptimiserView {
+  const { result, items, manual } = inputs;
+  const split = result.split;
+  const single = result.singleSupplier;
+
+  // Is the manual selection like-for-like with the plans? It must choose a
+  // supplier for every item the plans buy.
+  const plannedItemIds = new Set((split?.assignments ?? []).map((a) => a.itemId));
+  const selectedPlanned = items.filter(
+    (item) => plannedItemIds.has(item.itemId) && item.selectedSupplierId !== null,
+  ).length;
+  const manualComplete = split !== null && selectedPlanned === plannedItemIds.size;
+
+  const manualCard =
+    manual.selectedCount === 0
+      ? emptyCard(
+          'manual',
+          'Your manual selection',
+          'Nothing chosen yet — click quote cells in the matrix, or let the optimiser fill them in.',
+        )
+      : filledCard(
+          'manual',
+          'Your manual selection',
+          manual,
+          manual.unselected.length === 0
+            ? []
+            : [
+                `${manual.unselected.length} ${manual.unselected.length === 1 ? 'item is' : 'items are'} not chosen yet and not counted.`,
+              ],
+          false,
+        );
+
+  const splitNotes: string[] = [];
+  let splitCard: OptimiserCardView;
+  if (split === null) {
+    splitCard = emptyCard(
+      'split',
+      'Auto-pick cheapest split',
+      'Nothing can be ordered yet — add quotes (in stock) for at least one material.',
+    );
+  } else {
+    if (manualComplete) {
+      const saving = manual.grandTotalPence - split.totals.grandTotalPence;
+      if (saving > 0) splitNotes.push(`${formatPence(saving)} cheaper than your manual selection.`);
+      else if (saving === 0) splitNotes.push('Same price as your manual selection.');
+      else
+        splitNotes.push(
+          `${formatPence(-saving)} more than your manual selection, which uses quotes the optimiser skips (out of stock).`,
+        );
+    } else if (manual.selectedCount > 0) {
+      splitNotes.push(
+        'Your manual selection does not cover every item yet, so its total is not like-for-like.',
+      );
+    }
+    const naive = result.cheapestPerItem;
+    if (naive !== null && split.totals.grandTotalPence < naive.totals.grandTotalPence) {
+      splitNotes.push(
+        `${formatPence(naive.totals.grandTotalPence - split.totals.grandTotalPence)} less than buying every item at its lowest price — consolidating orders saves on delivery.`,
+      );
+    }
+    splitCard = filledCard(
+      'split',
+      'Auto-pick cheapest split',
+      split.totals,
+      splitNotes,
+      selectionMatchesPlan(items, split),
+    );
+  }
+
+  let singleCard: OptimiserCardView;
+  if (single === null) {
+    singleCard = emptyCard(
+      'single',
+      'Best single-supplier option',
+      split === null
+        ? 'Nothing can be ordered yet.'
+        : 'No single supplier has every item in stock, so the order has to be split.',
+    );
+  } else {
+    const singleNotes: string[] = [];
+    if (split !== null) {
+      const extra = single.totals.grandTotalPence - split.totals.grandTotalPence;
+      if (extra > 0) {
+        singleNotes.push(
+          `${formatPence(extra)} more than the cheapest split, but one order from one supplier instead of ${supplierCountLabel(split.supplierCount)}.`,
+        );
+      } else {
+        singleNotes.push('The same price as the cheapest split, with just one order to place.');
+      }
+    }
+    if (result.singleSupplierOptions.length > 1) {
+      singleNotes.push(
+        `Next best: ${result.singleSupplierOptions
+          .slice(1, 3)
+          .map((option) => `${option.name} ${formatPence(option.grandTotalPence)}`)
+          .join(', ')}.`,
+      );
+    }
+    singleCard = filledCard(
+      'single',
+      'Best single-supplier option',
+      single.totals,
+      singleNotes,
+      selectionMatchesPlan(items, single),
+    );
+  }
+
+  const caveats: string[] = [];
+  if (result.uncoverable.length > 0) {
+    caveats.push(
+      `${result.uncoverable.length === 1 ? 'This item has' : 'These items have'} no in-stock quote anywhere and ${
+        result.uncoverable.length === 1 ? 'is' : 'are'
+      } left out of both plans: ${result.uncoverable.map((line) => line.itemName).join(', ')}.`,
+    );
+  }
+  if (result.skippedOutOfStockCount > 0) {
+    caveats.push(
+      `${result.skippedOutOfStockCount} out-of-stock ${
+        result.skippedOutOfStockCount === 1 ? 'quote was' : 'quotes were'
+      } skipped — an order cannot be placed for them.`,
+    );
+  }
+  if (!result.exact) {
+    caveats.push(
+      'This project is large enough that the cheapest split could not be proven; it is the best combination found.',
+    );
+  }
+  return { manual: manualCard, split: splitCard, single: singleCard, caveats };
+}
+
+/**
+ * Run the optimiser over a project's current matrix. Shared by the workspace
+ * page and by the Apply action (which re-runs it on the server so a plan is
+ * never trusted from the browser).
+ */
+export function computeProjectOptimiser(
+  db: Db,
+  projectId: number,
+): { projectMode: ProjectMode; result: OptimiserResult } | null {
+  const project = db.select().from(projects).where(eq(projects.id, projectId)).get();
+  if (project === undefined) return null;
+  const result = cheapestCombination(
+    toCostingItems(listProjectItems(db, projectId)),
+    toCostingSuppliers(listProjectSuppliers(db, projectId)),
+    toCostingQuotes(listProjectQuotes(db, projectId)),
+  );
+  return { projectMode: project.projectMode, result };
+}
+
+export function planForKind(result: OptimiserResult, kind: AppliedPlanKind): OptimiserPlan | null {
+  return kind === 'split' ? result.split : result.singleSupplier;
+}
+
 export function getProjectWorkspaceView(db: Db, projectId: number): ProjectWorkspaceView | null {
   const project = db.select().from(projects).where(eq(projects.id, projectId)).get();
   if (project === undefined) return null;
@@ -265,6 +544,20 @@ export function getProjectWorkspaceView(db: Db, projectId: number): ProjectWorks
     toCostingQuotes(quotes),
   );
   const comparison = budgetComparison(project.targetBudgetPence, totals.grandTotalPence);
+
+  const costingItems = toCostingItems(items);
+  const optimiser: OptimiserView | null =
+    project.projectMode !== 'mix_and_match' || items.length === 0 || suppliers.length === 0
+      ? null
+      : buildOptimiserView({
+          result: cheapestCombination(
+            costingItems,
+            toCostingSuppliers(suppliers),
+            toCostingQuotes(quotes),
+          ),
+          items: costingItems,
+          manual: totals,
+        });
 
   const cellByPair = new Map<string, (typeof quotes)[number]>();
   for (const quote of quotes) cellByPair.set(`${quote.itemId}:${quote.supplierId}`, quote);
@@ -386,5 +679,6 @@ export function getProjectWorkspaceView(db: Db, projectId: number): ProjectWorks
       summaryLabel: `Materials ${formatPence(totals.materialsTotalPence)} + delivery ${formatPence(totals.deliveryTotalPence)}`,
     },
     isEmpty: items.length === 0 && suppliers.length === 0,
+    optimiser,
   };
 }

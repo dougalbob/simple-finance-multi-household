@@ -1,3 +1,34 @@
+# Handoff: Projects Phase 2 — the Cheapest Combination optimiser (decision 182, UNRELEASED)
+
+Work in progress on session branch `arena/01a0f975-simple-finance`; the app is still **v0.31.0**
+(no version bump, no release notes, no PR yet). The v0.31.0 block below is the last released state.
+
+## What changed
+
+- `cheapestCombination` in `src/lib/projects/costing.ts`: exact two-stage solver (supplier-subset
+  enumeration, then branch-and-bound over assignments) over in-stock quotes with every delivery
+  rule applied; also best single supplier, the naive cheapest-per-row baseline, uncoverable items.
+- `/projects/[id]` gains an optimiser bar above the matrix: manual selection vs ⚡ cheapest split
+  vs 🚚 best single supplier, with one-click Apply (`applyProjectPlanAction` →
+  `applyProjectSelections`: one transaction, audited, server recomputes and refuses stale totals).
+- No schema, migration or dependency change. SPEC §27.6–27.7, decision 182,
+  `PROJECTS_IMPLEMENTATION.MD` (Phase 2 ticked, session 2 logged, OQ-P3 updated, OQ-P4 added).
+
+## Gates so far
+
+`npm test` **637 passed** · `typecheck` · `format:check` clean · new `e2e/projects.spec.ts` (own
+`projects` project in `playwright.config.ts`, before `backup`) green locally via SANDBOX entry 8.
+
+## What the release session must do
+
+1. Run the full gates (`build`, `themes:check`, whole Playwright suite, `npm audit --omit=dev`).
+2. Bump the five version places, write `docs/RELEASE_NOTES_vX.Y.Z.md`, refresh these docs, then
+   follow `docs/RELEASE_PROCESS.md`. Remember post-merge facts for v0.31.0 are also still to be
+   recorded here by a session with GitHub access.
+3. Ask the household about OQ-P3 (out-of-stock skipped) and OQ-P4 (suggest Click & Collect?).
+
+---
+
 # Handoff: v0.31.0 — Projects Phase 1: the DIY costing matrix & delivery rules (decision 181)
 
 **v0.30.0 — verified post-merge facts (recorded per decision 173):**
