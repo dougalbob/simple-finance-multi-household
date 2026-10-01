@@ -1866,3 +1866,72 @@ opened the bell. The accessible name carries "2 new since you last looked".
   people; the bell's personal filtering is about the count and its own lists. A dedicated "only mine"
   filter on the Tasks page would be a later decision if the household wants it.
 
+
+## 27. Projects: project costing & supplier optimiser (v0.31.0, decision 181)
+
+A planning workspace for **future** spending: cost a purchase or a project against real quotes from
+several suppliers before any money moves. Projects are planning records — they never touch pots,
+purchases, estimates or Insights, and nothing on the page records a purchase.
+
+### 27.1 The costing matrix (shared shape for every project type)
+
+One matrix serves DIY projects now and holiday/car comparisons later, without a schema rewrite
+(`PROJECTS_IMPLEMENTATION.MD` is the feature's working plan and status log):
+
+- **Rows** (`project_items`) — what you need: name, whole-number `quantity`, `unit`, optional
+  `category`/`notes`, and a `cost_frequency` (`one_off` | `annual` | `monthly`; dormant in this
+  release, unlocked for TCO comparisons later).
+- **Columns** (`project_suppliers`) — suppliers/merchants per project (deliberately separate from
+  the §21 contact book), with phone/website/notes and the delivery rules (below).
+- **Cells** (`project_quotes`) — one item's quote from one supplier (UNIQUE per item+supplier):
+  unit price **inc. VAT** (integer pence), or pack-only pricing (`pack_size` + `pack_price` —
+  required packs = `ceil(quantity / pack_size)`, line cost = packs × pack price), plus `product_url`,
+  `in_stock` (default true) and notes.
+- **Aggregation mode** (`projects.project_mode`): `'mix_and_match'` (this release — one cell per
+  row, grouped by supplier) or `'compare_options'` (columns are whole candidates; vertical totals by
+  cost frequency arrive with the TCO phase). A `compare_options` project can be created and carries
+  an honest "arrives in a later phase" note.
+
+### 27.2 Delivery rules (per supplier)
+
+- A **flat delivery fee**, incurred **once** when ≥1 selected item is ordered from that supplier
+  (two lines from one supplier pay one fee).
+- An optional **free-delivery threshold** on that supplier's materials subtotal: met → delivery £0
+  (stated as "Free delivery (over £X)"); missed → the fee, with a **"£X away from free delivery"**
+  hint.
+- **Click &amp; Collect**: the supplier may offer it; when the order is set to `collect`, delivery is
+  £0 regardless of fee or threshold. Suppliers with no selected items pay nothing.
+
+### 27.3 Manual selection and the order breakdown
+
+Clicking a quote cell selects that supplier for the row (stored on the item as
+`selected_supplier_id`); only a supplier with a quote for an item can be selected for it (an empty
+cell is "not stocked"); the "No supplier" column clears a pick. Out-of-stock quotes can be selected
+but are flagged everywhere they appear.
+
+The **Shopping List &amp; Order Breakdown** groups every selected line by chosen supplier —
+supplier name/phone/website, lines with quantity and product links, materials subtotal, the
+delivery verdict and the supplier total — and the **Project Grand Total** footer sums materials +
+delivery against `projects.target_budget_pence` when set (under/on/over in words).
+
+### 27.4 DIY entry helpers
+
+- **+20% VAT helper** on the quote price: builders' merchants quote ex. VAT; the button rewrites the
+  typed price × 1.2 (exact integer pence, half-up). The stored price is always inc. VAT.
+- **Pack sizes**: entering pack size + pack price makes the cell a pack-only quote; the cell and the
+  breakdown show the effective line cost for the required quantity.
+
+### 27.5 Records, versions and deletion
+
+Standing rules apply: every mutable row carries `version` (stale forms fail visibly), and every
+change writes an audit entry in the same transaction. Deletion is allowed — a project is a draft
+plan, not money history (PROJECTS_IMPLEMENTATION.MD OQ-P2) — and is audited with what went:
+deleting a project removes its rows/columns/cells; deleting a row or column cascades its quotes; a
+selection pointing at a removed supplier or quote is cleared.
+
+### 27.6 Phasing
+
+Phase 1 (this release) is the DIY matrix end-to-end above. Phase 2 adds the "Calculate Cheapest
+Combination" optimiser (exact subset solver over suppliers with delivery rules, plus the best
+single-supplier comparison); Phase 3 holiday/bundle refinements; Phase 4 the `compare_options`
+candidate/TCO mode. `PROJECTS_IMPLEMENTATION.MD` tracks the stage session by session.

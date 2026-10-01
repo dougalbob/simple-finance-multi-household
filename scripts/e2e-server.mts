@@ -21,6 +21,7 @@ import { createSupplier } from '../src/lib/records/suppliers';
 import { createVehicle } from '../src/lib/records/vehicles';
 import { addSupplierInteraction } from '../src/lib/records/supplier-details';
 import { createTask } from '../src/lib/records/tasks';
+import { seedFenceDemoProject } from '../src/lib/projects/demo';
 import { toLocalDateString } from '../src/lib/time';
 import { recentMonthlyDueDay } from './e2e-seed-dates';
 
@@ -468,6 +469,10 @@ function seed(): void {
   setWeeklyGroceriesPence(db, 8500, ACTOR);
   setMonthlyFuelPence(db, vehicleA.id, 6000, ACTOR);
   setMonthlyFuelPence(db, vehicleB.id, 4500, ACTOR);
+
+  // Projects (SPEC §27, decision 181): the fictional “Back Garden Fence
+  // Replacement” demo so /projects opens on a matrix with real content.
+  seedFenceDemoProject(db, ACTOR, now);
 
   handle.raw.close();
   // The second vehicle exists so the Insights panels have a zero-activity row

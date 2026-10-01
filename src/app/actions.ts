@@ -133,6 +133,25 @@ import {
   voidReceipt,
 } from '@/lib/records/receipts';
 import {
+  createProject,
+  createProjectItem,
+  createProjectSupplier,
+  deleteProject,
+  deleteProjectItem,
+  deleteProjectQuote,
+  deleteProjectSupplier,
+  editProject,
+  editProjectItem,
+  editProjectSupplier,
+  InvalidProjectInputError,
+  ProjectItemNotFoundError,
+  ProjectNotFoundError,
+  ProjectQuoteNotFoundError,
+  ProjectSupplierNotFoundError,
+  saveProjectQuote,
+  selectProjectItemSupplier,
+} from '@/lib/projects/projects';
+import {
   archivePotEntrySchema,
   cancelScheduleEntrySchema,
   categoryEntrySchema,
@@ -171,6 +190,15 @@ import {
   voidRecordEntrySchema,
   voidSwapEntrySchema,
   warningLeadsEntrySchema,
+  projectCreateEntrySchema,
+  projectEditEntrySchema,
+  projectItemEntrySchema,
+  projectItemEditEntrySchema,
+  projectSupplierEntrySchema,
+  projectSupplierEditEntrySchema,
+  projectQuoteEntrySchema,
+  projectQuoteDeleteEntrySchema,
+  projectSelectionEntrySchema,
 } from '@/lib/validation';
 import {
   cancelSchedule,
@@ -2707,4 +2735,424 @@ export async function saveThemeAction(
     status: 'ok',
     message: `Saved — this device now uses ${theme.label} (${theme.mode}).`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Projects — Project Costing & Supplier Optimiser (SPEC §27, decision 181).
+// Every write revalidates the projects pages so the matrix, the supplier bar
+// and the shopping list reflect it in the same breath.
+// ---------------------------------------------------------------------------
+
+function revalidateProjectPages(projectId?: number): void {
+  revalidatePath('/projects');
+  if (projectId !== undefined) revalidatePath(`/projects/${projectId}`);
+}
+
+function projectErrorMessage(error: unknown): string | null {
+  if (
+    error instanceof InvalidProjectInputError ||
+    error instanceof ProjectNotFoundError ||
+    error instanceof ProjectItemNotFoundError ||
+    error instanceof ProjectSupplierNotFoundError ||
+    error instanceof ProjectQuoteNotFoundError ||
+    error instanceof VersionConflictError
+  ) {
+    return error.message;
+  }
+  return null;
+}
+
+/** Empty money input = null (an unset budget/price), else parsePence. */
+function penceOrNull(value: FormDataEntryValue | null): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  return parsePence(value);
+}
+
+/** Checkbox helper: a rendered box posts 'on' when ticked. */
+function checkedFlag(value: FormDataEntryValue | null): boolean {
+  return value === 'on' || value === 'true';
+}
+
+export async function createProjectAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectCreateEntrySchema.safeParse({
+    name: String(formData.get('name') ?? ''),
+    projectMode: textOrNull(formData.get('projectMode')) ?? 'mix_and_match',
+    targetBudgetPence: penceOrNull(formData.get('targetBudget')),
+    status: textOrNull(formData.get('status')) ?? 'researching',
+    notes: textOrNull(formData.get('notes')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the project fields.') };
+  }
+  try {
+    const project = createProject(getDbHandle().db, { ...parsed.data, actor: user.email });
+    revalidateProjectPages(project.id);
+    return { status: 'ok', message: `Project “${project.name}” started.` };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function editProjectAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectEditEntrySchema.safeParse({
+    projectId: numberOrNull(formData.get('projectId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    name: String(formData.get('name') ?? ''),
+    projectMode: textOrNull(formData.get('projectMode')) ?? 'mix_and_match',
+    targetBudgetPence: penceOrNull(formData.get('targetBudget')),
+    status: textOrNull(formData.get('status')) ?? 'researching',
+    notes: textOrNull(formData.get('notes')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the project fields.') };
+  }
+  try {
+    const project = editProject(getDbHandle().db, {
+      id: parsed.data.projectId,
+      expectedVersion: parsed.data.expectedVersion,
+      patch: {
+        name: parsed.data.name,
+        projectMode: parsed.data.projectMode,
+        targetBudgetPence: parsed.data.targetBudgetPence,
+        status: parsed.data.status,
+        notes: parsed.data.notes,
+      },
+      actor: user.email,
+    });
+    revalidateProjectPages(project.id);
+    return { status: 'ok', message: `Project “${project.name}” saved.` };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function deleteProjectAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const projectId = positiveNumber(formData.get('projectId'));
+  const expectedVersion = positiveNumber(formData.get('expectedVersion'));
+  if (projectId === null || expectedVersion === null) {
+    return { status: 'error', message: 'That project could not be read. Refresh and try again.' };
+  }
+  try {
+    deleteProject(getDbHandle().db, { id: projectId, expectedVersion, actor: user.email });
+    revalidateProjectPages();
+    return { status: 'ok', message: 'Project deleted.' };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function createProjectItemAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectItemEntrySchema.safeParse({
+    projectId: numberOrNull(formData.get('projectId')),
+    name: String(formData.get('name') ?? ''),
+    quantity: numberOrNull(formData.get('quantity')),
+    unit: textOrNull(formData.get('unit')),
+    costFrequency: textOrNull(formData.get('costFrequency')) ?? 'one_off',
+    category: textOrNull(formData.get('category')),
+    notes: textOrNull(formData.get('notes')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the item fields.') };
+  }
+  try {
+    const item = createProjectItem(getDbHandle().db, { ...parsed.data, actor: user.email });
+    revalidateProjectPages(item.projectId);
+    return {
+      status: 'ok',
+      message: `Added “${item.name}” (${item.quantity} ${item.unit}) to the matrix.`,
+    };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function editProjectItemAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectItemEditEntrySchema.safeParse({
+    itemId: numberOrNull(formData.get('itemId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    name: String(formData.get('name') ?? ''),
+    quantity: numberOrNull(formData.get('quantity')),
+    unit: textOrNull(formData.get('unit')),
+    costFrequency: textOrNull(formData.get('costFrequency')) ?? 'one_off',
+    category: textOrNull(formData.get('category')),
+    notes: textOrNull(formData.get('notes')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the item fields.') };
+  }
+  try {
+    const item = editProjectItem(getDbHandle().db, {
+      id: parsed.data.itemId,
+      expectedVersion: parsed.data.expectedVersion,
+      patch: {
+        name: parsed.data.name,
+        quantity: parsed.data.quantity,
+        unit: parsed.data.unit,
+        costFrequency: parsed.data.costFrequency,
+        category: parsed.data.category,
+        notes: parsed.data.notes,
+      },
+      actor: user.email,
+    });
+    revalidateProjectPages(item.projectId);
+    return { status: 'ok', message: `Item “${item.name}” saved.` };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function deleteProjectItemAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const itemId = positiveNumber(formData.get('itemId'));
+  const expectedVersion = positiveNumber(formData.get('expectedVersion'));
+  const projectId = positiveNumber(formData.get('projectId'));
+  if (itemId === null || expectedVersion === null || projectId === null) {
+    return { status: 'error', message: 'That item could not be read. Refresh and try again.' };
+  }
+  try {
+    deleteProjectItem(getDbHandle().db, { id: itemId, expectedVersion, actor: user.email });
+    revalidateProjectPages(projectId);
+    return { status: 'ok', message: 'Item deleted.' };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function createProjectSupplierAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectSupplierEntrySchema.safeParse({
+    projectId: numberOrNull(formData.get('projectId')),
+    name: String(formData.get('name') ?? ''),
+    phone: textOrNull(formData.get('phone')),
+    websiteUrl: textOrNull(formData.get('websiteUrl')),
+    notes: textOrNull(formData.get('notes')),
+    deliveryFeePence: penceOrNull(formData.get('deliveryFee')) ?? 0,
+    freeDeliveryThresholdPence: penceOrNull(formData.get('freeDeliveryThreshold')),
+    clickAndCollectAvailable: checkedFlag(formData.get('clickAndCollectAvailable')),
+    fulfilmentChoice: textOrNull(formData.get('fulfilmentChoice')) ?? 'delivery',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the supplier fields.') };
+  }
+  try {
+    const supplier = createProjectSupplier(getDbHandle().db, {
+      ...parsed.data,
+      actor: user.email,
+    });
+    revalidateProjectPages(supplier.projectId);
+    return { status: 'ok', message: `Supplier “${supplier.name}” added.` };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function editProjectSupplierAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectSupplierEditEntrySchema.safeParse({
+    supplierId: numberOrNull(formData.get('supplierId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    name: String(formData.get('name') ?? ''),
+    phone: textOrNull(formData.get('phone')),
+    websiteUrl: textOrNull(formData.get('websiteUrl')),
+    notes: textOrNull(formData.get('notes')),
+    deliveryFeePence: penceOrNull(formData.get('deliveryFee')) ?? 0,
+    freeDeliveryThresholdPence: penceOrNull(formData.get('freeDeliveryThreshold')),
+    clickAndCollectAvailable: checkedFlag(formData.get('clickAndCollectAvailable')),
+    fulfilmentChoice: textOrNull(formData.get('fulfilmentChoice')) ?? 'delivery',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the supplier fields.') };
+  }
+  try {
+    const supplier = editProjectSupplier(getDbHandle().db, {
+      id: parsed.data.supplierId,
+      expectedVersion: parsed.data.expectedVersion,
+      patch: {
+        name: parsed.data.name,
+        phone: parsed.data.phone,
+        websiteUrl: parsed.data.websiteUrl,
+        notes: parsed.data.notes,
+        deliveryFeePence: parsed.data.deliveryFeePence,
+        freeDeliveryThresholdPence: parsed.data.freeDeliveryThresholdPence,
+        clickAndCollectAvailable: parsed.data.clickAndCollectAvailable,
+        fulfilmentChoice: parsed.data.fulfilmentChoice,
+      },
+      actor: user.email,
+    });
+    revalidateProjectPages(supplier.projectId);
+    return { status: 'ok', message: `Supplier “${supplier.name}” saved.` };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function deleteProjectSupplierAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const supplierId = positiveNumber(formData.get('supplierId'));
+  const expectedVersion = positiveNumber(formData.get('expectedVersion'));
+  const projectId = positiveNumber(formData.get('projectId'));
+  if (supplierId === null || expectedVersion === null || projectId === null) {
+    return { status: 'error', message: 'That supplier could not be read. Refresh and try again.' };
+  }
+  try {
+    deleteProjectSupplier(getDbHandle().db, {
+      id: supplierId,
+      expectedVersion,
+      actor: user.email,
+    });
+    revalidateProjectPages(projectId);
+    return { status: 'ok', message: 'Supplier deleted.' };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+/** Create or edit the quote cell for one item/supplier pair. */
+export async function saveProjectQuoteAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectQuoteEntrySchema.safeParse({
+    projectId: numberOrNull(formData.get('projectId')),
+    itemId: numberOrNull(formData.get('itemId')),
+    supplierId: numberOrNull(formData.get('supplierId')),
+    unitPricePence: penceOrNull(formData.get('unitPrice')),
+    packSize: numberOrNull(formData.get('packSize')),
+    packPricePence: penceOrNull(formData.get('packPrice')),
+    productUrl: textOrNull(formData.get('productUrl')),
+    inStock: checkedFlag(formData.get('inStock')),
+    notes: textOrNull(formData.get('notes')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the quote fields.') };
+  }
+  try {
+    saveProjectQuote(getDbHandle().db, { ...parsed.data, actor: user.email });
+    revalidateProjectPages(parsed.data.projectId);
+    return { status: 'ok', message: 'Quote saved.' };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+export async function deleteProjectQuoteAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectQuoteDeleteEntrySchema.safeParse({
+    projectId: numberOrNull(formData.get('projectId')),
+    itemId: numberOrNull(formData.get('itemId')),
+    supplierId: numberOrNull(formData.get('supplierId')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'That quote could not be read.') };
+  }
+  try {
+    deleteProjectQuote(getDbHandle().db, { ...parsed.data, actor: user.email });
+    revalidateProjectPages(parsed.data.projectId);
+    return { status: 'ok', message: 'Quote removed.' };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
+}
+
+/** The matrix cell click: this row buys from that supplier (blank = clear). */
+export async function selectProjectSupplierAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUserFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  const parsed = projectSelectionEntrySchema.safeParse({
+    itemId: numberOrNull(formData.get('itemId')),
+    supplierId: positiveNumber(formData.get('supplierId')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'That choice could not be read.') };
+  }
+  const projectId = positiveNumber(formData.get('projectId'));
+  try {
+    selectProjectItemSupplier(getDbHandle().db, {
+      itemId: parsed.data.itemId,
+      supplierId: parsed.data.supplierId,
+      actor: user.email,
+    });
+    revalidateProjectPages(projectId ?? undefined);
+    return {
+      status: 'ok',
+      message:
+        parsed.data.supplierId === null ? 'Selection cleared.' : 'Supplier selected for this item.',
+    };
+  } catch (err) {
+    const message = projectErrorMessage(err);
+    if (message !== null) return { status: 'error', message };
+    throw err;
+  }
 }

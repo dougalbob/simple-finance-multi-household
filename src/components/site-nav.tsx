@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: '/suppliers', label: 'Suppliers' },
   { href: '/contracts', label: 'Contracts & Renewals' },
   { href: '/tasks', label: 'Tasks' },
+  { href: '/projects', label: 'Projects' },
 ];
 
 const NAV_GROUPS = [
@@ -47,6 +48,7 @@ const NAV_GROUPS = [
       { href: '/suppliers', label: 'Suppliers' },
       { href: '/contracts', label: 'Contracts & Renewals' },
       { href: '/tasks', label: 'Tasks' },
+      { href: '/projects', label: 'Projects' },
     ],
   },
 ];
