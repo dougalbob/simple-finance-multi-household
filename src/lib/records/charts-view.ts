@@ -17,6 +17,7 @@ import {
 } from './chart-series';
 import { firstOfLocalMonth, startOfWeekLocal, GROCERIES_PARENT } from './insights';
 import { ensureScheduleState, getHorizonProjectionView } from './money-view';
+import { firstRecordedPurchaseDate } from './recording';
 import { listPeople } from './people';
 import { getCommitmentCategoryIds, getWeeklyGroceriesPence } from './settings';
 
@@ -157,6 +158,11 @@ export interface GroceriesChartView {
   /** The Groceries parent id — the drill-down link's category filter. */
   parentCategoryId: number | null;
   configuredWeeklyPence: number | null;
+  /**
+   * The first date anything was recorded (SPEC §16.7 B). Weeks before it are
+   * not counted in the average. Null while nothing has been recorded yet.
+   */
+  recordingStartedOn: string | null;
 }
 
 export interface GroceriesChartOptions {
@@ -182,13 +188,28 @@ export function getGroceriesChartView(
   );
   const configuredWeeklyPence = getWeeklyGroceriesPence(db);
   const parent = findParentCategory(db, GROCERIES_PARENT);
+  const recordingStartedOn = firstRecordedPurchaseDate(db);
+  // Nothing recorded yet: no complete week can have been recorded, so `today`
+  // (which no complete week reaches) is the honest stand-in.
+  const recordedFrom = recordingStartedOn ?? today;
   return {
     today,
-    phone: groceriesSeries(lines, { today, weeks: phoneWeeks, configuredWeeklyPence }),
-    laptop: groceriesSeries(lines, { today, weeks: laptopWeeks, configuredWeeklyPence }),
+    phone: groceriesSeries(lines, {
+      today,
+      weeks: phoneWeeks,
+      configuredWeeklyPence,
+      recordedFrom,
+    }),
+    laptop: groceriesSeries(lines, {
+      today,
+      weeks: laptopWeeks,
+      configuredWeeklyPence,
+      recordedFrom,
+    }),
     parentName: GROCERIES_PARENT,
     parentCategoryId: parent?.id ?? null,
     configuredWeeklyPence,
+    recordingStartedOn,
   };
 }
 

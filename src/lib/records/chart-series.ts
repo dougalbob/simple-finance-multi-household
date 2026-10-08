@@ -4,6 +4,7 @@ import { addDaysLocal, addMonthsClamped, checkedLocalDate } from './dates';
 import {
   firstOfLocalMonth,
   formatMonthLabel,
+  isRecordedWeek,
   monthOfLocalDate,
   monthRange,
   startOfWeekLocal,
@@ -244,12 +245,23 @@ export interface WeekBucket {
   amountPence: number;
   /** False for the week containing `today` — it is still being lived. */
   complete: boolean;
+  /**
+   * False when recording had not begun for the whole week (it began after
+   * the Monday). Such a week still shows what was recorded in it, but it is
+   * not counted towards any average — it was not a zero week, nor a full one.
+   */
+  recorded: boolean;
 }
 
 export interface WeeklyBucketOptions {
   today: string;
   /** How many Monday–Sunday weeks, ending with the in-progress one. */
   weeks: number;
+  /**
+   * The first local date anything was recorded. A week that starts before
+   * it is not `recorded`. Null means recording has always been on.
+   */
+  recordedFrom?: string | null;
 }
 
 /**
@@ -268,7 +280,8 @@ export function weeklyBuckets(
   for (let back = count - 1; back >= 0; back -= 1) {
     const weekStart = addDaysLocal(thisMonday, -7 * back);
     const weekEnd = addDaysLocal(weekStart, 6);
-    buckets.push({ weekStart, weekEnd, amountPence: 0, complete: back > 0 });
+    const recorded = isRecordedWeek(weekStart, options.recordedFrom ?? null);
+    buckets.push({ weekStart, weekEnd, amountPence: 0, complete: back > 0, recorded });
   }
   const index = new Map(buckets.map((bucket, position) => [bucket.weekStart, position]));
   for (const line of lines) {
@@ -296,12 +309,19 @@ export interface GroceriesSeriesOptions extends WeeklyBucketOptions {
   configuredWeeklyPence: number | null;
   /** How many complete weeks the trailing average uses (default 8). */
   averageWeeks?: number;
+  /** Required: the first local date anything was recorded (see `firstRecordedPurchaseDate`). */
+  recordedFrom: string;
 }
 
 /**
  * The groceries chart's series: weekly buckets, the configured weekly figure
  * (the "should") and the trailing average over complete weeks (the "are").
  * Two reference lines, one verdict.
+ *
+ * The average uses the last `averageWeeks` weeks that are complete AND were
+ * recorded in full. Weeks before the household started recording are not
+ * zero weeks, so they are never averaged in — the average would otherwise be
+ * dragged down by weeks nobody had a chance to record.
  */
 export function groceriesSeries(
   lines: readonly SpendingLineInput[],
@@ -309,12 +329,16 @@ export function groceriesSeries(
 ): GroceriesSeries {
   const weeks = weeklyBuckets(lines, options);
   const wanted = Math.max(1, Math.trunc(options.averageWeeks ?? 8));
-  const complete = weeks.filter((week) => week.complete).slice(-wanted);
-  const total = complete.reduce((sum, week) => sum + week.amountPence, 0);
-  const averageWeeks = complete.length;
+  const counted = weeks.filter((week) => week.complete && week.recorded).slice(-wanted);
+  const total = counted.reduce((sum, week) => sum + week.amountPence, 0);
+  const averageWeeks = counted.length;
   const averagePence = averageWeeks === 0 ? 0 : roundHalfUpDivide(total, averageWeeks);
   const configuredWeeklyPence = options.configuredWeeklyPence;
-  const driftPence = configuredWeeklyPence === null ? null : averagePence - configuredWeeklyPence;
+  // With no complete recorded week there is no average to compare, so no drift.
+  const driftPence =
+    configuredWeeklyPence === null || averageWeeks === 0
+      ? null
+      : averagePence - configuredWeeklyPence;
   return {
     weeks,
     configuredWeeklyPence,

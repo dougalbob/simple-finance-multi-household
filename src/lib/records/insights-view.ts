@@ -24,6 +24,7 @@ import {
 } from './insights';
 import { listPeople } from './people';
 import { listVehicles } from './vehicles';
+import { firstRecordedPurchaseDate } from './recording';
 import { getMonthlyFuelByVehicle, getWeeklyGroceriesPence } from './settings';
 import { ensureScheduleState } from './money-view';
 
@@ -97,6 +98,9 @@ export function getHonestyLoopView(db: Db, nowArg?: Date): HonestyLoop {
   const lines = spendingLinesBetween(db, windowFrom, today);
   const vehicles = listVehicles(db);
   const fuelByVehicle = getMonthlyFuelByVehicle(db);
+  // Nothing recorded yet: no complete week can have been recorded, so `today`
+  // is the honest stand-in (the same rule as the Charts card).
+  const recordedFrom = firstRecordedPurchaseDate(db) ?? today;
   return computeHonestyLoop(
     lines,
     {
@@ -108,6 +112,7 @@ export function getHonestyLoopView(db: Db, nowArg?: Date): HonestyLoop {
       })),
     },
     today,
+    { recordedFrom },
   );
 }
 

@@ -383,9 +383,17 @@ export interface GroceriesWeek {
 
 export interface HonestyGroceries {
   parent: string;
-  /** The last `weeks` COMPLETE Monday–Sunday weeks, oldest first. */
+  /**
+   * Up to 8 COMPLETE Monday–Sunday weeks, oldest first, all on or after
+   * `recordedFrom`. Fewer (or none) while recording is young.
+   */
   weeks: GroceriesWeek[];
-  /** Mean per-week actual over the whole window (zero weeks included). */
+  /** The first date anything was recorded; weeks before it are not counted. */
+  recordedFrom: string;
+  /**
+   * Mean per-week actual over `weeks` (empty recorded weeks included, as zero
+   * weeks; weeks before recording began excluded). Zero when there are none.
+   */
   averageWeeklyPence: number;
   configuredPence: number | null;
   /** averageWeeklyPence − configuredPence; null when nothing is configured. */
@@ -415,6 +423,17 @@ export interface HonestyLoop {
   fuel: HonestyFuel[];
 }
 
+/**
+ * A week was recorded in full when it begins on or after the recording date
+ * (`recordedFrom`, the first recorded purchase — decision 183). A week that
+ * starts before it was not recorded, so it is neither a zero week nor a full
+ * one, and it is kept out of every average. Null means recording has always
+ * been on.
+ */
+export function isRecordedWeek(weekStart: string, recordedFrom: string | null): boolean {
+  return recordedFrom === null || weekStart >= recordedFrom;
+}
+
 /** The Monday (local) starting the week that contains `date`. */
 export function startOfWeekLocal(date: string): string {
   const d = checkedLocalDate(date);
@@ -430,7 +449,9 @@ export function startOfWeekLocal(date: string): string {
  *
  * Windows are complete periods only — the partial current week/month is
  * excluded, so the comparison never mixes a 3-day week with a 7-day one:
- * - groceries: the last 8 complete Monday–Sunday weeks;
+ * - groceries: the last 8 complete Monday–Sunday weeks, counting only weeks
+ *   on or after `recordedFrom` (decision 183). Weeks before recording began
+ *   are not zero weeks and are not averaged in;
  * - fuel (per vehicle): the last 3 complete calendar months.
  *
  * Actuals are NET signed spending in the tracked categories (Groceries
@@ -442,17 +463,20 @@ export function computeHonestyLoop(
   lines: readonly SpendingLineInput[],
   config: HonestyConfig,
   today: string,
-  options: { weeks?: number; months?: number } = {},
+  options: { weeks?: number; months?: number; recordedFrom: string },
 ): HonestyLoop {
   checkedLocalDate(today);
   const weekCount = Math.min(Math.max(options.weeks ?? 8, 1), 52);
   const monthCount = Math.min(Math.max(options.months ?? 3, 1), 24);
+  const recordedFrom = options.recordedFrom;
 
   const thisMonday = startOfWeekLocal(today);
   const groceryLines = lines.filter((line) => line.parentName === GROCERIES_PARENT);
   const weeks: GroceriesWeek[] = [];
   for (let i = weekCount; i >= 1; i -= 1) {
     const weekStart = addDaysLocal(thisMonday, -7 * i);
+    // Before recording began is not a zero week: leave it out entirely.
+    if (!isRecordedWeek(weekStart, recordedFrom)) continue;
     const weekEnd = addDaysLocal(weekStart, 6);
     const actualPence = groceryLines
       .filter((line) => line.occurredDate >= weekStart && line.occurredDate <= weekEnd)
@@ -460,7 +484,12 @@ export function computeHonestyLoop(
     weeks.push({ weekStart, weekEnd, actualPence });
   }
   const groceryTotal = weeks.reduce((sum, week) => sum + week.actualPence, 0);
-  const averageWeeklyPence = roundHalfUpDivide(groceryTotal, weekCount);
+  const averageWeeklyPence = weeks.length === 0 ? 0 : roundHalfUpDivide(groceryTotal, weeks.length);
+  // No recorded complete week means no average to compare against.
+  const groceryDrift =
+    config.weeklyGroceriesPence === null || weeks.length === 0
+      ? null
+      : averageWeeklyPence - config.weeklyGroceriesPence;
 
   const firstOfCurrent = firstOfLocalMonth(today);
   const fuel: HonestyFuel[] = config.monthlyFuelPence.map((vehicle) => {
@@ -497,12 +526,10 @@ export function computeHonestyLoop(
     groceries: {
       parent: GROCERIES_PARENT,
       weeks,
+      recordedFrom,
       averageWeeklyPence,
       configuredPence: config.weeklyGroceriesPence,
-      driftPence:
-        config.weeklyGroceriesPence === null
-          ? null
-          : averageWeeklyPence - config.weeklyGroceriesPence,
+      driftPence: groceryDrift,
     },
     fuel,
   };

@@ -12,7 +12,7 @@ import {
 import { addDaysLocal } from '@/lib/records/dates';
 import { getFuelEconomyView, type VehicleFuelEconomyView } from '@/lib/records/fuel';
 import { describeClosure, formatLitres, formatMiles, formatMpg } from '@/lib/records/fuel-economy';
-import { toLocalDateString } from '@/lib/time';
+import { formatShortLocalDate, toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -331,14 +331,28 @@ export default async function InsightsPage({
             <div className="rounded-lg border border-border p-3">
               <h3 className="text-sm font-semibold">Groceries — {loop.groceries.parent}</h3>
               <p className="text-xs text-ink-muted">
-                last {loop.groceries.weeks.length} complete weeks (Mon–Sun)
+                {loop.groceries.weeks.length === 0
+                  ? 'no complete week recorded yet'
+                  : `last ${loop.groceries.weeks.length} complete ${
+                      loop.groceries.weeks.length === 1 ? 'week' : 'weeks'
+                    } (Mon–Sun)`}
+                {loop.groceries.weeks.length > 0 && loop.groceries.weeks.length < 8
+                  ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier weeks are not counted`
+                  : ''}
               </p>
-              <HonestyComparison
-                configuredLabel="weekly"
-                configuredPence={loop.groceries.configuredPence}
-                averagePence={loop.groceries.averageWeeklyPence}
-                driftPence={loop.groceries.driftPence}
-              />
+              {loop.groceries.weeks.length === 0 ? (
+                <p className="mt-2 text-sm text-ink-soft">
+                  No complete week of shopping is recorded yet, so there is no average to compare
+                  with the configured figure.
+                </p>
+              ) : (
+                <HonestyComparison
+                  configuredLabel="weekly"
+                  configuredPence={loop.groceries.configuredPence}
+                  averagePence={loop.groceries.averageWeeklyPence}
+                  driftPence={loop.groceries.driftPence}
+                />
+              )}
               <ul className="mt-3 space-y-1">
                 {loop.groceries.weeks.map((week) => (
                   <li
