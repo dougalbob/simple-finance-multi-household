@@ -1,3 +1,64 @@
+# Handoff: v0.34.0 — Averages count only recorded time (decisions 67, 183, 184)
+
+**v0.33.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `d0c3d1a3ace569d60b9c5f946effb92abfa33900` (PR #94, from `arena/2d58da4f-simple-finance`,
+  merged 2026-10-08T08:44:37Z, merge commit not squash).
+- PR CI run `37750742324` (green on head `b67728ec…`), `main` CI run `37751866330` and Publish run
+  `37753147792` — all green.
+- Annotated tag `v0.33.0` (tag object `2bde766f…`) points at that merge commit; the GitHub release
+  "v0.33.0 — Running balance in All Transactions" was published 2026-10-08T08:59:55Z and is marked Latest.
+- Digest `sha256:34643a0a8aeaa628f6f17a8db154f49c72206ca86558bdd79ad53f6245c29029` on `v0.33.0` /
+  `latest` / `sha-d0c3d1a`, differing from v0.32.0's `sha256:9c339e02…`.
+
+**v0.32.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `83ffd1d2f4222e24069817d1bd3e35557eda20cf` (PR #93, merged 2026-10-01T22:26:36Z).
+- `main` CI run `36935088332`, Publish run `36937299990`; annotated tag `v0.32.0` (tag object `5760e543…`).
+- Digest `sha256:9c339e02ff4b529da82ee8a7ca31a038d3ef0b45245c747d29bdf05cdcae657d` on `v0.32.0` /
+  `latest` / `sha-83ffd1d`, differing from v0.31.0's `sha256:f82d3d31…`.
+
+## What changed
+
+- **Charts groceries average counts recorded weeks only (decision 183).** The start of recording is
+  derived, not stored: `firstRecordedPurchaseDate` in `src/lib/records/recording.ts` (earliest
+  non-voided, non-schedule-converted purchase). A week counts only if it is complete and begins on or
+  after that date (`isRecordedWeek` in `src/lib/records/insights.ts`). Empty weeks inside the recording
+  period are zero weeks. Nothing recorded means no average and no drift. Worked example: recording from
+  Mon 14 Sep 2026 gives £46.67 a week over 3 complete weeks, not £17.50 over 8.
+- **Insights fuel comparison counts the part-recorded first month (decision 184).** `isRecordedMonth`:
+  a calendar month counts when its last day is on or after the recording date. The average divides by
+  counted months only; with none there is no average and no drift. The panel says "per week" or "per
+  month" and warns when recording began on a day other than the 1st. Worked example: configured £75,
+  September £50 (recording from 17 Sep), July and August £0 → average £50.00 over 1 month, drift −£25.00.
+  The old rule gave £16.67 (£50 / 3).
+- **Decision 67** (the panel honesty loop) now records both rules; groceries and fuel deliberately differ
+  until the household says otherwise.
+- **Schedule category stays forward-only** (pinned by `tests/schedule-category-correction.test.ts`,
+  commit `62c2aea`). A converted payment keeps its category; the one-off fix is an audited Edit on the
+  Purchases page. This is closed and was not changed.
+- No schema, migration, backup-format or dependency change. Version 0.34.0 in all five places.
+
+## Gates at PR preparation
+
+`npm test`: **660 passed** / 158 suites · `npm run typecheck` clean · `npm run format:check` clean ·
+`npm run themes:check` clean · `npm run build` clean (`next-env.d.ts` restored) · `npm audit
+--omit=dev` zero · Playwright: see the release PR description and `docs/SANDBOX.md` entry 8 for the
+local run (overlay `playwright.local.config.ts`, never committed).
+
+## What a future session should know
+
+1. **Record v0.34.0's post-merge facts at the top of this file** (merge commit, PR CI and main CI run
+   IDs, tag, Publish run, digest vs v0.33.0's `sha256:34643a0a…`), per decision 173.
+2. **Open follow-up, not in this release:** the groceries rule (whole weeks starting on or after the
+   start) and the fuel rule (any month containing or after the start) differ on purpose. Offer to align
+   them only if the household asks.
+3. **Known limit (decision 183):** a purchase back-dated to before launch moves the recording start back,
+   and those weeks count again. The fix is to correct that date, not the rule.
+4. Phase 3 and Phase 4 of `PROJECTS_IMPLEMENTATION.MD` are unchanged from v0.32.0 below.
+
+---
+
 # Handoff: v0.32.0 — Projects Phase 2: the Cheapest Combination optimiser (decision 182)
 
 **v0.31.0 — verified post-merge facts (recorded per decision 173):**
