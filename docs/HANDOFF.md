@@ -1,4 +1,33 @@
-# Handoff: v0.34.0 — Averages count only recorded time (decisions 67, 183, 184)
+# Handoff: v0.35.0 — Tap a day-by-day amount to see what it is made of (decision 185)
+
+**v0.34.0 — verified post-merge facts (recorded per decision 173):** to be recorded by the next
+working session from the merged release PR, its `main` and Publish runs, the annotated `v0.35.0` tag
+and the GHCR digest. The v0.35.0 release PR itself records nothing post-merge.
+
+## What changed
+
+- **Horizon Day by day amounts open their breakdown inline (decision 185).** Commitments, Expected
+  money in and Day-to-day amounts are tappable. The breakdown opens beneath that date's row, one at a
+  time, and closes on a second tap or Close. Components: `src/app/horizon/day-by-day-table.tsx` (client),
+  `buildHorizonDayDetails` and `describeDayToDayBasis` in `src/lib/records/horizon-days.ts` (pure), and
+  `page.tsx` now passes the day rows plus the per-day details into the table.
+- **Projected shops and fills record their basis.** `ProjectedDayToDayEvent` gained `basis`
+  (`anchor` | `overdue` | `never`), `anchorDate` and `cadenceDays`, set in `projectDayToDayEvents`
+  (`src/lib/records/day-to-day.ts`). The figures are unchanged.
+- **Gotchas for future work.** Keep amount-button labels free of the words "Day-to-day" so that
+  `getByLabel('Day-to-day')` (the form select, used in `e2e/horizon.spec.ts`) keeps resolving to one
+  element. The panel is pinned to `min(calc(100vw-6rem),36rem)` because the table scrolls sideways on a
+  phone. Windows over 60 days open Day by day closed by default.
+- **Verification run locally.** `npm test` 671 passed; typecheck, format, themes, build and
+  `npm audit --omit=dev` clean; Horizon Playwright project 10/10 via the `docs/SANDBOX.md` entry 8 route.
+  The full browser suite runs in CI.
+- **Open item (not in this release).** Nothing new. The day-by-day tap does not yet offer a link from a
+  line to its Purchases or Schedules record; say if the household wants that.
+
+## What the household does
+
+In Unraid: take a backup, then Force Update. The badge should read `v0.35.0 · pre-release`.
+
 
 **v0.33.0 — verified post-merge facts (recorded per decision 173):**
 
