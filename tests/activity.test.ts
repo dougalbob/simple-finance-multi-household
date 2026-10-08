@@ -793,3 +793,298 @@ describe('All Transactions: expected support (v0.7.0)', () => {
     }
   });
 });
+
+describe('All Transactions: running balance (v0.33.0)', () => {
+  const ACTOR_BAL = 'alex@example.com';
+  const at = (date: string, time = 'T12:00:00Z') => new Date(`${date}${time}`);
+
+  it('shows no running balance when pot has never been checkpointed', async () => {
+    const fx = await createHouseholdFixture(ACTOR_BAL, at('2026-09-20'));
+    try {
+      const db = fx.db;
+      const pot = fx.pots.main;
+      // No checkpoint yet
+      createPurchase(db, {
+        supplierName: 'Corner Shop',
+        potId: pot.id,
+        totalPence: 1200,
+        occurredDate: '2026-09-21',
+        lines: [
+          {
+            amountPence: 1200,
+            categoryId: fx.categoryId('Groceries', 'Weekly Shop'),
+            targetKind: 'household',
+          },
+        ],
+        actor: ACTOR_BAL,
+        now: at('2026-09-21'),
+      });
+      const view = listPotActivity(db, {
+        potId: pot.id,
+        dateFrom: '2026-09-20',
+        dateTo: '2026-09-30',
+      });
+      const list = rows(view);
+      assert.equal(list.length, 1);
+      assert.equal(list[0]?.runningBalancePence, null);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('computes running balance from checkpoint plus movements after it', async () => {
+    const fx = await createHouseholdFixture(ACTOR_BAL, at('2026-09-20'));
+    try {
+      const db = fx.db;
+      const pot = fx.pots.main;
+      addCheckpoint(db, {
+        potId: pot.id,
+        amountPence: 100000,
+        effectiveDate: '2026-09-22',
+        actor: ACTOR_BAL,
+        now: at('2026-09-22', 'T10:00:00Z'),
+      });
+      createPurchase(db, {
+        supplierName: 'Tesco',
+        potId: pot.id,
+        totalPence: 6347,
+        occurredDate: '2026-09-23',
+        lines: [
+          {
+            amountPence: 6347,
+            categoryId: fx.categoryId('Groceries', 'Weekly Shop'),
+            targetKind: 'household',
+          },
+        ],
+        actor: ACTOR_BAL,
+        now: at('2026-09-23'),
+      });
+      const view = listPotActivity(db, {
+        potId: pot.id,
+        dateFrom: '2026-09-20',
+        dateTo: '2026-09-30',
+      });
+      const list = rows(view);
+      // One purchase in window
+      assert.equal(list.length, 1);
+      // 100000 - 6347 = 93653
+      assert.equal(list[0]?.runningBalancePence, 93653);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('resets running balance at each checkpoint, resolving drift', async () => {
+    const fx = await createHouseholdFixture(ACTOR_BAL, at('2026-09-20'));
+    try {
+      const db = fx.db;
+      const pot = fx.pots.main;
+      // First checkpoint
+      addCheckpoint(db, {
+        potId: pot.id,
+        amountPence: 100000,
+        effectiveDate: '2026-09-20',
+        actor: ACTOR_BAL,
+        now: at('2026-09-20', 'T10:00:00Z'),
+      });
+      // Purchase after first checkpoint
+      createPurchase(db, {
+        supplierName: 'Shop A',
+        potId: pot.id,
+        totalPence: 20000,
+        occurredDate: '2026-09-21',
+        lines: [
+          {
+            amountPence: 20000,
+            categoryId: fx.categoryId('Groceries', 'Weekly Shop'),
+            targetKind: 'household',
+          },
+        ],
+        actor: ACTOR_BAL,
+        now: at('2026-09-21'),
+      });
+      // Second checkpoint reports 90000, not 80000 — drift of +10000
+      addCheckpoint(db, {
+        potId: pot.id,
+        amountPence: 90000,
+        effectiveDate: '2026-09-22',
+        actor: ACTOR_BAL,
+        now: at('2026-09-22', 'T10:00:00Z'),
+      });
+      // Purchase after second checkpoint
+      createPurchase(db, {
+        supplierName: 'Shop B',
+        potId: pot.id,
+        totalPence: 10000,
+        occurredDate: '2026-09-23',
+        lines: [
+          {
+            amountPence: 10000,
+            categoryId: fx.categoryId('Groceries', 'Weekly Shop'),
+            targetKind: 'household',
+          },
+        ],
+        actor: ACTOR_BAL,
+        now: at('2026-09-23'),
+      });
+      const view = listPotActivity(db, {
+        potId: pot.id,
+        dateFrom: '2026-09-20',
+        dateTo: '2026-09-30',
+      });
+      const list = rows(view).sort((a, b) => a.date.localeCompare(b.date));
+      assert.equal(list.length, 2);
+      // First purchase: 100000 - 20000 = 80000 (before second checkpoint)
+      assert.equal(list[0]?.runningBalancePence, 80000);
+      // Second purchase: 90000 - 10000 = 80000 (after second checkpoint, drift resolved)
+      assert.equal(list[1]?.runningBalancePence, 80000);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('handles same-day credit absorbed vs counted (E13 and bank-transfer case)', async () => {
+    const fx = await createHouseholdFixture(ACTOR_BAL, at('2026-09-20'));
+    try {
+      const db = fx.db;
+      const pot = fx.pots.main;
+      // Checkpoint on 22nd
+      addCheckpoint(db, {
+        potId: pot.id,
+        amountPence: 2000,
+        effectiveDate: '2026-09-22',
+        actor: ACTOR_BAL,
+        now: at('2026-09-22', 'T10:00:00Z'),
+      });
+      // Credit recorded BEFORE checkpoint same day — absorbed
+      // Simulate by creating receipt with createdAt before checkpoint's createdAt, same occurredDate
+      createReceipt(db, {
+        potId: pot.id,
+        amountPence: 8000,
+        occurredDate: '2026-09-23',
+        source: 'Refund',
+        actor: ACTOR_BAL,
+        now: at('2026-09-23', 'T09:00:00Z'),
+      });
+      addCheckpoint(db, {
+        potId: pot.id,
+        amountPence: 10000,
+        effectiveDate: '2026-09-23',
+        actor: ACTOR_BAL,
+        now: at('2026-09-23', 'T12:00:00Z'),
+      });
+      // Debit same day — always counts after checkpoint
+      createPurchase(db, {
+        supplierName: 'Shop',
+        potId: pot.id,
+        totalPence: 2000,
+        occurredDate: '2026-09-23',
+        lines: [
+          {
+            amountPence: 2000,
+            categoryId: fx.categoryId('Groceries', 'Weekly Shop'),
+            targetKind: 'household',
+          },
+        ],
+        actor: ACTOR_BAL,
+        now: at('2026-09-23', 'T13:00:00Z'),
+      });
+      const view = listPotActivity(db, {
+        potId: pot.id,
+        dateFrom: '2026-09-22',
+        dateTo: '2026-09-24',
+      });
+      const list = rows(view).sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.key.localeCompare(b.key);
+      });
+      // We have receipt (absorbed) and purchase (counts) and maybe checkpoint dividers
+      // The receipt occurredDate 23rd, but recorded before checkpoint, so it should NOT have running balance anchored on 23rd checkpoint
+      // It should be anchored on 22nd checkpoint: 2000 + 8000 = 10000
+      const receiptRow = list.find((r) => r.code === 'BAC');
+      assert.ok(receiptRow);
+      // Anchored on 22nd checkpoint: 2000 + 8000 = 10000
+      assert.equal(receiptRow?.runningBalancePence, 10000);
+
+      // Purchase after checkpoint: 10000 - 2000 = 8000
+      const purchaseRow = list.find((r) => r.code === 'PUR');
+      assert.ok(purchaseRow);
+      assert.equal(purchaseRow?.runningBalancePence, 8000);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('credit recorded after checkpoint same day counts (bank-transfer case)', async () => {
+    const fx = await createHouseholdFixture(ACTOR_BAL, at('2026-09-20'));
+    try {
+      const db = fx.db;
+      const pot = fx.pots.main;
+      addCheckpoint(db, {
+        potId: pot.id,
+        amountPence: -44365,
+        effectiveDate: '2026-09-23',
+        actor: ACTOR_BAL,
+        now: at('2026-09-23', 'T10:00:00Z'),
+      });
+      // Transfer in recorded AFTER checkpoint same day
+      createTransfer(db, {
+        fromPotId: fx.pots.salary.id,
+        toPotId: pot.id,
+        amountPence: 150000,
+        occurredDate: '2026-09-23',
+        actor: ACTOR_BAL,
+        now: at('2026-09-23', 'T14:00:00Z'),
+      });
+      const view = listPotActivity(db, {
+        potId: pot.id,
+        dateFrom: '2026-09-23',
+        dateTo: '2026-09-24',
+      });
+      const list = rows(view);
+      const txRow = list.find((r) => r.code === 'TX<');
+      assert.ok(txRow);
+      // -44365 + 150000 = 105635 = £1056.35
+      assert.equal(txRow?.runningBalancePence, 105635);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('expected rows have no running balance', async () => {
+    const fx = await createHouseholdFixture(
+      ACTOR_BAL,
+      new Date('2026-09-24T19:30:00+01:00'),
+    );
+    try {
+      const db = fx.db;
+      const debt = createDebt(db, {
+        counterparty: 'Mum',
+        direction: 'we_owe',
+        actor: ACTOR_BAL,
+        now: at('2026-09-24'),
+      });
+      const { editDebt } = await import('../src/lib/records/debts');
+      editDebt(db, {
+        id: debt.id,
+        expectedVersion: 1,
+        actor: ACTOR_BAL,
+        now: at('2026-09-24'),
+        patch: {
+          expectedInflow: { amountPence: 100000, dayOfMonth: 10, untilDate: '2027-02-10' },
+        },
+      });
+      const view = listPotActivity(db, {
+        potId: fx.pots.main.id,
+        dateFrom: '2026-10-01',
+        dateTo: '2026-10-31',
+      });
+      const list = rows(view);
+      assert.equal(list.length, 1);
+      assert.equal(list[0]?.code, 'EXP<');
+      assert.equal(list[0]?.runningBalancePence, null);
+    } finally {
+      fx.close();
+    }
+  });
+});

@@ -22,6 +22,11 @@ interface SearchParams {
  * activity view. A pure projection of existing records — this page renders no
  * form and cannot create, edit or void anything. Every row links to the
  * canonical page that owns that behaviour.
+ *
+ * Running balance (v0.33.0): far-right column shows balance after each
+ * movement, anchored on checkpoints. Green = credit, red = debit. Drift is
+ * resolved by checkpoints: balances before a checkpoint stay as computed,
+ * after checkpoint use the most recent checkpoint.
  */
 export default async function TransactionsPage({
   searchParams,
@@ -33,16 +38,10 @@ export default async function TransactionsPage({
 
   const { db } = getDbHandle();
   const now = new Date();
-  // The lazy due pass runs as on every read page (SPEC §11.2), so a direct
-  // debit that came due today is in the list. It writes conversions, never
-  // user records — "read-only" here means no user-facing writes.
   ensureScheduleState(db, now);
 
   const params = await searchParams;
   const today = toLocalDateString(now);
-  // Live pots only. Archiving a pot requires it to have no records at all
-  // (SPEC §4), so an archived pot has no history to reach and offering one
-  // here would only suggest there was something to see.
   const pots = listPots(db);
   const pot =
     pots.find((candidate) => candidate.id === Number(params.potId)) ??
@@ -65,8 +64,6 @@ export default async function TransactionsPage({
     );
   }
 
-  // The window: a manual range, clamped so the end date is never in the
-  // future (no record can be — SPEC §9.1), falling back to the last 30 days.
   const defaultFrom = addDaysLocal(today, -29);
   const latest = latestCheckpointPerPot(db).get(pot.id) ?? null;
   const checkpointDate = latest === null ? null : toLocalDateString(latest.effectiveAt);
@@ -102,7 +99,9 @@ export default async function TransactionsPage({
         <p className="mt-1 text-sm text-ink-soft">
           Everything that touched <span className="font-medium">{pot.label}</span> between two
           dates, newest first. This page is read-only: each row opens the record in the page that
-          can edit or void it. Green is money into this pot, red is money out.
+          can edit or void it. Green is money into this pot, red is money out. The far-right balance
+          is the running balance after each movement, anchored on checkpoints — green in credit, red
+          overdrawn.
         </p>
       </header>
 
@@ -218,7 +217,7 @@ export default async function TransactionsPage({
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-sm">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="bg-surface-muted text-left text-xs uppercase tracking-wide text-ink-muted">
                 <tr>
                   <th scope="col" className="px-3 py-2">
@@ -238,6 +237,9 @@ export default async function TransactionsPage({
                   </th>
                   <th scope="col" className="px-3 py-2">
                     Notes
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right">
+                    Balance
                   </th>
                 </tr>
               </thead>
@@ -263,6 +265,13 @@ export default async function TransactionsPage({
                       </td>
                       <td className="px-3 py-2 text-right text-xs text-ink-muted">reported</td>
                       <td className="px-3 py-2 text-xs text-ink-muted">not a movement</td>
+                      <td
+                        className={`whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums ${
+                          entry.checkpoint.amountPence < 0 ? 'text-danger' : 'text-positive'
+                        }`}
+                      >
+                        {formatPence(entry.checkpoint.amountPence)}
+                      </td>
                     </tr>
                   ) : (
                     <ActivityTableRow key={entry.row.key} row={entry.row} />
@@ -283,6 +292,7 @@ export default async function TransactionsPage({
                     net {net < 0 ? '−' : '+'}
                     {formatPence(Math.abs(net))}
                   </td>
+                  <td className="px-3 py-2 text-right text-xs text-ink-muted">—</td>
                 </tr>
                 {activity.totals.expectedRowCount > 0 ? (
                   <tr className="border-t border-border text-ink-muted">
@@ -295,6 +305,7 @@ export default async function TransactionsPage({
                       ≈{formatPence(activity.totals.expectedInPence)}
                     </td>
                     <td className="px-3 py-2 text-right text-xs">not a movement</td>
+                    <td className="px-3 py-2 text-right text-xs">—</td>
                   </tr>
                 ) : null}
               </tfoot>
@@ -305,10 +316,12 @@ export default async function TransactionsPage({
         <p className="mt-3 text-xs text-ink-muted">
           &ldquo;Movements shown&rdquo; is the sum of the recorded rows above — expected support
           rows are expectations, never movements, so they are listed but not counted, and they give
-          way when the borrowing is recorded. It is not the change in this pot&rsquo;s estimate:
-          voided records are not listed here, and a credit written down before the checkpoint on
-          that same day is already inside the reported figure (SPEC §7.1). A credit written down
-          after the checkpoint is added.
+          way when the borrowing is recorded. The balance column shows the pot&apos;s running
+          balance after each movement, anchored on the most recent checkpoint: any drift before a
+          checkpoint stays as it was, and after the checkpoint the new balances use that
+          checkpoint&apos;s reported figure. A credit written down before the checkpoint on that same
+          day is already inside the reported figure (SPEC §7.1). A credit written down after the
+          checkpoint is added. Green is in credit, red is overdrawn.
         </p>
       </section>
     </main>
@@ -317,6 +330,8 @@ export default async function TransactionsPage({
 
 function ActivityTableRow({ row }: { row: ActivityRow }) {
   const incoming = row.direction === 'in';
+  const balance = row.runningBalancePence;
+  const balanceInCredit = balance !== null && balance >= 0;
   return (
     <tr className="border-t border-border-hairline align-top">
       <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ink-body">{row.date}</td>
@@ -355,6 +370,13 @@ function ActivityTableRow({ row }: { row: ActivityRow }) {
       </td>
       <td className="px-3 py-2.5 text-ink-soft">
         {row.note === '' ? <span className="text-ink-faint">—</span> : row.note}
+      </td>
+      <td
+        className={`whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums ${
+          balance === null ? 'text-ink-faint' : balanceInCredit ? 'text-positive' : 'text-danger'
+        }`}
+      >
+        {balance === null ? <span className="text-ink-faint">—</span> : formatPence(balance)}
       </td>
     </tr>
   );

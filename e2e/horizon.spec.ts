@@ -52,7 +52,7 @@ test.describe('horizon', () => {
 
     // The seeded expected support is listed, flagged as expected.
     const moneyIn = moneyInBlock(page);
-    await expect(moneyIn.getByText('support from Mum', { exact: true })).toBeVisible();
+    await expect(moneyIn.getByText('support from Mum', { exact: true }).first()).toBeVisible();
     await expect(moneyIn.getByText('expected — never received').first()).toBeVisible();
 
     // Day-to-day rides as dated events (v0.6.0 anchor-reset): the seeded

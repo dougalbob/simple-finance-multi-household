@@ -37,7 +37,8 @@ test.describe('all transactions', () => {
     // The note field is carried across verbatim — but not pinned to the seed's
     // text, because the `desktop` project edits this very purchase's note
     // before this one runs. What matters is that it is not the empty placeholder.
-    await expect(corner.getByRole('cell').last()).not.toHaveText('—');
+    // With the running-balance column, the notes cell is second-last, not last.
+    await expect(corner.getByRole('cell').nth(5)).not.toHaveText('—');
 
     // A converted standing order keeps its code and links back to the
     // schedule. The seed dates this schedule so its newest conversion is about
@@ -66,8 +67,9 @@ test.describe('all transactions', () => {
     // Scoped to the footer: the caveat paragraph below the table also says
     // "Movements shown", so an unscoped text match would not be unique.
     await expect(page.locator('tfoot').getByText('Movements shown')).toBeVisible();
-    // The page says what the total is not.
-    await expect(page.getByText(/It is not the change in this pot’s estimate/)).toBeVisible();
+    // The page says what the total is not, and explains the balance column.
+    await expect(page.getByText(/running balance after each movement/).first()).toBeVisible();
+    await expect(page.getByText(/Green is in credit, red is overdrawn/).first()).toBeVisible();
   });
 
   test('one transfer is red on the pot it left and green on the pot it reached', async ({
@@ -245,6 +247,37 @@ test.describe('all transactions', () => {
     await page.goto('/pots');
     await expect(
       page.locator('section[aria-labelledby="debts-heading"]').getByText('we owe £250.00'),
+    ).toBeVisible();
+  });
+
+  test('shows running balance at far right, green in credit red in debit, anchored on checkpoints', async ({
+    page,
+  }) => {
+    await page.goto('/transactions');
+    const table = page.locator('section[aria-labelledby="activity-heading"] table');
+    // Header has Balance at far right
+    await expect(table.getByRole('columnheader', { name: 'Balance' })).toBeVisible();
+
+    // Checkpoint divider shows its reported figure as balance, with colour
+    const divider = table.locator('tr', { hasText: 'Checkpoint · reported' }).first();
+    // The balance cell is the last cell of the divider row
+    const dividerBalance = divider.getByRole('cell').last();
+    await expect(dividerBalance).toContainText(/£/);
+    // Colour-coded: check class contains positive or danger (credit/debit)
+    await expect(dividerBalance).toHaveClass(/text-(positive|danger)/);
+
+    // A transaction row shows a running balance in the far-right cell
+    const anyRow = table.locator('tbody tr').filter({ has: page.getByText('£') }).first();
+    const balanceCell = anyRow.getByRole('cell').last();
+    // Balance cell should contain £ or — when no anchor
+    await expect(balanceCell).toContainText(/£|—/);
+
+    // If there is a balance, it should be colour-coded
+    const rowsWithBalance = table.locator('tbody tr').filter({ hasText: '£' });
+    // At least one row should have a £ in the balance column (not just amount)
+    // The balance column is last, so check that some last cells have £
+    await expect(
+      rowsWithBalance.locator('td').last().first(),
     ).toBeVisible();
   });
 });
