@@ -411,8 +411,9 @@ export interface HonestyFuel {
   vehicleId: number;
   label: string;
   /**
-   * Up to `months` COMPLETE calendar months, oldest first, all starting on or
-   * after the recording date. Fewer (or none) while recording is young.
+   * Up to `months` COMPLETE calendar months, oldest first, all containing or
+   * following the recording date (the first month may be only part recorded).
+   * Fewer (or none) while recording is young.
    */
   months: HonestyFuelMonth[];
   averageMonthlyPence: number;
@@ -434,16 +435,17 @@ export interface HonestyLoop {
  * been on.
  */
 export function isRecordedWeek(weekStart: string, recordedFrom: string | null): boolean {
-  return isRecordedPeriod(weekStart, recordedFrom);
+  return recordedFrom === null || weekStart >= recordedFrom;
 }
 
 /**
- * The same rule for any period (a week or a calendar month): it was recorded
- * in full when it starts on or after the recording date. Used by the fuel
- * comparison, so a month only partly recorded is never averaged in.
+ * A calendar month counts for the fuel comparison when it contains or follows
+ * the recording date, so the first, part-recorded month is counted (the
+ * household's choice, decision 184). Months that ended before recording began
+ * are left out.
  */
-export function isRecordedPeriod(periodStart: string, recordedFrom: string | null): boolean {
-  return recordedFrom === null || periodStart >= recordedFrom;
+export function isRecordedMonth(monthEnd: string, recordedFrom: string | null): boolean {
+  return recordedFrom === null || monthEnd >= recordedFrom;
 }
 
 /** The Monday (local) starting the week that contains `date`. */
@@ -464,7 +466,8 @@ export function startOfWeekLocal(date: string): string {
  * - groceries: the last 8 complete Monday–Sunday weeks, counting only weeks
  *   on or after `recordedFrom` (decision 183). Weeks before recording began
  *   are not zero weeks and are not averaged in;
- * - fuel (per vehicle): the last 3 complete calendar months.
+ * - fuel (per vehicle): the last 3 complete calendar months that contain or
+ *   follow `recordedFrom` (decision 184 — the first month may be part recorded);
  *
  * Actuals are NET signed spending in the tracked categories (Groceries
  * parent for groceries; Vehicle Running / Fuel lines targeted at the
@@ -515,8 +518,8 @@ export function computeHonestyLoop(
     for (let k = monthCount; k >= 1; k -= 1) {
       const monthStart = addMonthsClamped(firstOfCurrent, -k);
       const { from, to } = monthRange(monthOfLocalDate(monthStart));
-      // A month before recording began is not a zero month: leave it out.
-      if (!isRecordedPeriod(from, recordedFrom)) continue;
+      // A month that ended before recording began is not a zero month: leave it out.
+      if (!isRecordedMonth(to, recordedFrom)) continue;
       const actualPence = fuelLines
         .filter((line) => line.occurredDate >= from && line.occurredDate <= to)
         .reduce((sum, line) => sum + line.amountPence, 0);

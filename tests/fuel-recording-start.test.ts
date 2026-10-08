@@ -52,8 +52,8 @@ describe('fuel comparison averages recorded months only (unit)', () => {
     assert.equal(vehicle?.driftPence, 5000 - 7500);
   });
 
-  it('a month that began before recording did is left out, even if it holds a fill-up', () => {
-    // Recording began on 17 September: September was only partly recorded.
+  it('a part-recorded first month counts (decision 184)', () => {
+    // Recording began on 17 September: September is part recorded, and it counts.
     const loop = computeHonestyLoop(
       [fuelLine('2026-09-20', 5000)],
       {
@@ -64,9 +64,27 @@ describe('fuel comparison averages recorded months only (unit)', () => {
       { recordedFrom: '2026-09-17' },
     );
     const vehicle = loop.fuel[0];
-    assert.equal(vehicle?.months.length, 0);
-    assert.equal(vehicle?.averageMonthlyPence, 0);
-    assert.equal(vehicle?.driftPence, null);
+    assert.equal(vehicle?.months.length, 1);
+    assert.equal(vehicle?.averageMonthlyPence, 5000);
+    assert.equal(vehicle?.driftPence, 5000 - 7500);
+  });
+
+  it('a month that ended before recording began is left out, even if it is in the window', () => {
+    // Recording began on 1 September: August ended before it, so it is not a zero month.
+    const loop = computeHonestyLoop(
+      [fuelLine('2026-09-12', 5000)],
+      {
+        weeklyGroceriesPence: null,
+        monthlyFuelPence: [{ vehicleId: 1, label: 'Vehicle A', configuredPence: null }],
+      },
+      TODAY,
+      { recordedFrom: '2026-09-01' },
+    );
+    assert.deepEqual(
+      loop.fuel[0]?.months.map((month) => month.month),
+      ['2026-09'],
+    );
+    assert.equal(loop.fuel[0]?.averageMonthlyPence, 5000);
   });
 
   it('once recording has begun, quiet months are zero months', () => {
@@ -117,13 +135,17 @@ describe('fuel comparison, from the recorded purchases (integration)', () => {
   });
   after(() => fixture.close());
 
-  it('the September fill-up is not averaged over two months that were never recorded', () => {
-    // September began before recording did (17 Sep), so there is no complete recorded month yet.
+  it('the September fill-up is the average, the two months never recorded are not', () => {
+    // Recording began on 17 September: September counts (part recorded), July and August do not.
     const loop = getHonestyLoopView(fixture.db, NOW);
     const vehicle = loop.fuel.find((row) => row.label === 'Vehicle A');
     assert.equal(loop.groceries.recordedFrom, '2026-09-17');
-    assert.equal(vehicle?.months.length, 0);
-    assert.equal(vehicle?.driftPence, null);
+    assert.deepEqual(
+      vehicle?.months.map((month) => month.month),
+      ['2026-09'],
+    );
+    assert.equal(vehicle?.averageMonthlyPence, 5000);
+    assert.equal(vehicle?.driftPence, 5000 - 7500);
   });
 });
 

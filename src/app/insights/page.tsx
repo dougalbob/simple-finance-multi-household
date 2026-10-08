@@ -377,7 +377,11 @@ export default async function InsightsPage({
                 {loop.fuel[0] !== undefined &&
                 loop.fuel[0].months.length > 0 &&
                 loop.fuel[0].months.length < 3
-                  ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier months are not counted`
+                  ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier months are not counted${
+                      loop.groceries.recordedFrom.endsWith('-01')
+                        ? ''
+                        : ' — the first month is only part recorded, so its figure may read low'
+                    }`
                   : ''}
               </p>
               <div className="mt-3 space-y-4">
