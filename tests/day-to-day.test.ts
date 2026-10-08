@@ -107,6 +107,54 @@ describe('day-to-day: anchor-reset projected shops and fills (v0.6.0)', () => {
     return events.map((event) => event.dueDate);
   }
 
+  it('basis: anchored series name the last real event; overdue and never start tomorrow', async () => {
+    const { db } = await setUp();
+    setWeeklyGroceriesPence(db, p(90), ACTOR);
+
+    // No history yet: never → tomorrow.
+    const never = projectDayToDayEvents(db, TODAY, '2026-09-30').filter(
+      (event) => event.kind === 'groceries',
+    );
+    assert.ok(never.length > 0);
+    assert.ok(never.every((event) => event.basis === 'never' && event.anchorDate === null));
+    assert.ok(never.every((event) => event.cadenceDays === 7));
+
+    // A shop on the 21st: anchored, so the next is the 28th (not tomorrow).
+    shop(db, { occurredDate: '2026-09-21', amount: 80 });
+    const anchored = projectDayToDayEvents(db, TODAY, '2026-10-05').filter(
+      (event) => event.kind === 'groceries',
+    );
+    assert.deepEqual(datesOf(anchored), ['2026-09-28', '2026-10-05']);
+    assert.ok(anchored.every((event) => event.basis === 'anchor'));
+    assert.ok(anchored.every((event) => event.anchorDate === '2026-09-21'));
+  });
+
+  it('basis: an anchor older than one cadence is overdue, not anchored', async () => {
+    const { db } = await setUp();
+    setWeeklyGroceriesPence(db, p(90), ACTOR);
+    shop(db, { occurredDate: '2026-09-01', amount: 80 });
+
+    const events = projectDayToDayEvents(db, TODAY, '2026-09-30').filter(
+      (event) => event.kind === 'groceries',
+    );
+    assert.deepEqual(datesOf(events), ['2026-09-25']);
+    assert.equal(events[0]?.basis, 'overdue');
+    assert.equal(events[0]?.anchorDate, '2026-09-01');
+  });
+
+  it("basis: fuel is per vehicle, anchored on that vehicle's last fill", async () => {
+    const { db } = await setUp();
+    setMonthlyFuelPence(db, fixture.vehicles.vehicleA.id, p(60), ACTOR);
+    fill(db, { occurredDate: '2026-09-10', amount: 55, vehicleId: fixture.vehicles.vehicleA.id });
+
+    const audi = projectDayToDayEvents(db, TODAY, '2026-10-31').filter(
+      (event) => event.kind === 'fuel',
+    );
+    assert.ok(audi.length > 0);
+    assert.ok(audi.every((event) => event.basis === 'anchor' && event.cadenceDays === 30));
+    assert.ok(audi.every((event) => event.anchorDate === '2026-09-10'));
+  });
+
   it('no history → the next shop is projected tomorrow, then every 7 days', async () => {
     const { db } = await setUp();
     setWeeklyGroceriesPence(db, p(90), ACTOR);

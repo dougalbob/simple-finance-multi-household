@@ -52,6 +52,30 @@ export interface ProjectedDayToDayEvent {
   dueDate: string;
   /** The vehicle a fuel event belongs to; null for groceries. */
   vehicleId: number | null;
+  /**
+   * Why the series sits where it does, for the Horizon panel's explanation:
+   * - 'anchor'  — projected every `cadenceDays` from the last real event;
+   * - 'overdue' — that real event is older than one cadence, so the series
+   *               starts tomorrow and repeats from there;
+   * - 'never'   — no real event has ever been recorded; same start as 'overdue'.
+   */
+  basis: ProjectedDayToDayBasis;
+  /** The last real event this series is anchored on (null when never recorded). */
+  anchorDate: string | null;
+  /** The series cadence in days (7 for groceries, 30 for fuel). */
+  cadenceDays: number;
+}
+
+export type ProjectedDayToDayBasis = 'anchor' | 'overdue' | 'never';
+
+/** The basis of a series, from its anchor and cadence (see ProjectedDayToDayEvent.basis). */
+export function dayToDayBasis(
+  anchor: string | null,
+  cadenceDays: number,
+  today: string,
+): ProjectedDayToDayBasis {
+  if (anchor === null) return 'never';
+  return addDaysLocal(anchor, cadenceDays) > today ? 'anchor' : 'overdue';
 }
 
 /**
@@ -151,6 +175,7 @@ export function projectDayToDayEvents(
   const groceriesPence = getWeeklyGroceriesPence(db);
   if (groceriesPence !== null && groceriesPence > 0) {
     const anchor = lastWeeklyShopDate(db);
+    const basis = dayToDayBasis(anchor, GROCERIES_CADENCE_DAYS, today);
     for (
       let due = nextEventDate(anchor, GROCERIES_CADENCE_DAYS, today);
       due <= throughDate;
@@ -162,6 +187,9 @@ export function projectDayToDayEvents(
         amountPence: groceriesPence,
         dueDate: due,
         vehicleId: null,
+        basis,
+        anchorDate: anchor,
+        cadenceDays: GROCERIES_CADENCE_DAYS,
       });
     }
   }
@@ -172,6 +200,7 @@ export function projectDayToDayEvents(
     const monthlyPence = fuelByVehicle.get(vehicle.id) ?? 0;
     if (monthlyPence <= 0) continue;
     const anchor = lastFillByVehicle.get(vehicle.id) ?? null;
+    const basis = dayToDayBasis(anchor, FUEL_CADENCE_DAYS, today);
     for (
       let due = nextEventDate(anchor, FUEL_CADENCE_DAYS, today);
       due <= throughDate;
@@ -183,6 +212,9 @@ export function projectDayToDayEvents(
         amountPence: monthlyPence,
         dueDate: due,
         vehicleId: vehicle.id,
+        basis,
+        anchorDate: anchor,
+        cadenceDays: FUEL_CADENCE_DAYS,
       });
     }
   }
