@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { waitForTill } from './support';
+import { addDaysIso, londonToday, waitForTill } from './support';
 import { APP_RELEASE_STAGE, APP_VERSION } from '../src/lib/version';
 
 /**
@@ -925,6 +925,44 @@ test.describe('mobile quick entry', () => {
     await expect(page.getByRole('heading', { name: 'Recent entries' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Key dates' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /Schedules, renewals/ })).toHaveCount(0);
+  });
+
+  test('the payday card states the facts and opens Horizon the day before payday', async ({
+    page,
+  }) => {
+    // The payday is the next scheduled income; read it from the Income page,
+    // the same way the Horizon spec does, so no date logic is duplicated here.
+    await page.goto('/income');
+    const summary = page.locator('section[aria-label="Income summary"]');
+    const payday = /(\d{4}-\d{2}-\d{2}) · into/.exec(await summary.innerText())?.[1] ?? '';
+    expect(payday).not.toBe('');
+    const dayBefore = addDaysIso(payday, -1);
+    const tomorrow = addDaysIso(londonToday(), 1);
+    const expected = dayBefore < tomorrow ? tomorrow : dayBefore;
+
+    await page.goto('/');
+    await waitForTill(page);
+    const card = page.locator('section[aria-labelledby="payday-summary-heading"]');
+    await expect(card.getByText('Payday projection', { exact: true })).toBeVisible();
+    // "Next pay day is 26th October (18 days from today)" — the ordinal, the
+    // month name and the day count, never a raw ISO date (decision 186).
+    await expect(card.getByRole('heading', { level: 2 })).toHaveText(
+      /^Next pay day is \d{1,2}(?:st|nd|rd|th) [A-Z][a-z]+(?: \d{4})? \(\d+ days? from today\)$/,
+    );
+    // The balance is the liquid one the projection starts from — bank and
+    // cash pots — never the card-debt net total.
+    await expect(
+      card.getByText(
+        /Based on a current household balance of £[\d,]+\.\d{2} in bank and cash pots and no additional unplanned spending, the household low would reach -?£[\d,]+\.\d{2}\./,
+      ),
+    ).toBeVisible();
+
+    // The detail lives on Horizon: the link carries the look-ahead date, and
+    // the page it opens really is set to that date.
+    const horizon = card.getByRole('link', { name: 'Horizon', exact: true });
+    await expect(horizon).toHaveAttribute('href', `/horizon?through=${expected}`);
+    await horizon.click();
+    await expect(page.locator('#horizon-through')).toHaveValue(expected);
   });
 
   test('purchase filters start collapsed and stay inside the card', async ({ page }) => {

@@ -1,14 +1,20 @@
 import { formatPence } from '@/lib/money';
 import type { ProjectionView } from '@/lib/records/money-view';
+import { paydaySummaryFromView } from '@/lib/records/payday-summary';
 
 /**
- * Shared projection panel (home + overview, decision 74): the tier banner,
- * the “what's in this forecast” breakdown, the day-by-day table, and the
- * “plan a transfer?” pot watch lines. All figures come from the pure
- * projection engine — nothing here recomputes anything.
+ * The Overview's projection panel (decision 74; trimmed in decision 186): the
+ * tier banner, the figures, and the “what's in this forecast” expansions —
+ * the lists and the day-by-day table, which is where the arithmetic is
+ * checked. The prose the panel used to repeat around them (the weekly pace
+ * line, which the till on this same page already carries, and the footnotes
+ * under the expansions) now lives only on Horizon. The pot watch is the same
+ * sentence the home card shows, from the same pure builder. All figures come
+ * from the pure projection engine — nothing here recomputes anything.
  */
 export function ProjectionSection({ projection }: { projection: ProjectionView }) {
   const { result } = projection;
+  const summary = paydaySummaryFromView(projection);
   // Debt expectations ride in the receipt list flagged `expected` (SPEC §10.2,
   // v0.7.0): the panel lists them under their own heading so a £1,000 support
   // payment is never mistaken for salary.
@@ -46,8 +52,6 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
       </div>
 
       <p className={`rounded-lg border px-3 py-2 text-sm font-medium ${tierStyles}`}>{tierText}</p>
-
-      <p className="mt-2 text-sm text-ink-soft">{projection.paceText}</p>
 
       <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
         <div className="flex justify-between gap-2">
@@ -106,11 +110,6 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-ink-muted">
-            Borrowed money the household expects, flagged and never counted as income. It moves no
-            pot estimate: the money lands only if it is actually borrowed and recorded, and until
-            then it is a plan. A settled loan expects nothing.
-          </p>
         </details>
       ) : null}
 
@@ -133,11 +132,6 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-ink-muted">
-            Dates follow when the household last recorded a weekly shop or a fill — a fresh shop
-            resets the week, a fresh fill resets the vehicle’s month. Amounts are the figures set in
-            Settings.
-          </p>
         </details>
       ) : null}
 
@@ -187,42 +181,16 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
         </details>
       ) : null}
 
-      {result.potWatches.length > 0 ? (
+      {summary !== null && summary.transfers.length > 0 ? (
         <div className="mt-4 space-y-2">
-          {result.potWatches.map((watch) => {
-            const label = projection.potLabels.get(watch.potId) ?? `Pot ${watch.potId}`;
-            const others = [...projection.otherPotEstimates.entries()]
-              .filter(([potId, pence]) => potId !== watch.potId && pence > 0)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 2)
-              .map(
-                ([potId, pence]) =>
-                  `${projection.potLabels.get(potId) ?? 'Another pot'} holds ${formatPence(pence)}`,
-              )
-              .join(', ');
-            const items = watch.earliestCommitments.map((item) => item.name).join(' and ');
-            return (
-              <p
-                key={watch.potId}
-                className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900"
-              >
-                <span className="font-semibold">Plan a transfer?</span> {label} is projected to run
-                about{' '}
-                <span className="font-semibold tabular-nums">
-                  {formatPence(watch.shortfallPence)}
-                </span>{' '}
-                short of its{' '}
-                {watch.commitmentsPence > 0
-                  ? `upcoming commitments (${formatPence(watch.commitmentsPence)})`
-                  : 'due outgoings'}
-                {watch.earliestDueDate !== null
-                  ? ` (first due ${watch.earliestDueDate}${items !== '' ? ` — ${items}` : ''})`
-                  : ''}
-                .{others !== '' ? ` Meanwhile, ${others}.` : ''} Transfers stay explicit — record
-                one when you decide.
-              </p>
-            );
-          })}
+          {summary.transfers.map((transfer) => (
+            <p
+              key={transfer.potId}
+              className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900"
+            >
+              <span className="font-semibold">Plan a transfer?</span> {transfer.text}
+            </p>
+          ))}
         </div>
       ) : null}
     </section>

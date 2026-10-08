@@ -18,15 +18,16 @@ import { creditCardOwedPence, potEstimateLabel } from '@/lib/records/pots';
 import { listPeople } from '@/lib/records/people';
 import { listVehicles } from '@/lib/records/vehicles';
 import { toLocalDateString } from '@/lib/time';
-import { ProjectionSection } from '@/app/overview/projection-panel';
+import { PaydaySummary } from '@/components/payday-summary';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Phone till home (SPEC §15.1, decision 164): available now, Quick Entry
- * (opens at the till), payday projection, due this week, and links to the
- * full pages. Recurring, pots, checkpoints, recent purchases and key dates
- * live on their own pages — not here.
+ * (opens at the till), the payday summary (decision 186 — the short card,
+ * with the full projection on Horizon), due this week, and links to the full
+ * pages. Recurring, pots, checkpoints, recent purchases and key dates live on
+ * their own pages — not here.
  */
 export default async function HomePage() {
   const user = await currentUserFromRequest();
@@ -74,7 +75,9 @@ export default async function HomePage() {
         {/* On a phone this page opens at the till (decision 158). */}
         <QuickEntry data={entryData} openAtTillOnMobile />
         {projection !== null ? (
-          <ProjectionSection projection={projection} />
+          // The short card (decision 186): the figures and the transfer nudge,
+          // with the full detail one tap away on Horizon.
+          <PaydaySummary projection={projection} />
         ) : (
           <section
             aria-labelledby="projection-locked-heading"

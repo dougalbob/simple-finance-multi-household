@@ -76,6 +76,39 @@ export function formatShortLocalDate(dateString: string): string {
   }).format(date);
 }
 
+/** 1 → "1st", 22 → "22nd" — a day of the month read as a day, not a number. */
+export function ordinalDay(day: number): string {
+  if (day % 100 >= 11 && day % 100 <= 13) return `${day}th`;
+  return day % 10 === 1
+    ? `${day}st`
+    : day % 10 === 2
+      ? `${day}nd`
+      : day % 10 === 3
+        ? `${day}rd`
+        : `${day}th`;
+}
+
+/**
+ * A spoken-style day and month for a 'YYYY-MM-DD' local date — "26th October"
+ * — with the year appended when the date is not in `today`'s year ("26th
+ * January 2027"), so a sentence like "next pay day is…" can never read as a
+ * date that has already passed. Assembled from parts in UTC rather than
+ * parsed as an instant: no timezone drift, and the same string on the server
+ * and in the browser.
+ */
+export function formatDayMonthLocalDate(dateString: string, today: string): string {
+  const match = DATE_ONLY_PATTERN.exec(dateString);
+  if (match === null) return dateString;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const monthName = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', month: 'long' }).format(
+    new Date(Date.UTC(year, month - 1, day)),
+  );
+  const label = `${ordinalDay(day)} ${monthName}`;
+  return today.slice(0, 4) === match[1] ? label : `${label} ${match[1]}`;
+}
+
 /**
  * `formatShortLocalDate`, plus the year when the date is not in `today`'s
  * year: "Sun 1 Nov" this year, "Tue 5 Jan 2027" next. A task due next
