@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
   allocations,
@@ -20,6 +20,7 @@ import { listPotsIncludingArchived } from './pots';
 import { listSuppliers } from './suppliers';
 import { purchaseLineSummary, targetNames } from './targets';
 import { listVehicles } from './vehicles';
+import { recordIsAfterCheckpoint, type CheckpointFacts, type SignedMovement } from './estimates';
 
 /**
  * The "All Transactions" projection (docs/SPEC.md §15.3, plan decisions
@@ -49,6 +50,13 @@ import { listVehicles } from './vehicles';
  * The date column is date-only ('YYYY-MM-DD', decision 108): a date-only
  * record's instant is the end-of-local-date marker, so rendering the instant
  * would print a 23:59 time that never happened.
+ *
+ * Running balance (v0.33.0): each transaction row shows the pot's balance
+ * after that movement, anchored on the most recent checkpoint. Balances
+ * before a checkpoint stay as computed from the previous checkpoint; after
+ * a checkpoint the new balances use that checkpoint's reported figure.
+ * This resolves drift without line-by-line reconciliation: a checkpoint
+ * resets the running total. Colour-coded green (credit) / red (debit).
  */
 
 /** The compact type codes the household sketch asked for (SPEC §15.3). */
@@ -109,6 +117,8 @@ export interface ActivityRow {
   secondaryLink: ActivityLink | null;
   /** Swap pairing state, or null. */
   badge: string | null;
+  /** Running balance after this movement, anchored on checkpoints (null when no anchor). */
+  runningBalancePence: number | null;
 }
 
 export interface ActivityCheckpoint {
@@ -160,6 +170,32 @@ interface PendingRow {
   recordId: number;
   familyRank: number;
   row: ActivityRow;
+  /** Movement facts for running-balance calculation (null for expected rows). */
+  movement: BalanceMovement | null;
+}
+
+interface BalanceMovement extends SignedMovement {
+  /** For ordering */
+  sortAt: number;
+  recordId: number;
+  familyRank: number;
+  key: string;
+  signedPence: number;
+}
+
+function movementOrderLE(a: BalanceMovement, b: BalanceMovement): boolean {
+  if (a.sortAt !== b.sortAt) return a.sortAt < b.sortAt;
+  const aEntered = a.enteredAt?.getTime() ?? 0;
+  const bEntered = b.enteredAt?.getTime() ?? 0;
+  if (aEntered !== bEntered) return aEntered < bEntered;
+  if (a.familyRank !== b.familyRank) return a.familyRank < b.familyRank;
+  if (a.recordId !== b.recordId) return a.recordId < b.recordId;
+  return a.key <= b.key;
+}
+
+function movementOrderLEInclusive(a: BalanceMovement, b: BalanceMovement): boolean {
+  if (a.key === b.key) return true;
+  return movementOrderLE(a, b);
 }
 
 export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView {
@@ -241,8 +277,10 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           ? 'SO'
           : 'PUR';
     const lineSummary = purchaseLineSummary(lines, categoryNames, names);
+    const sortAt = purchase.occurredAt.getTime();
+    const signedPence = -purchase.totalPence;
     pending.push({
-      sortAt: purchase.occurredAt.getTime(),
+      sortAt,
       recordId: purchase.id,
       familyRank: 0,
       row: {
@@ -254,13 +292,9 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         source:
           purchase.supplierId !== null
             ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
-            : // A standing order may have no supplier (SPEC §11.1: a household
-              // transfer option), so fall back to the schedule's own name —
-              // "Unknown supplier" would be a dead end on a dense list.
-              (schedule?.name ?? 'Unknown supplier'),
+            : (schedule?.name ?? 'Unknown supplier'),
         category: lineSummary.label,
         extraLines: lineSummary.extraLines,
-        // A refund's total is negative, so money came back in (SPEC §9.5).
         amountPence: Math.abs(purchase.totalPence),
         direction: purchase.totalPence < 0 ? 'in' : 'out',
         note: purchase.note ?? '',
@@ -276,6 +310,17 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
                 label: 'Open the schedule',
               },
         badge: null,
+        runningBalancePence: null,
+      },
+      movement: {
+        key: `purchase-${purchase.id}`,
+        recordId: purchase.id,
+        familyRank: 0,
+        sortAt,
+        signedPence,
+        occurredAt: purchase.occurredAt,
+        occurredDate: purchase.occurredDate,
+        enteredAt: purchase.createdAt,
       },
     });
   }
@@ -299,8 +344,10 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
   for (const transfer of transferRows) {
     const incoming = transfer.toPotId === potId;
     const otherPotId = incoming ? transfer.fromPotId : transfer.toPotId;
+    const sortAt = transfer.occurredAt.getTime();
+    const signedPence = incoming ? transfer.amountPence : -transfer.amountPence;
     pending.push({
-      sortAt: transfer.occurredAt.getTime(),
+      sortAt,
       recordId: transfer.id,
       familyRank: 1,
       row: {
@@ -321,6 +368,17 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         },
         secondaryLink: null,
         badge: null,
+        runningBalancePence: null,
+      },
+      movement: {
+        key: `transfer-${transfer.id}`,
+        recordId: transfer.id,
+        familyRank: 1,
+        sortAt,
+        signedPence,
+        occurredAt: transfer.occurredAt,
+        occurredDate: transfer.occurredDate,
+        enteredAt: transfer.createdAt,
       },
     });
   }
@@ -358,8 +416,10 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         : movement.kind === 'swap'
           ? (`SW${arrow}` as ActivityCode)
           : (`TX${arrow}` as ActivityCode);
+    const sortAt = movement.occurredAt.getTime();
+    const signedPence = incoming ? movement.amountPence : -movement.amountPence;
     pending.push({
-      sortAt: movement.occurredAt.getTime(),
+      sortAt,
       recordId: movement.id,
       familyRank: 2,
       row: {
@@ -381,14 +441,22 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         secondaryLink:
           movement.kind === 'swap' ? { href: '/pots#swaps', label: 'Open the swap list' } : null,
         badge: movement.kind === 'swap' ? (swapPartners.get(movement.id) ?? null) : null,
+        runningBalancePence: null,
+      },
+      movement: {
+        key: `external-${movement.id}`,
+        recordId: movement.id,
+        familyRank: 2,
+        sortAt,
+        signedPence,
+        occurredAt: movement.occurredAt,
+        occurredDate: movement.occurredDate,
+        enteredAt: movement.createdAt,
       },
     });
   }
 
   // --- Income: BAC --------------------------------------------------------
-  // Scheduled salary and one-off income (a sold bicycle paid in cash or by
-  // bank transfer) are the same record family: money that arrived in this
-  // pot. Always a credit — a receipt can only add to the pot it landed in.
   const receiptRows = db
     .select({
       receipt: receipts,
@@ -411,8 +479,9 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
     .all();
 
   for (const { receipt, scheduleId, scheduleName } of receiptRows) {
+    const sortAt = receipt.occurredAt.getTime();
     pending.push({
-      sortAt: receipt.occurredAt.getTime(),
+      sortAt,
       recordId: receipt.id,
       familyRank: 3,
       row: {
@@ -421,11 +490,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         recordId: receipt.id,
         date: receipt.occurredDate,
         code: 'BAC',
-        // A typed source wins; a converted receipt reads its schedule's
-        // current name; a salary recorded before sources existed still has
-        // something to show rather than a blank cell.
         source: receipt.source ?? scheduleName ?? 'Income',
-        // Income has no category by design (SPEC §6): it is not spending.
         category: '',
         extraLines: 0,
         amountPence: receipt.amountPence,
@@ -440,17 +505,22 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
             ? null
             : { href: `/recurring#schedule-${scheduleId}`, label: 'Open the schedule' },
         badge: scheduleName === null ? null : 'from schedule',
+        runningBalancePence: null,
+      },
+      movement: {
+        key: `receipt-${receipt.id}`,
+        recordId: receipt.id,
+        familyRank: 3,
+        sortAt,
+        signedPence: receipt.amountPence,
+        occurredAt: receipt.occurredAt,
+        occurredDate: receipt.occurredDate,
+        enteredAt: receipt.createdAt,
       },
     });
   }
 
   // --- Expected support: EXP< ---------------------------------------------
-  // A debt's expectation (SPEC §10.2, v0.7.0) joins the list from its due
-  // date: the household sees the money it is expecting, and the row is the
-  // nudge to record the borrowing when it lands. It is flagged, never
-  // counted in the totals — an expectation is not a movement — and it gives
-  // way as soon as that month's money is recorded (`expectedInflowOccurrences`
-  // answers it), leaving the real `LN<` row behind.
   for (const debt of listDebts(db)) {
     if (expectedInflowPotId(db, debt) !== potId) continue;
     const occurrences = expectedInflowOccurrences(
@@ -460,16 +530,9 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       dateTo,
       potId,
     );
-    // The expectation speaks for the months since it was set, never for
-    // months before the household planned it (v0.7.0): the local date of the
-    // debt's last edit is the honest floor, and a month that has come and
-    // gone unrecorded reads as exactly that.
     const plannedFrom = toLocalDateString(debt.updatedAt);
     for (const occurrence of occurrences) {
       if (occurrence.configuredDate < plannedFrom) continue;
-      // An occurrence configured on the 1st can shift back into the previous
-      // month (weekend shift, decision 7): rows outside the window are not
-      // part of it, exactly as for every other family.
       if (occurrence.dueDate < dateFrom || occurrence.dueDate > dateTo) continue;
       pending.push({
         sortAt: endOfLocalDate(occurrence.dueDate).getTime(),
@@ -490,7 +553,9 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           link: { href: `/pots#debt-${debt.id}`, label: 'Open the loan panel' },
           secondaryLink: null,
           badge: 'expected — not recorded yet',
+          runningBalancePence: null,
         },
+        movement: null,
       });
     }
   }
@@ -505,14 +570,218 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       a.row.key.localeCompare(b.row.key),
   );
   const shown = pending.slice(0, limit);
-  // The per-family fetches are capped, so the honest "how many did I hide"
-  // count comes from counting the window in the database, not from what was
-  // fetched (SPEC §15.3: a capped list must say so rather than imply a total).
   const windowRowCount =
     countRows(db, purchases, potId, dateFrom, dateTo) +
     countTransferRows(db, potId, dateFrom, dateTo) +
     countRows(db, externalMovements, potId, dateFrom, dateTo) +
     countRows(db, receipts, potId, dateFrom, dateTo);
+
+  // ---- Running balance calculation --------------------------------------
+  // Fetch all checkpoints for this pot, ascending.
+  const allCheckpointsAsc = db
+    .select()
+    .from(checkpoints)
+    .where(eq(checkpoints.potId, potId))
+    .orderBy(asc(checkpoints.effectiveAt), asc(checkpoints.id))
+    .all();
+
+  const relevantCheckpointsAsc = allCheckpointsAsc.filter(
+    (c) => toLocalDateString(c.effectiveAt) <= dateTo,
+  );
+
+  let balanceMovementsAsc: BalanceMovement[] = [];
+  if (relevantCheckpointsAsc.length > 0) {
+    const firstCp = relevantCheckpointsAsc[0];
+    if (firstCp === undefined) {
+      // Should not happen due to length check, but keep TS happy
+      throw new Error('No checkpoint found');
+    }
+    const earliestDate = toLocalDateString(firstCp.effectiveAt);
+    // Fetch all movements from earliest checkpoint date to dateTo (no limit)
+    const balancePurchaseRows = db
+      .select()
+      .from(purchases)
+      .where(
+        and(
+          eq(purchases.potId, potId),
+          isNull(purchases.voidedAt),
+          gte(purchases.occurredDate, earliestDate),
+          lte(purchases.occurredDate, dateTo),
+        ),
+      )
+      .all();
+    const balanceTransferRows = db
+      .select()
+      .from(transfers)
+      .where(
+        and(
+          or(eq(transfers.fromPotId, potId), eq(transfers.toPotId, potId)),
+          isNull(transfers.voidedAt),
+          gte(transfers.occurredDate, earliestDate),
+          lte(transfers.occurredDate, dateTo),
+        ),
+      )
+      .all();
+    const balanceExternalRows = db
+      .select()
+      .from(externalMovements)
+      .where(
+        and(
+          eq(externalMovements.potId, potId),
+          isNull(externalMovements.voidedAt),
+          gte(externalMovements.occurredDate, earliestDate),
+          lte(externalMovements.occurredDate, dateTo),
+        ),
+      )
+      .all();
+    const balanceReceiptRows = db
+      .select()
+      .from(receipts)
+      .where(
+        and(
+          eq(receipts.potId, potId),
+          isNull(receipts.voidedAt),
+          gte(receipts.occurredDate, earliestDate),
+          lte(receipts.occurredDate, dateTo),
+        ),
+      )
+      .all();
+
+    const all: BalanceMovement[] = [];
+    for (const p of balancePurchaseRows) {
+      all.push({
+        key: `purchase-${p.id}`,
+        recordId: p.id,
+        familyRank: 0,
+        sortAt: p.occurredAt.getTime(),
+        signedPence: -p.totalPence,
+        occurredAt: p.occurredAt,
+        occurredDate: p.occurredDate,
+        enteredAt: p.createdAt,
+      });
+    }
+    for (const t of balanceTransferRows) {
+      const incoming = t.toPotId === potId;
+      all.push({
+        key: `transfer-${t.id}`,
+        recordId: t.id,
+        familyRank: 1,
+        sortAt: t.occurredAt.getTime(),
+        signedPence: incoming ? t.amountPence : -t.amountPence,
+        occurredAt: t.occurredAt,
+        occurredDate: t.occurredDate,
+        enteredAt: t.createdAt,
+      });
+    }
+    for (const m of balanceExternalRows) {
+      const incoming = m.direction === 'in';
+      all.push({
+        key: `external-${m.id}`,
+        recordId: m.id,
+        familyRank: 2,
+        sortAt: m.occurredAt.getTime(),
+        signedPence: incoming ? m.amountPence : -m.amountPence,
+        occurredAt: m.occurredAt,
+        occurredDate: m.occurredDate,
+        enteredAt: m.createdAt,
+      });
+    }
+    for (const r of balanceReceiptRows) {
+      all.push({
+        key: `receipt-${r.id}`,
+        recordId: r.id,
+        familyRank: 3,
+        sortAt: r.occurredAt.getTime(),
+        signedPence: r.amountPence,
+        occurredAt: r.occurredAt,
+        occurredDate: r.occurredDate,
+        enteredAt: r.createdAt,
+      });
+    }
+    all.sort((a, b) => {
+      if (a.sortAt !== b.sortAt) return a.sortAt - b.sortAt;
+      const aEntered = a.enteredAt?.getTime() ?? 0;
+      const bEntered = b.enteredAt?.getTime() ?? 0;
+      if (aEntered !== bEntered) return aEntered - bEntered;
+      if (a.familyRank !== b.familyRank) return a.familyRank - b.familyRank;
+      if (a.recordId !== b.recordId) return a.recordId - b.recordId;
+      return a.key.localeCompare(b.key);
+    });
+    balanceMovementsAsc = all;
+  }
+
+  const checkpointFactsAsc: Array<CheckpointFacts & { id: number; date: string }> =
+    relevantCheckpointsAsc.map((c) => ({
+      id: c.id,
+      amountPence: c.amountPence,
+      effectiveAt: c.effectiveAt,
+      enteredAt: c.createdAt,
+      date: toLocalDateString(c.effectiveAt),
+    }));
+
+  // Map from key to BalanceMovement for quick lookup of shown rows
+  const balanceByKey = new Map(balanceMovementsAsc.map((m) => [m.key, m]));
+
+  // Compute running balance for each shown row
+  const runningBalanceByKey = new Map<string, number | null>();
+  for (const item of shown) {
+    if (item.movement === null) {
+      runningBalanceByKey.set(item.row.key, null);
+      continue;
+    }
+    // Find the movement in balanceMovementsAsc (should exist)
+    const movement = balanceByKey.get(item.row.key) ?? item.movement;
+    // Find anchor checkpoint: latest where movement is after checkpoint
+    let anchor: (CheckpointFacts & { id: number; date: string }) | null = null;
+    for (let i = checkpointFactsAsc.length - 1; i >= 0; i--) {
+      const cp = checkpointFactsAsc[i];
+      if (cp === undefined) continue;
+      const cpFacts: CheckpointFacts = {
+        amountPence: cp.amountPence,
+        effectiveAt: cp.effectiveAt,
+        enteredAt: cp.enteredAt,
+      };
+      const mov: SignedMovement = {
+        signedPence: movement.signedPence,
+        occurredAt: movement.occurredAt,
+        occurredDate: movement.occurredDate,
+        enteredAt: movement.enteredAt,
+      };
+      if (recordIsAfterCheckpoint(mov, cpFacts)) {
+        anchor = cp;
+        break;
+      }
+    }
+    if (anchor === null || anchor === undefined) {
+      runningBalanceByKey.set(item.row.key, null);
+      continue;
+    }
+    // Sum movements after anchor up to and including this movement
+    let sum = anchor.amountPence;
+    for (const m of balanceMovementsAsc) {
+      const mFacts: CheckpointFacts = {
+        amountPence: anchor.amountPence,
+        effectiveAt: anchor.effectiveAt,
+        enteredAt: anchor.enteredAt,
+      };
+      const mMov: SignedMovement = {
+        signedPence: m.signedPence,
+        occurredAt: m.occurredAt,
+        occurredDate: m.occurredDate,
+        enteredAt: m.enteredAt,
+      };
+      if (!recordIsAfterCheckpoint(mMov, mFacts)) continue;
+      if (!movementOrderLEInclusive(m, movement)) continue;
+      // m is after anchor and <= current movement
+      // But also ensure m's date is not after current movement's date? The order check already handles time
+      // However we must also ensure m is not after current movement in terms of checkpoint absorption?
+      // The anchor check ensures m is after anchor; if m is absorbed by a later checkpoint that is between anchor and current, then m would NOT be after anchor? Actually if there's a later checkpoint C2 between anchor and current, and m is before C2, then m would be NOT after C2, but it could still be after anchor. However for current movement T anchored to C2, we wouldn't be summing after anchor (C) but after C2. Since we already selected anchor as latest checkpoint where T is after, any intermediate checkpoint between anchor and T cannot exist, because anchor is latest where T is after. If there is C2 between anchor and T where T is after C2, then anchor would be C2, not earlier. So our anchor is already latest.
+      // For other movements M that are after anchor but before C2, and C2 is between anchor and T, then M would be inside C2 (not after C2), but we are summing after anchor, not after C2. Should we include M? No, because C2 resets balance and M is already included in C2's amount.
+      // However our anchor is C2, so we are summing after C2, not after earlier checkpoint. So M before C2 would not be after C2, so excluded. Good.
+      sum += m.signedPence;
+    }
+    runningBalanceByKey.set(item.row.key, sum);
+  }
 
   let inPence = 0;
   let outPence = 0;
@@ -521,19 +790,16 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
   let shownRecordCount = 0;
   const entries: ActivityEntry[] = shown.map((item) => {
     if (item.row.family === 'expected') {
-      // An expectation is not a movement (v0.7.0): it is listed and flagged,
-      // and the page says plainly that it sits outside the totals.
       expectedInPence += item.row.amountPence;
       expectedRowCount += 1;
-      return { kind: 'row', row: item.row };
+      return { kind: 'row', row: { ...item.row, runningBalancePence: null } };
     }
     shownRecordCount += 1;
     if (item.row.direction === 'in') inPence += item.row.amountPence;
     else outPence += item.row.amountPence;
-    return { kind: 'row', row: item.row };
+    const bal = runningBalanceByKey.get(item.row.key) ?? null;
+    return { kind: 'row', row: { ...item.row, runningBalancePence: bal } };
   });
-  // Expected rows can take a slot under the cap, so the hidden count is
-  // measured against the recorded rows actually shown, not the whole list.
   const hiddenRowCount = Math.max(windowRowCount - shownRecordCount, 0);
 
   // Checkpoint dividers (SPEC §15.3): the reported figure inside the window,
