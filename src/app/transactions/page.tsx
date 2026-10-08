@@ -319,9 +319,9 @@ export default async function TransactionsPage({
           way when the borrowing is recorded. The balance column shows the pot&apos;s running
           balance after each movement, anchored on the most recent checkpoint: any drift before a
           checkpoint stays as it was, and after the checkpoint the new balances use that
-          checkpoint&apos;s reported figure. A credit written down before the checkpoint on that same
-          day is already inside the reported figure (SPEC §7.1). A credit written down after the
-          checkpoint is added. Green is in credit, red is overdrawn.
+          checkpoint&apos;s reported figure. A credit written down before the checkpoint on that
+          same day is already inside the reported figure (SPEC §7.1). A credit written down after
+          the checkpoint is added. Green is in credit, red is overdrawn.
         </p>
       </section>
     </main>

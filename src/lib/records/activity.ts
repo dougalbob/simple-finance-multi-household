@@ -130,8 +130,7 @@ export interface ActivityCheckpoint {
 }
 
 export type ActivityEntry =
-  | { kind: 'row'; row: ActivityRow }
-  | { kind: 'checkpoint'; checkpoint: ActivityCheckpoint };
+  { kind: 'row'; row: ActivityRow } | { kind: 'checkpoint'; checkpoint: ActivityCheckpoint };
 
 export interface ActivityTotals {
   /** Sum of the recorded rows actually shown, credits. */

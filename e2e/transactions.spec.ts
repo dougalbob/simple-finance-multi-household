@@ -267,7 +267,10 @@ test.describe('all transactions', () => {
     await expect(dividerBalance).toHaveClass(/text-(positive|danger)/);
 
     // A transaction row shows a running balance in the far-right cell
-    const anyRow = table.locator('tbody tr').filter({ has: page.getByText('£') }).first();
+    const anyRow = table
+      .locator('tbody tr')
+      .filter({ has: page.getByText('£') })
+      .first();
     const balanceCell = anyRow.getByRole('cell').last();
     // Balance cell should contain £ or — when no anchor
     await expect(balanceCell).toContainText(/£|—/);
@@ -276,9 +279,7 @@ test.describe('all transactions', () => {
     const rowsWithBalance = table.locator('tbody tr').filter({ hasText: '£' });
     // At least one row should have a £ in the balance column (not just amount)
     // The balance column is last, so check that some last cells have £
-    await expect(
-      rowsWithBalance.locator('td').last().first(),
-    ).toBeVisible();
+    await expect(rowsWithBalance.locator('td').last().first()).toBeVisible();
   });
 });
 

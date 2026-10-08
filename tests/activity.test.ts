@@ -1052,10 +1052,7 @@ describe('All Transactions: running balance (v0.33.0)', () => {
   });
 
   it('expected rows have no running balance', async () => {
-    const fx = await createHouseholdFixture(
-      ACTOR_BAL,
-      new Date('2026-09-24T19:30:00+01:00'),
-    );
+    const fx = await createHouseholdFixture(ACTOR_BAL, new Date('2026-09-24T19:30:00+01:00'));
     try {
       const db = fx.db;
       const debt = createDebt(db, {
