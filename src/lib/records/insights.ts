@@ -410,7 +410,10 @@ export interface HonestyFuelMonth {
 export interface HonestyFuel {
   vehicleId: number;
   label: string;
-  /** The last `months` COMPLETE calendar months (this partial month excluded). */
+  /**
+   * Up to `months` COMPLETE calendar months, oldest first, all starting on or
+   * after the recording date. Fewer (or none) while recording is young.
+   */
   months: HonestyFuelMonth[];
   averageMonthlyPence: number;
   configuredPence: number | null;
@@ -431,7 +434,16 @@ export interface HonestyLoop {
  * been on.
  */
 export function isRecordedWeek(weekStart: string, recordedFrom: string | null): boolean {
-  return recordedFrom === null || weekStart >= recordedFrom;
+  return isRecordedPeriod(weekStart, recordedFrom);
+}
+
+/**
+ * The same rule for any period (a week or a calendar month): it was recorded
+ * in full when it starts on or after the recording date. Used by the fuel
+ * comparison, so a month only partly recorded is never averaged in.
+ */
+export function isRecordedPeriod(periodStart: string, recordedFrom: string | null): boolean {
+  return recordedFrom === null || periodStart >= recordedFrom;
 }
 
 /** The Monday (local) starting the week that contains `date`. */
@@ -503,21 +515,27 @@ export function computeHonestyLoop(
     for (let k = monthCount; k >= 1; k -= 1) {
       const monthStart = addMonthsClamped(firstOfCurrent, -k);
       const { from, to } = monthRange(monthOfLocalDate(monthStart));
+      // A month before recording began is not a zero month: leave it out.
+      if (!isRecordedPeriod(from, recordedFrom)) continue;
       const actualPence = fuelLines
         .filter((line) => line.occurredDate >= from && line.occurredDate <= to)
         .reduce((sum, line) => sum + line.amountPence, 0);
       months.push({ month: `${from.slice(0, 4)}-${from.slice(5, 7)}`, from, to, actualPence });
     }
     const total = months.reduce((sum, entry) => sum + entry.actualPence, 0);
-    const averageMonthlyPence = roundHalfUpDivide(total, monthCount);
+    // Averaged over the recorded months only; none recorded means no average.
+    const averageMonthlyPence = months.length === 0 ? 0 : roundHalfUpDivide(total, months.length);
+    const driftPence =
+      vehicle.configuredPence === null || months.length === 0
+        ? null
+        : averageMonthlyPence - vehicle.configuredPence;
     return {
       vehicleId: vehicle.vehicleId,
       label: vehicle.label,
       months,
       averageMonthlyPence,
       configuredPence: vehicle.configuredPence,
-      driftPence:
-        vehicle.configuredPence === null ? null : averageMonthlyPence - vehicle.configuredPence,
+      driftPence,
     };
   });
 
