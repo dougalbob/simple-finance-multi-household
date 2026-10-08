@@ -2612,3 +2612,58 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
 183. **The groceries average counts only weeks since recording began (2026-10-08, released in v0.34.0).** Reported on the Charts card: "over the last 8 complete weeks" for a household recording since Mon 14 Sep. The five weeks before launch counted as zero weeks, so £46.67 a week read as £17.50. **Decision — the start is derived, not stored.** `firstRecordedPurchaseDate` (`src/lib/records/recording.ts`) is the earliest `occurredDate` of a non-voided purchase that is not schedule-converted. Schedule-converted purchases are left out because backdating a direct debit writes its past instances as purchases. A stored "recording started" setting was rejected: it needs a backfill and a value nobody typed, and the derived date corrects itself. **A week counts only if it is complete and begins on or after that date** (`isRecordedWeek`, `src/lib/records/insights.ts`). A week that began earlier, even one partly recorded, is shown but marked "not counted"; it is never averaged in, so a part week never mixes with whole ones. Empty weeks inside the recording period still count as zero weeks. Nothing recorded means no average and no drift. The Charts card and the Insights honesty loop share the rule, so they still agree. **Known limit:** a purchase back-dated to before launch moves the start back and those weeks count again. The fix is to correct that date, not the rule. The fuel comparison uses the same start date but a different month rule, decided by the household in decision 184: a calendar month counts if it contains or follows the recording date (`isRecordedMonth`). The average divides by the months that count; with none, there is no average and no drift. Tests: `tests/groceries-recording-start.test.ts` (the reported figure, the honesty loop agreeing, nothing recorded, a mid-week start), `tests/fuel-recording-start.test.ts` (one recorded month, a partly recorded first month, quiet months after recording began) and the "groceries before recording began" block in `tests/chart-series.test.ts`.
 184. **The first, part-recorded month counts in the fuel comparison (2026-10-08, released in v0.34.0).** Decision 183 left a fuel month out when it began before recording did. The household chose instead to count the month that contains the first recorded purchase, so a single fill-up in a part-recorded month reads as that month's fuel: a household that began recording on 17 Sep and fuelled once in September now sees that figure as the average, not "no complete month yet". **The trade-off is deliberate:** fuel bought before recording began in that month is not in the figure, so the average may read low until a full month is recorded. The Insights panel says so when recording began on a day other than the 1st. **Scope:** this applies to fuel months only. Groceries weeks still count only when they begin on or after the recording date (decision 183), so a part-recorded first week is shown but not averaged in. The two rules differ on purpose until the household says otherwise. Rule: `isRecordedMonth` (`src/lib/records/insights.ts`) — a month counts when its last day is on or after the recording date. Tests: `tests/fuel-recording-start.test.ts`.
 185. **Horizon day-by-day amounts open their breakdown inline, one at a time (2026-10-08, released in v0.35.0).** The household asked for a way to see what a figure in the Day by day card is made of, without scrolling back to the commitments card and finding the date on a phone. Decided: **inline expansion beneath the tapped date's row** (not a popover or bottom sheet). The date stays on screen and no hover is needed. Three columns are tappable: Commitments, Expected money in (for consistency and so future income schedules are covered without a change here) and Day-to-day. **Only one breakdown is open at a time.** The panel shows only the tapped column, not a running balance, because End of day already shows that. **Day-to-day explains its basis.** Each projected shop or fill records why it falls on its date (`basis`: `anchor`, `overdue` or `never`, plus the anchor date and cadence) in `src/lib/records/day-to-day.ts`, and `describeDayToDayBasis` turns that into a sentence. The figures are unchanged. **The breakdown is a pure reshape** of the lines the view already holds (`buildHorizonDayDetails`, `src/lib/records/horizon-days.ts`), so the panel and the table cannot disagree. The interaction lives in a small client component (`src/app/horizon/day-by-day-table.tsx`). The panel is pinned to the visible width because the table scrolls sideways on a phone. Amount buttons are `nowrap`, and their labels avoid the words \"Day-to-day\" so the existing `getByLabel('Day-to-day')` selector still resolves to the form field. Tests: `tests/horizon-days.test.ts`, the basis block in `tests/day-to-day.test.ts`, and the Horizon e2e spec \"tapping a day-by-day amount opens its breakdown beneath that date, one at a time\".
+
+186. **The phone home's payday card is a summary; the full projection lives on Horizon (2026-10-08, v0.36.0).**
+    The household asked for the Quick Entry page's **PAYDAY PROJECTION** card to be trimmed so the other user
+    can digest it, and wrote the new copy themselves: next pay day and the day count; the household low from
+    the current balance with "no additional unplanned spending"; the overdraft-fee verdict; a "Plan a
+    transfer?" line in its existing amber treatment; and a link into **Horizon**. Four answers were taken from
+    the household before any code: the trim applies to the **phone home**, with **Overview** keeping the tables
+    but losing the duplicated prose ("home trimmed, Overview slightly trimmed"); the balance in the sentence is
+    the one the low is derived from — **liquid funds, bank and cash, ignoring card debt** (their words: "the
+    displayed figure should ignore any credit card debt"); the transfer deadline is **five days before the
+    earliest due date** (`TRANSFER_LEAD_DAYS = 5`, a code constant — the household's 21st → 16th); and the bill
+    noun **follows the schedules** ("Direct Debits", "standing orders", or both) rather than assuming direct
+    debits.
+
+    **Decision — one pure builder, two surfaces.** `buildPaydaySummary` (`src/lib/records/payday-summary.ts`)
+    turns the projection view into four sentences; `paydaySummaryFromView` is the single adapter (labels, kinds,
+    today), used by the home card (`src/components/payday-summary.tsx`) and the Overview pot watch, so the two
+    can never disagree. Wording is pinned to the character in `tests/payday-summary.test.ts` against the
+    household's own worked example (26th October, £242.22, −£165.25, Natwest £850.00 by the 16th).
+
+    **Decision — the fee sentence follows the tier, and does not cheer for a fee.** Tier `none`/`heads-up`
+    reads "No overdraft fees would be incurred."; tier `warning` says fees are likely and names the configured
+    threshold. The household's example was −£165.25 against a £250.00 threshold — below zero, inside the
+    threshold — which is exactly the reassuring case they asked for.
+
+    **Decision — "no additional unplanned spending" is the declared assumption.** The projection already
+    includes planned shops and fills (§7.3), so the sentence says so in the household's own words rather than
+    implying the low ignores day-to-day.
+
+    **Decision — Horizon opens on payday − 1.** The link is `/horizon?through=<payday − 1>`; the Horizon
+    default already resolves "the day before the next income" (decision 150), so the link reproduces the same
+    window and a stale bookmark still opens sanely. Verified in the browser: the card's −£165.25 equals
+    Horizon's "Free to spend up to" for the 25th to the penny.
+
+    **Decision — the phone home keeps the numbers, Horizon keeps the detail.** The day-by-day table, the dated
+    shops/fills, the expected-support list, the weekly pace and the footnotes left the home card; Overview keeps
+    its expansions (it is the sit-down surface) and lost only the pace line (the till on the same page already
+    carries it) and the footnote paragraphs. Nothing was removed from Horizon.
+
+    **Decision — the summary is honest about the pots it names.** The transfer sentence's noun comes from the
+    commitment lines' `scheduleKind` (carried through `ProjectionScheduleLine` into `PotWatchResult`), the
+    longest bill list is three names plus "and N more", and a pot already below zero with nothing left to leave
+    it says so instead of inventing a bill.
+
+    **Not changed:** the engine's arithmetic, the pot watch's bills-only scope (day-to-day still never enters
+    it), the five-day lead's source (a constant, not a setting — add one if the household asks), and the locked
+    "projection appears once a checkpoint and an income schedule exist" state.
+
+    **Gates:** `npm test` **696 passed** / 168 suites, 0 failed (up from v0.35.0's 671 / 160; 25 new tests:
+    `tests/payday-summary.test.ts` ×20 across 6 suites, and 5 for `formatDayMonthLocalDate`/`ordinalDay` in
+    `tests/time.test.ts`) · `typecheck`, `format:check`,
+    `themes:check`, `build` clean · `npm audit --omit=dev` zero · Playwright: the full local run and the CI
+    `browser` job are the gate; the affected projects (`mobile`, `desktop`, `horizon`, `credit-card-pots`) were
+    verified green locally via SANDBOX entry 8, including the new spec "the payday card states the facts and
+    opens Horizon the day before payday". No schema, migration, backup-format or dependency change.

@@ -23,7 +23,7 @@ import {
 import { listStoredReceiptAttachments, type StoredAttachment } from '@/lib/records/attachments';
 import { ensureScheduleState } from '@/lib/records/money-view';
 import { listPots } from '@/lib/records/pots';
-import { toLocalDateString } from '@/lib/time';
+import { ordinalDay, toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -184,7 +184,7 @@ export default async function IncomePage({
                             ? 'monthly'
                             : 'a month'
                           : 'a year'}
-                        , due on the {ordinal(schedule.dueDayOfMonth)}
+                        , due on the {ordinalDay(schedule.dueDayOfMonth)}
                         {schedule.frequency === 'annual' && schedule.dueMonth !== null
                           ? ` of month ${schedule.dueMonth}`
                           : ''}
@@ -203,8 +203,8 @@ export default async function IncomePage({
                     </p>
                     {schedule.nextDueDateShifted ? (
                       <p className="text-xs text-warning-700">
-                        The {ordinal(schedule.dueDayOfMonth)} falls on a weekend — expected on the
-                        Friday before.
+                        The {ordinalDay(schedule.dueDayOfMonth)} falls on a weekend — expected on
+                        the Friday before.
                       </p>
                     ) : null}
                   </div>
@@ -377,16 +377,4 @@ function IncomeRow({
       )}
     </li>
   );
-}
-
-/** 1 → "1st", 22 → "22nd" — the payday reads as a day of the month, not a number. */
-function ordinal(day: number): string {
-  if (day % 100 >= 11 && day % 100 <= 13) return `${day}th`;
-  return day % 10 === 1
-    ? `${day}st`
-    : day % 10 === 2
-      ? `${day}nd`
-      : day % 10 === 3
-        ? `${day}rd`
-        : `${day}th`;
 }

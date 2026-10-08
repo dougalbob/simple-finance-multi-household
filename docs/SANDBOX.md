@@ -358,6 +358,15 @@ empty — the fetch was blocked.
 
 ## History
 
+- **2026-10-08 (v0.36.0, session `arena/3b32c31f-simple-finance`):** entry 8 re-proved. The full local run
+  was flaky at the *tail* in a way worth recording: by the last three projects the sandbox was at
+  **3.86 GB of its 3.9 GB**, and those specs failed with `ERR_CONNECTION_REFUSED` — the `next dev` server
+  had been killed. A `free -m` sample every 10 s during the run tells the story (a ~1.5 GB floor, rising
+  through the compile-heavy middle projects); this is the mechanism behind entry 8's and the v0.34.0
+  bullet's connection-refused flakes, not app code. Remedy that works: re-run the affected projects alone
+  on a fresh server (`npx playwright test --config playwright.local.config.ts --project backup --project
+  credit-card-pots`) — 3/3 green here. Budget the memory: start the run with nothing else heavy going, and
+  read a red tail as memory before reading it as a bug.
 - **2026-10-08 (v0.34.0, session `arena/5cf1892e-simple-finance`):** entry 8 re-proved. The first full
   local run (115 tests, `LD_LIBRARY_PATH=/tmp/al2023/lib`, ~9 min under the sandbox's load) failed three
   tests: the backup download waited the full 120 s for a `download` event, and the next two tests hit

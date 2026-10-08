@@ -1,8 +1,80 @@
-# Handoff: v0.35.0 — Tap a day-by-day amount to see what it is made of (decision 185)
+# Handoff: v0.36.0 — A shorter payday card on the phone home (decision 186)
 
-**v0.34.0 — verified post-merge facts (recorded per decision 173):** to be recorded by the next
-working session from the merged release PR, its `main` and Publish runs, the annotated `v0.35.0` tag
-and the GHCR digest. The v0.35.0 release PR itself records nothing post-merge.
+**v0.35.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `2bd0371ecbb9ef7e0eb19ec087636ba351080182` (PR #96, from `arena/fefa6e6c-simple-finance`,
+  merged 2026-10-08T16:23:43Z, merge commit not squash).
+- PR CI run `37807552570` (green on the head), `main` CI run `37808440884` and Publish run
+  `37809769954` — all green.
+- Annotated tag `v0.35.0` (tag object `191d9a9b3fff6637b09d23e8a6ae99cac3a5eaf8`) points at that merge
+  commit; the GitHub release "v0.35.0 — Tap a day-by-day amount to see what it is made of" was published
+  2026-10-08T16:37:18Z and is marked Latest.
+- Digest `sha256:7bc3ba04259697e1b6c4ba2cbb8afa71bb3b0846b967f765bc24b274fd3efa63` on `v0.35.0` /
+  `latest` / `sha-2bd0371`, differing from v0.34.0's `sha256:e1c6ee54…`.
+
+**v0.34.0 — verified post-merge facts (recorded per decision 173):** merge commit
+`d957567bb9b194c6a18560576aead48de0a0526b` (PR #95, merged 2026-10-08T14:26:38Z); `main` CI run
+`37792505570` and Publish run `37793933963` green; annotated tag `v0.34.0`; digest
+`sha256:e1c6ee54d7649d84aea1e17b7abf94e69178e8c488b505975b7281dd1178473a` on all three tags.
+
+## What changed
+
+- **The phone home's payday card is a summary, not the panel (decision 186).** The household's own copy:
+  "Next pay day is 26th October (18 days from today)"; the household low from the liquid balance with "no
+  additional unplanned spending" and the fee verdict; the amber "Plan a transfer?" line; "See full
+  projection detail in the Horizon page." The balance named is `liquid_available_now` — bank and cash pots,
+  card debt ignored, because that is what the low is derived from. The feature sentence follows the tier
+  (§8): inside the threshold it says no fees, past it says fees are likely and names the threshold.
+- **One pure builder, two surfaces.** `buildPaydaySummary` / `paydaySummaryFromView`
+  (`src/lib/records/payday-summary.ts`) build the sentences; the home card
+  (`src/components/payday-summary.tsx`) and the Overview pot watch both render them, so the two cannot
+  disagree. Wording is pinned to the character in `tests/payday-summary.test.ts` against the household's
+  worked example (26th October, £242.22, −£165.25, Natwest £850.00 by the 16th).
+- **The transfer sentence names what is really due.** `TRANSFER_LEAD_DAYS = 5` (a constant, not a setting);
+  the bill noun comes from `scheduleKind` on the commitment lines ("Direct Debits", "standing orders", or
+  both) — `ProjectionScheduleLine.scheduleKind` and `PotWatchResult.earliestCommitments[].scheduleKind` are
+  new, and `money-view.ts` fills them. Three bill names, then "and N more"; once the five-day lead has
+  passed the sentence says "as soon as you can" instead of a past date.
+- **Overview keeps its panel, minus duplicate prose.** The weekly pace line (the till on the same page
+  already carries it) and the two footnote paragraphs under "Expected support" and "Projected shops and
+  fills" are gone; the figures, the expansions, the day-by-day table and the pot watch stay. Horizon is
+  untouched.
+- **Horizon link carries payday − 1** (`/horizon?through=…`) — the same date Horizon's own default
+  resolves (decision 150), so the tap lands on the window the summary described.
+- **New shared date helper.** `formatDayMonthLocalDate` and `ordinalDay` in `src/lib/time.ts` ("26th
+  October", plus the year when it is not today's year). `src/app/income/page.tsx`'s private `ordinal` was
+  replaced by the shared one.
+- No schema, migration, backup-format or dependency change. Version 0.36.0 in all five places.
+
+## Gates at PR preparation
+
+`npm test`: **696 passed** / 168 suites, 0 failed (25 new) · `npm run typecheck` clean · `npm run format:check` clean ·
+`npm run themes:check` clean · `npm run build` clean (`next-env.d.ts` restored) · `npm audit --omit=dev`
+zero · Playwright: see the release PR description and `docs/SANDBOX.md` entry 8 for the local run
+(overlay `playwright.local.config.ts`, never committed).
+
+## What a future session should know
+
+1. **Record v0.36.0's post-merge facts at the top of this file** (merge commit, PR CI and main CI run IDs,
+   tag, Publish run, digest vs v0.35.0's `sha256:7bc3ba04…`), per decision 173.
+2. **The transfer nudge no longer ends with "Transfers stay explicit — record one when you decide."** The
+   household's copy ends at the deadline. The `TransferForm` on the till's Move tab is the recording path;
+   put the sentence back only if they ask.
+3. **A past-due transfer deadline says "as soon as you can"** rather than naming a date — the one place the
+   wording departs from the household's literal text, chosen so the card cannot tell them to transfer by a
+   date that has already gone.
+4. **The five-day lead is a code constant.** If the household wants to tune it, promote `TRANSFER_LEAD_DAYS`
+   into the settings table beside the renewal/contract leads (Settings → Warning leads).
+5. Open items carried forward are unchanged: the Horizon "untick all pots" question, the Insights
+   groceries/fuel rule asymmetry (decision 183/184), and the day-by-day line → record links.
+
+## What the household does
+
+In Unraid: take a backup, then Force Update. The badge should read `v0.36.0 · pre-release`.
+
+---
+
+# Handoff: v0.35.0 — Tap a day-by-day amount to see what it is made of (decision 185)
 
 ## What changed
 

@@ -3,9 +3,11 @@ import { describe, it } from 'node:test';
 import {
   BUSINESS_TIMEZONE,
   endOfLocalDate,
+  formatDayMonthLocalDate,
   formatRelativeAge,
   formatShortLocalDate,
   isValidLocalDate,
+  ordinalDay,
   toLocalDateString,
 } from '../src/lib/time';
 
@@ -102,5 +104,40 @@ describe('formatShortLocalDate', () => {
 
   it('returns the input unchanged when it is not a local date', () => {
     assert.equal(formatShortLocalDate('not-a-date'), 'not-a-date');
+  });
+});
+
+describe('ordinalDay', () => {
+  it('reads a day of the month as a day', () => {
+    assert.equal(ordinalDay(1), '1st');
+    assert.equal(ordinalDay(2), '2nd');
+    assert.equal(ordinalDay(3), '3rd');
+    assert.equal(ordinalDay(21), '21st');
+    assert.equal(ordinalDay(22), '22nd');
+    assert.equal(ordinalDay(23), '23rd');
+  });
+
+  it('spells the teens with -th (11th, not 11st)', () => {
+    assert.equal(ordinalDay(11), '11th');
+    assert.equal(ordinalDay(12), '12th');
+    assert.equal(ordinalDay(13), '13th');
+    assert.equal(ordinalDay(111), '111th');
+  });
+});
+
+describe('formatDayMonthLocalDate', () => {
+  it('spells the day and the month for the payday sentence', () => {
+    assert.equal(formatDayMonthLocalDate('2026-10-26', '2026-10-08'), '26th October');
+    assert.equal(formatDayMonthLocalDate('2026-10-21', '2026-10-08'), '21st October');
+    assert.equal(formatDayMonthLocalDate('2026-03-01', '2026-03-01'), '1st March');
+  });
+
+  it('carries the year when the date is not in today’s year', () => {
+    assert.equal(formatDayMonthLocalDate('2027-01-26', '2026-12-30'), '26th January 2027');
+    assert.equal(formatDayMonthLocalDate('2026-12-31', '2026-12-30'), '31st December');
+  });
+
+  it('returns the input unchanged when it is not a local date', () => {
+    assert.equal(formatDayMonthLocalDate('not-a-date', '2026-10-08'), 'not-a-date');
   });
 });
