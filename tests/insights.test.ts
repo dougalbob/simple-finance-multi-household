@@ -18,6 +18,9 @@ import {
  * tests/insights-view.test.ts. All money is integer pence.
  */
 
+/** Unit fixtures that predate any recording rule: recording has always been on. */
+const RECORDING_ALWAYS_ON = '2000-01-01';
+
 function line(
   partial: Partial<SpendingLineInput> & Pick<SpendingLineInput, 'occurredDate' | 'amountPence'>,
 ): SpendingLineInput {
@@ -333,6 +336,7 @@ describe('insights: honesty loop (panel 4)', () => {
       lines,
       { weeklyGroceriesPence: 9000, monthlyFuelPence: [] },
       today,
+      { recordedFrom: RECORDING_ALWAYS_ON },
     );
     assert.equal(loop.groceries.weeks.length, 8);
     assert.equal(loop.groceries.weeks[loop.groceries.weeks.length - 1]?.weekStart, '2026-03-16');
@@ -357,6 +361,7 @@ describe('insights: honesty loop (panel 4)', () => {
       lines,
       { weeklyGroceriesPence: null, monthlyFuelPence: [] },
       '2026-09-20',
+      { recordedFrom: RECORDING_ALWAYS_ON },
     );
     // 9500 / 8 = 1187.5 → half-up 1188.
     assert.equal(loop.groceries.averageWeeklyPence, 1188);
@@ -410,6 +415,7 @@ describe('insights: honesty loop (panel 4)', () => {
         ],
       },
       today,
+      { recordedFrom: RECORDING_ALWAYS_ON },
     );
     const a = loop.fuel.find((row) => row.vehicleId === 1);
     assert.deepEqual(

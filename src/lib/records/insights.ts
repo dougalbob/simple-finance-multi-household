@@ -383,9 +383,17 @@ export interface GroceriesWeek {
 
 export interface HonestyGroceries {
   parent: string;
-  /** The last `weeks` COMPLETE Monday–Sunday weeks, oldest first. */
+  /**
+   * Up to 8 COMPLETE Monday–Sunday weeks, oldest first, all on or after
+   * `recordedFrom`. Fewer (or none) while recording is young.
+   */
   weeks: GroceriesWeek[];
-  /** Mean per-week actual over the whole window (zero weeks included). */
+  /** The first date anything was recorded; weeks before it are not counted. */
+  recordedFrom: string;
+  /**
+   * Mean per-week actual over `weeks` (empty recorded weeks included, as zero
+   * weeks; weeks before recording began excluded). Zero when there are none.
+   */
   averageWeeklyPence: number;
   configuredPence: number | null;
   /** averageWeeklyPence − configuredPence; null when nothing is configured. */
@@ -402,7 +410,11 @@ export interface HonestyFuelMonth {
 export interface HonestyFuel {
   vehicleId: number;
   label: string;
-  /** The last `months` COMPLETE calendar months (this partial month excluded). */
+  /**
+   * Up to `months` COMPLETE calendar months, oldest first, all containing or
+   * following the recording date (the first month may be only part recorded).
+   * Fewer (or none) while recording is young.
+   */
   months: HonestyFuelMonth[];
   averageMonthlyPence: number;
   configuredPence: number | null;
@@ -413,6 +425,27 @@ export interface HonestyLoop {
   today: string;
   groceries: HonestyGroceries;
   fuel: HonestyFuel[];
+}
+
+/**
+ * A week was recorded in full when it begins on or after the recording date
+ * (`recordedFrom`, the first recorded purchase — decision 183). A week that
+ * starts before it was not recorded, so it is neither a zero week nor a full
+ * one, and it is kept out of every average. Null means recording has always
+ * been on.
+ */
+export function isRecordedWeek(weekStart: string, recordedFrom: string | null): boolean {
+  return recordedFrom === null || weekStart >= recordedFrom;
+}
+
+/**
+ * A calendar month counts for the fuel comparison when it contains or follows
+ * the recording date, so the first, part-recorded month is counted (the
+ * household's choice, decision 184). Months that ended before recording began
+ * are left out.
+ */
+export function isRecordedMonth(monthEnd: string, recordedFrom: string | null): boolean {
+  return recordedFrom === null || monthEnd >= recordedFrom;
 }
 
 /** The Monday (local) starting the week that contains `date`. */
@@ -430,8 +463,11 @@ export function startOfWeekLocal(date: string): string {
  *
  * Windows are complete periods only — the partial current week/month is
  * excluded, so the comparison never mixes a 3-day week with a 7-day one:
- * - groceries: the last 8 complete Monday–Sunday weeks;
- * - fuel (per vehicle): the last 3 complete calendar months.
+ * - groceries: the last 8 complete Monday–Sunday weeks, counting only weeks
+ *   on or after `recordedFrom` (decision 183). Weeks before recording began
+ *   are not zero weeks and are not averaged in;
+ * - fuel (per vehicle): the last 3 complete calendar months that contain or
+ *   follow `recordedFrom` (decision 184 — the first month may be part recorded);
  *
  * Actuals are NET signed spending in the tracked categories (Groceries
  * parent for groceries; Vehicle Running / Fuel lines targeted at the
@@ -442,17 +478,20 @@ export function computeHonestyLoop(
   lines: readonly SpendingLineInput[],
   config: HonestyConfig,
   today: string,
-  options: { weeks?: number; months?: number } = {},
+  options: { weeks?: number; months?: number; recordedFrom: string },
 ): HonestyLoop {
   checkedLocalDate(today);
   const weekCount = Math.min(Math.max(options.weeks ?? 8, 1), 52);
   const monthCount = Math.min(Math.max(options.months ?? 3, 1), 24);
+  const recordedFrom = options.recordedFrom;
 
   const thisMonday = startOfWeekLocal(today);
   const groceryLines = lines.filter((line) => line.parentName === GROCERIES_PARENT);
   const weeks: GroceriesWeek[] = [];
   for (let i = weekCount; i >= 1; i -= 1) {
     const weekStart = addDaysLocal(thisMonday, -7 * i);
+    // Before recording began is not a zero week: leave it out entirely.
+    if (!isRecordedWeek(weekStart, recordedFrom)) continue;
     const weekEnd = addDaysLocal(weekStart, 6);
     const actualPence = groceryLines
       .filter((line) => line.occurredDate >= weekStart && line.occurredDate <= weekEnd)
@@ -460,7 +499,12 @@ export function computeHonestyLoop(
     weeks.push({ weekStart, weekEnd, actualPence });
   }
   const groceryTotal = weeks.reduce((sum, week) => sum + week.actualPence, 0);
-  const averageWeeklyPence = roundHalfUpDivide(groceryTotal, weekCount);
+  const averageWeeklyPence = weeks.length === 0 ? 0 : roundHalfUpDivide(groceryTotal, weeks.length);
+  // No recorded complete week means no average to compare against.
+  const groceryDrift =
+    config.weeklyGroceriesPence === null || weeks.length === 0
+      ? null
+      : averageWeeklyPence - config.weeklyGroceriesPence;
 
   const firstOfCurrent = firstOfLocalMonth(today);
   const fuel: HonestyFuel[] = config.monthlyFuelPence.map((vehicle) => {
@@ -474,21 +518,27 @@ export function computeHonestyLoop(
     for (let k = monthCount; k >= 1; k -= 1) {
       const monthStart = addMonthsClamped(firstOfCurrent, -k);
       const { from, to } = monthRange(monthOfLocalDate(monthStart));
+      // A month that ended before recording began is not a zero month: leave it out.
+      if (!isRecordedMonth(to, recordedFrom)) continue;
       const actualPence = fuelLines
         .filter((line) => line.occurredDate >= from && line.occurredDate <= to)
         .reduce((sum, line) => sum + line.amountPence, 0);
       months.push({ month: `${from.slice(0, 4)}-${from.slice(5, 7)}`, from, to, actualPence });
     }
     const total = months.reduce((sum, entry) => sum + entry.actualPence, 0);
-    const averageMonthlyPence = roundHalfUpDivide(total, monthCount);
+    // Averaged over the recorded months only; none recorded means no average.
+    const averageMonthlyPence = months.length === 0 ? 0 : roundHalfUpDivide(total, months.length);
+    const driftPence =
+      vehicle.configuredPence === null || months.length === 0
+        ? null
+        : averageMonthlyPence - vehicle.configuredPence;
     return {
       vehicleId: vehicle.vehicleId,
       label: vehicle.label,
       months,
       averageMonthlyPence,
       configuredPence: vehicle.configuredPence,
-      driftPence:
-        vehicle.configuredPence === null ? null : averageMonthlyPence - vehicle.configuredPence,
+      driftPence,
     };
   });
 
@@ -497,12 +547,10 @@ export function computeHonestyLoop(
     groceries: {
       parent: GROCERIES_PARENT,
       weeks,
+      recordedFrom,
       averageWeeklyPence,
       configuredPence: config.weeklyGroceriesPence,
-      driftPence:
-        config.weeklyGroceriesPence === null
-          ? null
-          : averageWeeklyPence - config.weeklyGroceriesPence,
+      driftPence: groceryDrift,
     },
     fuel,
   };

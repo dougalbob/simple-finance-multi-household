@@ -12,7 +12,7 @@ import {
 import { addDaysLocal } from '@/lib/records/dates';
 import { getFuelEconomyView, type VehicleFuelEconomyView } from '@/lib/records/fuel';
 import { describeClosure, formatLitres, formatMiles, formatMpg } from '@/lib/records/fuel-economy';
-import { toLocalDateString } from '@/lib/time';
+import { formatShortLocalDate, toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -331,14 +331,29 @@ export default async function InsightsPage({
             <div className="rounded-lg border border-border p-3">
               <h3 className="text-sm font-semibold">Groceries — {loop.groceries.parent}</h3>
               <p className="text-xs text-ink-muted">
-                last {loop.groceries.weeks.length} complete weeks (Mon–Sun)
+                {loop.groceries.weeks.length === 0
+                  ? 'no complete week recorded yet'
+                  : `last ${loop.groceries.weeks.length} complete ${
+                      loop.groceries.weeks.length === 1 ? 'week' : 'weeks'
+                    } (Mon–Sun)`}
+                {loop.groceries.weeks.length > 0 && loop.groceries.weeks.length < 8
+                  ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier weeks are not counted`
+                  : ''}
               </p>
-              <HonestyComparison
-                configuredLabel="weekly"
-                configuredPence={loop.groceries.configuredPence}
-                averagePence={loop.groceries.averageWeeklyPence}
-                driftPence={loop.groceries.driftPence}
-              />
+              {loop.groceries.weeks.length === 0 ? (
+                <p className="mt-2 text-sm text-ink-soft">
+                  No complete week of shopping is recorded yet, so there is no average to compare
+                  with the configured figure.
+                </p>
+              ) : (
+                <HonestyComparison
+                  configuredLabel="weekly"
+                  period="week"
+                  configuredPence={loop.groceries.configuredPence}
+                  averagePence={loop.groceries.averageWeeklyPence}
+                  driftPence={loop.groceries.driftPence}
+                />
+              )}
               <ul className="mt-3 space-y-1">
                 {loop.groceries.weeks.map((week) => (
                   <li
@@ -354,18 +369,39 @@ export default async function InsightsPage({
             <div className="rounded-lg border border-border p-3">
               <h3 className="text-sm font-semibold">Fuel</h3>
               <p className="text-xs text-ink-muted">
-                last {loop.fuel[0]?.months.length ?? 3} complete months, per vehicle
+                {loop.fuel[0] === undefined || loop.fuel[0].months.length === 0
+                  ? 'no complete month recorded yet, per vehicle'
+                  : `last ${loop.fuel[0].months.length} complete ${
+                      loop.fuel[0].months.length === 1 ? 'month' : 'months'
+                    }, per vehicle`}
+                {loop.fuel[0] !== undefined &&
+                loop.fuel[0].months.length > 0 &&
+                loop.fuel[0].months.length < 3
+                  ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier months are not counted${
+                      loop.groceries.recordedFrom.endsWith('-01')
+                        ? ''
+                        : ' — the first month is only part recorded, so its figure may read low'
+                    }`
+                  : ''}
               </p>
               <div className="mt-3 space-y-4">
                 {loop.fuel.map((vehicle) => (
                   <div key={vehicle.vehicleId}>
                     <p className="text-sm font-medium">{vehicle.label}</p>
-                    <HonestyComparison
-                      configuredLabel="monthly"
-                      configuredPence={vehicle.configuredPence}
-                      averagePence={vehicle.averageMonthlyPence}
-                      driftPence={vehicle.driftPence}
-                    />
+                    {vehicle.months.length === 0 ? (
+                      <p className="mt-2 text-sm text-ink-soft">
+                        No complete month of fuel is recorded yet, so there is no average to compare
+                        with the configured figure.
+                      </p>
+                    ) : (
+                      <HonestyComparison
+                        configuredLabel="monthly"
+                        period="month"
+                        configuredPence={vehicle.configuredPence}
+                        averagePence={vehicle.averageMonthlyPence}
+                        driftPence={vehicle.driftPence}
+                      />
+                    )}
                     <ul className="mt-2 space-y-1">
                       {vehicle.months.map((month) => (
                         <li
@@ -393,11 +429,15 @@ export default async function InsightsPage({
 
 function HonestyComparison({
   configuredLabel,
+  period,
   configuredPence,
   averagePence,
   driftPence,
 }: {
+  /** "weekly" / "monthly" — used in the card labels. */
   configuredLabel: string;
+  /** "week" / "month" — used in the sentence ("per week"). */
+  period: 'week' | 'month';
   configuredPence: number | null;
   averagePence: number;
   driftPence: number | null;
@@ -431,10 +471,10 @@ function HonestyComparison({
           {driftPence === 0
             ? 'Your configured figure matches recent actuals exactly.'
             : driftPence > 0
-              ? `You are spending about ${formatPence(driftPence)} more per ${configuredLabel} than the ${formatPence(
+              ? `You are spending about ${formatPence(driftPence)} more per ${period} than the ${formatPence(
                   configuredPence ?? 0,
                 )} you configured. Consider raising the figure — or cutting back.`
-              : `You are spending about ${formatPence(Math.abs(driftPence))} less per ${configuredLabel} than the ${formatPence(
+              : `You are spending about ${formatPence(Math.abs(driftPence))} less per ${period} than the ${formatPence(
                   configuredPence ?? 0,
                 )} you configured. The projection is being pessimistic.`}
         </p>

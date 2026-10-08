@@ -332,8 +332,15 @@ function DayDetails({ view }: { view: ForecastChartView }) {
 /* ------------------------------------------------------------------ */
 
 function GroceriesSection({ view }: { view: GroceriesChartView }) {
+  // Weeks before the first recorded purchase were never recorded at all, so
+  // they are not zero weeks and do not count (decision 183).
+  const since =
+    view.recordingStartedOn === null
+      ? ' Nothing is recorded yet, so there is no average.'
+      : ` Weeks before recording began on ${formatShortLocalDate(view.recordingStartedOn)} are not counted either.`;
   const caption =
-    'Recorded grocery lines only, bucketed Monday to Sunday. A week with no shop is a zero week, not a missing one — the average would flatter you otherwise. The current week is still being lived and never counts towards the average.';
+    'Recorded grocery lines only, bucketed Monday to Sunday. A week with no shop is a zero week, not a missing one — the average would flatter you otherwise. The current week is still being lived and never counts towards the average.' +
+    since;
   return (
     <ChartCard id="groceries" eyebrow="B · Groceries" title="Is the weekly shop creeping up?">
       <div className="lg:hidden">
@@ -368,7 +375,7 @@ function renderGroceries(
     href: href(week),
     hint: `Week of ${formatShortLocalDate(week.weekStart)}: ${formatPence(week.amountPence)}${
       week.complete ? '' : ' so far'
-    } — open these purchases`,
+    }${week.recorded ? '' : ' — not counted, recording had not begun'} — open these purchases`,
     muted: !week.complete,
   }));
   const domain = chartDomain(
@@ -408,11 +415,12 @@ function renderGroceries(
       ]}
       rows={series.weeks.map((week) => ({
         key: week.weekStart,
-        muted: !week.complete,
+        muted: !week.complete || !week.recorded,
         cells: [
           <a key="link" href={href(week)} className="text-accent hover:underline">
             {week.weekStart}
             {week.complete ? '' : ' (so far)'}
+            {week.recorded ? '' : ' (not counted)'}
           </a>,
           formatPence(week.amountPence),
         ],

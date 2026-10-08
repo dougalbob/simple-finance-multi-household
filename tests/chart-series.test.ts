@@ -27,6 +27,8 @@ import { chartDomain, formatAxisPence, niceStep, yFor } from '../src/components/
 
 const TODAY = '2026-09-20'; // a Sunday
 const MONDAY = '2026-09-14';
+/** Unit fixtures that predate any recording rule: recording has always been on. */
+const RECORDING_ALWAYS_ON = '2000-01-01';
 
 function line(
   partial: Partial<SpendingLineInput> & Pick<SpendingLineInput, 'occurredDate' | 'amountPence'>,
@@ -198,6 +200,7 @@ describe('chart series: weekly buckets and groceries (B)', () => {
       weeks: 4,
       configuredWeeklyPence: 7500,
       averageWeeks: 3,
+      recordedFrom: RECORDING_ALWAYS_ON,
     });
     assert.equal(series.averageWeeks, 3);
     assert.equal(series.averagePence, 6000); // (0 + 8000 + 10000) / 3
@@ -211,6 +214,7 @@ describe('chart series: weekly buckets and groceries (B)', () => {
       today: TODAY,
       weeks: 4,
       configuredWeeklyPence: null,
+      recordedFrom: RECORDING_ALWAYS_ON,
     });
     assert.equal(configured.driftPence, null);
     assert.match(configured.headline, /No weekly grocery figure is configured yet/);
@@ -219,6 +223,7 @@ describe('chart series: weekly buckets and groceries (B)', () => {
       today: TODAY,
       weeks: 1,
       configuredWeeklyPence: 7500,
+      recordedFrom: RECORDING_ALWAYS_ON,
     });
     assert.equal(nothing.averageWeeks, 0);
     assert.match(nothing.headline, /No complete week of shopping recorded yet/);
@@ -230,9 +235,54 @@ describe('chart series: weekly buckets and groceries (B)', () => {
         line({ occurredDate: '2026-09-07', amountPence: 9000 }),
         line({ occurredDate: '2026-09-09', amountPence: -1500 }),
       ],
-      { today: TODAY, weeks: 2, configuredWeeklyPence: null },
+      { today: TODAY, weeks: 2, configuredWeeklyPence: null, recordedFrom: RECORDING_ALWAYS_ON },
     );
     assert.equal(series.weeks[0]?.amountPence, 7500);
+  });
+});
+
+describe('chart series: groceries before recording began (B)', () => {
+  it('leaves weeks that begin before the recording date out of the average', () => {
+    // Recording began on Monday 7 Sep: the five weeks before it are not zero weeks.
+    const series = groceriesSeries(
+      [
+        line({ occurredDate: '2026-09-07', amountPence: 6000 }),
+        line({ occurredDate: '2026-09-14', amountPence: 3000 }),
+      ],
+      { today: TODAY, weeks: 8, configuredWeeklyPence: 9000, recordedFrom: '2026-09-07' },
+    );
+    assert.equal(series.averageWeeks, 1); // 7 Sep week only; 14 Sep is the week being lived
+    assert.equal(series.averagePence, 6000);
+    assert.equal(series.weeks.find((week) => week.weekStart === '2026-08-31')?.recorded, false);
+    assert.equal(series.weeks.find((week) => week.weekStart === '2026-09-07')?.recorded, true);
+  });
+
+  it('a week that began before recording did is kept out even when it held a purchase', () => {
+    // Recording began Thursday 10 Sep, so the week of 7 Sep was only part recorded.
+    const series = groceriesSeries(
+      [
+        line({ occurredDate: '2026-09-09', amountPence: 5000 }), // before recording began: a partial week
+        line({ occurredDate: '2026-09-15', amountPence: 4000 }), // the following week
+      ],
+      { today: '2026-09-22', weeks: 4, configuredWeeklyPence: null, recordedFrom: '2026-09-10' },
+    );
+    const partial = series.weeks.find((week) => week.weekStart === '2026-09-07');
+    assert.equal(partial?.recorded, false);
+    assert.equal(partial?.amountPence, 5000); // what was recorded is still shown…
+    assert.equal(series.averageWeeks, 1); // …but only the 14 Sep week is averaged
+    assert.equal(series.averagePence, 4000);
+  });
+
+  it('counts an empty week once recording has begun', () => {
+    const series = groceriesSeries([line({ occurredDate: '2026-09-07', amountPence: 8000 })], {
+      today: '2026-09-22',
+      weeks: 3,
+      configuredWeeklyPence: null,
+      recordedFrom: '2026-08-31',
+    });
+    // Weeks of 31 Aug (empty), 7 Sep (8000): (0 + 8000) / 2.
+    assert.equal(series.averageWeeks, 2);
+    assert.equal(series.averagePence, 4000);
   });
 });
 

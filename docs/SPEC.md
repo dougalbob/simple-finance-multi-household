@@ -1117,7 +1117,10 @@ Sept." A laptop also gets the three biggest outgoing days and a day-by-day break
 parent — 12 weeks on a phone, 26 on a laptop — against two reference lines: the configured weekly figure
 and the trailing 8-week average. **A week with no shop is a zero week, not a missing one**; anything else
 would flatter the average. The week being lived is drawn hatched and never counts towards the average,
-which is the honesty loop's rule (§16.4) and its exact figure.
+which is the honesty loop's rule (§16.4) and its exact figure. **Weeks before the household started recording
+are not counted either**: recording starts at the first recorded purchase (the earliest non-voided,
+hand-entered one), and a week counts only if it is complete and begins on or after that date. Those weeks
+are labelled "not counted" rather than read as shopping-free (decision 183).
 
 **C. Hers, his, household.** Stacked monthly bars of discretionary spending — 6 months on a phone, 12 on a
 laptop — split into one series per person plus a Household series. Attribution is **"For: person"**, the

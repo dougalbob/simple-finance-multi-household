@@ -358,6 +358,12 @@ empty — the fetch was blocked.
 
 ## History
 
+- **2026-10-08 (v0.34.0, session `arena/5cf1892e-simple-finance`):** entry 8 re-proved. The first full
+  local run (115 tests, `LD_LIBRARY_PATH=/tmp/al2023/lib`, ~9 min under the sandbox's load) failed three
+  tests: the backup download waited the full 120 s for a `download` event, and the next two tests hit
+  `ERR_CONNECTION_REFUSED` because the `next dev` server had stopped answering. The backup spec alone
+  then passed 2/2, and a second full run passed 115/115 in ~6.5 min. Treat a single red local run with
+  connection-refused errors as a sandbox flake: re-run before diagnosing app code. CI remains the proof.
 - **2026-09-27 (v0.22.1, session `arena/01a0e1ea-simple-finance`):** entry 8 re-proved a fifth time on a
   fresh sandbox — `@sparticuz/chromium` in 3s, `inflate()` wrote `/tmp/al2023`, `Chromium 153.0.8010.0`,
   the full **88-test** suite green locally in ~5 minutes, and the failing spec reproduced locally in 2.6
