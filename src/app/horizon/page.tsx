@@ -4,6 +4,7 @@ import { getDbHandle } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
 import { addDaysLocal } from '@/lib/records/dates';
 import { HorizonLookAheadForm } from '@/components/horizon-look-ahead-form';
+import { DayByDayTable } from './day-by-day-table';
 import { resolveHorizonThrough } from '@/lib/records/horizon-default';
 import {
   ensureScheduleState,
@@ -12,6 +13,7 @@ import {
   nextScheduledIncomeDate,
 } from '@/lib/records/money-view';
 import { listPots } from '@/lib/records/pots';
+import { buildHorizonDayDetails } from '@/lib/records/horizon-days';
 import { toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -139,6 +141,12 @@ export default async function HorizonPage({
       negative: true,
     })),
   );
+  // Per-day breakdown behind the Day by day table's amounts (tap to open).
+  const dayDetails = buildHorizonDayDetails({
+    commitmentLines: view.commitmentLines,
+    receiptLines: view.receiptLines,
+    dayToDayEvents: view.dayToDayEvents,
+  });
   const receiptGroups = groupByDate(
     view.receiptLines.map((line) => ({
       name: line.name,
@@ -404,44 +412,11 @@ export default async function HorizonPage({
             <summary className="cursor-pointer text-sm font-medium text-ink-body">
               Day by day ({result.perDay.length} days)
             </summary>
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[420px] text-sm">
-                <thead className="bg-surface-muted text-left text-xs uppercase tracking-wide text-ink-muted">
-                  <tr>
-                    <th className="px-3 py-1.5">Date</th>
-                    <th className="px-3 py-1.5 text-right">Commitments</th>
-                    {view.dayToDayIncluded ? (
-                      <th className="px-3 py-1.5 text-right">Day-to-day</th>
-                    ) : null}
-                    <th className="px-3 py-1.5 text-right">Expected money in</th>
-                    <th className="px-3 py-1.5 text-right">End of day</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.perDay.map((day) => (
-                    <tr key={day.date} className="border-t border-border-hairline">
-                      <td className="px-3 py-1.5">{day.date}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        {day.commitmentsPence > 0 ? `−${formatPence(day.commitmentsPence)}` : '—'}
-                      </td>
-                      {view.dayToDayIncluded ? (
-                        <td className="px-3 py-1.5 text-right tabular-nums">
-                          {day.dayToDayPence > 0 ? `−${formatPence(day.dayToDayPence)}` : '—'}
-                        </td>
-                      ) : null}
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        {day.receiptsPence > 0 ? `+${formatPence(day.receiptsPence)}` : '—'}
-                      </td>
-                      <td
-                        className={`px-3 py-1.5 text-right font-medium tabular-nums ${day.runningPence < 0 ? 'text-danger' : ''}`}
-                      >
-                        {formatPence(day.runningPence)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DayByDayTable
+              rows={result.perDay}
+              details={dayDetails}
+              dayToDayIncluded={view.dayToDayIncluded}
+            />
           </details>
         ) : null}
       </div>

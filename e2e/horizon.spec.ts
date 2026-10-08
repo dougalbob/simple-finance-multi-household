@@ -184,6 +184,37 @@ test.describe('horizon', () => {
     await expect(commitmentsBlock(page)).toHaveAttribute('open', '');
     await expect(moneyInBlock(page)).toHaveAttribute('open', '');
   });
+
+  test('tapping a day-by-day amount opens its breakdown beneath that date, one at a time', async ({
+    page,
+  }) => {
+    await page.goto('/horizon');
+    await waitForHorizonForm(page);
+    await page.getByLabel('Look ahead to').fill(futureDate(42));
+    await expect(page).toHaveURL(/[?&]through=/);
+
+    // Windows of six weeks or less open the day-by-day block by default.
+    const dayByDay = page.locator('details', { hasText: 'Day by day' }).first();
+    await expect(dayByDay).toHaveAttribute('open', '');
+
+    const commitmentButton = dayByDay.getByRole('button', { name: /^Commitments on / }).first();
+    await commitmentButton.click();
+    await expect(commitmentButton).toHaveAttribute('aria-expanded', 'true');
+    const panel = page.locator(`#${await commitmentButton.getAttribute('aria-controls')}`);
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText('Commitments');
+
+    // Only one breakdown is open at a time.
+    const moneyInButton = dayByDay.getByRole('button', { name: /^Expected money in on / }).first();
+    await moneyInButton.click();
+    await expect(moneyInButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(commitmentButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(panel).toHaveCount(0);
+
+    // Tapping the same amount again closes it.
+    await moneyInButton.click();
+    await expect(moneyInButton).toHaveAttribute('aria-expanded', 'false');
+  });
 });
 
 /**
