@@ -1005,7 +1005,7 @@ test.describe('mobile quick entry', () => {
     await expect(card).not.toContainText(/overdraft fee/i);
 
     // The till's selected-pot checkpoint and pot watch retain their own labels.
-    await till.getByLabel('Pot', { exact: true }).selectOption({ label: 'Natwest' });
+    await till.getByLabel('Pot').selectOption({ label: 'Natwest' });
     await expect(till).toContainText('Last checkpoint £312.00');
     await expect(till).toContainText('current account balance £312.00');
     await expect(till).toContainText(
