@@ -131,6 +131,12 @@ export default async function HorizonPage({
     selectedCount === pots.length ? 'every pot' : `${selectedCount} of ${pots.length} pots`;
   const allSelected = selectedCount === pots.length;
 
+  // Card totals: summed from the same lines each card lists, so the figure in
+  // a card's heading always matches the rows beneath it.
+  const commitmentsTotalPence = sumLinesPence(view.commitmentLines);
+  const receiptsTotalPence = sumLinesPence(view.receiptLines);
+  const dayToDayTotalPence = sumLinesPence(view.dayToDayEvents);
+
   // Sorted, day-grouped commitment list for the detail block.
   const commitmentGroups = groupByDate(
     view.commitmentLines.map((line) => ({
@@ -300,7 +306,8 @@ export default async function HorizonPage({
           className="rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <summary className="cursor-pointer text-sm font-medium text-ink-body">
-            Commitments in the window ({view.commitmentLines.length})
+            Commitments in the window ({view.commitmentLines.length}){' '}
+            <span className="tabular-nums">· {formatPence(commitmentsTotalPence)}</span>
           </summary>
           {view.commitmentLines.length === 0 ? (
             <p className="mt-2 text-sm text-ink-muted">No commitments due in this window.</p>
@@ -332,7 +339,8 @@ export default async function HorizonPage({
         >
           <summary className="cursor-pointer text-sm font-medium text-ink-body">
             Expected money in ({incomeLineCount}
-            {expectedLineCount > 0 ? ` income + ${expectedLineCount} expected support` : ''})
+            {expectedLineCount > 0 ? ` income + ${expectedLineCount} expected support` : ''}){' '}
+            <span className="tabular-nums">· {formatPence(receiptsTotalPence)}</span>
           </summary>
           {view.receiptLines.length === 0 ? (
             <p className="mt-2 text-sm text-ink-muted">No expected money in this window.</p>
@@ -371,7 +379,8 @@ export default async function HorizonPage({
             className="rounded-xl border border-border bg-surface p-4 shadow-sm"
           >
             <summary className="cursor-pointer text-sm font-medium text-ink-body">
-              Projected day-to-day spending ({view.dayToDayEvents.length})
+              Projected day-to-day spending ({view.dayToDayEvents.length}){' '}
+              <span className="tabular-nums">· {formatPence(dayToDayTotalPence)}</span>
             </summary>
             {view.dayToDayEvents.length === 0 ? (
               <p className="mt-2 text-sm text-ink-muted">
@@ -429,6 +438,11 @@ export default async function HorizonPage({
       </p>
     </main>
   );
+}
+
+/** Sum of the pence amounts on a list of dated lines (integer pence, no rounding). */
+function sumLinesPence(lines: ReadonlyArray<{ amountPence: number }>): number {
+  return lines.reduce((total, line) => total + line.amountPence, 0);
 }
 
 /** Group dated lines for the detail blocks, sorted by date then name. */
