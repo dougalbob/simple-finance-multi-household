@@ -1678,21 +1678,7 @@ The database stores the original filename (for display/download naming only), MI
 uploader and timestamp. Viewing/downloading an attachment requires authentication; responses are private and
 uncached, with `Content-Disposition` using a sanitized display name.
 
-**In-app viewer (v0.27.0, decision 177; layout and PDF element revised by decision 191):** attachment links
-open a native modal on phone and desktop, not a new tab or a browser window inside the installed PWA. Below
-640px the viewer fills the screen; from 640px up it is a centred panel. The header holds Close, the file name
-(which wraps rather than being cut short) and the size. The footer always holds the actions: **Open in PDF
-app** for a PDF (**Share** for an image), offered when the browser can share files, which hands the file to
-the system share sheet so the household's own PDF app can open it; and **Download**, always offered. Images
-use the browser's normal zoom. A PDF is shown in an `<object type="application/pdf">` element on the
-temporary blob URL. Its fallback text points to the footer buttons where the browser cannot draw the PDF, so
-an inline PDF is not promised on every phone. Close, Escape and backdrop dismissal return focus to the
-originating link without navigating or losing scroll. The modal traps keyboard focus and locks background
-scrolling. Loading and unavailable/offline states keep Close usable. Bytes are fetched through the same
-independently authenticated API with `no-store`, held only in a temporary blob URL and revoked on close. No
-offline document cache, no new tab, and no PDF.js or other page-rendering dependency: that would reverse
-decision 177 and needs the household's approval (OQ15). Printing remains via the browser/OS PDF viewer or the
-downloaded file rather than an unreliable mobile print button.
+**In-app viewer (v0.27.0, decision 177; layout revised by decision 191; PDF drawing by decision 192):** attachment links open a native modal on phone and desktop, not a new tab or a browser window inside the installed PWA. Below 640px the viewer fills the screen; from 640px up it is a centred panel. The header holds Close, the file name (which wraps rather than being cut short) and the size. The footer always holds the actions: **Open in PDF app** for a PDF (**Share** for an image), offered when the browser can share files, which hands the file to the system share sheet so the household's own PDF app can open it; and **Download**, always offered. Images use the browser's normal zoom. A PDF is drawn page by page in the app by **pdf.js** (`pdfjs-dist`, Apache-2.0; its legacy build, so that older phone browsers run it too). Each page is fitted to the viewer's width and drawn at the device's pixel ratio, capped at 2. Only pages near the screen are drawn, and a page that scrolls well away is released, so a long document does not exhaust a phone's memory. pdf.js loads only when a PDF is opened. The same code runs on every device; nothing checks which phone it is. The reader draws pages only: text cannot be selected or searched, links and form fields are not active, and a font the PDF does not embed is drawn with a stand-in while its positions still come from the PDF. Open in PDF app always gives the exact file. A PDF the reader cannot open shows a plain message and the footer buttons. Close, Escape and backdrop dismissal return focus to the originating link without navigating or losing scroll. The modal traps keyboard focus and locks background scrolling. Loading and unavailable/offline states keep Close usable. Bytes are fetched through the same independently authenticated API with `no-store`, held only in a temporary blob URL and revoked on close. No offline document cache and no new tab. The worker is served from this app's own static files, so no PDF content or request goes to another site. Printing remains via the browser/OS PDF viewer or the downloaded file rather than an unreliable mobile print button.
 
 ### 23.3 Integrity and security rules
 

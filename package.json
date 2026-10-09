@@ -1,6 +1,6 @@
 {
   "name": "simple-finance",
-  "version": "0.37.0",
+  "version": "0.38.0",
   "private": true,
   "description": "Private household spending app for two people watching money carefully. See docs/SPEC.md.",
   "engines": {
@@ -26,6 +26,7 @@
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.12",
     "next": "^16.3.5",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tar": "^7.5.22",

@@ -2,16 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { AttachmentSummary } from './attachment-form';
+import { PdfPages } from './pdf-pages';
 
 /**
  * Native modal: focus trap, Escape, focus return; no navigation out of the PWA.
  *
- * Layout (SPEC §23.2, decision 191): full screen on a phone, a centred panel
+ * Layout (SPEC §23.2, decisions 191–192): full screen on a phone, a centred panel
  * from 640px up. The header holds Close, the file name (wrapping, not cut
- * short) and the size. The footer always holds the actions, within reach on a
- * phone. A PDF is shown in an <object>, whose fallback text says what to do
- * where the browser cannot draw it. "Open in PDF app" hands the file to the
- * system share sheet, where the browser offers one. Download works everywhere.
+ * short) and the size. A PDF is drawn page by page by pdf.js (decision 192), the
+ * same on every device. The footer always holds the actions, within reach on a
+ * phone: "Open in PDF app" hands the file to the system share sheet, where the
+ * browser offers one, and Download works everywhere.
  */
 const ACTION = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded border px-4 py-2';
 
@@ -113,27 +114,19 @@ export function AttachmentViewer({
           </p>
         ) : null}
         {url ? (
-          <div className="relative min-h-0 flex-1 overflow-auto bg-till-inset">
-            {isPdf ? (
-              <object
-                type="application/pdf"
-                data={url}
-                title={attachment.originalName}
-                className="absolute inset-0 h-full w-full bg-surface"
-              >
-                <p className="p-4 text-sm">
-                  This browser cannot show this PDF here. Use the buttons below to open it in a PDF
-                  app.
-                </p>
-              </object>
-            ) : (
+          isPdf && file !== null ? (
+            <div className="relative min-h-0 flex-1 bg-till-inset">
+              <PdfPages file={file} />
+            </div>
+          ) : (
+            <div className="relative min-h-0 flex-1 overflow-auto bg-till-inset">
               <img
                 src={url}
                 alt={attachment.originalName}
                 className="mx-auto h-auto max-w-full p-2"
               />
-            )}
-          </div>
+            </div>
+          )
         ) : null}
         {url ? (
           <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">

@@ -1,29 +1,35 @@
-# Session handoff: arena/9d0d4627 — annual vehicle payments and phone PDF viewing (decisions 190–191, unreleased)
+# Release prep: v0.38.0 — Annual vehicle payments as ÷ 12 and PDFs read in the app (decisions 190–193)
 
-**Status:** the work is on `arena/9d0d4627-simple-finance`. It is not released: `package.json` still reads 0.37.0, and no version bump, PR, merge, tag, Publish run or GitHub release has been made. Per decision 173, post-release facts go at the top once they are verified.
+**Status at PR preparation:** the household approved, in order: PDF.js as a new dependency; road tax as built; the release once PDF was implemented; the tag and Publish. This is a pre-merge record only. It asserts no merge, tag, Publish run, GitHub release or registry digest. After publication, the next working session must add independently verified post-merge facts at the top, per decision 173.
 
 ## What changed
 
-- **Running costs (decision 190).** A converted annual schedule payment against a vehicle is spread as one twelfth in each of the twelve months it covers. `spreadOverCoverMonths` and `vehicleRunningCosts` in `src/lib/records/insights.ts` do the work, and `getVehicleCostsView` reads 22 months back. Insights labels spread child rows, shows a footnote, and its subtitle names the one exception to exact reconciliation. Overview shows a one-line note. Purchases, the month comparison, Horizon and Charts are unchanged.
-- **Attachment viewer (decision 191).** Full screen below 640px. A PDF is shown in an `<object>` with fallback text. The footer holds **Open in PDF app** (the native share sheet, where the browser offers it) and **Download**. No new dependency.
-- **Tests.** 14 new unit tests in `tests/insights.test.ts` and `tests/insights-view.test.ts`. The attachments e2e PDF branch now checks the object, the phone layout and the share hand-off through a mocked share API. A new `insights` e2e project adds its own vehicle and an annual premium through the Recurring form. It runs after backup and before the payday example.
-- **Docs.** SPEC §13, §16 item 3 and §23.2; decisions 190 and 191; a supersession note on 177; OQ15; SANDBOX entry 16 and its history line.
-- No schema, migration, backup-format or dependency change.
+- **Running costs (decision 190).** A converted annual schedule payment against a vehicle is spread as one twelfth in each of the twelve months it covers, starting in the month it is paid. Insights labels spread rows and footnotes them, and its subtitle names the one exception to exact reconciliation. Overview shows a one-line note. Purchases, the month comparison, Horizon and Charts stay on the payment date.
+- **Road tax (decision 193).** Confirmed as built: an annual road-tax payment against a vehicle is spread too. None is annual today, so nothing changes until one is added.
+- **PDFs in the app (decisions 191–192).** Full screen on a phone. PDF.js (`pdfjs-dist`, Apache-2.0, legacy build) draws each page to a canvas, fitted to the viewer's width, and only the pages near the screen. The footer holds Open in PDF app and Download. One code path for every device; nothing checks which phone it is. Text is not selectable or searchable in the reader, and standard-font data is not shipped, so a non-embedded font is drawn with a stand-in.
+- **Version.** 0.37.0 → 0.38.0 in `package.json`, `package-lock.json`, `src/lib/version.ts`, `simple-finance.xml` and `docs/RELEASE_NOTES_v0.38.0.md`.
+- No schema, migration or backup-format change. One new dependency: `pdfjs-dist`.
 
-## Gates (local, this session)
+## Gates at PR preparation
 
-`npm test` 717/717 (703 before). `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` pass. `npm audit --omit=dev` reports 0 vulnerabilities. Full e2e (`LD_LIBRARY_PATH=/tmp/al2023/lib npx playwright test --config playwright.local.config.ts`): 114 passed. The five red tests (a backup download timeout, after which the dev server stopped) passed 5/5 on a fresh re-run of their projects.
+`npm test`: **723 passed**, 172 suites, 0 failed (717 before, plus 6 geometry tests). `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` passed. `npm audit --omit=dev`: 0 vulnerabilities. The attachments project passed 3/3 locally. The full local browser run is recorded in the release notes. The PR's `gates`, `browser` and `docker` checks are mandatory and must all be green before merge. Do not infer their status from these local results.
 
 ## Not verified
 
-- An inline PDF on iOS Safari or Android Chrome. This sandbox's Chromium has no PDF viewer and no share API on Linux (SANDBOX entry 16), so the share hand-off is proven only against a mocked share API.
-- The household's live data. It is unknown whether the car insurance premium already exists as converted purchases for past years. If the schedule was created recently, set its start date back (SPEC §11.1 backfill) so the earlier payments are created.
+- A real iPhone Safari or Android Chrome. The reader is proven on the headless Chromium used here, which draws pages through pdf.js. The production build emits the worker, and `next start` serves it (HTTP 200, `application/javascript`, identical bytes). The household's phones are the test that remains.
+- The household's live car-insurance data: whether its recurring payment targets the car, and whether earlier years exist as purchases (decision 193).
 
-## Decisions for the household
+## What the household does
 
-1. **OQ15, PDF.js:** approve in-page PDF rendering (a new dependency, reversing the no-dependency part of decision 177), or keep Open in PDF app.
-2. **Road tax:** confirm that an annual road-tax payment against a vehicle should be spread too. The rule covers any annual vehicle schedule.
-3. **Release:** version, PR, tag and Publish are not decided. Nothing is tagged or published without the household's go-ahead.
+In Unraid, take a backup, then Force Update. The version badge should read `v0.38.0 · pre-release`. Then open a PDF attachment on each phone and check that it displays, scrolls and opens in a PDF app.
+
+---
+
+**v0.37.0 — verified post-merge facts (recorded per decision 173, by the session after its merge):**
+
+- Merge commit `abbd1374799fb733faa0554e52b44983b8a48aa9` (PR #98). The annotated tag `v0.37.0` points at that merge commit.
+- Publish run `37916778432` succeeded. The GitHub release `v0.37.0` was published 2026-10-09T10:22:29Z and is marked Latest.
+- Digest `sha256:f5610d92ca1b5d312db355c75c2d82af2320ac07cc7f46c94e9b834af932cfa2`, as printed in the release body by the Publish run's own registry check, shared by `v0.37.0`, `latest` and `sha-abbd137`. This sandbox cannot reach ghcr.io (SANDBOX entry 6), so this session did not repeat that check.
 
 ---
 

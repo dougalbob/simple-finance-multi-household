@@ -354,17 +354,17 @@ endpoint instead — `gh api repos/dougalbob/simple-finance/pulls/<n> --jq '{tit
 **Do not:** retry the log download, or conclude a job "produced no output" because the fetch came back
 empty — the fetch was blocked.
 
-## 16. Chromium here has no PDF viewer, and Linux has no share API — e2e proves wiring, not an inline PDF (2026-10-09)
+## 16. Chromium here has no PDF plugin, and Linux has no share API — PDF.js draws pages onto a canvas, so e2e can read a page's pixels (2026-10-09)
 
-**Symptom:** a PDF in the attachment viewer looks blank in every screenshot taken here, and the share action never appears in e2e.
+**Symptom:** a PDF in the attachment viewer looks blank in screenshots taken here, and the share action never appears in e2e.
 
-- This build's Chromium has no PDF viewer: `navigator.pdfViewerEnabled` is `false` and `navigator.mimeTypes` is empty. An `<object type="application/pdf">` or an `<iframe>` therefore shows its fallback content, or nothing, whatever a phone would do. Judge the wiring, the fallback text and the layout only. A blank PDF body here is not a bug in the app, and a working one here is no proof for a phone.
+- This build's Chromium has no PDF plugin: `navigator.pdfViewerEnabled` is `false` and `navigator.mimeTypes` is empty. An `<object type="application/pdf">` or an `<iframe>` therefore shows its fallback content, or nothing, whatever a phone would do. That is why the reader (decision 192) draws each page with pdf.js onto a canvas: this Chromium can draw a canvas, so the attachments spec reads the centre pixel of the generated page (`isBluePixel` in `e2e/attachments.spec.ts`). A blank canvas here is a real failure. A drawn page is still no proof for a phone, because this sandbox tests neither iOS Safari nor Android Chrome.
 - `navigator.share` and `navigator.canShare` are `undefined` on Linux headless, so the share button is absent. A test that needs it must define both properties with `page.evaluate` **before** it opens the viewer: the viewer reads the capability when it draws its footer, so a mock installed afterwards is never seen.
 - `test.use()` inside a `test.describe` group throws `Cannot use({ defaultBrowserType }) in a describe group`. Device presets such as `devices['Pixel 7']` carry `defaultBrowserType`, so spreading one into a describe fails. Put `test.use()` at the top level, or set phone emulation explicitly in the test (viewport, `isMobile`, `hasTouch`, `deviceScaleFactor`, `userAgent`).
 - A purchase created at phone width left **Save purchase** disabled until the test timed out. Create records at desktop width, then `page.setViewportSize` to phone size before opening the viewer.
 - For a visual check, use a throwaway copy of a spec and a throwaway overlay project whose `testMatch` names only that copy. Delete both before committing, and never leave probe specs in `e2e/`.
 
-**Do not:** read a blank PDF body, or a passing PDF test, as evidence about phones; and do not retry `test.use` inside a describe.
+**Do not:** read a passing PDF test as evidence about a phone's own browser; and do not retry `test.use` inside a describe.
 
 ---
 
@@ -500,3 +500,4 @@ empty — the fetch was blocked.
   way to force a long `/suppliers` list and check that a deep link really scrolls the named card to the top;
   and `next build` flipped `next-env.d.ts` again — reverted with `git checkout -- next-env.d.ts` as entry 8's
   history already advises.
+- **2026-10-09 (v0.38.0 release, session `arena/9d0d4627-simple-finance`):** PDF.js adopted for in-page PDF reading after the household's approval (decision 192), and annual road tax confirmed as built (decision 193). Entry 16 rewritten: pdf.js draws onto a canvas, which this Chromium can read. The full local run (`npx playwright test --config playwright.local.config.ts`, 119 tests) gave **119 passed**, with no flaky failures this time. `npm test` 723/723, typecheck, format, themes, build and `npm audit --omit=dev` (0) pass. The production build emits `pdf.worker.min.*.mjs`, and `next start` serves it as `application/javascript`.

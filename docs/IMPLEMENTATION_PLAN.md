@@ -1560,7 +1560,7 @@ the keyboard.
 | OQ12 | Attachment size limit and retention guidance | 10 MB per file; README guidance on archive growth; no server-side pruning in v1. User-initiated removal of one receipt is decision 89 — still no automatic pruning. |
 | OQ13 | 29 February renewal dates under annual advance | Land on 28 February in non-leap years; visible and editable. |
 | OQ14 | Should the Tasks page's "The app has noticed" also list a **stale pot** — a bank or cash pot with no balance checkpoint for N days? | **Deferred by household 2026-09-27 (v0.26.0, decision 176): they will road-test the app and decide in a few weeks.** Not in v0.25.0 (decision 175) nor v0.26.0. Options: **7 days** (about one and a half of the household's 4–5-day checkpoint cycles — prompts early) or **14 days** (quieter; only a pot that has clearly been forgotten). Derived and link-only either way, like the other noticed items. |
-| OQ15 | Phone PDF display: should the app draw PDF pages itself (PDF.js, a new dependency, reversing the no-dependency rule in decision 177)? | **Open 2026-10-09.** Decision 191 ships without a dependency: an `<object>` element, a full-screen phone layout, and Open in PDF app / Download. Whether a given phone's browser draws the PDF inline is unverified. Options: keep this (the phone's own PDF app opens the file), or approve PDF.js for in-page viewing on every phone. |
+| OQ15 | Phone PDF display: should the app draw PDF pages itself (PDF.js, a new dependency, reversing the no-dependency rule in decision 177)? | **Resolved 2026-10-09: approved (decision 192).** PDF.js draws each page in the app, the same on every phone, with Open in PDF app and Download kept. |
 
 ## Release history
 
@@ -2454,8 +2454,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     Single-pass release continues under RELEASE_PROCESS.md, with local Playwright via SANDBOX.md
     entry 8; temporary config removed before commit. No new open question (next available remains OQ15).
 
-    **Superseded in part by decision 191:** the PDF is now an `<object>` element, the viewer fills the screen
-    on a phone, and the actions sit in a footer. The no-PDF.js rule is unchanged.
+    **Superseded in part by decisions 191 and 192:** the PDF is drawn in the app by pdf.js (decision 192), inside a full-screen layout with the actions in a footer (decision 191). The no-PDF.js rule was reversed by decision 192, with the household's approval.
 
 178. **Checkpoint cash at the till; pots gain an owner; cash cards lose the overdraft fields; the pots page leads with recording (2026-09-28, v0.28.0).**
 
@@ -2734,7 +2733,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     today is outside every figure. Monthly payments, ordinary purchases and every cash-basis view stay on the
     payment date: the month comparison, personal spending, the honesty loop, Horizon, Charts, Purchases and the
     cash summaries. The rule follows the schedule's cadence and its vehicle target, not its category, so an
-    annual road-tax payment against a vehicle is spread too. The household should confirm that scope.
+    annual road-tax payment against a vehicle is spread too. The household confirmed that scope on 2026-10-09 (decision 193).
 
     Insights marks a spread row "(annual ÷ 12)", adds a footnote when a spread applies, and its subtitle now
     names this one exception to exact reconciliation. Overview shows the same figures with a one-line note. The
@@ -2762,6 +2761,20 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     Not verified here, and not promised: an inline PDF on iOS Safari or Android Chrome. This sandbox's Chromium
     has no PDF viewer and no share API on Linux, so e2e proves the wiring, the fallback path, the share hand-off
     through a mocked share API, and the layout at 393px and 1400px. It does not prove an inline page. This
-    supersedes the iframe and header layout of decision 177; its no-PDF.js rule stands. **Open question OQ15:**
-    in-page rendering with PDF.js would show PDFs on every phone, but it is a new dependency with a worker and
-    needs the household's approval.
+    supersedes the iframe and header layout of decision 177; its no-PDF.js rule was reversed by decision 192 (OQ15, resolved 2026-10-09).
+
+192. **In-page PDF reading with PDF.js (2026-10-09, v0.38.0).**
+
+    The household approved OQ15: PDF.js as a new dependency, reversing the no-dependency rule of decision 177 as revised by decision 191, and no phone-specific code. Decision 191 drew a PDF in an `<object>` element and left the drawing to each phone's browser, which on some phones shows only the first page or offers a download instead. Now `pdfjs-dist` (Apache-2.0) draws each page itself, the same way on every device.
+
+    Built as follows. The **legacy build** (`pdfjs-dist/legacy/build/pdf.mjs`) is used, because the modern build calls `Promise.withResolvers` directly, which older iPhones lack. The worker (`pdf.worker.min.mjs`) is addressed by a URL that Next bundles as a static asset, so `next dev` and `next start` serve the same path; the production build emits it and `next start` serves it as `application/javascript`. pdf.js is imported only when a PDF is opened. Each page is fitted to the viewer's width and drawn at the device pixel ratio, capped at 2. A page is drawn while it is within 150% of the visible height, and its bitmap is released once it moves further away. The reader has no text layer and no annotation layer: text is not selectable or searchable, and links and form fields are inactive. The standard-font and CMap data are not shipped in this version, so a non-embedded font is drawn with a stand-in while its positions still come from the PDF; Open in PDF app remains the exact copy. Schema, migrations and the backup format are unchanged. The footer, Download, Close, Escape, focus return, scroll lock and the `no-store` fetch are as decision 191 left them.
+
+    Tests: the pure page geometry (`tests/pdf-page-layout.test.ts`: fit to width, the pixel-ratio cap, landscape pages, unmeasured pages). The attachments e2e spec checks that the first page's centre pixel is the blue square the generated PDF draws, that a three-page file gives three page canvases, that a page fills a phone's width less its gap, and that an unreadable file shows the message with Download.
+
+    Not verified: a real iPhone Safari or Android Chrome. This sandbox's Chromium has no PDF plugin, but it draws through pdf.js, so the reader is proven on that engine. The household's phones are the test that remains.
+
+193. **Road tax follows the annual rule (2026-10-09, v0.38.0).**
+
+    The household confirmed that an annual road-tax payment against a vehicle is spread like any other annual vehicle payment (decision 190). The code stays as built. Road tax is paid monthly on both cars today, so nothing is spread at present. The household's own car insurance is the one annual direct debit, and it is spread. The wife's car insurance is a monthly direct debit and is unaffected.
+
+    A premium is spread only when its recurring payment targets the vehicle (`Vehicle — <name>` on the Recurring form) and its start date reaches back far enough for the past years to exist as purchases (SPEC §11.1). Both are checks for the household's car insurance.
