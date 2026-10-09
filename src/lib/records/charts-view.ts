@@ -1,6 +1,6 @@
 import { and, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { allocations, categories, purchases, schedules } from '../db/schema';
+import { allocations, categories, purchases, schedules, suppliers } from '../db/schema';
 import { toLocalDateString } from '../time';
 import { addDaysLocal, addMonthsClamped } from './dates';
 import { categoryTree, findParentCategory } from './categories';
@@ -15,8 +15,21 @@ import {
   type GroceriesSeries,
   type PersonalSeries,
 } from './chart-series';
-import { firstOfLocalMonth, startOfWeekLocal, GROCERIES_PARENT } from './insights';
-import { ensureScheduleState, getHorizonProjectionView } from './money-view';
+import {
+  firstOfLocalMonth,
+  lastOfLocalMonth,
+  startOfWeekLocal,
+  GROCERIES_PARENT,
+  type PersonRef,
+} from './insights';
+import {
+  ensureScheduleState,
+  getHorizonProjectionView,
+  nextScheduledIncomeDate,
+  recentScheduledIncomeDates,
+} from './money-view';
+import { spendingMix, type MixLine, type SpendingMix } from './spending-mix';
+import { listVehicles } from './vehicles';
 import { firstRecordedPurchaseDate } from './recording';
 import { listPeople } from './people';
 import { getCommitmentCategoryIds, getWeeklyGroceriesPence } from './settings';
@@ -467,4 +480,227 @@ export function chartSpendingLines(db: Db, from: string, to: string): ChartSpend
     amountPence: row.amountPence,
     scheduleConverted: row.scheduleInstanceId !== null,
   }));
+}
+
+/* ------------------------------------------------------------------ */
+/* E. Where the money goes — the spending-mix pie                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The parent whose spending is split per person in the pie (§16.7 E). Only
+ * Personal: Entertainment & Eating Out stays one slice, as the household asked.
+ */
+export const PIE_SPLIT_PARENTS = ['Personal'] as const;
+
+export type MixWindowKind = 'payday' | 'previous-payday' | 'month' | 'custom';
+
+export interface MixWindow {
+  kind: MixWindowKind;
+  from: string;
+  to: string;
+}
+
+export interface MixParentChoice {
+  id: number;
+  name: string;
+  retired: boolean;
+}
+
+export interface SpendingMixView {
+  today: string;
+  window: MixWindow;
+  /** The windows the selector links to; null when a payday cycle cannot be found. */
+  presets: {
+    payday: MixWindow | null;
+    previousPayday: MixWindow | null;
+    month: MixWindow;
+  };
+  /** Plain words for why the window is what it is, when it is a fallback. */
+  notice: string | null;
+  parents: MixParentChoice[];
+  /** Parent ids counted. Every parent unless the selector says otherwise. */
+  includedParentIds: number[];
+  allParentsIncluded: boolean;
+  mix: SpendingMix;
+  /** Who or what a line was for: `person:3`, `vehicle:1`, `household`. */
+  targetLabels: Map<string, string>;
+  people: PersonRef[];
+}
+
+export interface SpendingMixOptions {
+  /** Both bounds, or neither: a half-given window falls back to the default. */
+  from?: string | null;
+  to?: string | null;
+  /** Parent ids to count. Null (the default) counts every parent. */
+  includedParentIds?: readonly number[] | null;
+}
+
+function isLocalDateText(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+}
+
+/**
+ * The lines behind the pie: non-void allocation lines in [from, to] with
+ * their parent id, purchase id, supplier and note. The same join as
+ * `chartSpendingLines`, widened so a slice can show its own line items.
+ */
+export function spendingMixLines(db: Db, from: string, to: string): MixLine[] {
+  const rows = db
+    .select({
+      occurredDate: purchases.occurredDate,
+      purchaseId: purchases.id,
+      supplierName: suppliers.name,
+      note: purchases.note,
+      categoryId: allocations.categoryId,
+      childName: categories.name,
+      parentId: categories.parentId,
+      parentName: sql<string>`(select p.name from categories p where p.id = ${categories.parentId})`,
+      targetKind: allocations.targetKind,
+      targetId: allocations.targetId,
+      amountPence: allocations.amountPence,
+    })
+    .from(allocations)
+    .innerJoin(purchases, eq(purchases.id, allocations.purchaseId))
+    .innerJoin(categories, eq(categories.id, allocations.categoryId))
+    .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
+    .where(
+      and(
+        isNull(purchases.voidedAt),
+        gte(purchases.occurredDate, from),
+        lte(purchases.occurredDate, to),
+      ),
+    )
+    .all();
+  const lines: MixLine[] = [];
+  for (const row of rows) {
+    // Allocations always point at a leaf, so the parent is always present.
+    if (row.parentId === null) continue;
+    lines.push({
+      occurredDate: row.occurredDate,
+      categoryId: row.categoryId,
+      parentId: row.parentId,
+      parentName: row.parentName,
+      childName: row.childName,
+      targetKind: row.targetKind as 'household' | 'person' | 'vehicle',
+      targetId: row.targetId,
+      amountPence: row.amountPence,
+      purchaseId: row.purchaseId,
+      supplierName: row.supplierName ?? null,
+      note: row.note ?? null,
+    });
+  }
+  return lines;
+}
+
+/**
+ * The selector's windows. The **payday cycle** runs from the most recent
+ * payday up to the day before the next one — the household's own month. The
+ * previous cycle is the one before that. Both are null until the main salary
+ * has two paydays on record to bracket them.
+ */
+export function paydayCycleWindows(
+  db: Db,
+  today: string,
+): { payday: MixWindow | null; previousPayday: MixWindow | null } {
+  const [latest, previous] = recentScheduledIncomeDates(db, today, 2);
+  const next = nextScheduledIncomeDate(db, today);
+  if (latest === undefined) return { payday: null, previousPayday: null };
+  const payday: MixWindow = {
+    kind: 'payday',
+    from: latest,
+    // With no next payday on record the cycle runs up to today, not into the future.
+    to: next === null ? today : addDaysLocal(next, -1),
+  };
+  const previousPayday: MixWindow | null =
+    previous === undefined
+      ? null
+      : { kind: 'previous-payday', from: previous, to: addDaysLocal(latest, -1) };
+  return { payday, previousPayday };
+}
+
+/**
+ * Where the money goes (§16.7 E). The default window is the current payday
+ * cycle; a custom window must have both bounds and run forwards. Every figure
+ * comes from `spendingMix`, the engine the Insights totals also read.
+ */
+export function getSpendingMixView(
+  db: Db,
+  options: SpendingMixOptions = {},
+  nowArg?: Date,
+): SpendingMixView {
+  const now = nowArg ?? new Date();
+  ensureScheduleState(db, now);
+  const today = toLocalDateString(now);
+  const month: MixWindow = {
+    kind: 'month',
+    from: firstOfLocalMonth(today),
+    to: lastOfLocalMonth(today),
+  };
+  const cycles = paydayCycleWindows(db, today);
+
+  let notice: string | null = null;
+  let window: MixWindow;
+  const askedFrom = options.from ?? null;
+  const askedTo = options.to ?? null;
+  if (askedFrom !== null || askedTo !== null) {
+    if (
+      askedFrom !== null &&
+      askedTo !== null &&
+      isLocalDateText(askedFrom) &&
+      isLocalDateText(askedTo) &&
+      askedFrom <= askedTo
+    ) {
+      window = { kind: 'custom', from: askedFrom, to: askedTo };
+    } else {
+      window = cycles.payday ?? month;
+      notice = 'Those dates were not a valid window, so the default window is shown.';
+    }
+  } else if (cycles.payday !== null) {
+    window = cycles.payday;
+  } else {
+    window = month;
+    notice =
+      'No payday is scheduled yet, so this shows the current calendar month. Add the salary on the Money coming in page (/income) for payday cycles.';
+  }
+
+  const parentTree = categoryTree(db);
+  const parents: MixParentChoice[] = parentTree.map((parent) => ({
+    id: parent.id,
+    name: parent.name,
+    retired: parent.retiredAt !== null,
+  }));
+  const allParentIds = parents.map((parent) => parent.id);
+  const requested = options.includedParentIds ?? null;
+  const includedParentIds =
+    requested === null ? allParentIds : allParentIds.filter((id) => requested.includes(id));
+  const allParentsIncluded = includedParentIds.length === allParentIds.length;
+
+  const people = listPeople(db).map((person) => ({ id: person.id, label: person.label }));
+  const lines = spendingMixLines(db, window.from, window.to);
+  const mix = spendingMix(lines, {
+    from: window.from,
+    to: window.to,
+    includedParentIds: allParentsIncluded ? null : new Set(includedParentIds),
+    people,
+    splitParents: parents
+      .filter((parent) => (PIE_SPLIT_PARENTS as readonly string[]).includes(parent.name))
+      .map((parent) => ({ id: parent.id, name: parent.name })),
+  });
+
+  const targetLabels = new Map<string, string>([['household', 'Household']]);
+  for (const person of people) targetLabels.set(`person:${person.id}`, person.label);
+  for (const vehicle of listVehicles(db)) targetLabels.set(`vehicle:${vehicle.id}`, vehicle.label);
+
+  return {
+    today,
+    window,
+    presets: { payday: cycles.payday, previousPayday: cycles.previousPayday, month },
+    notice,
+    parents,
+    includedParentIds,
+    allParentsIncluded,
+    mix,
+    targetLabels,
+    people,
+  };
 }

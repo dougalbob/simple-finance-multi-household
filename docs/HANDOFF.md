@@ -1,3 +1,29 @@
+# Release prep: v0.39.0 — Where the money goes, and Horizon totals (decisions 194–195)
+
+**Status at PR preparation:** the household approved the Horizon totals on the preview, and approved the Charts pie in this session ("I like it … happy with the scope of the chart"). This is a pre-merge record only. It asserts no merge, tag, Publish run, GitHub release or registry digest. After publication, the next working session must add independently verified post-merge facts at the top, per decision 173.
+
+## What changed
+
+- **Horizon totals (decision 194).** Each card's heading shows its total beside the count: commitments, expected money in, day-to-day. Summed from the same lists each card renders. Expected money in keeps its "≈ … expected — never received" support lines.
+- **Where the money goes on /charts (decision 195).** A pie of net spending by parent category over a window, with Personal split per person (`targetKind = person`, one slice each; household-marked personal spending is its own unsplit slice). Default window: payday cycle (last payday up to the day before the next; weekend shift per decision 112). Selector: payday cycle, previous payday cycle, calendar month, custom. Category include/exclude checkboxes. Slice drill-down to line items. Everything is a GET form and link, server-rendered SVG, no client JavaScript. Pure arithmetic in `src/lib/records/spending-mix.ts`; view assembly in `getSpendingMixView` (`charts-view.ts`); `recentScheduledIncomeDates` in `money-view.ts`.
+- **Version.** 0.38.0 → 0.39.0 in `package.json`, `package-lock.json` (root and `packages[""]`), `src/lib/version.ts`, `simple-finance.xml` and `docs/RELEASE_NOTES_v0.39.0.md`.
+- No schema, migration, backup-format or dependency change.
+
+## Gates at PR preparation
+
+`npm test`: **749 passed**, 178 suites, 0 failed (723 before, plus 26 new in `tests/spending-mix.test.ts` and `tests/spending-mix-view.test.ts`). `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` passed. `npm audit --omit=dev`: 0 vulnerabilities. Local Playwright was not run for this release (the household asked for it to be skipped for now). The PR's `gates`, `browser` and `docker` checks are mandatory and must all be green before merge. Do not infer their status from these local results.
+
+## Not verified
+
+- A real phone or laptop browser render of the pie. The layout is checked through server HTML only, and the phone and laptop variants are both present, following the other charts.
+- Entertainment & Eating Out is not split per person. This is as built and was not changed in this release.
+
+## What the household does
+
+In Unraid, take a backup, then Force Update. The version badge should read `v0.39.0 · pre-release`.
+
+---
+
 # Release prep: v0.38.0 — Annual vehicle payments as ÷ 12 and PDFs read in the app (decisions 190–193)
 
 **Status at PR preparation:** the household approved, in order: PDF.js as a new dependency; road tax as built; the release once PDF was implemented; the tag and Publish. This is a pre-merge record only. It asserts no merge, tag, Publish run, GitHub release or registry digest. After publication, the next working session must add independently verified post-merge facts at the top, per decision 173.

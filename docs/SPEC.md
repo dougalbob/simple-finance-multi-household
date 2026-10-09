@@ -1208,6 +1208,27 @@ household's own direct debits and standing orders already use, and says so. A **
 toggle narrows the chart to purchases the app converted from a schedule (`purchases.scheduleInstanceId`) —
 true DD/SOs, no hand-typed bills.
 
+**E. Where the money goes (decision 195).** A pie of **net spending by parent category**
+over a window the household chooses, so the question "what share of our money goes on each thing" has a picture.
+The default window is the **payday cycle**: from the most recent payday up to the day before the next one
+(a weekend payday counts as the Friday before, decision 112). The selector offers the previous payday cycle and
+the calendar month, and any custom window with both dates given and running forwards. The selector is a plain GET
+form, so the window and the category ticks live in the URL and work with JavaScript switched off.
+
+- **Slices are parent categories**, counted from the same allocation lines as Insights, with refunds netted off
+  their own category. **Personal is the one exception**: each person's own spending is a slice of its own
+  ("Personal — Alex", "Personal — Sam"), and household-marked personal spending is a third slice that is never
+  split between people. Entertainment & Eating Out stays one slice. Unticking a category removes it from the pie
+  and from the total.
+- **A category that nets to zero or below is not drawn**, because a slice cannot be negative. It stays in the
+  table with its real figure, and the legend says "not drawn". A person in Personal with no spending in the
+  window still appears with an honest £0.00.
+- **Clicking a slice shows its line items** beneath the pie: date, where, category, who it was for, and amount,
+  with "Open these purchases" linking to the same window in the purchases list. The slice is
+  a real link (`?slice=…#mix`), so the line items work without JavaScript and can be sent to the other person.
+- Hand-rolled SVG, server-rendered, with the same verdict sentence, table twin, and phone and laptop figures as
+  every other chart. Colour is never the only signal: the legend names each slice and gives its figure and share.
+
 **Rules every chart keeps.**
 
 - **Hand-rolled SVG, server-rendered** (`src/components/charts/`), no chart library and no client
