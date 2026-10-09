@@ -101,9 +101,52 @@ test.describe('removing a receipt', () => {
     await expect(pdfLink).toBeVisible();
     for (const width of [393, 1400]) {
       await page.setViewportSize({ width, height: 950 });
+      // The share API is read when the viewer draws its footer, so mock it before opening.
+      // Headless Linux has no share API (SANDBOX entry 16).
+      if (width === 393) {
+        await page.evaluate(() => {
+          const shared: Array<{ name: string; type: string; size: number }> = [];
+          Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+          Object.defineProperty(navigator, 'share', {
+            configurable: true,
+            value: async (data: { files?: File[] }) => {
+              for (const file of data.files ?? []) {
+                shared.push({ name: file.name, type: file.type, size: file.size });
+              }
+            },
+          });
+          (window as unknown as { __shared: typeof shared }).__shared = shared;
+        });
+      }
       await pdfLink.click();
       const dialog = page.getByRole('dialog');
-      await expect(dialog.locator('iframe')).toHaveAttribute('src', /^blob:/);
+      // The PDF is an <object> on a blob URL. This Chromium has no PDF plugin, so the
+      // inline page itself is not checked here: only the wiring and the fallback path.
+      await expect(dialog.locator('object[type="application/pdf"]')).toHaveAttribute(
+        'data',
+        /^blob:/,
+      );
+      await expect(dialog.getByRole('link', { name: 'Download' })).toHaveAttribute(
+        'download',
+        'fictional.pdf',
+      );
+      const box = await dialog.boundingBox();
+      if (width === 393) {
+        // A phone gets the whole screen, and the actions are in reach without scrolling.
+        expect(box?.width).toBe(393);
+        expect(box?.height).toBe(950);
+        await expect(dialog.getByRole('link', { name: 'Download' })).toBeInViewport();
+        await dialog.getByRole('button', { name: 'Open in PDF app' }).click();
+        const shared = await page.evaluate(
+          () => (window as unknown as { __shared?: unknown[] }).__shared ?? [],
+        );
+        expect(shared).toEqual([
+          expect.objectContaining({ name: 'fictional.pdf', type: 'application/pdf' }),
+        ]);
+      } else {
+        // From 640px up the viewer is a centred panel, not the whole screen.
+        expect(box?.width).toBeLessThan(1400);
+      }
       await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
       await dialog.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(pdfLink).toBeFocused();

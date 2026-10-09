@@ -324,3 +324,136 @@ describe('insights-view: converted schedule purchases count as spending', () => 
     }
   });
 });
+
+describe('insights-view: annual vehicle payments are spread ÷ 12 in running costs only (decision 190)', () => {
+  it('an annual premium reads as one twelfth a month in running costs, and stays on its payment date in the monthly comparison', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, vehicles } = fixture;
+      createSchedule(db, {
+        name: 'Fictional car insurance',
+        kind: 'dd',
+        frequency: 'annual',
+        dueMonth: 8,
+        dueDayOfMonth: 24,
+        amountPence: 61500,
+        potId: pots.main.id,
+        categoryId: fixture.categoryId('Vehicle Running', 'Insurance'),
+        supplierName: 'Fictional Insurer Ltd',
+        targetKind: 'vehicle',
+        targetId: vehicles.vehicleA.id,
+        activeFrom: '2025-08-24',
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+      // Two payments have fallen due (24 Aug 2025 and 24 Aug 2026); the next is in 2027.
+      const view = getVehicleCostsView(db, NOW);
+      const a = view.find((row) => row.vehicleId === vehicles.vehicleA.id);
+      assert.equal(a?.previousMonthPence, 5125, 'August 2026: one twelfth of the premium');
+      assert.equal(a?.monthPence, 5125, 'September 2026 (in progress): one twelfth');
+      // Oct 2025 – Jul 2026 from the 2025 payment (10 shares) + Aug – Sep 2026 from this year's (2 shares).
+      assert.equal(a?.rolling12Pence, 61500);
+      assert.equal(a?.annualSpreadPence, 61500);
+      assert.equal(a?.rolling12From, '2025-10-01');
+      const insurance = a?.byChild.find((row) => row.child === 'Insurance');
+      assert.equal(insurance?.amountPence, 61500);
+      assert.equal(insurance?.spreadPence, 61500);
+
+      // Cash basis elsewhere: the whole premium is in August 2026 — the spike is still the truth
+      // for the month's outgoings, and the purchase history still shows one payment.
+      const comparison = getMonthComparisonView(db, NOW);
+      assert.equal(comparison.previous.summary.totalPence, 61500);
+      assert.equal(comparison.current.summary.totalPence, 0);
+      const history = listPurchases(db, { dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+      assert.equal(history.length, 1);
+      assert.equal(history[0]?.purchase.totalPence, 61500);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('after a year of payments, an annual and a monthly vehicle compare like for like', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, vehicles } = fixture;
+      const insurance = fixture.categoryId('Vehicle Running', 'Insurance');
+      createSchedule(db, {
+        name: 'Fictional car insurance',
+        kind: 'dd',
+        frequency: 'annual',
+        dueMonth: 8,
+        dueDayOfMonth: 24,
+        amountPence: 61500,
+        potId: pots.main.id,
+        categoryId: insurance,
+        supplierName: 'Fictional Insurer Ltd',
+        targetKind: 'vehicle',
+        targetId: vehicles.vehicleA.id,
+        activeFrom: '2025-08-24',
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+      createSchedule(db, {
+        name: 'Fictional monthly insurance',
+        kind: 'dd',
+        frequency: 'monthly',
+        dueDayOfMonth: 1,
+        amountPence: 5125,
+        potId: pots.main.id,
+        categoryId: insurance,
+        supplierName: 'Fictional Insurer Ltd',
+        targetKind: 'vehicle',
+        targetId: vehicles.vehicleB.id,
+        activeFrom: '2025-10-01',
+        actor: 'sam@example.com',
+        now: NOW,
+      });
+      const readAt = new Date('2026-10-09T09:00:00Z');
+      const view = getVehicleCostsView(db, readAt);
+      const a = view.find((row) => row.vehicleId === vehicles.vehicleA.id);
+      const b = view.find((row) => row.vehicleId === vehicles.vehicleB.id);
+      // Nov 2025 – Oct 2026 is the window. Both vehicles pay 61500 over it.
+      assert.equal(a?.rolling12From, '2025-11-01');
+      assert.equal(a?.rolling12Pence, 61500);
+      assert.equal(b?.rolling12Pence, 61500);
+      assert.equal(a?.annualSpreadPence, 61500);
+      assert.equal(b?.annualSpreadPence, 0, 'the monthly direct debit is not spread');
+      assert.equal(a?.monthPence, 5125);
+      assert.equal(b?.monthPence, 5125);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('a premium paid more than eleven months back still reaches the rolling window', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, vehicles } = fixture;
+      // Paid 15 Nov 2024 and 15 Nov 2025 (both fall due by 20 Sep 2026). The 2024
+      // payment covers Nov 2024 – Oct 2025: only its October 2025 share is in the window.
+      createSchedule(db, {
+        name: 'Fictional car insurance (November renewal)',
+        kind: 'dd',
+        frequency: 'annual',
+        dueMonth: 11,
+        dueDayOfMonth: 15,
+        amountPence: 61500,
+        potId: pots.main.id,
+        categoryId: fixture.categoryId('Vehicle Running', 'Insurance'),
+        supplierName: 'Fictional Insurer Ltd',
+        targetKind: 'vehicle',
+        targetId: vehicles.vehicleA.id,
+        activeFrom: '2024-11-15',
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+      const a = getVehicleCostsView(db, NOW).find((row) => row.vehicleId === vehicles.vehicleA.id);
+      // Oct 2025 (1 share, from the 2024 payment) + Nov 2025 – Sep 2026 (11 shares, from the 2025 payment).
+      assert.equal(a?.rolling12From, '2025-10-01');
+      assert.equal(a?.rolling12Pence, 5125 + 11 * 5125);
+      assert.equal(a?.rolling12Pence, 61500, 'steady state: exactly one premium');
+    } finally {
+      fixture.close();
+    }
+  });
+});

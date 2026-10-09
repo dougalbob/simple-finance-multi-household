@@ -88,7 +88,8 @@ export default async function InsightsPage({
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
           Recorded spending only — transfers never appear here (they move money between your own
-          pots), and income is not spending. Figures reconcile with the purchase history exactly.
+          pots), and income is not spending. Figures reconcile with the purchase history exactly,
+          except that running costs show an annual vehicle payment as ÷ 12 a month (decision 190).
         </p>
       </header>
 
@@ -271,11 +272,27 @@ export default async function InsightsPage({
                           key={`${row.parent}-${row.child}`}
                           className="flex items-baseline justify-between gap-2"
                         >
-                          <span className="text-ink-soft">{row.child}</span>
+                          <span className="text-ink-soft">
+                            {row.child}
+                            {row.spreadPence > 0 ? (
+                              <span className="ml-1 text-xs text-ink-muted">
+                                {row.spreadPence === row.amountPence
+                                  ? '(annual ÷ 12)'
+                                  : '(incl. annual ÷ 12)'}
+                              </span>
+                            ) : null}
+                          </span>
                           <span className="tabular-nums">{formatPence(row.amountPence)}</span>
                         </li>
                       ))}
                     </ul>
+                  ) : null}
+                  {vehicle.annualSpreadPence > 0 ? (
+                    <p className="mt-2 text-xs text-ink-muted">
+                      An annual payment is shown as ÷ 12 in each month it covers, from the month it
+                      is paid. Purchases and the monthly comparison still show the single payment on
+                      its date.
+                    </p>
                   ) : null}
                 </div>
               ))}

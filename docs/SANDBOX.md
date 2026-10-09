@@ -354,10 +354,23 @@ endpoint instead — `gh api repos/dougalbob/simple-finance/pulls/<n> --jq '{tit
 **Do not:** retry the log download, or conclude a job "produced no output" because the fetch came back
 empty — the fetch was blocked.
 
+## 16. Chromium here has no PDF viewer, and Linux has no share API — e2e proves wiring, not an inline PDF (2026-10-09)
+
+**Symptom:** a PDF in the attachment viewer looks blank in every screenshot taken here, and the share action never appears in e2e.
+
+- This build's Chromium has no PDF viewer: `navigator.pdfViewerEnabled` is `false` and `navigator.mimeTypes` is empty. An `<object type="application/pdf">` or an `<iframe>` therefore shows its fallback content, or nothing, whatever a phone would do. Judge the wiring, the fallback text and the layout only. A blank PDF body here is not a bug in the app, and a working one here is no proof for a phone.
+- `navigator.share` and `navigator.canShare` are `undefined` on Linux headless, so the share button is absent. A test that needs it must define both properties with `page.evaluate` **before** it opens the viewer: the viewer reads the capability when it draws its footer, so a mock installed afterwards is never seen.
+- `test.use()` inside a `test.describe` group throws `Cannot use({ defaultBrowserType }) in a describe group`. Device presets such as `devices['Pixel 7']` carry `defaultBrowserType`, so spreading one into a describe fails. Put `test.use()` at the top level, or set phone emulation explicitly in the test (viewport, `isMobile`, `hasTouch`, `deviceScaleFactor`, `userAgent`).
+- A purchase created at phone width left **Save purchase** disabled until the test timed out. Create records at desktop width, then `page.setViewportSize` to phone size before opening the viewer.
+- For a visual check, use a throwaway copy of a spec and a throwaway overlay project whose `testMatch` names only that copy. Delete both before committing, and never leave probe specs in `e2e/`.
+
+**Do not:** read a blank PDF body, or a passing PDF test, as evidence about phones; and do not retry `test.use` inside a describe.
+
 ---
 
 ## History
 
+- **2026-10-09 (v0.37.0 follow-up, session `arena/9d0d4627-simple-finance`, unreleased):** entry 16 added. Entry 8 re-proved: `@sparticuz/chromium` Chromium 153.0.8010.0 with the local overlay. The full local run (`npx playwright test --config playwright.local.config.ts`, 119 tests) gave **114 passed**. The 5 red were the backup download timing out at 120 s; the dev server then stopped, so four later tests failed with `ERR_CONNECTION_REFUSED`. The same five tests then passed 5/5 on a fresh server, run as their projects (backup, credit-card-pots, insights, payday-summary). `npm test` 717/717, typecheck, format, themes and build pass, and `npm audit --omit=dev` reports 0. This sandbox's Chromium draws no PDF, so the PDF viewer is proven for wiring and layout only.
 - **2026-10-08 (v0.36.0, session `arena/3b32c31f-simple-finance`):** entry 8 re-proved. The full local run
   was flaky at the *tail* in a way worth recording: by the last three projects the sandbox was at
   **3.86 GB of its 3.9 GB**, and those specs failed with `ERR_CONNECTION_REFUSED` — the `next dev` server

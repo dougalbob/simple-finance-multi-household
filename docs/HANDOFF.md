@@ -1,3 +1,32 @@
+# Session handoff: arena/9d0d4627 — annual vehicle payments and phone PDF viewing (decisions 190–191, unreleased)
+
+**Status:** the work is on `arena/9d0d4627-simple-finance`. It is not released: `package.json` still reads 0.37.0, and no version bump, PR, merge, tag, Publish run or GitHub release has been made. Per decision 173, post-release facts go at the top once they are verified.
+
+## What changed
+
+- **Running costs (decision 190).** A converted annual schedule payment against a vehicle is spread as one twelfth in each of the twelve months it covers. `spreadOverCoverMonths` and `vehicleRunningCosts` in `src/lib/records/insights.ts` do the work, and `getVehicleCostsView` reads 22 months back. Insights labels spread child rows, shows a footnote, and its subtitle names the one exception to exact reconciliation. Overview shows a one-line note. Purchases, the month comparison, Horizon and Charts are unchanged.
+- **Attachment viewer (decision 191).** Full screen below 640px. A PDF is shown in an `<object>` with fallback text. The footer holds **Open in PDF app** (the native share sheet, where the browser offers it) and **Download**. No new dependency.
+- **Tests.** 14 new unit tests in `tests/insights.test.ts` and `tests/insights-view.test.ts`. The attachments e2e PDF branch now checks the object, the phone layout and the share hand-off through a mocked share API. A new `insights` e2e project adds its own vehicle and an annual premium through the Recurring form. It runs after backup and before the payday example.
+- **Docs.** SPEC §13, §16 item 3 and §23.2; decisions 190 and 191; a supersession note on 177; OQ15; SANDBOX entry 16 and its history line.
+- No schema, migration, backup-format or dependency change.
+
+## Gates (local, this session)
+
+`npm test` 717/717 (703 before). `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` pass. `npm audit --omit=dev` reports 0 vulnerabilities. Full e2e (`LD_LIBRARY_PATH=/tmp/al2023/lib npx playwright test --config playwright.local.config.ts`): 114 passed. The five red tests (a backup download timeout, after which the dev server stopped) passed 5/5 on a fresh re-run of their projects.
+
+## Not verified
+
+- An inline PDF on iOS Safari or Android Chrome. This sandbox's Chromium has no PDF viewer and no share API on Linux (SANDBOX entry 16), so the share hand-off is proven only against a mocked share API.
+- The household's live data. It is unknown whether the car insurance premium already exists as converted purchases for past years. If the schedule was created recently, set its start date back (SPEC §11.1 backfill) so the earlier payments are created.
+
+## Decisions for the household
+
+1. **OQ15, PDF.js:** approve in-page PDF rendering (a new dependency, reversing the no-dependency part of decision 177), or keep Open in PDF app.
+2. **Road tax:** confirm that an annual road-tax payment against a vehicle should be spread too. The rule covers any annual vehicle schedule.
+3. **Release:** version, PR, tag and Publish are not decided. Nothing is tagged or published without the household's go-ahead.
+
+---
+
 **v0.36.0 — verified post-merge facts (recorded per decision 173):**
 
 - Merge commit `005e1e6022df02863b625e70155059b90e3d4fee` (PR #97); PR CI run `37820874589` and `main` CI run `37822242713` — all green.

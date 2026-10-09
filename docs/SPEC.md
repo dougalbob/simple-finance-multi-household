@@ -747,6 +747,10 @@ query instead of a duplicated tree per car.
 - **Fuel economy (v0.10.0, household request).** A fuel purchase may carry the odometer reading, the litres
   bought and whether the tank was filled to full. Both numbers are optional when the fuel is recorded and can
   be added later; from them the app works out the price per litre, mpg and fuel cost per mile (§15.1, §16.6).
+- **Annual vehicle payments (decision 190).** A yearly schedule payment against a vehicle (a car insurance
+  premium, say) is shown in running costs as one twelfth in each of the twelve months it covers, from the month
+  it is paid (§16.3). Monthly payments are shown as they are, and the purchase record keeps the single payment
+  on its date.
 - Out of scope: valuation, depreciation, trip or business mileage logs, maintenance reminders.
 
 ## 14. Connectivity, PWA, notifications
@@ -1124,6 +1128,16 @@ picker in Settings. Not one page, component or chart changed to make that possib
 3. **Vehicle running costs** — per vehicle: monthly totals and rolling 12-month, by child category
    (fuel/insurance/maintenance/road tax/parking). On Overview, each vehicle name links to Purchases
    filtered to that vehicle from `rolling12From` through today (decision 179).
+   **Annual payments (decision 190).** In running costs only, a converted annual schedule payment against a
+   vehicle counts as one twelfth in each of the twelve months it covers, starting in the month it is paid, so a
+   yearly premium can be compared with a monthly direct debit. The rolling 12-month total therefore counts one
+   premium once, and this month and last month each show its share. Shares are whole pence, with the leftover
+   pence on the earliest months, so they always add up to the payment. A month counts in full, including the
+   one in progress. The spread is worked out when the figures are read and is never stored. Purchases, the
+   month-on-month comparison (item 1), the personal views, the honesty loop, Horizon and Charts keep each
+   payment on its due date. The rule follows the schedule's cadence and its vehicle target, not its category,
+   so an annual road-tax payment against a vehicle is spread as well. A spread row is labelled "(annual ÷ 12)",
+   and the Insights subtitle names this one exception to exact reconciliation with the purchase history.
 4. **Projection feedback (honesty loop)** — configured weekly grocery and per-vehicle monthly fuel figures vs
    recent actuals (last 4–8 weeks), so drift is visible and fixable.
 5. **To-payday projection strip** — lives on Overview (§15.2) with the two warning tiers and the pot-level
@@ -1664,15 +1678,21 @@ The database stores the original filename (for display/download naming only), MI
 uploader and timestamp. Viewing/downloading an attachment requires authentication; responses are private and
 uncached, with `Content-Disposition` using a sanitized display name.
 
-**In-app viewer (v0.27.0, decision 177):** attachment links open a native modal on phone and desktop,
-not a new tab or a browser window inside the installed PWA. Its own header shows Close, filename, size,
-Download and Share when file sharing is supported. Images use the browser's normal zoom; PDFs use its
-embedded viewer with a Download/Share fallback when unsupported. Close, Escape and backdrop dismissal
-return focus to the originating link without navigating or losing scroll. The modal traps keyboard focus
-and locks background scrolling. Loading and unavailable/offline states keep Close usable. Bytes are
-fetched through the same independently authenticated API with `no-store`, held only in a temporary blob
-URL and revoked on close. No offline document cache or PDF.js dependency is added. Printing remains via
-the browser/OS PDF viewer or downloaded file rather than an unreliable mobile print button.
+**In-app viewer (v0.27.0, decision 177; layout and PDF element revised by decision 191):** attachment links
+open a native modal on phone and desktop, not a new tab or a browser window inside the installed PWA. Below
+640px the viewer fills the screen; from 640px up it is a centred panel. The header holds Close, the file name
+(which wraps rather than being cut short) and the size. The footer always holds the actions: **Open in PDF
+app** for a PDF (**Share** for an image), offered when the browser can share files, which hands the file to
+the system share sheet so the household's own PDF app can open it; and **Download**, always offered. Images
+use the browser's normal zoom. A PDF is shown in an `<object type="application/pdf">` element on the
+temporary blob URL. Its fallback text points to the footer buttons where the browser cannot draw the PDF, so
+an inline PDF is not promised on every phone. Close, Escape and backdrop dismissal return focus to the
+originating link without navigating or losing scroll. The modal traps keyboard focus and locks background
+scrolling. Loading and unavailable/offline states keep Close usable. Bytes are fetched through the same
+independently authenticated API with `no-store`, held only in a temporary blob URL and revoked on close. No
+offline document cache, no new tab, and no PDF.js or other page-rendering dependency: that would reverse
+decision 177 and needs the household's approval (OQ15). Printing remains via the browser/OS PDF viewer or the
+downloaded file rather than an unreliable mobile print button.
 
 ### 23.3 Integrity and security rules
 

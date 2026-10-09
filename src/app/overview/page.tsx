@@ -136,6 +136,11 @@ export default async function OverviewPage() {
                       this month {formatPence(vehicle.monthPence)} · previous{' '}
                       {formatPence(vehicle.previousMonthPence)} · since {vehicle.rolling12From}
                     </p>
+                    {vehicle.annualSpreadPence > 0 ? (
+                      <p className="text-xs text-ink-muted">
+                        Annual payments shown as ÷ 12 a month.
+                      </p>
+                    ) : null}
                   </li>
                 );
               })}

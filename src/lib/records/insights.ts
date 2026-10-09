@@ -30,6 +30,9 @@ import {
 export const GROCERIES_PARENT = 'Groceries';
 export const FUEL_CHILD = 'Fuel';
 
+/** Months an annual schedule payment covers, counted from its own month (decision 190). */
+export const ANNUAL_COVER_MONTHS = 12;
+
 export interface SpendingLineInput {
   occurredDate: string; // 'YYYY-MM-DD'
   categoryId: number;
@@ -39,6 +42,13 @@ export interface SpendingLineInput {
   targetId: number | null;
   /** Signed: purchases positive, refunds negative (net spending). */
   amountPence: number;
+  /**
+   * Calendar months this amount pays for, starting in its own month (decision
+   * 190). Ordinary purchases and monthly payments are 1 (the default). An
+   * annual schedule payment is 12. Only the vehicle running-costs view spreads
+   * it (÷ 12 per month); every other view keeps the cash-basis date.
+   */
+  coversMonths?: number;
 }
 
 export interface ChildSum {
@@ -292,7 +302,10 @@ export interface VehicleRef {
 export interface VehicleCosts {
   vehicleId: number;
   label: string;
-  /** Current calendar month (partial until month end — labelled in the UI). */
+  /**
+   * Current calendar month (partial until month end — labelled in the UI). An
+   * annual payment contributes its ÷ 12 share to each month it covers (decision 190).
+   */
   monthPence: number;
   previousMonthPence: number;
   /**
@@ -302,14 +315,56 @@ export interface VehicleCosts {
    */
   rolling12Pence: number;
   rolling12From: string;
+  /** The part of rolling12Pence that comes from annual payments spread ÷ 12 (decision 190). */
+  annualSpreadPence: number;
   /** By child category over the rolling window (fuel/insurance/…). */
-  byChild: Array<{ parent: string; child: string; amountPence: number }>;
+  byChild: Array<{
+    parent: string;
+    child: string;
+    amountPence: number;
+    /** The part of amountPence that comes from annual payments spread ÷ 12 (decision 190). */
+    spreadPence: number;
+  }>;
+}
+
+/**
+ * Spread one payment evenly over the calendar months it covers, starting in its
+ * own month (decision 190). A monthly payment or ordinary purchase covers one
+ * month and comes back unchanged. For an annual payment, `amountPence / months`
+ * may not divide exactly, so the leftover pence go one each to the earliest
+ * months: the pieces always sum to the original amount. Each piece is dated on
+ * the first of its month, so the month and window rules treat it exactly as they
+ * treat a purchase. A piece dated after `today` falls outside every window.
+ */
+export function spreadOverCoverMonths(line: SpendingLineInput): SpendingLineInput[] {
+  const months = line.coversMonths ?? 1;
+  if (!Number.isInteger(months) || months < 1 || months > ANNUAL_COVER_MONTHS) {
+    throw new Error(
+      `Expected a payment covering 1–${ANNUAL_COVER_MONTHS} months, received ${months}`,
+    );
+  }
+  if (months === 1) return [line];
+  const base = Math.floor(line.amountPence / months);
+  const leftover = line.amountPence - base * months; // 0 ≤ leftover < months
+  const first = firstOfLocalMonth(line.occurredDate);
+  return Array.from({ length: months }, (_, index) => ({
+    ...line,
+    occurredDate: addMonthsClamped(first, index),
+    amountPence: index < leftover ? base + 1 : base,
+    coversMonths: 1,
+  }));
 }
 
 /**
  * Panel 3 (SPEC §16.3, §13): per-vehicle monthly totals and the rolling
  * 12-month total, by child category. Costs stay with the vehicle regardless
  * of who paid or drove; only lines whose target is the vehicle count.
+ *
+ * An annual payment (a yearly premium, say) is shown as ÷ 12 in each of the
+ * twelve months it covers, from its payment month (decision 190). That makes it
+ * comparable with a monthly direct debit. The spread is derived here and never
+ * stored: the schedule and the purchase still record the single payment on its
+ * date, and cash-basis views never see it.
  */
 export function vehicleRunningCosts(
   lines: readonly SpendingLineInput[],
@@ -327,34 +382,43 @@ export function vehicleRunningCosts(
     line.occurredDate >= from && line.occurredDate <= to;
 
   return vehicles.map((vehicle) => {
-    const mine = lines.filter(
-      (line) => line.targetKind === 'vehicle' && line.targetId === vehicle.id,
-    );
-    const monthPence = mine
-      .filter((line) => inRange(line, currentRange.from, currentRange.to))
-      .reduce((sum, line) => sum + line.amountPence, 0);
-    const previousMonthPence = mine
-      .filter((line) => inRange(line, previousRange.from, previousRange.to))
-      .reduce((sum, line) => sum + line.amountPence, 0);
-    const rollingLines = mine.filter((line) => inRange(line, rolling12From, today));
-    const byChild = new Map<string, { parent: string; child: string; amountPence: number }>();
-    for (const line of rollingLines) {
-      const key = `${line.parentName}/${line.childName}`;
+    // Each piece remembers whether it came from an annual payment, so the
+    // spread can be reported separately from the rest.
+    const mine = lines
+      .filter((line) => line.targetKind === 'vehicle' && line.targetId === vehicle.id)
+      .flatMap((line) => {
+        const annual = (line.coversMonths ?? 1) > 1;
+        return spreadOverCoverMonths(line).map((piece) => ({ piece, annual }));
+      });
+    const sumOf = (entries: readonly { piece: SpendingLineInput }[]): number =>
+      entries.reduce((sum, entry) => sum + entry.piece.amountPence, 0);
+    const inMonth = (range: { from: string; to: string }) =>
+      mine.filter((entry) => inRange(entry.piece, range.from, range.to));
+    const rollingEntries = mine.filter((entry) => inRange(entry.piece, rolling12From, today));
+    const byChild = new Map<
+      string,
+      { parent: string; child: string; amountPence: number; spreadPence: number }
+    >();
+    for (const { piece, annual } of rollingEntries) {
+      const key = `${piece.parentName}/${piece.childName}`;
       const entry = byChild.get(key) ?? {
-        parent: line.parentName,
-        child: line.childName,
+        parent: piece.parentName,
+        child: piece.childName,
         amountPence: 0,
+        spreadPence: 0,
       };
-      entry.amountPence += line.amountPence;
+      entry.amountPence += piece.amountPence;
+      if (annual) entry.spreadPence += piece.amountPence;
       byChild.set(key, entry);
     }
     return {
       vehicleId: vehicle.id,
       label: vehicle.label,
-      monthPence,
-      previousMonthPence,
-      rolling12Pence: rollingLines.reduce((sum, line) => sum + line.amountPence, 0),
+      monthPence: sumOf(inMonth(currentRange)),
+      previousMonthPence: sumOf(inMonth(previousRange)),
+      rolling12Pence: sumOf(rollingEntries),
       rolling12From,
+      annualSpreadPence: sumOf(rollingEntries.filter((entry) => entry.annual)),
       byChild: [...byChild.values()].sort(
         (a, b) => a.parent.localeCompare(b.parent) || a.child.localeCompare(b.child),
       ),

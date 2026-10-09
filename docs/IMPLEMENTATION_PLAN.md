@@ -1560,6 +1560,7 @@ the keyboard.
 | OQ12 | Attachment size limit and retention guidance | 10 MB per file; README guidance on archive growth; no server-side pruning in v1. User-initiated removal of one receipt is decision 89 — still no automatic pruning. |
 | OQ13 | 29 February renewal dates under annual advance | Land on 28 February in non-leap years; visible and editable. |
 | OQ14 | Should the Tasks page's "The app has noticed" also list a **stale pot** — a bank or cash pot with no balance checkpoint for N days? | **Deferred by household 2026-09-27 (v0.26.0, decision 176): they will road-test the app and decide in a few weeks.** Not in v0.25.0 (decision 175) nor v0.26.0. Options: **7 days** (about one and a half of the household's 4–5-day checkpoint cycles — prompts early) or **14 days** (quieter; only a pot that has clearly been forgotten). Derived and link-only either way, like the other noticed items. |
+| OQ15 | Phone PDF display: should the app draw PDF pages itself (PDF.js, a new dependency, reversing the no-dependency rule in decision 177)? | **Open 2026-10-09.** Decision 191 ships without a dependency: an `<object>` element, a full-screen phone layout, and Open in PDF app / Download. Whether a given phone's browser draws the PDF inline is unverified. Options: keep this (the phone's own PDF app opens the file), or approve PDF.js for in-page viewing on every phone. |
 
 ## Release history
 
@@ -2453,6 +2454,9 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     Single-pass release continues under RELEASE_PROCESS.md, with local Playwright via SANDBOX.md
     entry 8; temporary config removed before commit. No new open question (next available remains OQ15).
 
+    **Superseded in part by decision 191:** the PDF is now an `<object>` element, the viewer fills the screen
+    on a phone, and the actions sit in a footer. The no-PDF.js rule is unchanged.
+
 178. **Checkpoint cash at the till; pots gain an owner; cash cards lose the overdraft fields; the pots page leads with recording (2026-09-28, v0.28.0).**
 
     The household's brief, answered in one conversation: they reach for cash checkpoints far more
@@ -2717,3 +2721,47 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     on All Transactions — checkpoint plus recorded movements after it — never by copying the
     checkpoint figure. Use the shared pence formatter for both values. Rename only the visible tab
     and its navigation/help references; the checkpoint form and its internal mode remain unchanged.
+
+190. **Annual vehicle payments show as one twelfth a month in running costs (2026-10-09, v0.37.0 follow-up).**
+
+    The household's car insurance is a yearly direct debit and the wife's is monthly, so the Vehicle running
+    costs card could not compare them: a yearly premium landed in one month. Decision: in `vehicleRunningCosts`
+    only, a converted payment from an annual schedule covers twelve months from its own month.
+    `spreadOverCoverMonths` gives each covered month an equal share in whole pence, the leftover pence going to
+    the earliest months, so the shares always sum to the payment. In steady state the rolling 12-month total
+    counts one premium exactly. The spread is derived when figures are read and is never stored. Shares are
+    month-granular (a covered month counts in full, including the one in progress), and a share dated after
+    today is outside every figure. Monthly payments, ordinary purchases and every cash-basis view stay on the
+    payment date: the month comparison, personal spending, the honesty loop, Horizon, Charts, Purchases and the
+    cash summaries. The rule follows the schedule's cadence and its vehicle target, not its category, so an
+    annual road-tax payment against a vehicle is spread too. The household should confirm that scope.
+
+    Insights marks a spread row "(annual ÷ 12)", adds a footnote when a spread applies, and its subtitle now
+    names this one exception to exact reconciliation. Overview shows the same figures with a one-line note. The
+    DB read reaches 22 months back (the window starts 11 months back), because a payment made earlier can still
+    cover the window; the engine drops anything outside the window, so no unspread figure changes. Schema,
+    migrations and backup format are unchanged.
+
+    Tests: the pure engine (split, pence remainder, refunds, window edges, future shares, steady state, cash
+    summaries unchanged); the DB reads (a converted annual premium, a monthly comparator on the same vehicle, a
+    premium paid more than eleven months back); and the e2e `insights` project (its own vehicle and an annual
+    direct debit entered through the Recurring form, the card, and the two converted purchases). Left as they
+    are, and to decide later: Charts' fixed commitments and the month comparison keep the cash spike, which is
+    the truth for that month.
+
+191. **Phone PDF viewing: an object element, a full-screen phone layout and Open in PDF app (2026-10-09, v0.37.0 follow-up).**
+
+    The household asked for PDF viewing on a phone, with a way to open the file in a PDF-capable app. The old
+    viewer put a bare iframe under a note, and kept Download and Share in a header that wrapped on a phone.
+    Chosen without a new dependency: the PDF is an `<object type="application/pdf">` on the blob URL, with
+    fallback text for a browser that cannot draw it. Below 640px the viewer fills the screen. The actions sit in
+    a footer that is always in reach: **Open in PDF app** (the system share sheet with the file, where the
+    browser offers file sharing; images keep **Share**) and **Download** (always). Close, Escape, focus return,
+    scroll lock and the authenticated `no-store` fetch are unchanged.
+
+    Not verified here, and not promised: an inline PDF on iOS Safari or Android Chrome. This sandbox's Chromium
+    has no PDF viewer and no share API on Linux, so e2e proves the wiring, the fallback path, the share hand-off
+    through a mocked share API, and the layout at 393px and 1400px. It does not prove an inline page. This
+    supersedes the iframe and header layout of decision 177; its no-PDF.js rule stands. **Open question OQ15:**
+    in-page rendering with PDF.js would show PDFs on every phone, but it is a new dependency with a worker and
+    needs the household's approval.
