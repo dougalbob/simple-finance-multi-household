@@ -25,6 +25,8 @@ test.describe('balance checkpoints', () => {
 
     // No reload: the pot card reads the new balance straight away.
     await expect(card.getByText('≈ £1,234.56')).toBeVisible();
-    await expect(card.getByText(/Last reported £1,234\.56/)).toBeVisible();
+    const reported = card.getByText(/Last reported £1,234\.56/);
+    await expect(reported).toBeVisible();
+    await expect(reported).toContainText(/\(\d{1,2} [A-Za-z]{3} \d{4}, \d{1,2}:\d{2}\)/);
   });
 });

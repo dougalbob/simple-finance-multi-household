@@ -1,3 +1,32 @@
+**v0.36.0 — verified post-merge facts (recorded per decision 173):**
+
+- Merge commit `005e1e6022df02863b625e70155059b90e3d4fee` (PR #97); PR CI run `37820874589` and `main` CI run `37822242713` — all green.
+- Annotated tag `v0.36.0` points at that merge commit; Publish run `37823382583` succeeded, and the release is marked Latest.
+- Digest `sha256:cc04dcb8b1cae6d80eb61cc25c21874523a9c82e7d655120eea1b1c60aeb3d89` on `v0.36.0` / `latest` / `sha-005e1e6`, differing from v0.35.0's `sha256:7bc3ba04259697e1b6c4ba2cbb8afa71bb3b0846b967f765bc24b274fd3efa63`.
+
+# Release prep: v0.37.0 — Clearer payday outlook and checkpoint balances (decisions 187–189)
+
+**Status at PR preparation:** the preview and changes were approved by the household. This is a pre-merge record only; it asserts no PR, merge, tag, Publish run, release or registry digest. After publication, the next working session must add independently verified post-merge facts at the top, per decision 173.
+
+## What changed
+
+- Exclude all projected day-to-day spending on the actual main salary date only; the shared payday calculation feeds Quick Entry, home, Overview and Horizon. Other receipt dates still include day-to-day spending.
+- Keep the home card short: payday, household low, one worst-pot bills-only transfer nudge and Horizon link. Remove the overdraft-fees sentence. The optional day-to-day guide is qualified, assumes the named pot pays for it, and is not a strict allocation; the five-day transfer lead stays.
+- Keep Overview's figures and transfer warning but move dated forecast detail to Horizon. On desktop, place the Till above—not instead of—the existing home dashboard; mobile order is unchanged.
+- Make the negative salary-window low explicit, with the date in the heading and the approved shortfall wording. In the selected-pot warning, remove the first-due bill detail and show a separate optional guide only when projected day-to-day spending is positive.
+- Rename only the visible Balance tab to **Checkpoint**. The Purchase view shows **Last checkpoint** (same amount, age and local timestamp), then a separate **current account balance** derived from the latest running balance in All Transactions—not from a live bank connection.
+- No schema, migration, backup-format or dependency change. The full notes are in `docs/RELEASE_NOTES_v0.37.0.md`; detailed decisions are 187–189 in `docs/IMPLEMENTATION_PLAN.md` and the aligned behaviour is in `docs/SPEC.md`.
+
+## Gates at PR preparation
+
+`npm test`: **703 passed** / 169 suites, 0 failed · `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` passed · `npm audit --omit=dev`: 0 vulnerabilities. The approved preview was served from the preserved `.e2e-data/simple-finance.sqlite` fixture. Local Playwright was not run because this sandbox has no Chromium binary; the PR's `gates`, `browser` and `docker` checks are mandatory and must all be green before merge. Do not infer their status from these local results.
+
+## What the household does
+
+After the release is published, in Unraid: take a backup, then Force Update. The badge should read `v0.37.0 · pre-release`.
+
+---
+
 # Handoff: v0.36.0 — A shorter payday card on the phone home (decision 186)
 
 **v0.35.0 — verified post-merge facts (recorded per decision 173):**

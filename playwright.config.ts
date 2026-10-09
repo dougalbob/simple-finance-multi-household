@@ -44,6 +44,7 @@ export default defineConfig({
     {
       name: 'mobile',
       testMatch: /home\.spec\.ts/,
+      grepInvert: /the payday card states the facts and opens Horizon the day before payday/,
       use: { ...devices['Pixel 7'] },
     },
     {
@@ -185,6 +186,14 @@ export default defineConfig({
       name: 'credit-card-pots',
       testMatch: /credit-card-pots\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
+      // The payday example rewrites only the isolated E2E seed. Keep it last so
+      // its fictional account, schedules and settings cannot affect other specs.
+      name: 'payday-summary',
+      testMatch: /home\.spec\.ts/,
+      grep: /the payday card states the facts and opens Horizon the day before payday/,
+      use: { ...devices['Pixel 7'] },
     },
   ],
   webServer: {

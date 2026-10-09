@@ -4,6 +4,7 @@ import {
   BUSINESS_TIMEZONE,
   endOfLocalDate,
   formatDayMonthLocalDate,
+  formatOrdinalDayMonthShortLocalDate,
   formatRelativeAge,
   formatShortLocalDate,
   isValidLocalDate,
@@ -139,5 +140,20 @@ describe('formatDayMonthLocalDate', () => {
 
   it('returns the input unchanged when it is not a local date', () => {
     assert.equal(formatDayMonthLocalDate('not-a-date', '2026-10-08'), 'not-a-date');
+  });
+});
+
+describe('formatOrdinalDayMonthShortLocalDate', () => {
+  it('formats the payday heading as an ordinal day and abbreviated month', () => {
+    assert.equal(formatOrdinalDayMonthShortLocalDate('2026-10-26', '2026-10-09'), '26th Oct');
+    assert.equal(formatOrdinalDayMonthShortLocalDate('2026-10-01', '2026-10-09'), '1st Oct');
+  });
+
+  it('adds the year when the payday is in a different year', () => {
+    assert.equal(formatOrdinalDayMonthShortLocalDate('2027-01-26', '2026-12-30'), '26th Jan 2027');
+  });
+
+  it('returns the input unchanged for malformed dates', () => {
+    assert.equal(formatOrdinalDayMonthShortLocalDate('not-a-date', '2026-10-09'), 'not-a-date');
   });
 });

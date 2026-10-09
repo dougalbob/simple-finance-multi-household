@@ -36,12 +36,12 @@ import type { QuickEntryData } from '../../components/quick-entry';
  * the old string match silently pointed the till flow at the wrong pot. With
  * nothing configured the form starts with no pot selected.
  *
- * Each pot carries the two figures SPEC §7.7 puts at the till: its **last
- * checkpoint** (what the bank showed when the household last checked, with
- * its age) and what is **left once the bills due from that pot have left,
- * before the next income lands** — plus the household-wide outlook the form
- * shows as its headline. Both are read-only context here; the checkpoint is
- * never editable in the till form.
+ * Each pot carries its **last checkpoint** (what the bank showed when the
+ * household last checked, with its age), the ledger-derived current account
+ * balance shown by All Transactions, and its bills-only shortfall before
+ * income lands. The household-wide outlook includes projected day-to-day
+ * spending and powers the form's separate, conditional guide. These are
+ * read-only context; the checkpoint is never editable in the till form.
  */
 export interface EntryDefaultsInput {
   people: ReadonlyArray<{ id: number; email: string | null }>;
@@ -130,6 +130,10 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
                 ageLabel: formatRelativeAge(checkpoint.effectiveAt, now),
                 reportedAtLabel: formatInstantLocal(checkpoint.effectiveAt),
               },
+        // This is the latest running balance from the ledger — the same
+        // checkpoint-plus-movements balance shown by All Transactions, not the
+        // reported checkpoint above. Cash and credit cards do not use this label.
+        currentAccountBalancePence: kind === 'bank' ? (potView?.estimatePence ?? null) : null,
         // Cash keeps one honest crumb of its checkpoint: when it was counted,
         // never the amount (decision 178).
         cashLastCountedLabel:
@@ -139,10 +143,6 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
         estimatePence: potView?.estimatePence ?? null,
         spendablePence: potOutlook?.spendablePence ?? null,
         shortfallPence: potOutlook?.shortfallPence ?? null,
-        dueBeforeIncome: (potOutlook?.outgoing ?? []).map((line) => ({
-          ...line,
-          dueLabel: formatShortLocalDate(line.dueDate),
-        })),
       };
     }),
     people: people.map(({ id, label }) => ({ id, label })),

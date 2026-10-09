@@ -240,19 +240,29 @@ Phone home and Overview call `household_available_now` **Household total now** (
 card debt shown separately as context. The payday and Horizon projections label their starting point
 **Liquid funds now** and exclude credit-card pots. Decision 165's estimate arithmetic is unchanged.
 
-**The phone home shows a summary, not the panel (v0.36.0, decision 186).** The till home's card is four
-sentences and a door to Horizon: *"Next pay day is 26th October (18 days from today)"; "Based on a current
-household balance of £242.22 in bank and cash pots and no additional unplanned spending, the household low
-would reach -£165.25. No overdraft fees would be incurred."; "Plan a transfer? …" (§7.5); "See full projection
-detail in the Horizon page."* The balance named is `liquid_available_now` — **bank and cash pots only**, never
-the card-debt net total, because that is the figure the low is derived from. The fee sentence follows the tier
-(§8): below zero but inside the configured threshold is "No overdraft fees would be incurred."; past the
-threshold the card says fees are likely and names the threshold. The **date is payday − 1**, which is also the
-date the **Horizon** link carries (`/horizon?through=…`), so the tap lands on the same window the summary
-described. The day-by-day table, the dated shops/fills, the expected-support list, the weekly pace and the
-detail blocks are **Horizon's** — the phone home does not repeat them (decision 164's "doors, not mini copies").
-**Overview** keeps the full panel: the tier banner, the figures, the "what's in this forecast" expansions and
-the pot watch, minus the prose the till on that same page already carries.
+**Main salary payday is the one day projected day-to-day is excluded (v0.37.0 follow-up, decision 187).**
+For every read model, the engine removes all projected grocery and fuel events dated on an actual occurrence
+of the main salary receipt — after any weekend shift — before it computes day-to-day totals, the low or the
+per-day figures. An event on another receipt date still counts. Payday projection, Quick Entry/Till's cycle,
+the phone-home summary, Overview and Horizon use the same corrected result; Horizon excludes every occurrence
+of the selected main salary schedule inside its chosen window. This is an exclusion from the forecast only:
+other dated events and all commitments still apply normally.
+
+**The phone home shows a summary, not the panel (decisions 186–187; v0.37.0 follow-up).** Its card states the next pay
+day, the household low, at most one transfer nudge (§7.5), and a link to Horizon. The balance in the low
+sentence is `liquid_available_now` — **bank and cash pots only**, never the card-debt net total, because that
+is the figure the low is derived from. The card has no overdraft-fees sentence. The transfer nudge names the
+pot with the greatest **bills-only** shortfall; when projected day-to-day spending is positive it may add a
+separate, qualified guide that assumes this spending also comes from that named pot, explicitly **not a strict
+pot allocation** (§7.5). The Horizon link carries the day before payday (`/horizon?through=…`). The day-by-day
+table, dated shops/fills, expected-support list, weekly pace and detail blocks live on Horizon — the phone home
+does not repeat them (decision 164's "doors, not mini copies").
+
+**Overview keeps the figures, not the expandable forecast (v0.37.0 follow-up, decision 187).** The panel
+retains its tier message, payday and liquid-funds figures, projected day-to-day totals, commitments, receipts
+and the same worst-pot transfer nudge. It no longer has expandable forecast sections or a day-by-day table;
+its Horizon link opens on the day before payday. Horizon owns the dated detail. Quick Entry/Till remains beside
+the projection on `/overview`.
 
 `projected_low` normally occurs just before salary lands. The projection **includes** expected income; it is
 not a spending-only forecast.
@@ -294,11 +304,12 @@ once in the estimate, once in the smoothed allowance — for the whole cadence w
 carried today's date.)
 
 The events join the projection engine as ordinary expected outgoings with due dates (§7.2): within a day they
-apply before receipts, like commitments. Two consequences the household can see: the **lowest point's date is
-meaningful with day-to-day included** (it lands on a shop day, a fill day, or a commitment day — not always
-"today"), and the projection panel/horizon list the dated events they are counting, so the inputs stay
-visible. Events are household-level: pot scoping on the horizon does not filter them, and the §7.5 pot watch
-still excludes them.
+apply before receipts, like commitments, except that all projected day-to-day events on the main salary date
+are omitted. Other receipt dates do not suppress them. Two consequences the household can see: the **lowest
+point's date is meaningful with day-to-day included** (it lands on a shop day, a fill day, or a commitment day
+— not always "today"), and Horizon lists the dated events it counts. The home summary and Overview retain the
+corrected day-to-day totals without repeating the dated list. Events are household-level: pot scoping on the
+horizon does not filter them, and the §7.5 pot watch still excludes them.
 
 **Honesty loop:** Insights show recent actuals (e.g. last 4–8 weeks of Groceries and per-vehicle Fuel) against
 these configured figures, so drift is visible and the config can be corrected. The projection panel lists
@@ -325,16 +336,19 @@ pot_watch(P) = estimate(P) − Σ expected commitments due from P between now an
 ```
 
 Only bank and cash pots can enter this watch. A credit-card balance and commitments charged to a card are
-excluded: card debt cannot trigger a bank-pot **"plan a transfer"** warning. If `pot_watch(P) < 0`, the home
-card and Overview show a distinct, non-alarming notice — the same sentence on both surfaces (v0.36.0, decision
-186), naming the liquid pot, the shortfall, the earliest due date with the bills due that day, and how soon the
-money should move (fictional example: *"Natwest will run about £850.00 short of its upcoming Direct Debits
-(next due 21st October — Council tax, Mortgage and Water Bill). Aim to transfer at least £850.00 into Natwest
-by 16th October."*). The bills' **kind** is read from the schedules themselves — "Direct Debits", "standing
-orders", or both — never assumed. The deadline is the earliest due date **minus five days**
-(`TRANSFER_LEAD_DAYS`), so the money lands before the debit is taken; once that day has arrived the sentence
-says "as soon as you can" rather than naming a date in the past. Long lists name three bills and count the
-rest. This is a planning nudge, not an overdraft warning; the pot-level watch deliberately excludes day-to-day
+excluded: card debt cannot trigger a bank-pot **"plan a transfer"** warning. If one or more pots have a
+shortfall, the home card and Overview show **only the pot with the greatest bills-only shortfall** in a
+distinct, non-alarming notice (v0.37.0 follow-up, decision 187). It names that pot, the shortfall, the earliest
+due date with the bills due that day, and how soon the money should move (fictional example: *"Natwest has the
+worst bills-only shortfall: £850.00 (upcoming Direct Debits next due 21st October — Council tax, Mortgage and
+Water Bill). Aim to transfer at least £850.00 into Natwest by 16th October."*). The bills' **kind** is read from
+the schedules themselves — "Direct Debits", "standing orders", or both — never assumed. The deadline is the
+earliest due date **minus five days** (`TRANSFER_LEAD_DAYS`), so the money lands before the debit is taken; once
+that day has arrived the sentence says "as soon as you can" rather than naming a date in the past. Long lists
+name three bills and count the rest. When the projection contains day-to-day spending, the notice may add a
+separate **guide**: bills-only shortfall plus the projected day-to-day total, **assuming that spending also
+comes from the named pot**. It says this is a guide, not a strict pot allocation; it never changes the
+bills-only shortfall or transfer deadline. The pot-level watch itself deliberately excludes day-to-day
 projection (groceries/fuel vary by pot and payment method and would muddy a transfer-planning signal).
 
 ### 7.6 Horizon (how far the money would go) — v0.5.0
@@ -409,12 +423,26 @@ never on a debt's expected support. Borrowed support inside that window remains 
 as expected, never received income. The salary itself is not counted as money you can spend: the
 engine applies outgoings before receipts, including on salary day.
 
-Both surfaces show “Lowest before pay day” and the same weekly pace as the projection panel (§7.2).
-No salary schedule or no checkpoint means no figure, not zero. The estimate arithmetic is unchanged.
+Quick Entry/Till shows the same low and pace on `/` and `/overview`; its heading includes the scheduled
+payday as an ordinal day and abbreviated month (for example, “Lowest before 26th Oct pay day”). Positive
+and zero-low guidance is unchanged. For a negative low, the pace text states the shortfall and that no
+discretionary spending is available (for example, *"Projected shortfall: -£413.57 before payday. No
+discretionary spending is available at this time."*). That negative-low presentation omits “No weekly
+allowance”, the salary-not-counted sentence, and the projected-liquid-funds disclaimer. No salary schedule
+or no checkpoint means no figure, not zero. The home payday card states the low without the weekly pace;
+Overview retains the projection figures and tier message (§7.2).
 
-Per-pot signals remain `estimate(P) − commitments from P`, in the same salary window. They exclude
-household shops/fuel and receipts: these are bills-only transfer-planning signals, not the household
-spending allowance. The checkpoint stays the reported figure, never edited. Cash pots show no balance.
+Per-pot bills-only signals remain `estimate(P) − commitments from P`, in the same salary window. They
+exclude household shops/fuel and receipts: these are transfer-planning signals, not the household spending
+allowance. Quick Entry labels its selected-pot signal **Bills-only shortfall** and shows that pot's last
+checkpoint labelled **Last checkpoint**, with its age and the existing local date/time format. For a
+checkpointed bank pot, it also shows **current account balance** from the latest ledger running balance on
+All Transactions (the checkpoint plus recorded movements after it), not by repeating the checkpoint amount.
+When projected day-to-day spending is positive, it adds a separate qualified guide to the selected-pot
+shortfall (for example: *"If projected day-to-day spending also comes from Natwest, the guide shortfall is
+about £1,458.57."*). The guide adds the projected day-to-day total to the bills-only shortfall, assumes that
+spending comes from the named pot, and is not a strict pot allocation; it does not change the bills-only
+figure. The checkpoint stays the reported figure, never edited. Cash pots show no balance.
 
 
 ## 8. Warnings (two tiers)
@@ -746,23 +774,31 @@ query instead of a duplicated tree per car.
 Purpose: fast, accurate entry at the till. It does not get into the weeds; review lives on the desktop.
 All pages remain reachable on mobile (nothing hidden) — they are simply not the mobile design focus.
 
-**Two homes, one codebase (decision 164).** The phone's first screen is `/` — a till home: available-now,
-Quick Entry, the payday summary (v0.36.0, decision 186 — four sentences, the transfer nudge, and a link to
-Horizon; §7.2), due this week, and links to Charts, Purchases and Horizon. It is not a copy
-of Overview and it does not embed Recurring, the pots dump, recent purchases, checkpoints or key dates.
-Recurring stays a laptop-first chore, reachable from the drawer as one item. The drawer leads with Quick
-Entry, Purchases, Horizon, Charts, Overview and Recurring; everything else sits in a second group. The
-laptop keeps the full navigation bar and opens on Overview when the household sits down.
+**Two homes, one codebase (decision 164).** The phone's first screen is `/` — a till home, ordered as
+**Household total now → Quick Entry/Till → payday summary → due this week → links**. The summary is the
+v0.37.0 follow-up card (decisions 186–187): next payday, projected household low, at most one worst-pot
+bills-only transfer nudge with a qualified day-to-day guide when applicable, and a link to Horizon (§7.2,
+§7.5). On a laptop the same `/` page places Quick Entry/Till **above** the household total and the rest of
+the existing dashboard; responsive ordering never replaces that content. Neither layout is a copy of
+Overview or embeds Recurring, the pots dump, recent purchases, checkpoints or key dates. Recurring stays a
+laptop-first chore, reachable from the drawer as one item. The drawer leads with Quick Entry, Purchases,
+Horizon, Charts, Overview and Recurring; everything else sits in a second group. The laptop keeps the full
+navigation bar and opens on Overview when the household sits down.
 
 Home = four big actions:
 
 1. **Add Purchase (redesigned v0.9.0, re-laid out v0.11.0)**. Two cards.
-   - **Card 1, record it:** pot first, then the two balance figures (§7.7): the pot's **last
-     reported checkpoint** with its age (bank pots only; cash shows nothing), the household **"free to
-     spend before income lands"** headline, and the pot's own shortfall warning when the bills leaving it
-     outrun it. Then supplier (typeahead: recents first, filtered as you type, inline rows, no browser
-     popup; tapping a suggestion fills the name, applies the remembered category and moves to Amount) →
-     amount → "+ Note" collapsed out of the way → a full-width **Next: category →** button. **There is no
+   - **Card 1, record it:** pot first, then the two balance figures (§7.7): the selected bank pot's
+     **last reported checkpoint**, with its age and existing local date/time label (cash shows no balance),
+     the household **"free to spend before income lands"** headline, and the selected pot's explicitly
+     **bills-only shortfall** when its own commitments outrun it. The low uses the same salary-day
+     exclusion as the payday projection; a negative low says **"Projected shortfall: -£413.57 before
+     payday. No discretionary spending is available at this time."** The negative presentation omits
+     “No weekly allowance”, the salary-not-counted sentence, and the projected-liquid-funds disclaimer.
+     Positive and zero-low guidance is unchanged. Then supplier (typeahead: recents
+     first, filtered as you type, inline rows, no browser popup; tapping a suggestion fills the name, applies
+     the remembered category and moves to Amount) → amount → "+ Note" collapsed out of the way → a full-width
+     **Next: category →** button. **There is no
      Save on card 1** (v0.11.0): the supplier's remembered category is only shown on card 2, and it must
      be seen before it is saved.
    - **Card 2, Category & allocation:** category → "For" (household / person / vehicle) → split lines →
@@ -793,10 +829,10 @@ Home = four big actions:
      for a form that was filled and not saved.
    - **Focus at the till (v0.13.1, decision 151): nothing is focused when the page opens.** The till used
      to land on the supplier as soon as it was ready; on a real phone that raised the on-screen keyboard,
-     the browser scrolled the focused field above it, and the Purchase / Fuel / Balance / Move tab strip
+     the browser scrolled the focused field above it, and the Purchase / Fuel / Checkpoint / Move tab strip
      went off the top of the screen with it. The household decides what to fill in by tapping it, so no
      field is focused as a side-effect of **the till becoming ready** or of **a type tab becoming
-     visible** — Fuel and Balance open with nothing focused too. The card's first paint still shows the
+     visible** — Fuel and Checkpoint open with nothing focused too. The card's first paint still shows the
      type tabs, the pot, the payday shortfall warning and the free-to-spend figure; the keyboard stays
      down.
    - **The phone opens at the till (decision 158, superseding 151's "the page does not scroll itself"
@@ -865,7 +901,7 @@ Home = four big actions:
      (decision 174's rule) and the card stays open on its confirmation; nothing is ever focused as
      a side-effect of opening it (decision 151). Checkpoints stay checkpoints — labelled as such,
      never a bank connection. The card is hidden entirely for a household with no cash pots, and
-     the full **Balance** tab remains for every other pot.
+     the full **Checkpoint** tab remains for every other pot.
 4. **Move Money** — between the household's own pots (a cash handover included), borrowing and
    repayments against a tracked debt, a swap with someone outside the household, or other money
    in/out with a note. Recorded in the moment, like everything else here.
@@ -908,7 +944,7 @@ Menu pages:
 
 | Page | Contents |
 |---|---|
-| **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; to-payday projection panel (payday date, expected receipts, commitments due, projected day-to-day events, projected low) with "what's in this forecast" expansions including the dated shops/fills list and a debt's expected support when one is in the window (v0.7.0), trimmed in v0.36.0 (decision 186) of the duplicate prose that now lives on Horizon; pot-level "plan a transfer" notice (§7.5); due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Quick-add always visible. Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
+| **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; payday projection panel retaining its date, tier, liquid funds, day-to-day total, commitments and receipts, plus the worst-pot bills-only transfer nudge (§7.5), but **no expandable forecast sections or day-by-day table** (v0.37.0 follow-up, decision 187). Horizon owns the dated shops/fills, expected-support list and day-by-day detail; the panel links there, opening on the day before payday. Quick Entry/Till stays visible beside the projection. Due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
 | **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); inline editing; refund/void/correct with audit trail visible; split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
 | **All Transactions** | Read-only activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. No add, edit or void on the page (§15.3). |
 | **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance, state, contract end date where set); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below; renewals sit under the schedules (beside projection). On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row. |
@@ -1276,14 +1312,16 @@ projected_low = −£571.26 on the 25th   (the last weekly shop of the cycle, ju
 ```
 
 Tier check: −£571.26 ≤ −£250.00 → **Tier 2 Warning**: "Projected to be more than £250 overdrawn before
-payday." (Had it fallen between £0 and −£250, only the Tier 1 heads-up would show.) The panel expands to list
-every input: five commitments, salary, and the six dated day-to-day events with their amounts — nothing
-invisible.
+payday." (Had it fallen between £0 and −£250, only the Tier 1 heads-up would show.) Horizon owns the dated
+breakdown of the five commitments, salary and the projected day-to-day events; the home summary and Overview
+keep the corrected figures and link to that detail.
 
 Pot-level transfer watch (§7.5): `pot_watch(Main)` = £348.88 − £1,014.96 = **−£666.08** → distinct notice:
-"Main account is projected £666.08 short of the DDs due from it before payday — Mortgage and Council Tax leave
-on the 1st; Salary account holds £520.00." The household warning and the transfer nudge are separate signals
-with separate remedies.
+"Main account has the worst bills-only shortfall: £666.08 (upcoming Direct Debits next due 28th September —
+Energy). If projected day-to-day spending also comes from Main account, the guide shortfall is about £1,161.08
+— a guide, not a strict pot allocation. Aim to transfer at least £666.08 into Main account as soon as you can."
+The household warning and the transfer nudge are separate signals with separate remedies; the pot watch remains
+bills-only.
 
 ### E9 — Contract ends, renewals and key-date alerts (fictional)
 

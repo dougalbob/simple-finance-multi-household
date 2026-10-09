@@ -29,6 +29,16 @@ test.describe('desktop review', () => {
     ).toBeVisible();
     // Estimates and projections, never a bank balance.
     await expect(page.getByText(/never a bank balance/i).first()).toBeVisible();
+    const projection = page.locator('section[aria-labelledby="projection-heading"]');
+    await expect(projection.getByText('Projected day-to-day', { exact: false })).toBeVisible();
+    await expect(projection.getByText('Upcoming commitments')).toBeVisible();
+    await expect(projection.getByText('Expected receipts')).toBeVisible();
+    await expect(projection.locator('details')).toHaveCount(0);
+    await expect(projection.locator('table')).toHaveCount(0);
+    await expect(projection.getByRole('link', { name: 'Horizon →' })).toHaveAttribute(
+      'href',
+      /^\/horizon\?through=\d{4}-\d{2}-\d{2}$/,
+    );
     await expect(page.getByRole('heading', { name: /Due this week/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Key dates/i })).toBeVisible();
     // The seeded renewal is inside its warning window (SPEC §22).

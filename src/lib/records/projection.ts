@@ -16,9 +16,9 @@ import { addDaysLocal, daysBetween } from './dates';
  *   on its due day like any other outgoing — no up-front lump — so the low
  *   lands on shop/fill days and the lowest point's date is meaningful.
  * - Expected receipts and commitments (unconverted schedule instances only)
- *   apply on their due day; within a day, outgoings (commitments and
- *   day-to-day events alike) apply before receipts (still the conservative
- *   direction).
+ *   apply on their due day; within a day, outgoings apply before receipts.
+ *   Projected day-to-day events are the exception on an actual main salary
+ *   date: they are omitted on that date only, not on other receipt dates.
  * - `projected_low` = the minimum running value in the window (inclusive of
  *   the start). It normally occurs just before salary lands. The projection
  *   includes expected income — it is not a spending-only forecast.
@@ -68,6 +68,13 @@ export interface ProjectionInput {
    */
   projectedGroceries: ProjectionScheduleLine[];
   projectedFuel: ProjectionScheduleLine[];
+  /**
+   * Actual dates for the main salary schedule (already weekend-shifted).
+   * Projected day-to-day items on these dates are excluded; receipts from
+   * other schedules/dates do not make a day a payday. Horizon passes every
+   * occurrence of the selected main salary schedule inside its window.
+   */
+  mainSalaryDates?: ReadonlyArray<string>;
   /** Overdraft warning threshold in pence (SPEC §8); null when none configured. */
   warningThresholdPence: number | null;
   potWatches: PotWatchInput[];
@@ -114,15 +121,32 @@ export interface ProjectionResult {
   potWatches: PotWatchResult[];
 }
 
+/** Remove projected events whose date is an actual occurrence of main salary. */
+export function excludeMainSalaryDayToDay<T extends { dueDate: string }>(
+  events: readonly T[],
+  mainSalaryDates: ReadonlyArray<string>,
+): T[] {
+  if (events.length === 0 || mainSalaryDates.length === 0) return [...events];
+  const salaryDates = new Set(mainSalaryDates);
+  return events.filter((event) => !salaryDates.has(event.dueDate));
+}
+
 export function projectToPayday(input: ProjectionInput): ProjectionResult {
   const today = toLocalDateString(input.now);
   const days = input.paydayDate === null ? 0 : daysBetween(today, input.paydayDate);
   const hasWindow = input.paydayDate !== null && days > 0;
 
-  // The figures used by this projection: the projected shop/fill events due
-  // inside the window (zero when there is no window, as before).
-  const groceriesPence = hasWindow ? sum(input.projectedGroceries.map((l) => l.amountPence)) : 0;
-  const fuelPence = hasWindow ? sum(input.projectedFuel.map((l) => l.amountPence)) : 0;
+  // The figures used by this projection: projected shop/fill events due
+  // inside the window, except on the main salary date(s). Other receipt dates
+  // remain ordinary dates for day-to-day spending.
+  const projectedGroceries = hasWindow
+    ? excludeMainSalaryDayToDay(input.projectedGroceries, input.mainSalaryDates ?? [])
+    : [];
+  const projectedFuel = hasWindow
+    ? excludeMainSalaryDayToDay(input.projectedFuel, input.mainSalaryDates ?? [])
+    : [];
+  const groceriesPence = sum(projectedGroceries.map((line) => line.amountPence));
+  const fuelPence = sum(projectedFuel.map((line) => line.amountPence));
   const dayToDayPence = groceriesPence + fuelPence;
 
   let projectedLowPence: number | null = null;
@@ -132,7 +156,7 @@ export function projectToPayday(input: ProjectionInput): ProjectionResult {
   if (hasWindow) {
     const commitmentsByDate = sumByDate(input.commitments);
     const receiptsByDate = sumByDate(input.receipts);
-    const dayToDayByDate = sumByDate([...input.projectedGroceries, ...input.projectedFuel]);
+    const dayToDayByDate = sumByDate([...projectedGroceries, ...projectedFuel]);
     const base = input.availableNowPence;
 
     projectedLowPence = base;
@@ -147,8 +171,8 @@ export function projectToPayday(input: ProjectionInput): ProjectionResult {
       const receiptsDue = receiptsByDate.get(date) ?? 0;
       const dayToDayDue = dayToDayByDate.get(date) ?? 0;
 
-      // Outgoings apply before receipts on the same day (conservative) — a
-      // shop or fill due on payday still clears before the salary lands.
+      // Commitments apply before receipts on the same day (conservative).
+      // Day-to-day has already been filtered off the main salary dates.
       const minOfDay =
         base +
         receiptsCumulative -

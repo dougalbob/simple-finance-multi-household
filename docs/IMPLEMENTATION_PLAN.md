@@ -2667,3 +2667,53 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     `browser` job are the gate; the affected projects (`mobile`, `desktop`, `horizon`, `credit-card-pots`) were
     verified green locally via SANDBOX entry 8, including the new spec "the payday card states the facts and
     opens Horizon the day before payday". No schema, migration, backup-format or dependency change.
+
+187. **Exclude all projected day-to-day spending on the main salary day and keep the home/Overview summary consistent (2026-10-09, v0.37.0 follow-up).**
+
+    The follow-up closes the remaining gaps from decision 186 without changing the salary-window
+    definition. **On the actual main salary receipt date only**, every projected day-to-day event is
+    removed — weekly groceries and per-vehicle fuel alike. It is not a rule for any other receipt
+    date. The shared result feeds the payday projection, Quick Entry/Till, the home card, Overview
+    totals and low, and Horizon; Horizon applies the rule to every occurrence of its selected main
+    salary schedule in the chosen window. The salary's configured day remains the 26th; an expected
+    receipt on another date does not suppress shops or fills.
+
+    **The phone summary gets smaller and clearer.** Keep its payday, liquid household low, single
+    greatest bills-only pot shortfall, five-day transfer lead and Horizon link (`through=payday−1`);
+    remove the overdraft-fees sentence. When projected day-to-day spending is positive, the worst-pot
+    line may add a separately worded guide: bills-only shortfall plus that spending, assuming it also
+    comes from the named pot, explicitly not a strict pot allocation. If several pots are short, name
+    the one with the greatest bills-only shortfall. The selected-pot Till display calls its amount
+    **Bills-only shortfall** and shows the checkpoint's existing amount, age, and Europe/London
+    date/time. Negative lows use the shortfall wording (`-£96.35`); positive and zero-low guidance
+    stays as it was.
+
+    **Overview is a figures-and-door surface, not a second Horizon.** Retain the tier message, payday,
+    liquid funds, day-to-day, commitments, receipts and transfer warning; remove expandable forecast
+    sections and the day-by-day table; link to Horizon for dated detail. `/overview` keeps Quick
+    Entry beside the projection. On `/`, mobile ordering remains Household total then Till, while a
+    laptop moves the same Till above — never instead of — the existing household/dashboard content.
+
+    **Fictional browser scenario.** A dedicated final Playwright project creates Main £242.22, salary
+    due the 26th, a Natwest bank pot with supplier-first DD schedules due the 21st, and a £90 projected
+    fuel event on salary day. The assertions cover the checkpoint date/time, bills-only and worst-pot
+    wording, exact `-£96.35` negative-low copy, the Horizon date, and the missing salary-day event in
+    Overview and Horizon. No household values are used. No schema, migration, backup format or
+    dependency change; release gates are recorded in the release notes after they have actually run.
+
+188. **Show a qualified day-to-day guide beside the Till's bills-only shortfall (2026-10-09, v0.37.0 follow-up).**
+
+    Keep the selected pot's bills-only shortfall as the primary figure, but remove the first-due
+    bill detail from that line. When projected day-to-day spending is positive, append a conditional
+    guide: *"If projected day-to-day spending also comes from [pot], the guide shortfall is about
+    [bills-only shortfall plus projected day-to-day spending]."* Omit the guide at zero; it never
+    changes the bills-only figure. Retain the selected-pot assumption and the explanation that the
+    guide is not a strict allocation in the full decision record (§7.7).
+
+189. **Rename Quick Entry's Balance tab to Checkpoint and show the ledger's current running balance separately (2026-10-09, v0.37.0 follow-up).**
+
+    The Purchase view labels the report **Last checkpoint**, retaining its reported amount, age and
+    local timestamp. After that it shows **current account balance** from the latest running balance
+    on All Transactions — checkpoint plus recorded movements after it — never by copying the
+    checkpoint figure. Use the shared pence formatter for both values. Rename only the visible tab
+    and its navigation/help references; the checkpoint form and its internal mode remain unchanged.

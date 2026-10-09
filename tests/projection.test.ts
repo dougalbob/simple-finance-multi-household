@@ -248,7 +248,7 @@ describe('projection: day-to-day events and edge cases', () => {
     assert.equal(result.tier, 'none');
   });
 
-  it('a projected shop on payday clears before the salary, like any outgoing', () => {
+  it('excludes every projected day-to-day item on main salary day', () => {
     const result = projectToPayday({
       now: NOW,
       availableNowPence: p(1000),
@@ -266,15 +266,82 @@ describe('projection: day-to-day events and edge cases', () => {
           dueDate: '2026-10-26',
         },
       ],
-      projectedFuel: [],
+      projectedFuel: [
+        {
+          scheduleId: 11,
+          name: 'Fuel — Vehicle A (projected)',
+          potId: 0,
+          amountPence: p(55),
+          dueDate: '2026-10-26',
+        },
+      ],
+      mainSalaryDates: ['2026-10-26'],
       warningThresholdPence: null,
       potWatches: [],
     });
-    // 1000 − 90 (the shop leaves the morning of payday) = 910 low.
+    // Neither the projected shop nor fill lowers the low before salary lands.
+    assert.equal(result.projectedLowPence, p(1000));
+    assert.equal(result.lowDate, '2026-09-27'); // today remains the lowest point
+    assert.equal(result.perDay.at(-1)?.runningPence, p(1500));
+    assert.equal(result.groceriesPence, 0);
+    assert.equal(result.fuelPence, 0);
+    assert.equal(result.perDay.at(-1)?.dayToDayPence, 0);
+  });
+
+  it('keeps day-to-day on other receipt dates inside the window', () => {
+    const result = projectToPayday({
+      now: NOW,
+      availableNowPence: p(1000),
+      paydayDate: '2026-10-26',
+      commitments: [],
+      receipts: [
+        {
+          scheduleId: 3,
+          name: 'Other income',
+          potId: 1,
+          amountPence: p(100),
+          dueDate: '2026-10-20',
+        },
+        { scheduleId: 2, name: 'Salary', potId: 2, amountPence: p(500), dueDate: '2026-10-26' },
+      ],
+      projectedGroceries: [
+        {
+          scheduleId: 10,
+          name: 'Weekly shop (projected)',
+          potId: 0,
+          amountPence: p(90),
+          dueDate: '2026-10-20',
+        },
+        {
+          scheduleId: 11,
+          name: 'Weekly shop (projected)',
+          potId: 0,
+          amountPence: p(35),
+          dueDate: '2026-10-26',
+        },
+      ],
+      projectedFuel: [
+        {
+          scheduleId: 12,
+          name: 'Fuel — Vehicle A (projected)',
+          potId: 0,
+          amountPence: p(55),
+          dueDate: '2026-10-26',
+        },
+      ],
+      mainSalaryDates: ['2026-10-26'],
+      warningThresholdPence: null,
+      potWatches: [],
+    });
+
+    const byDate = new Map(result.perDay.map((day) => [day.date, day]));
+    assert.equal(result.dayToDayPence, p(90));
+    assert.equal(result.groceriesPence, p(90));
+    assert.equal(result.fuelPence, 0);
     assert.equal(result.projectedLowPence, p(910));
-    assert.equal(result.lowDate, '2026-10-26');
-    assert.equal(result.perDay.at(-1)?.runningPence, p(1000 - 90 + 500));
-    assert.equal(result.perDay.at(-1)?.dayToDayPence, p(90));
+    assert.equal(byDate.get('2026-10-20')?.dayToDayPence, p(90));
+    assert.equal(byDate.get('2026-10-20')?.runningPence, p(1010));
+    assert.equal(byDate.get('2026-10-26')?.dayToDayPence, 0);
   });
 
   it('DST-boundary windows count whole local days (autumn-back 2026-10-25)', () => {

@@ -1,24 +1,16 @@
+import Link from 'next/link';
 import { formatPence } from '@/lib/money';
 import type { ProjectionView } from '@/lib/records/money-view';
 import { paydaySummaryFromView } from '@/lib/records/payday-summary';
 
 /**
- * The Overview's projection panel (decision 74; trimmed in decision 186): the
- * tier banner, the figures, and the “what's in this forecast” expansions —
- * the lists and the day-by-day table, which is where the arithmetic is
- * checked. The prose the panel used to repeat around them (the weekly pace
- * line, which the till on this same page already carries, and the footnotes
- * under the expansions) now lives only on Horizon. The pot watch is the same
- * sentence the home card shows, from the same pure builder. All figures come
- * from the pure projection engine — nothing here recomputes anything.
+ * Overview keeps the payday figures and pot watch, while Horizon owns the
+ * dated forecast, expansions and day-by-day table. All figures come from the
+ * pure projection engine — nothing here recomputes anything.
  */
 export function ProjectionSection({ projection }: { projection: ProjectionView }) {
   const { result } = projection;
   const summary = paydaySummaryFromView(projection);
-  // Debt expectations ride in the receipt list flagged `expected` (SPEC §10.2,
-  // v0.7.0): the panel lists them under their own heading so a £1,000 support
-  // payment is never mistaken for salary.
-  const expectedSupportLines = projection.receiptLines.filter((line) => line.expected === true);
   const tier = result.tier;
   const tierStyles =
     tier === 'warning'
@@ -87,100 +79,6 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
         </div>
       </dl>
 
-      {expectedSupportLines.length > 0 ? (
-        <details className="mt-4">
-          <summary className="cursor-pointer text-sm font-medium text-ink-body">
-            Expected support in this forecast ({expectedSupportLines.length})
-          </summary>
-          <ul className="mt-2 divide-y divide-border-hairline">
-            {expectedSupportLines.map((line) => (
-              <li
-                key={`${line.dueDate}-${line.scheduleId}-expected`}
-                className="flex items-baseline justify-between gap-2 py-1.5 text-sm"
-              >
-                <span>
-                  <span className="font-medium">{line.name}</span>{' '}
-                  <span className="text-xs text-ink-muted">
-                    {line.dueDate} · {line.potLabel} · expected — never received
-                  </span>
-                </span>
-                <span className="tabular-nums text-ink-muted">
-                  ≈{formatPence(line.amountPence)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-
-      {projection.dayToDayEvents.length > 0 ? (
-        <details className="mt-4">
-          <summary className="cursor-pointer text-sm font-medium text-ink-body">
-            Projected shops and fills ({projection.dayToDayEvents.length})
-          </summary>
-          <ul className="mt-2 divide-y divide-border-hairline">
-            {projection.dayToDayEvents.map((event) => (
-              <li
-                key={`${event.dueDate}-${event.name}`}
-                className="flex items-baseline justify-between gap-2 py-1.5 text-sm"
-              >
-                <span>
-                  <span className="font-medium">{event.name}</span>{' '}
-                  <span className="text-xs text-ink-muted">{event.dueDate}</span>
-                </span>
-                <span className="tabular-nums">−{formatPence(event.amountPence)}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-
-      {result.perDay.length > 0 ? (
-        <details className="mt-4">
-          <summary className="cursor-pointer text-sm font-medium text-ink-body">
-            What’s in this forecast — day-by-day ({result.perDay.length} days)
-          </summary>
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[420px] text-sm">
-              <thead className="bg-surface-muted text-left text-xs uppercase tracking-wide text-ink-muted">
-                <tr>
-                  <th className="px-3 py-1.5">Date</th>
-                  <th className="px-3 py-1.5 text-right">Commitments</th>
-                  {result.dayToDayPence > 0 ? (
-                    <th className="px-3 py-1.5 text-right">Day-to-day</th>
-                  ) : null}
-                  <th className="px-3 py-1.5 text-right">Receipts</th>
-                  <th className="px-3 py-1.5 text-right">End of day</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.perDay.map((day) => (
-                  <tr key={day.date} className="border-t border-border-hairline">
-                    <td className="px-3 py-1.5">{day.date}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">
-                      {day.commitmentsPence > 0 ? `−${formatPence(day.commitmentsPence)}` : '—'}
-                    </td>
-                    {result.dayToDayPence > 0 ? (
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        {day.dayToDayPence > 0 ? `−${formatPence(day.dayToDayPence)}` : '—'}
-                      </td>
-                    ) : null}
-                    <td className="px-3 py-1.5 text-right tabular-nums">
-                      {day.receiptsPence > 0 ? `+${formatPence(day.receiptsPence)}` : '—'}
-                    </td>
-                    <td
-                      className={`px-3 py-1.5 text-right font-medium tabular-nums ${day.runningPence < 0 ? 'text-danger' : ''}`}
-                    >
-                      {formatPence(day.runningPence)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      ) : null}
-
       {summary !== null && summary.transfers.length > 0 ? (
         <div className="mt-4 space-y-2">
           {summary.transfers.map((transfer) => (
@@ -192,6 +90,18 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
             </p>
           ))}
         </div>
+      ) : null}
+
+      {summary !== null ? (
+        <p className="mt-4 text-sm text-ink-body">
+          Full dated forecast and day-by-day detail on{' '}
+          <Link
+            href={`/horizon?through=${summary.horizonThroughDate}`}
+            className="font-medium text-accent hover:underline"
+          >
+            Horizon →
+          </Link>
+        </p>
       ) : null}
     </section>
   );

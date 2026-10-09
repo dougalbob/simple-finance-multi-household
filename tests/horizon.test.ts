@@ -262,6 +262,19 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
 
   it('reproduces the window arithmetic by hand, to the penny', async () => {
     const { db, pots } = await setUp();
+    // This later receipt is inside the horizon, but not from the main Salary
+    // schedule. Day-to-day on its date must still count.
+    createSchedule(db, {
+      name: 'Other income',
+      kind: 'receipt',
+      frequency: 'monthly',
+      dueDayOfMonth: 20,
+      amountPence: p(50),
+      potId: pots.main.id,
+      activeFrom: '2026-09-01',
+      actor: ACTOR,
+      now,
+    });
     setWeeklyGroceriesPence(db, p(90), ACTOR);
     setMonthlyFuelPence(db, fixture.vehicles.vehicleA.id, p(75), ACTOR);
     setMonthlyFuelPence(db, fixture.vehicles.vehicleB.id, p(60), ACTOR);
@@ -315,9 +328,10 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
     //   Energy DD (25th, monthly) — 25 Sep AND 25 Oct  → £169.10
     //   Salary (26th → weekend shift) — 26 Sep is Saturday → Friday 25 Sep,
     //       and Monday 26 Oct  → £4,300
+    //   Other income (20th) — 20 Oct  → £50; not a main salary date
     //   Support (12th) — Monday 12 Oct  → £1,000, flagged expected
     //   Weekly shops — every 7 days from the 21st → 28/9, 5/10, 12/10,
-    //       19/10, 26/10  → 5 × £90 = £450
+    //       19/10, 26/10; the main-salary-day shop is excluded → 4 × £90 = £360
     //   Fuel A — 20/9 + 30 → 20/10  → £75;   Fuel B — 5/9 + 30 → 5/10  → £60
     const through = '2026-10-26';
     const view = getHorizonProjectionView(db, through, [], true, now);
@@ -327,32 +341,41 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
     assert.equal(result.days, 33);
     assert.equal(result.availableNowPence, p(820));
     assert.equal(result.totalCommitmentsPence, p(169.1));
-    assert.equal(result.totalReceiptsPence, p(5300)); // two salaries + support
+    assert.equal(result.totalReceiptsPence, p(5350)); // two salaries + other income + support
+    assert.ok(
+      view.receiptLines.some(
+        (line) => !line.expected && line.name === 'Other income' && line.dueDate === '2026-10-20',
+      ),
+    );
     const expected = view.receiptLines.filter((line) => line.expected);
     assert.equal(expected.length, 1);
     assert.equal(expected[0]?.dueDate, '2026-10-12');
     assert.equal(expected[0]?.amountPence, p(1000));
 
     // Day-to-day is episodic: dated events from the anchors, no smooth rate.
-    assert.equal(result.groceriesPence, p(450.0));
+    assert.equal(result.groceriesPence, p(360.0)); // 4 shops; the 26 Oct payday shop is excluded
     assert.equal(result.fuelPence, p(135.0)); // £75 A (20/10) + £60 B (5/10)
-    assert.equal(result.dayToDayPence, p(585.0));
+    assert.equal(result.dayToDayPence, p(495.0));
     assert.deepEqual(
       view.dayToDayEvents
         .filter((event) => event.kind === 'groceries')
         .map((event) => event.dueDate),
-      ['2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'],
+      ['2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19'],
     );
+    const otherReceiptDay = result.perDay.find((day) => day.date === '2026-10-20');
+    assert.equal(otherReceiptDay?.receiptsPence, p(50));
+    assert.equal(otherReceiptDay?.dayToDayPence, p(75));
     assert.deepEqual(
       view.dayToDayEvents.filter((event) => event.kind === 'fuel').map((event) => event.dueDate),
       ['2026-10-05', '2026-10-20'],
     );
 
-    // The last weekly shop of the window lands on the 26th, the through
-    // date — an outgoing on the final day, included like every other.
+    // The weekly shop projected for 26 Oct is the main salary-day item, so it
+    // is absent from the Horizon list and final-day total too.
     const lastDay = result.perDay[result.perDay.length - 1];
     assert.ok(lastDay);
-    assert.equal(lastDay.dayToDayPence, p(90.0));
+    assert.equal(lastDay.dayToDayPence, 0);
+    assert.equal(lastDay.receiptsPence, p(2150));
 
     // "Where we'd land" is the final day's running total — the arithmetic of
     // the engine's final row, never a separately computed figure.

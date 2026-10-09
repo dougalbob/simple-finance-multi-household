@@ -8,6 +8,8 @@ import { createPurchase } from '../src/lib/records/purchases';
 import { createTransfer } from '../src/lib/records/transfers';
 import { createSchedule } from '../src/lib/records/schedules';
 import {
+  getCycleOutlook,
+  getHorizonProjectionView,
   getMoneySnapshot,
   getProjectionView,
   getUpcomingCommitments,
@@ -274,6 +276,120 @@ describe('money view: E8 end to end over the database', () => {
     assert.equal(view.paydayScheduleName, 'Salary');
     assert.equal(view.result.paydayDate, '2026-10-26');
     void salary;
+  });
+
+  it('excludes projected groceries and fuel only on main salary dates in every read model', async () => {
+    fixture = await createHouseholdFixture('alex@example.com', new Date('2026-10-31T12:00:00Z'));
+    const { db, pots, vehicles, people } = fixture;
+    const actor = 'alex@example.com';
+    const now = new Date('2026-10-31T12:00:00Z');
+    const fuelCategory = fixture.categoryId('Vehicle Running', 'Fuel');
+
+    addCheckpoint(db, { potId: pots.main.id, amountPence: p(1000), actor, now });
+    createSchedule(db, {
+      name: 'Salary',
+      kind: 'receipt',
+      frequency: 'monthly',
+      dueDayOfMonth: 26,
+      amountPence: p(2150),
+      potId: pots.salary.id,
+      activeFrom: '2026-10-01',
+      actor,
+      now,
+    });
+    // A separate receipt after salary is not a payday. The projected fill on
+    // its date must still count in a longer Horizon window.
+    createSchedule(db, {
+      name: 'Other income',
+      kind: 'receipt',
+      frequency: 'monthly',
+      dueDayOfMonth: 30,
+      amountPence: p(50),
+      potId: pots.main.id,
+      activeFrom: '2026-10-01',
+      actor,
+      now,
+    });
+
+    const fill = (occurredDate: string, vehicleId: number, amountPence: number) =>
+      createPurchase(db, {
+        potId: pots.main.id,
+        totalPence: amountPence,
+        occurredDate,
+        occurredAt: new Date(`${occurredDate}T12:00:00Z`),
+        paidByPersonId: people.alex.id,
+        actor,
+        now,
+        lines: [
+          {
+            amountPence,
+            categoryId: fuelCategory,
+            targetKind: 'vehicle',
+            targetId: vehicleId,
+          },
+        ],
+      });
+    // The £90 weekly-shop event and £90 fuel event land on the next main
+    // salary day (26 November) and are both omitted there. A later £55 fill on
+    // the separate 30 November receipt date remains in the longer Horizon.
+    createPurchase(db, {
+      potId: pots.main.id,
+      totalPence: p(90),
+      occurredDate: '2026-10-29',
+      occurredAt: new Date('2026-10-29T12:00:00Z'),
+      paidByPersonId: people.alex.id,
+      actor,
+      now,
+      lines: [
+        {
+          amountPence: p(90),
+          categoryId: fixture.categoryId('Groceries', 'Weekly Shop'),
+          targetKind: 'household',
+        },
+      ],
+    });
+    fill('2026-10-27', vehicles.vehicleA.id, p(10));
+    fill('2026-10-31', vehicles.vehicleB.id, p(10));
+    setWeeklyGroceriesPence(db, p(90), actor, now);
+    setMonthlyFuelPence(db, vehicles.vehicleA.id, p(90), actor, now);
+    setMonthlyFuelPence(db, vehicles.vehicleB.id, p(55), actor, now);
+
+    const payday = getProjectionView(db, now);
+    assert.ok(payday);
+    assert.equal(payday.result.paydayDate, '2026-11-26');
+    assert.equal(payday.result.groceriesPence, p(270));
+    assert.equal(payday.result.fuelPence, 0);
+    assert.equal(payday.result.dayToDayPence, p(270));
+    assert.deepEqual(
+      payday.dayToDayEvents.map((event) => [event.kind, event.dueDate]),
+      [
+        ['groceries', '2026-11-05'],
+        ['groceries', '2026-11-12'],
+        ['groceries', '2026-11-19'],
+      ],
+    );
+    assert.equal(payday.result.perDay.at(-1)?.dayToDayPence, 0);
+    assert.equal(payday.result.projectedLowPence, p(730));
+
+    const till = getCycleOutlook(db, now);
+    assert.equal(till.incomeDate, '2026-11-26');
+    assert.equal(till.dayToDayPence, p(270));
+    assert.equal(till.freeToSpendPence, payday.result.projectedLowPence);
+
+    const horizon = getHorizonProjectionView(db, '2026-11-30', [], true, now);
+    assert.equal(horizon.result.groceriesPence, p(270));
+    assert.equal(horizon.result.fuelPence, p(55));
+    assert.equal(horizon.result.dayToDayPence, p(325));
+    assert.deepEqual(
+      horizon.dayToDayEvents.map((event) => [event.kind, event.vehicleId, event.dueDate]),
+      [
+        ['groceries', null, '2026-11-05'],
+        ['groceries', null, '2026-11-12'],
+        ['groceries', null, '2026-11-19'],
+        ['fuel', vehicles.vehicleB.id, '2026-11-30'],
+      ],
+    );
+    assert.equal(horizon.result.perDay.at(-1)?.dayToDayPence, p(55));
   });
 
   it('no checkpoint anywhere → snapshot with null household, no projection', async () => {

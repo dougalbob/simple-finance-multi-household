@@ -16,6 +16,7 @@ import {
   type PurchaseActionState,
 } from '@/lib/action-state';
 import { formatPence, parsePence, penceInput } from '@/lib/money';
+import { formatOrdinalDayMonthShortLocalDate } from '@/lib/time';
 import { formatPencePerLitre, parseLitres } from '@/lib/records/fuel-economy';
 import {
   remainderLineAmount,
@@ -64,14 +65,6 @@ export interface EntryCheckpoint {
   reportedAtLabel: string;
 }
 
-export interface EntryDueLine {
-  name: string;
-  amountPence: number;
-  dueDate: string;
-  /** Rendered on the server, e.g. "Fri 27 Sep". */
-  dueLabel: string;
-}
-
 export interface EntryPotOption {
   id: number;
   label: string;
@@ -81,6 +74,11 @@ export interface EntryPotOption {
   ownerPersonId: number | null;
   /** The last reported balance (SPEC §5); null when never checkpointed, or for cash. */
   checkpoint: EntryCheckpoint | null;
+  /**
+   * Bank-only: the latest ledger-derived running balance shown by All Transactions
+   * (checkpoint plus recorded movements after it), not the checkpoint figure.
+   */
+  currentAccountBalancePence: number | null;
   /**
    * Cash-only: when the pot was last counted, rendered on the server
    * ("2 days ago"). The amount itself is deliberately not sent — the till
@@ -94,8 +92,6 @@ export interface EntryPotOption {
   spendablePence: number | null;
   /** How far short of its own bills the pot would be; null when it covers them. */
   shortfallPence: number | null;
-  /** The bills that leave this pot before income lands, soonest first. */
-  dueBeforeIncome: EntryDueLine[];
 }
 
 /**
@@ -241,7 +237,7 @@ export function QuickEntry({
             Fuel
           </TabButton>
           <TabButton active={mode === 'balance'} onClick={() => setMode('balance')}>
-            Balance
+            Checkpoint
           </TabButton>
           <TabButton active={mode === 'move'} onClick={() => setMode('move')}>
             Move
@@ -266,7 +262,7 @@ const CASH_CHECKPOINT_ID = 'cash-checkpoint';
  * "Checkpoint cash" button that opens a small card — the signed-in person's
  * own cash pot (the pot whose Owner is them, decision 178), a counted
  * amount, and Save. The household checks cash far more often than they
- * expected, and digging through Balance's all-pots select every time was
+ * expected, and digging through the Checkpoint tab's all-pots select every time was
  * the friction. It is a disclosure above the description text, not a tab:
  * the four tabs stay as they are, and the card disappears entirely for a
  * household with no cash pots.
@@ -594,7 +590,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
    *
    * Nothing focuses on open (decision 151). The form used to land on the
    * supplier once the till could hear (decision 137), which on a real phone
-   * raised the keyboard and scrolled the Purchase / Fuel / Balance / Move tab
+   * raised the keyboard and scrolled the Purchase / Fuel / Checkpoint / Move tab
    * strip off the top of the screen. The household decides what to fill in by
    * tapping it, so the only focus moves left are answers to something they
    * did: a suggestion tapped, Enter in Supplier, Next, "+ Note", "Add
@@ -948,8 +944,8 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                   Choose the pot this came out of — no default is set, so nothing is preselected.
                 </p>
               ) : null}
-              <PotBalance pot={selectedPot} />
-              <CycleSummary cycle={data.cycle} />
+              <PotBalance pot={selectedPot} cycle={data.cycle} />
+              <CycleSummary cycle={data.cycle} today={data.today} />
 
               <SupplierTypeahead
                 inputRef={supplierRef}
@@ -1267,14 +1263,15 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
 }
 
 /**
- * The pot's own two figures (SPEC §7.7): the **last reported checkpoint** —
- * what the bank showed when the household last looked, with its age, exactly
- * as it is stored, not an estimate and not a projection — and, only when the
- * alarm is real, the shortfall that pot would hit before income lands. Cash
- * pots show nothing: the household counts the notes, and a stale number would
- * be worse than none (SPEC §15.1).
+ * The bank pot's checkpoint is the **last checkpoint** — exactly the amount
+ * reported, with its age, not a current balance. Beside it, show the
+ * ledger-derived current account balance from All Transactions (checkpoint
+ * plus recorded movements after it), never as a live bank connection. When
+ * the pot is short of its bills, show the bills-only shortfall; positive
+ * projected day-to-day spending adds a separate guide assuming it also comes
+ * from this pot. Cash pots show no amount (SPEC §15.1).
  */
-function PotBalance({ pot }: { pot: EntryPotOption | null }) {
+function PotBalance({ pot, cycle }: { pot: EntryPotOption | null; cycle: EntryCycleOutlook }) {
   if (pot === null) {
     return (
       <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
@@ -1305,7 +1302,6 @@ function PotBalance({ pot }: { pot: EntryPotOption | null }) {
       </p>
     );
   }
-  const firstDue = pot.dueBeforeIncome[0];
   return (
     <div className="rounded-lg bg-canvas p-2.5">
       {pot.checkpoint === null ? (
@@ -1314,7 +1310,7 @@ function PotBalance({ pot }: { pot: EntryPotOption | null }) {
         </p>
       ) : (
         <p className="text-xs text-ink-soft">
-          Last reported{' '}
+          Last checkpoint{' '}
           <span
             className="font-semibold tabular-nums text-ink"
             title={pot.checkpoint.reportedAtLabel}
@@ -1323,15 +1319,18 @@ function PotBalance({ pot }: { pot: EntryPotOption | null }) {
           </span>{' '}
           · {pot.checkpoint.ageLabel}
           <span className="text-ink-faint"> ({pot.checkpoint.reportedAtLabel})</span>
+          {pot.currentAccountBalancePence !== null
+            ? ` - current account balance ${formatPence(pot.currentAccountBalancePence)}`
+            : null}
         </p>
       )}
       {pot.shortfallPence !== null ? (
         <p className="mt-1.5 rounded-md bg-warning-100 px-2 py-1 text-xs font-semibold text-warning-900">
-          {pot.label} would be {formatPence(pot.shortfallPence)} short before income lands
-          {firstDue !== undefined
-            ? ` — ${firstDue.name} ${formatPence(firstDue.amountPence)} on ${firstDue.dueLabel}`
-            : ''}
-          .
+          Bills-only shortfall: {pot.label} would be {formatPence(pot.shortfallPence)} short before
+          income lands
+          {cycle.dayToDayPence > 0
+            ? ` — If projected day-to-day spending also comes from ${pot.label}, the guide shortfall is about ${formatPence(pot.shortfallPence + cycle.dayToDayPence)}`
+            : '.'}
         </p>
       ) : null}
     </div>
@@ -1339,7 +1338,7 @@ function PotBalance({ pot }: { pot: EntryPotOption | null }) {
 }
 
 /** The shared salary-window low and pace, not a separate spending-only sum. */
-function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
+function CycleSummary({ cycle, today }: { cycle: EntryCycleOutlook; today: string }) {
   if (cycle.incomeDate === null) {
     return (
       <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
@@ -1348,11 +1347,12 @@ function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
       </p>
     );
   }
+  const paydayLabel = formatOrdinalDayMonthShortLocalDate(cycle.incomeDate, today);
   if (cycle.freeToSpendPence === null) {
     return (
       <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
-        Lowest before pay day ({cycle.incomeDateLabel}): record a balance checkpoint and this figure
-        appears here.
+        Lowest before {paydayLabel} pay day: record a balance checkpoint and this figure appears
+        here.
       </p>
     );
   }
@@ -1363,7 +1363,7 @@ function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
         <span className="min-w-0 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          Lowest before pay day
+          Lowest before {paydayLabel} pay day
         </span>
         <span
           className={`min-w-0 text-xl font-semibold break-words tabular-nums sm:text-2xl ${negative ? 'text-negative' : 'text-ink'}`}
@@ -1372,12 +1372,17 @@ function CycleSummary({ cycle }: { cycle: EntryCycleOutlook }) {
         </span>
       </div>
       <p className="mt-1 text-xs text-ink-soft">
-        {cycle.paceText} Salary on {cycle.incomeDateLabel} is not counted as money you can spend.
+        {cycle.paceText}
+        {negative
+          ? null
+          : ` Salary on ${cycle.incomeDateLabel} is not counted as money you can spend.`}
       </p>
-      <p className="mt-1 text-xs text-ink-muted">
-        Projected liquid funds across bank and cash pots, not household net total — never a bank
-        balance.
-      </p>
+      {negative ? null : (
+        <p className="mt-1 text-xs text-ink-muted">
+          Projected liquid funds across bank and cash pots, not household net total — never a bank
+          balance.
+        </p>
+      )}
     </div>
   );
 }

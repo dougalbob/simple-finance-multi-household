@@ -24,12 +24,12 @@ import { ProjectionSection } from './projection-panel';
 export const dynamic = 'force-dynamic';
 
 /**
- * Dense overview (SPEC §15.2, decisions 74 and 164): money + tier banner,
- * projection with the “what's in this forecast” breakdown, due this week,
- * key dates, this month's spending by parent, and vehicles rolling 12.
- * Purchase review, transfer void, adding a pot and checkpoint history live
- * on their own pages. Quick entry is embedded here so the mobile home and
- * this page share the same entry code path.
+ * Dense overview (SPEC §15.2, decisions 74, 164 and 187): money + tier banner,
+ * top-line payday projection with a Horizon link, due this week, key dates,
+ * this month's spending by parent, and vehicles rolling 12. Horizon owns the
+ * dated forecast and day-by-day table. Purchase review, transfer void, adding
+ * a pot and checkpoint history live on their own pages. Quick Entry stays
+ * beside the projection and shares its code path with the phone home.
  */
 export default async function OverviewPage() {
   const user = await currentUserFromRequest();
@@ -88,8 +88,8 @@ export default async function OverviewPage() {
               <p className="mt-1 text-sm text-ink-soft">
                 The liquidity projection appears once a bank or cash pot has a balance checkpoint
                 and an expected income schedule (for example a monthly salary). Record a checkpoint
-                in Quick Entry → Balance or on Accounts, Pots &amp; Checkpoints, then add the income
-                schedule in Recurring.
+                in Quick Entry → Checkpoint or on Accounts, Pots &amp; Checkpoints, then add the
+                income schedule in Recurring.
               </p>
             </section>
           )}
@@ -188,7 +188,7 @@ function MoneyRow({
       </div>
       {money.householdAvailablePence === null ? (
         <p className="text-sm text-ink-soft">
-          Record a balance checkpoint in Quick Entry → Balance or on Accounts, Pots &amp;
+          Record a balance checkpoint in Quick Entry → Checkpoint or on Accounts, Pots &amp;
           Checkpoints and the household estimate appears here. Unreported pots never get an estimate
           — the app does not guess balances.
         </p>

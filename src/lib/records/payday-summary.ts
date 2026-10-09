@@ -2,27 +2,27 @@ import { formatPence } from '../money';
 import { formatDayMonthLocalDate, toLocalDateString } from '../time';
 import { addDaysLocal } from './dates';
 import type { ProjectionView } from './money-view';
-import type { WarningTier } from './projection';
 import type { ScheduleKind } from './schedules';
 
 /**
- * The payday summary (v0.36.0, decision 186): the short, plain-English card
- * the household asked for on the phone home, and the same sentences for the
- * pot watch wherever it is shown. Everything the old projection panel
- * expanded into — the day-by-day table, the projected shops and fills, the
- * expected support list, the weekly pace — lives on Horizon, so the home
- * card states the four facts and links there:
+ * The payday summary (v0.37.0 follow-up, decision 187): the short,
+ * plain-English card the household asked for on the phone home. The day-by-day
+ * table, projected shops/fills, expected-support list and weekly pace live on
+ * Horizon; the card keeps four facts and links there:
  *
  *     Next pay day is 26th October (18 days from today)
  *     Based on a current household balance of £242.22 in bank and cash pots
  *     and no additional unplanned spending, the household low would reach
- *     -£165.25. No overdraft fees would be incurred.
- *     Plan a transfer? Natwest will run about £850.00 short of its upcoming
- *     Direct Debits (next due 21st October — Council tax, Mortgage and Water
- *     Bill). Aim to transfer at least £850.00 into Natwest by 16th October.
+ *     -£165.25.
+ *     Plan a transfer? Natwest has the worst bills-only shortfall: £850.00
+ *     (upcoming Direct Debits next due 21st October — Council tax, Mortgage
+ *     and Water Bill). Aim to transfer at least £850.00 into Natwest by
+ *     16th October.
  *
- * Pure and framework-free: the wording is pinned in Node, so a number that
- * moves is a failed test rather than a sentence nobody re-read.
+ * When day-to-day projection is positive, the transfer line adds a separate
+ * named-pot guide, explicitly not a strict allocation. Pure and framework-
+ * free: the wording is pinned in Node, so a number that moves is a failed
+ * test rather than a sentence nobody re-read.
  */
 
 /**
@@ -67,9 +67,8 @@ export interface PaydaySummaryInput {
    */
   availableNowPence: number;
   projectedLowPence: number | null;
-  tier: WarningTier;
-  /** The configured bank warning threshold, when there is one (SPEC §8). */
-  warningThresholdPence: number | null;
+  /** Projected shops and fills through payday, excluded from pot watches (SPEC §7.3/§7.5). */
+  dayToDayPence: number;
   /** Pots that would run short of their own bills before payday (SPEC §7.5). */
   transfers: ReadonlyArray<PaydayTransferWatch>;
 }
@@ -79,9 +78,7 @@ export interface PaydaySummary {
   paydayLine: string;
   /** "Based on a current household balance of …", or null with no window. */
   lowLine: string | null;
-  /** The fee sentence for the tier — "No overdraft fees would be incurred." */
-  overdraftLine: string | null;
-  /** One sentence per pot that would run short; empty when every pot covers its bills. */
+  /** The worst bills-only shortfall, with an optional day-to-day guide. */
   transfers: Array<{ potId: number; text: string }>;
   /** The day before payday — the date Horizon's look-ahead opens on. */
   horizonThroughDate: string;
@@ -121,8 +118,7 @@ export function paydaySummaryFromView(view: ProjectionView): PaydaySummary | nul
     paydayDays: result.days,
     availableNowPence: result.availableNowPence,
     projectedLowPence: result.projectedLowPence,
-    tier: result.tier,
-    warningThresholdPence: result.warningThresholdPence,
+    dayToDayPence: result.dayToDayPence,
     transfers: result.potWatches.map((watch) => ({
       potId: watch.potId,
       potLabel: view.potLabels.get(watch.potId) ?? `Pot ${watch.potId}`,
@@ -147,40 +143,48 @@ export function buildPaydaySummary(input: PaydaySummaryInput): PaydaySummary {
         : `Based on a current household balance of ${formatPence(input.availableNowPence)} in bank ` +
           `and cash pots and no additional unplanned spending, the household low would reach ` +
           `${formatPence(projectedLowPence)}.`,
-    overdraftLine:
-      projectedLowPence === null
-        ? null
-        : overdraftSentence(input.tier, input.warningThresholdPence),
-    transfers: input.transfers.map((watch) => ({
-      potId: watch.potId,
-      text: transferSentence(watch, today),
-    })),
+    transfers: worstTransfer(input.transfers, today, input.dayToDayPence),
     horizonThroughDate: addDaysLocal(paydayDate, -1),
   };
 }
 
-/**
- * The fee sentence follows the tier (SPEC §8). Below zero but inside the
- * household's own threshold is exactly the state the household asked to be
- * reassured about — the low is covered, so no fee. Past the threshold the app
- * says so plainly instead of promising fees it cannot know about.
- */
-function overdraftSentence(tier: WarningTier, warningThresholdPence: number | null): string {
-  if (tier !== 'warning') return 'No overdraft fees would be incurred.';
-  return warningThresholdPence === null
-    ? 'Overdraft fees are likely.'
-    : `Overdraft fees are likely — the low passes the configured ${formatPence(warningThresholdPence)} bank warning threshold.`;
+function worstTransfer(
+  transfers: ReadonlyArray<PaydayTransferWatch>,
+  today: string,
+  dayToDayPence: number,
+): Array<{ potId: number; text: string }> {
+  const worst = transfers.reduce<PaydayTransferWatch | null>(
+    (selected, candidate) =>
+      selected === null || candidate.shortfallPence > selected.shortfallPence
+        ? candidate
+        : selected,
+    null,
+  );
+  return worst === null
+    ? []
+    : [{ potId: worst.potId, text: transferSentence(worst, today, dayToDayPence) }];
 }
 
-function transferSentence(watch: PaydayTransferWatch, today: string): string {
+function transferSentence(
+  watch: PaydayTransferWatch,
+  today: string,
+  dayToDayPence: number,
+): string {
   const amount = formatPence(watch.shortfallPence);
+  const dayToDayGuide =
+    dayToDayPence > 0
+      ? ` If projected day-to-day spending also comes from ${watch.potLabel}, the guide shortfall ` +
+        `is about ${formatPence(watch.shortfallPence + dayToDayPence)} — a guide, not a strict ` +
+        `pot allocation.`
+      : '';
   if (watch.earliestDueDate === null) {
-    // A pot already below zero with nothing left to leave it: the shortfall
+    // A pot already below zero with no bills left to leave it: the shortfall
     // is the reported balance itself, and there is no due date to plan to.
     return (
-      `${watch.potLabel} is already ${formatPence(-watch.estimatePence)} overdrawn and has no ` +
-      `bills left in this window. Aim to transfer at least ${amount} into ${watch.potLabel} as ` +
-      `soon as you can.`
+      `${watch.potLabel} has the worst bills-only shortfall: ${amount}. It is already ` +
+      `${formatPence(-watch.estimatePence)} overdrawn, with no bills left in this window.` +
+      `${dayToDayGuide} Aim to transfer at least ${amount} into ${watch.potLabel} as soon as ` +
+      `you can.`
     );
   }
   const due = formatDayMonthLocalDate(watch.earliestDueDate, today);
@@ -189,9 +193,9 @@ function transferSentence(watch: PaydayTransferWatch, today: string): string {
   const deadline =
     leadDate <= today ? 'as soon as you can' : `by ${formatDayMonthLocalDate(leadDate, today)}`;
   return (
-    `${watch.potLabel} will run about ${amount} short of its upcoming ` +
-    `${commitmentNoun(watch.commitmentKinds)} (next due ${due}${bills === '' ? '' : ` — ${bills}`})` +
-    `. Aim to transfer at least ${amount} into ${watch.potLabel} ${deadline}.`
+    `${watch.potLabel} has the worst bills-only shortfall: ${amount} (upcoming ` +
+    `${commitmentNoun(watch.commitmentKinds)} next due ${due}${bills === '' ? '' : ` — ${bills}`}).` +
+    `${dayToDayGuide} Aim to transfer at least ${amount} into ${watch.potLabel} ${deadline}.`
   );
 }
 

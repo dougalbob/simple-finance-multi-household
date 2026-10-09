@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { auditEntries } from '../src/lib/db/schema';
 import { signInEmailChoices } from '../src/lib/auth/sign-in-choices';
 import { loadAppConfig } from '../src/lib/config';
+import { listPotActivity } from '../src/lib/records/activity';
 import { buildEntryData, entryDefaults } from '../src/lib/records/entry-view';
 import { listFuelSupplierIds } from '../src/lib/records/fuel';
 import {
@@ -152,6 +153,58 @@ describe('signInEmailChoices', () => {
       'dev@example.com',
       'old@example.com',
     ]);
+  });
+});
+
+describe('Quick Entry current account balance from All Transactions', () => {
+  let fx: HouseholdFixture;
+  before(async () => {
+    fx = await createHouseholdFixture();
+  });
+  after(() => fx.close());
+
+  it('keeps the checkpoint separate from the latest running balance', () => {
+    const now = new Date('2026-09-20T17:00:00Z');
+    const potId = fx.pots.main.id;
+    addCheckpoint(fx.db, {
+      potId,
+      amountPence: 31200,
+      effectiveDate: '2026-09-18',
+      actor: 'alex@example.com',
+      now,
+    });
+    createPurchase(fx.db, {
+      potId,
+      totalPence: 4000,
+      supplierName: 'Test shop',
+      occurredDate: '2026-09-19',
+      lines: [
+        {
+          amountPence: 4000,
+          categoryId: fx.categoryId('Groceries', 'Weekly Shop'),
+          targetKind: 'household',
+        },
+      ],
+      actor: 'alex@example.com',
+      now,
+    });
+
+    const pot = buildEntryData(fx.db, now).pots.find((entry) => entry.id === potId);
+    assert.ok(pot);
+    assert.equal(pot.checkpoint?.amountPence, 31200);
+
+    const activity = listPotActivity(fx.db, {
+      potId,
+      dateFrom: '2026-09-01',
+      dateTo: '2026-09-20',
+    });
+    const latestMovement = activity.entries.find(
+      (entry) => entry.kind === 'row' && entry.row.runningBalancePence !== null,
+    );
+    assert.ok(latestMovement?.kind === 'row');
+    assert.equal(latestMovement.row.runningBalancePence, 27200);
+    assert.equal(pot.currentAccountBalancePence, latestMovement.row.runningBalancePence);
+    assert.notEqual(pot.currentAccountBalancePence, pot.checkpoint?.amountPence);
   });
 });
 
