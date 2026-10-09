@@ -283,7 +283,7 @@ export default async function HorizonPage({
         </>
       ) : (
         <p className="mb-4 rounded-lg border border-dashed border-border-strong bg-surface p-4 text-sm text-ink-soft">
-          {lowLine} Record one on Quick Entry → Balance or Accounts, Pots &amp; Checkpoints. Card
+          {lowLine} Record one on Quick Entry → Checkpoint or Accounts, Pots &amp; Checkpoints. Card
           balances are excluded from this liquidity projection.
         </p>
       )}

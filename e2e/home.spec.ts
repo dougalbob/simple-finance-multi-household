@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { addDaysIso, londonToday, waitForTill } from './support';
+import { addDaysIso, waitForTill } from './support';
+import { formatPence } from '../src/lib/money';
 import { APP_RELEASE_STAGE, APP_VERSION } from '../src/lib/version';
+import { seedPaydayScenario } from './payday-scenario';
 
 /**
  * Mobile acceptance path (blueprint §12: "desktop and mobile primary paths are
@@ -170,7 +172,7 @@ test.describe('mobile quick entry', () => {
     await page.goto('/');
     await waitForTill(page);
     const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
-    await entry.getByRole('tab', { name: 'Balance' }).click();
+    await entry.getByRole('tab', { name: 'Checkpoint' }).click();
     await entry.getByLabel('Balance now').fill('987.65');
     await entry.getByRole('button', { name: 'Save checkpoint' }).click();
     await expect(entry.getByRole('status')).toContainText(/checkpoint/i, { timeout: 30_000 });
@@ -522,19 +524,22 @@ test.describe('mobile quick entry', () => {
     const pot = entry.getByLabel('Pot');
     await expect(pot.locator('option:checked')).toHaveText('Main account');
 
-    // The bank's last reported figure — labelled as a checkpoint, with a
-    // pound amount, its age and the time it was reported, and never presented
-    // as a live balance. (The figure itself moves during this spec file: an
-    // earlier test records a checkpoint against the same default pot.)
-    const reported = entry.getByText(/Last reported/);
-    await expect(reported).toBeVisible();
-    await expect(reported).toContainText(/Last reported £[\d,]+\.\d{2}/);
-    await expect(reported).toContainText(/ago|just now/);
+    // Keep the bank's last checkpoint visibly distinct from the current
+    // account balance. Both the report age/time and the separate
+    // All Transactions running-balance figure are present. (The checkpoint
+    // itself moves during this spec file: an earlier test records one.)
+    const checkpoint = entry.getByText(/Last checkpoint/);
+    await expect(checkpoint).toBeVisible();
+    await expect(checkpoint).toContainText(/Last checkpoint £[\d,]+\.\d{2}/);
+    await expect(checkpoint).toContainText(/ago|just now/);
+    await expect(checkpoint).toContainText(/current account balance £[\d,]+\.\d{2}/);
 
     // ...and the figure that stops the mortgage being a surprise three days
     // before payday: what is left when everything expected to leave has left,
     // counting expected support but not spendable salary (SPEC §7.7).
-    await expect(entry.getByText('Lowest before pay day')).toBeVisible();
+    await expect(
+      entry.getByText(/Lowest before \d{1,2}(?:st|nd|rd|th) [A-Z][a-z]{2}(?: \d{4})? pay day/),
+    ).toBeVisible();
     await expect(
       entry.getByText(/Salary on .* is not counted as money you can spend/),
     ).toBeVisible();
@@ -543,8 +548,10 @@ test.describe('mobile quick entry', () => {
     // A cash pot shows no balance at all: the household counts the notes.
     await pot.selectOption({ label: "Alex's cash" });
     await expect(entry.getByText(/no balance is shown for cash/i)).toBeVisible();
-    await expect(entry.getByText(/Last reported/)).toHaveCount(0);
-    await expect(entry.getByText('Lowest before pay day')).toBeVisible();
+    await expect(entry.getByText(/Last checkpoint/)).toHaveCount(0);
+    await expect(
+      entry.getByText(/Lowest before \d{1,2}(?:st|nd|rd|th) [A-Z][a-z]{2}(?: \d{4})? pay day/),
+    ).toBeVisible();
   });
 
   test('suggests suppliers inline, filters as you type and moves on to the amount', async ({
@@ -617,7 +624,9 @@ test.describe('mobile quick entry', () => {
     // the type tabs, the pot, and what is left before income lands.
     await expect(entry.getByRole('tab', { name: 'Purchase' })).toBeVisible();
     await expect(entry.getByLabel('Pot').locator('option:checked')).toHaveText('Main account');
-    await expect(entry.getByText('Lowest before pay day')).toBeVisible();
+    await expect(
+      entry.getByText(/Lowest before \d{1,2}(?:st|nd|rd|th) [A-Z][a-z]{2}(?: \d{4})? pay day/),
+    ).toBeVisible();
 
     // The tab strip sits inside the viewport — a different mode is one tap
     // away, which is the whole point of opening here.
@@ -658,7 +667,7 @@ test.describe('mobile quick entry', () => {
     await expectNoFieldFocused(page);
   });
 
-  test('choosing a type does not grab a field: Fuel, Balance and Move wait to be tapped', async ({
+  test('choosing a type does not grab a field: Fuel, Checkpoint and Move wait to be tapped', async ({
     page,
   }) => {
     await page.goto('/');
@@ -667,13 +676,13 @@ test.describe('mobile quick entry', () => {
 
     // The same rule as the opening page (decision 151), one level down:
     // choosing a *type* is not choosing a field. The Fuel amount and the
-    // Balance figure used to autofocus as the tab appeared, with the same
+    // Checkpoint amount used to autofocus as the tab appeared, with the same
     // keyboard-and-scroll cost on a phone.
     await entry.getByRole('tab', { name: 'Fuel' }).click();
     await expect(entry.getByLabel('Fuel amount')).toBeVisible();
     await expectNoFieldFocused(page);
 
-    await entry.getByRole('tab', { name: 'Balance' }).click();
+    await entry.getByRole('tab', { name: 'Checkpoint' }).click();
     await expect(entry.getByLabel('Balance now')).toBeVisible();
     await expectNoFieldFocused(page);
 
@@ -683,7 +692,7 @@ test.describe('mobile quick entry', () => {
 
     // Tapping the field itself still works, and still focuses it — the
     // household's tap, not the page's idea.
-    await entry.getByRole('tab', { name: 'Balance' }).click();
+    await entry.getByRole('tab', { name: 'Checkpoint' }).click();
     const balance = entry.getByLabel('Balance now');
     await balance.click();
     await expect(balance).toBeFocused();
@@ -760,7 +769,7 @@ test.describe('mobile quick entry', () => {
     problems.push(...(await tooSmall('Purchase panel 2')));
     await showPanel(entry, 0);
     await page.waitForTimeout(400);
-    for (const tab of ['Fuel', 'Balance', 'Move']) {
+    for (const tab of ['Fuel', 'Checkpoint', 'Move']) {
       await entry.getByRole('tab', { name: tab }).click();
       problems.push(...(await tooSmall(tab)));
     }
@@ -796,7 +805,11 @@ test.describe('mobile quick entry', () => {
       // Mid-screen, clear of the sticky page navigation — and measured only
       // once the scroll has stopped (`settledBox`), because `drag()` needs
       // coordinates that are still true when the touch lands.
-      const box = await settledBox(page, entry.getByText('Lowest before pay day'), 'balance card');
+      const box = await settledBox(
+        page,
+        entry.getByText(/Lowest before \d{1,2}(?:st|nd|rd|th) [A-Z][a-z]{2}(?: \d{4})? pay day/),
+        'balance card',
+      );
       return { x: box.x + box.width / 2, y: box.y + 4 };
     };
 
@@ -867,7 +880,7 @@ test.describe('mobile quick entry', () => {
       await showPanel(entry, 1);
       await noOverflow(`${setup.label} purchase panel 2`);
       await showPanel(entry, 0);
-      for (const tab of ['Fuel', 'Balance', 'Move']) {
+      for (const tab of ['Fuel', 'Checkpoint', 'Move']) {
         await entry.getByRole('tab', { name: tab }).click();
         await noOverflow(`${setup.label} ${tab}`);
       }
@@ -927,42 +940,107 @@ test.describe('mobile quick entry', () => {
     await expect(page.getByRole('heading', { name: /Schedules, renewals/ })).toHaveCount(0);
   });
 
+  test('on a laptop the home till sits above the existing dashboard', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 950 });
+    await page.goto('/');
+    await waitForTill(page);
+
+    const till = page.getByRole('region', { name: /Record it while it is fresh/i });
+    const money = page.locator('section[aria-labelledby="money-heading"]');
+    await expect(till).toBeVisible();
+    await expect(money.getByText('Household total now', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Next pay day is/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Due this week' })).toBeVisible();
+
+    const tillBox = await till.boundingBox();
+    const moneyBox = await money.boundingBox();
+    expect(tillBox).not.toBeNull();
+    expect(moneyBox).not.toBeNull();
+    if (tillBox === null || moneyBox === null) return;
+    expect(tillBox.y).toBeLessThan(moneyBox.y);
+    expect(tillBox.y + tillBox.height).toBeLessThan(moneyBox.y);
+    await expectNoFieldFocused(page);
+  });
+
   test('the payday card states the facts and opens Horizon the day before payday', async ({
     page,
   }) => {
-    // The payday is the next scheduled income; read it from the Income page,
-    // the same way the Horizon spec does, so no date logic is duplicated here.
-    await page.goto('/income');
-    const summary = page.locator('section[aria-label="Income summary"]');
-    const payday = /(\d{4}-\d{2}-\d{2}) · into/.exec(await summary.innerText())?.[1] ?? '';
-    expect(payday).not.toBe('');
-    const dayBefore = addDaysIso(payday, -1);
-    const tomorrow = addDaysIso(londonToday(), 1);
-    const expected = dayBefore < tomorrow ? tomorrow : dayBefore;
+    // Isolated fictional household: Main £242.22, salary due on the 26th,
+    // Natwest direct debits on the 21st, and a projected £90 fuel item on
+    // payday to prove that the shared filter applies to every read surface.
+    const { paydayDate, natwestBillsOnlyShortfallPence } = seedPaydayScenario();
+    const dayBefore = addDaysIso(paydayDate, -1);
 
     await page.goto('/');
     await waitForTill(page);
+    const till = page.getByRole('region', { name: /Record it while it is fresh/i });
+    const mainCheckpoint = till.getByText('£242.22', { exact: true });
+    await expect(mainCheckpoint).toBeVisible();
+    await expect(mainCheckpoint).toHaveAttribute(
+      'title',
+      /^\d{1,2} [A-Za-z]{3} \d{4}, \d{1,2}:\d{2}$/,
+    );
+    await expect(till.getByText('Lowest before 26th Oct pay day')).toBeVisible();
+    await expect(till).toContainText(
+      'Projected shortfall: -£96.35 before payday. No discretionary spending is available at this time.',
+    );
+    await expect(till.getByText(/No weekly allowance/)).toHaveCount(0);
+    await expect(till.getByText(/Salary on .* is not counted as money you can spend/)).toHaveCount(
+      0,
+    );
+    await expect(till.getByText(/Projected liquid funds across bank and cash pots/)).toHaveCount(0);
+
     const card = page.locator('section[aria-labelledby="payday-summary-heading"]');
     await expect(card.getByText('Payday projection', { exact: true })).toBeVisible();
-    // "Next pay day is 26th October (18 days from today)" — the ordinal, the
-    // month name and the day count, never a raw ISO date (decision 186).
     await expect(card.getByRole('heading', { level: 2 })).toHaveText(
       /^Next pay day is \d{1,2}(?:st|nd|rd|th) [A-Z][a-z]+(?: \d{4})? \(\d+ days? from today\)$/,
     );
-    // The balance is the liquid one the projection starts from — bank and
-    // cash pots — never the card-debt net total.
     await expect(
       card.getByText(
         /Based on a current household balance of £[\d,]+\.\d{2} in bank and cash pots and no additional unplanned spending, the household low would reach -?£[\d,]+\.\d{2}\./,
       ),
     ).toBeVisible();
+    await expect(card).toContainText(
+      /Plan a transfer\? Natwest has the worst bills-only shortfall:/,
+    );
+    await expect(card).not.toContainText(/overdraft fee/i);
 
-    // The detail lives on Horizon: the link carries the look-ahead date, and
-    // the page it opens really is set to that date.
-    const horizon = card.getByRole('link', { name: 'Horizon', exact: true });
-    await expect(horizon).toHaveAttribute('href', `/horizon?through=${expected}`);
-    await horizon.click();
-    await expect(page.locator('#horizon-through')).toHaveValue(expected);
+    // The till's selected-pot checkpoint and pot watch retain their own labels.
+    await till.getByLabel('Pot').selectOption({ label: 'Natwest' });
+    await expect(till).toContainText('Last checkpoint £312.00');
+    await expect(till).toContainText('current account balance £312.00');
+    await expect(till).toContainText(
+      `Bills-only shortfall: Natwest would be ${formatPence(natwestBillsOnlyShortfallPence)} short before income lands.`,
+    );
+    await expect(till).not.toContainText('Scenario Council Tax');
+    await expect(till).not.toContainText(
+      /If projected day-to-day spending also comes from Natwest/,
+    );
+
+    // Overview keeps the payday figures, but its day-to-day total excludes the
+    // £90 event on salary day. Horizon excludes that same event on the same day.
+    await page.goto('/overview');
+    const projection = page.locator('section[aria-labelledby="projection-heading"]');
+    await expect(projection).toContainText('Projected day-to-day');
+    await expect(projection).toContainText('(groceries £0.00 + fuel £0.00)');
+    await expect(projection).not.toContainText('£90.00');
+
+    await page.goto('/');
+    await waitForTill(page);
+    const paydayCard = page.locator('section[aria-labelledby="payday-summary-heading"]');
+    const paydayHorizon = paydayCard.getByRole('link', { name: 'Horizon', exact: true });
+    await expect(paydayHorizon).toHaveAttribute('href', `/horizon?through=${dayBefore}`);
+    await paydayHorizon.click();
+    await expect(page.locator('#horizon-through')).toHaveValue(dayBefore);
+
+    await page.goto(`/horizon?through=${paydayDate}`);
+    await expect(page.getByRole('heading', { name: 'How far the money would go' })).toBeVisible();
+    const paydayRow = page.getByRole('row', { name: new RegExp(paydayDate) });
+    await expect(paydayRow).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: `Projected shops and fills on ${paydayDate}` }),
+    ).toHaveCount(0);
+    await expectNoFieldFocused(page);
   });
 
   test('purchase filters start collapsed and stay inside the card', async ({ page }) => {

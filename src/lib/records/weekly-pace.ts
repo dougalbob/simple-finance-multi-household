@@ -15,7 +15,9 @@ export function weeklyPacePence(
 
 export function weeklyPaceText(today: string, lowDate: string | null, low: number | null): string {
   if (low === null) return '';
-  if (low < 0) return `Projected shortfall: ${formatPence(-low)} below zero. No weekly allowance.`;
+  if (low < 0) {
+    return `Projected shortfall: ${formatPence(low)} before payday. No discretionary spending is available at this time.`;
+  }
   if (low === 0) return 'The forecast already touches zero. No weekly allowance.';
   const pace = weeklyPacePence(today, lowDate, low);
   if (pace === null)

@@ -11,12 +11,11 @@ import {
 import type { ProjectionView } from '../src/lib/records/money-view';
 
 /**
- * The payday summary (v0.36.0, decision 186): the household's own worked
- * example, pinned to the character. Today is 8 October 2026; the next salary
- * lands on the 26th (18 days); the household's liquid balance is £242.22; the
- * projection's low is −£165.25 (below zero, inside the £250 threshold, so no
- * fee); and Natwest is £850.00 short of its direct debits due on the 21st, so
- * the money should move by the 16th (five days early, TRANSFER_LEAD_DAYS).
+ * The payday summary (v0.37.0 follow-up, decision 187): a short, plain-English card
+ * with the corrected main-salary-day projection, the household low, the worst
+ * bills-only pot shortfall and a qualified day-to-day-inclusive guide. Payday
+ * is the 26th; Natwest's direct debits are due on the 21st, so the five-day
+ * transfer lead is the 16th.
  */
 
 const NATWEST_BILLS = [
@@ -45,15 +44,14 @@ function input(overrides: Partial<PaydaySummaryInput> = {}): PaydaySummaryInput 
     paydayDays: 18,
     availableNowPence: 24222,
     projectedLowPence: -16525,
-    tier: 'heads-up',
-    warningThresholdPence: 25000,
+    dayToDayPence: 0,
     transfers: [],
     ...overrides,
   };
 }
 
 describe('payday summary: the household’s worked example', () => {
-  it('states the pay day, the low and the fee verdict', () => {
+  it('states payday, the liquid low and the day-before-payday Horizon date', () => {
     const summary = buildPaydaySummary(input());
     assert.equal(summary.paydayLine, 'Next pay day is 26th October (18 days from today)');
     assert.equal(
@@ -61,22 +59,27 @@ describe('payday summary: the household’s worked example', () => {
       'Based on a current household balance of £242.22 in bank and cash pots and no additional ' +
         'unplanned spending, the household low would reach -£165.25.',
     );
-    assert.equal(summary.overdraftLine, 'No overdraft fees would be incurred.');
     assert.equal(summary.horizonThroughDate, '2026-10-25');
+    assert.equal('overdraftLine' in summary, false);
   });
 
-  it('asks for the transfer by five days before the earliest bill', () => {
+  it('asks for the bills-only transfer five days before the earliest bill', () => {
     assert.equal(TRANSFER_LEAD_DAYS, 5);
     const summary = buildPaydaySummary(input({ transfers: [watch()] }));
     assert.deepEqual(summary.transfers, [
       {
         potId: 1,
         text:
-          'Natwest will run about £850.00 short of its upcoming Direct Debits (next due 21st ' +
-          'October — Council tax, Mortgage and Water Bill). Aim to transfer at least £850.00 into ' +
-          'Natwest by 16th October.',
+          'Natwest has the worst bills-only shortfall: £850.00 (upcoming Direct Debits next due ' +
+          '21st October — Council tax, Mortgage and Water Bill). Aim to transfer at least £850.00 ' +
+          'into Natwest by 16th October.',
       },
     ]);
+  });
+
+  it('keeps a negative low in the conventional -£96.35 order', () => {
+    const summary = buildPaydaySummary(input({ projectedLowPence: -9635 }));
+    assert.match(summary.lowLine ?? '', /household low would reach -£96\.35\.$/);
   });
 });
 
@@ -93,64 +96,72 @@ describe('payday summary: the pay day line', () => {
         paydayDate: '2027-01-26',
         paydayDays: 27,
         projectedLowPence: 12000,
-        tier: 'none',
       }),
     );
     assert.equal(summary.paydayLine, 'Next pay day is 26th January 2027 (27 days from today)');
-    // The horizon date is payday − 1, whatever the year.
     assert.equal(summary.horizonThroughDate, '2027-01-25');
   });
-});
 
-describe('payday summary: the fee verdict follows the tier', () => {
-  it('heads-up inside the threshold: no fee', () => {
-    const summary = buildPaydaySummary(input({ tier: 'heads-up', projectedLowPence: -1000 }));
-    assert.equal(summary.overdraftLine, 'No overdraft fees would be incurred.');
-  });
-
-  it('above zero throughout: no fee', () => {
-    const summary = buildPaydaySummary(input({ tier: 'none', projectedLowPence: 45000 }));
-    assert.equal(summary.overdraftLine, 'No overdraft fees would be incurred.');
-  });
-
-  it('past the configured threshold: says so, with the threshold figure', () => {
-    const summary = buildPaydaySummary(
-      input({ tier: 'warning', projectedLowPence: -57126, warningThresholdPence: 25000 }),
-    );
-    assert.equal(
-      summary.overdraftLine,
-      'Overdraft fees are likely — the low passes the configured £250.00 bank warning threshold.',
-    );
-  });
-
-  it('past the threshold with nothing configured still says fees are likely', () => {
-    const summary = buildPaydaySummary(
-      input({ tier: 'warning', projectedLowPence: -57126, warningThresholdPence: null }),
-    );
-    assert.equal(summary.overdraftLine, 'Overdraft fees are likely.');
-  });
-
-  it('no window to project: no low sentence and no fee sentence', () => {
-    const summary = buildPaydaySummary(input({ projectedLowPence: null, tier: 'none' }));
+  it('has no low sentence when there is no window to project', () => {
+    const summary = buildPaydaySummary(input({ projectedLowPence: null }));
     assert.equal(summary.lowLine, null);
-    assert.equal(summary.overdraftLine, null);
   });
 });
 
 describe('payday summary: the transfer sentence', () => {
-  it('names standing orders when that is what the pot has', () => {
-    const summary = buildPaydaySummary(input({ transfers: [watch({ commitmentKinds: ['so'] })] }));
-    assert.match(summary.transfers[0]!.text, /short of its upcoming standing orders \(next due/);
+  it('adds a qualified guide when projected day-to-day spending is positive', () => {
+    const summary = buildPaydaySummary(input({ transfers: [watch()], dayToDayPence: 4750 }));
+    assert.equal(
+      summary.transfers[0]?.text,
+      'Natwest has the worst bills-only shortfall: £850.00 (upcoming Direct Debits next due ' +
+        '21st October — Council tax, Mortgage and Water Bill). If projected day-to-day spending ' +
+        'also comes from Natwest, the guide shortfall is about £897.50 — a guide, not a strict ' +
+        'pot allocation. Aim to transfer at least £850.00 into Natwest by 16th October.',
+    );
   });
 
-  it('names both when the pot has both', () => {
+  it('uses the day-to-day guide only for the named pot, not a household allocation', () => {
+    const summary = buildPaydaySummary(
+      input({
+        transfers: [watch({ potLabel: 'Main account' })],
+        dayToDayPence: 12345,
+      }),
+    );
+    assert.match(summary.transfers[0]?.text ?? '', /also comes from Main account/);
+    assert.match(summary.transfers[0]?.text ?? '', /guide, not a strict pot allocation/);
+    assert.doesNotMatch(summary.transfers[0]?.text ?? '', /across the household/);
+  });
+
+  it('names the pot with the greatest bills-only shortfall, not the greatest guide', () => {
+    const natwest = watch({ shortfallPence: 85000 });
+    const main = watch({
+      potId: 2,
+      potLabel: 'Main account',
+      shortfallPence: 70000,
+      estimatePence: 5000,
+    });
+    const summary = buildPaydaySummary(input({ transfers: [main, natwest], dayToDayPence: 30000 }));
+    assert.equal(summary.transfers.length, 1);
+    assert.equal(summary.transfers[0]?.potId, 1);
+    assert.match(summary.transfers[0]?.text ?? '', /^Natwest has the worst bills-only shortfall/);
+  });
+
+  it('does not show the day-to-day guide when there is no projected spending', () => {
+    const summary = buildPaydaySummary(input({ transfers: [watch()], dayToDayPence: 0 }));
+    assert.doesNotMatch(summary.transfers[0]?.text ?? '', /guide shortfall/);
+    assert.doesNotMatch(summary.transfers[0]?.text ?? '', /strict pot allocation/);
+  });
+
+  it('names standing orders when that is what the pot has', () => {
+    const summary = buildPaydaySummary(input({ transfers: [watch({ commitmentKinds: ['so'] })] }));
+    assert.match(summary.transfers[0]?.text ?? '', /upcoming standing orders next due/);
+  });
+
+  it('names both when the pot has both kinds of bill', () => {
     const summary = buildPaydaySummary(
       input({ transfers: [watch({ commitmentKinds: ['dd', 'so'] })] }),
     );
-    assert.match(
-      summary.transfers[0]!.text,
-      /short of its upcoming Direct Debits and standing orders \(next due/,
-    );
+    assert.match(summary.transfers[0]?.text ?? '', /upcoming Direct Debits and standing orders/);
   });
 
   it('counts the bills it does not name', () => {
@@ -169,36 +180,37 @@ describe('payday summary: the transfer sentence', () => {
         ],
       }),
     );
-    assert.match(summary.transfers[0]!.text, /— Council tax, Mortgage, Water Bill and 2 more\)/);
+    assert.match(
+      summary.transfers[0]?.text ?? '',
+      /— Council tax, Mortgage, Water Bill and 2 more\)/,
+    );
   });
 
-  it('drops the bracket when there is nothing to name', () => {
+  it('drops the bill list when there is nothing to name', () => {
     const summary = buildPaydaySummary(input({ transfers: [watch({ earliestCommitments: [] })] }));
-    assert.match(summary.transfers[0]!.text, /\(next due 21st October\)\. Aim to transfer/);
+    assert.match(
+      summary.transfers[0]?.text ?? '',
+      /\(upcoming Direct Debits next due 21st October\)\./,
+    );
   });
 
   it('names the day while the five-day lead is still ahead', () => {
     const summary = buildPaydaySummary(
-      input({
-        today: '2026-10-05',
-        transfers: [watch({ earliestDueDate: '2026-10-11' })],
-      }),
+      input({ today: '2026-10-05', transfers: [watch({ earliestDueDate: '2026-10-11' })] }),
     );
-    assert.match(summary.transfers[0]!.text, /into Natwest by 6th October\.$/);
+    assert.match(summary.transfers[0]?.text ?? '', /into Natwest by 6th October\.$/);
   });
 
   it('says "as soon as you can" once the five-day lead has arrived or passed', () => {
-    // On the day itself (11th − 5 = the 6th) there is no lead left, and the
-    // later cases are already behind it.
     for (const today of ['2026-10-06', '2026-10-08']) {
       const summary = buildPaydaySummary(
         input({ today, transfers: [watch({ earliestDueDate: '2026-10-11' })] }),
       );
-      assert.match(summary.transfers[0]!.text, /into Natwest as soon as you can\.$/);
+      assert.match(summary.transfers[0]?.text ?? '', /into Natwest as soon as you can\.$/);
     }
   });
 
-  it('handles a pot already below zero with nothing left to leave it', () => {
+  it('gives an already-negative pot with no upcoming bills an immediate transfer plan', () => {
     const summary = buildPaydaySummary(
       input({
         transfers: [
@@ -214,13 +226,14 @@ describe('payday summary: the transfer sentence', () => {
       }),
     );
     assert.equal(
-      summary.transfers[0]!.text,
-      'Main account is already £443.65 overdrawn and has no bills left in this window. Aim to ' +
-        'transfer at least £443.65 into Main account as soon as you can.',
+      summary.transfers[0]?.text,
+      'Main account has the worst bills-only shortfall: £443.65. It is already £443.65 overdrawn, ' +
+        'with no bills left in this window. Aim to transfer at least £443.65 into Main account as ' +
+        'soon as you can.',
     );
   });
 
-  it('returns no transfer lines when every pot covers its own bills', () => {
+  it('returns no transfer lines when no pot is short', () => {
     const summary = buildPaydaySummary(input());
     assert.deepEqual(summary.transfers, []);
   });
@@ -241,15 +254,14 @@ describe('commitmentKindsByPot', () => {
 });
 
 describe('paydaySummaryFromView', () => {
-  it('reads today from the snapshot and the labels from the view', () => {
+  it('reads today from the snapshot, day-to-day spend and labels from the view', () => {
     const view = {
       result: {
         paydayDate: '2026-10-26',
         days: 18,
         availableNowPence: 24222,
         projectedLowPence: -16525,
-        tier: 'heads-up',
-        warningThresholdPence: 25000,
+        dayToDayPence: 4750,
         potWatches: [
           {
             potId: 7,
@@ -273,8 +285,8 @@ describe('paydaySummaryFromView', () => {
     const summary = paydaySummaryFromView(view);
     assert.equal(summary?.paydayLine, 'Next pay day is 26th October (18 days from today)');
     assert.match(
-      summary?.transfers[0]!.text ?? '',
-      /Natwest will run about £850.00 short of its upcoming Direct Debits and standing orders/,
+      summary?.transfers[0]?.text ?? '',
+      /Natwest has the worst bills-only shortfall: £850\.00.*guide shortfall is about £897\.50/,
     );
   });
 

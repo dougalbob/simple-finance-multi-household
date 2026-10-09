@@ -16,9 +16,17 @@ it('protects zero, with no invented allowance for a low today or a shortfall', (
   for (const low of [-100, 0, 100])
     assert.equal(weeklyPacePence('2026-10-03', '2026-10-03', low), null);
   assert.equal(weeklyPacePence('2026-10-03', '2026-10-22', -100), null);
-  assert.match(
+  assert.equal(
     weeklyPaceText('2026-10-03', '2026-10-22', -100),
-    /£1.00 below zero.*No weekly allowance/,
+    'Projected shortfall: -£1.00 before payday. No discretionary spending is available at this time.',
+  );
+  assert.equal(
+    weeklyPaceText('2026-10-03', '2026-10-22', -41357),
+    'Projected shortfall: -£413.57 before payday. No discretionary spending is available at this time.',
+  );
+  assert.equal(
+    weeklyPaceText('2026-10-03', '2026-10-22', 0),
+    'The forecast already touches zero. No weekly allowance.',
   );
   assert.match(weeklyPaceText('2026-10-03', '2026-10-03', 100), /already today/);
 });

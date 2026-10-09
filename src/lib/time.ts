@@ -109,6 +109,20 @@ export function formatDayMonthLocalDate(dateString: string, today: string): stri
   return today.slice(0, 4) === match[1] ? label : `${label} ${match[1]}`;
 }
 
+/** Compact spoken date for a due-date heading, e.g. "26th Oct". */
+export function formatOrdinalDayMonthShortLocalDate(dateString: string, today: string): string {
+  const match = DATE_ONLY_PATTERN.exec(dateString);
+  if (match === null) return dateString;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const monthName = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', month: 'short' }).format(
+    new Date(Date.UTC(year, month - 1, day)),
+  );
+  const label = `${ordinalDay(day)} ${monthName}`;
+  return today.slice(0, 4) === match[1] ? label : `${label} ${match[1]}`;
+}
+
 /**
  * `formatShortLocalDate`, plus the year when the date is not in `today`'s
  * year: "Sun 1 Nov" this year, "Tue 5 Jan 2027" next. A task due next

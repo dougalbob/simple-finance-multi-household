@@ -312,14 +312,15 @@ describe('day-to-day: anchor-reset projected shops and fills (v0.6.0)', () => {
       now: new Date('2026-09-01T09:00:00Z'),
     });
 
-    // Before any fill: the payday window expects A's fuel tomorrow
-    // (pessimism — the tank state is unknown).
+    // Before any fill, both the unknown-tank fuel estimate and the weekly
+    // shop would land on 25 September. Salary's 26th falls on Saturday and
+    // shifts to Friday 25th, so projected day-to-day is omitted that day.
     const before = getProjectionView(db, NOW);
     assert.ok(before);
-    const beforeFuel = before.result.perDay
+    const beforeDayToDay = before.result.perDay
       .filter((day) => day.dayToDayPence > 0)
       .map((day) => day.date);
-    assert.ok(beforeFuel[0] === '2026-09-25');
+    assert.deepEqual(beforeDayToDay, []);
 
     // Now Alex fills Vehicle A today: the projected fill moves out 30 days.
     fill(db, {
@@ -337,7 +338,7 @@ describe('day-to-day: anchor-reset projected shops and fills (v0.6.0)', () => {
     // …and the horizon no longer charges that £55 fill twice: it is in the
     // estimate already, and the projected fill is a month away.
     assert.equal(after.availableNowPence, p(1000 - 55.0));
-    const between = after.result.perDay.find((day) => day.date === '2026-09-25');
-    assert.equal(between?.dayToDayPence, p(90)); // groceries only, no fuel
+    const salaryDay = after.result.perDay.find((day) => day.date === '2026-09-25');
+    assert.equal(salaryDay?.dayToDayPence, 0); // both projected groceries and fuel are omitted
   });
 });

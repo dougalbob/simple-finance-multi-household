@@ -1,6 +1,10 @@
 import { formatPence } from '@/lib/money';
 import type { CycleOutlook, CycleOutlookPot } from '@/lib/records/money-view';
-import { formatShortLocalDate } from '@/lib/time';
+import {
+  formatOrdinalDayMonthShortLocalDate,
+  formatShortLocalDate,
+  toLocalDateString,
+} from '@/lib/time';
 
 /** Shared salary-window low and weekly pace (SPEC §7.7, decision 166). */
 export function CycleOutlookLine({
@@ -26,6 +30,10 @@ export function CycleOutlookLine({
     );
   }
   const negative = outlook.freeToSpendPence < 0;
+  const paydayLabel = formatOrdinalDayMonthShortLocalDate(
+    outlook.incomeDate,
+    toLocalDateString(outlook.asOf),
+  );
   return (
     <p
       className={`rounded-lg px-3 py-2 text-sm ${
@@ -34,10 +42,12 @@ export function CycleOutlookLine({
           : 'bg-canvas text-ink-body'
       } ${className ?? ''}`}
     >
-      Lowest before pay day ({formatShortLocalDate(outlook.incomeDate)}):{' '}
+      Lowest before {paydayLabel} pay day:{' '}
       <span className="font-semibold tabular-nums">{formatPence(outlook.freeToSpendPence)}</span>.{' '}
-      {outlook.paceText} Salary on {formatShortLocalDate(outlook.incomeDate)} is not counted as
-      money you can spend.
+      {outlook.paceText}
+      {negative
+        ? null
+        : ` Salary on ${formatShortLocalDate(outlook.incomeDate)} is not counted as money you can spend.`}
     </p>
   );
 }

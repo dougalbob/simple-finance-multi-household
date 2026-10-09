@@ -23,11 +23,12 @@ import { PaydaySummary } from '@/components/payday-summary';
 export const dynamic = 'force-dynamic';
 
 /**
- * Phone till home (SPEC §15.1, decision 164): available now, Quick Entry
- * (opens at the till), the payday summary (decision 186 — the short card,
- * with the full projection on Horizon), due this week, and links to the full
- * pages. Recurring, pots, checkpoints, recent purchases and key dates live on
- * their own pages — not here.
+ * Responsive till home (SPEC §15.1, decisions 164 and 187): on a phone,
+ * Household total now precedes Quick Entry; on a laptop the same till sits
+ * above the household total and the existing dashboard. Both retain the short
+ * payday summary (full dated projection on Horizon), due this week and links
+ * to the full pages. Recurring, pots, checkpoints, recent purchases and key
+ * dates live on their own pages — not here.
  */
 export default async function HomePage() {
   const user = await currentUserFromRequest();
@@ -66,22 +67,32 @@ export default async function HomePage() {
         </p>
       </header>
 
-      <div className="space-y-6">
+      <div className="flex flex-col gap-6">
         {people.length < 2 || vehicles.length === 0 ? (
-          <HouseholdSetup people={people.map(({ id, label }) => ({ id, label }))} />
+          <div className="order-0">
+            <HouseholdSetup people={people.map(({ id, label }) => ({ id, label }))} />
+          </div>
         ) : null}
 
-        <MoneySection money={money} />
-        {/* On a phone this page opens at the till (decision 158). */}
-        <QuickEntry data={entryData} openAtTillOnMobile />
+        {/* Mobile: keep the household total ahead of the till. Laptop: put the
+            same till above, not in place of, the existing home content. */}
+        <div className="order-2 lg:order-1">
+          {/* On a phone this page opens at the till (decision 158). */}
+          <QuickEntry data={entryData} openAtTillOnMobile />
+        </div>
+        <div className="order-1 lg:order-2">
+          <MoneySection money={money} />
+        </div>
         {projection !== null ? (
-          // The short card (decision 186): the figures and the transfer nudge,
-          // with the full detail one tap away on Horizon.
-          <PaydaySummary projection={projection} />
+          // The short card (decisions 186–187): corrected figures and the
+          // bills-only transfer nudge, with full dated detail on Horizon.
+          <div className="order-3">
+            <PaydaySummary projection={projection} />
+          </div>
         ) : (
           <section
             aria-labelledby="projection-locked-heading"
-            className="rounded-xl border border-dashed border-border-strong bg-surface p-4"
+            className="order-3 rounded-xl border border-dashed border-border-strong bg-surface p-4"
           >
             <h2 id="projection-locked-heading" className="text-lg font-semibold">
               Payday projection
@@ -89,7 +100,7 @@ export default async function HomePage() {
             <p className="mt-1 text-sm text-ink-soft">
               The liquidity projection appears once a bank or cash pot has a balance checkpoint and
               an expected income schedule (for example a monthly salary). Record a checkpoint in
-              Quick Entry → Balance or on{' '}
+              Quick Entry → Checkpoint or on{' '}
               <Link href="/pots" className="font-medium text-accent hover:underline">
                 Accounts, Pots &amp; Checkpoints
               </Link>
@@ -98,9 +109,13 @@ export default async function HomePage() {
           </section>
         )}
 
-        <DueThisWeekSection items={dueThisWeek} />
+        <div className="order-4">
+          <DueThisWeekSection items={dueThisWeek} />
+        </div>
 
-        <HomePageLinks />
+        <div className="order-5">
+          <HomePageLinks />
+        </div>
       </div>
     </main>
   );
@@ -140,7 +155,7 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
       </div>
       {money.householdAvailablePence === null ? (
         <p className="text-sm text-ink-soft">
-          Record a balance checkpoint in Quick Entry → Balance or on{' '}
+          Record a balance checkpoint in Quick Entry → Checkpoint or on{' '}
           <Link href="/pots" className="font-medium text-accent hover:underline">
             Accounts, Pots &amp; Checkpoints
           </Link>{' '}

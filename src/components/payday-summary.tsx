@@ -3,8 +3,8 @@ import type { ProjectionView } from '@/lib/records/money-view';
 import { paydaySummaryFromView } from '@/lib/records/payday-summary';
 
 /**
- * The phone home's payday card (v0.36.0, decision 186): four facts and a door
- * to Horizon. The household's verdict on the old projection panel was that it
+ * The phone home's payday card (v0.37.0 follow-up, decision 187): four facts
+ * and a door to Horizon. The household's verdict on the old projection panel was that it
  * was too much for the other user — the day-by-day table, the projected shops
  * and fills, the expected support list and the weekly pace all live on
  * Horizon, on the same engine, so this card just says:
@@ -12,8 +12,8 @@ import { paydaySummaryFromView } from '@/lib/records/payday-summary';
  * - when the next pay day is;
  * - what the household low would be, from the liquid balance the projection
  *   actually starts from (bank and cash — never the card-debt net total);
- * - whether that low would cost overdraft fees;
- * - which pot would run short of its own bills, and by when the money should
+ * - the worst pot's bills-only shortfall, an optional qualified guide that
+ *   assumes day-to-day spending also leaves that pot, and when the money should
  *   move — kept in the amber transfer treatment it has always had.
  *
  * Every sentence comes from the pure builder (`payday-summary.ts`), so the
@@ -36,10 +36,7 @@ export function PaydaySummary({ projection }: { projection: ProjectionView }) {
       </h2>
 
       {summary.lowLine !== null ? (
-        <p className="mt-2 text-sm text-ink-body">
-          {summary.lowLine}
-          {summary.overdraftLine !== null ? ` ${summary.overdraftLine}` : ''}
-        </p>
+        <p className="mt-2 text-sm text-ink-body">{summary.lowLine}</p>
       ) : null}
 
       {summary.transfers.length > 0 ? (

@@ -26,6 +26,7 @@ import {
 } from './estimates';
 import { computeKeyDateAlerts, type KeyDateAlert, type KeyDateItem } from './keydates';
 import {
+  excludeMainSalaryDayToDay,
   projectToPayday,
   type PotWatchInput,
   type ProjectionResult,
@@ -336,7 +337,11 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
   // anchored on when the household last actually shopped or filled up, so a
   // fresh £55 at the pumps suppresses projected fuel for its cooldown
   // instead of being double-counted alongside a smooth allowance.
-  const dayToDayEvents = projectDayToDayEvents(db, today, windowUpper);
+  const mainSalaryDates = [paydayDate];
+  const dayToDayEvents = excludeMainSalaryDayToDay(
+    projectDayToDayEvents(db, today, windowUpper),
+    mainSalaryDates,
+  );
   const dayToDaySplit = splitDayToDayEvents(dayToDayEvents);
 
   const potWatches: PotWatchInput[] = snapshot.pots
@@ -355,6 +360,7 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
     receipts: receiptLines,
     projectedGroceries: dayToDayEventsToLines(dayToDaySplit.groceries),
     projectedFuel: dayToDayEventsToLines(dayToDaySplit.fuel),
+    mainSalaryDates,
     warningThresholdPence,
     potWatches,
   });
@@ -443,7 +449,11 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
       : windowLines(db, 'commitment', today, income.date).filter((row) =>
           liquidPotIds.has(row.potId),
         );
-  const dayToDayEvents = income === null ? [] : projectDayToDayEvents(db, today, income.date);
+  const mainSalaryDates = income === null ? [] : [income.date];
+  const dayToDayEvents =
+    income === null
+      ? []
+      : excludeMainSalaryDayToDay(projectDayToDayEvents(db, today, income.date), mainSalaryDates);
   const commitments = commitmentRows.map((row) => ({
     name: row.name,
     amountPence: row.amountPence,
@@ -667,6 +677,31 @@ function nextReceiptScheduleInstance(
     .orderBy(asc(scheduleInstances.dueDate), asc(scheduleInstances.id))
     .limit(1)
     .get();
+}
+
+/**
+ * The main salary schedule's actual (weekend-shifted) occurrences in a window.
+ * Other receipt schedules are deliberately not included: a benefit or refund
+ * arriving inside Horizon does not turn that date into payday.
+ */
+function mainSalaryDatesInWindow(db: Db, today: string, throughDate: string): string[] {
+  if (throughDate <= today) return [];
+  const mainSalary = nextReceiptScheduleInstance(db, today);
+  if (mainSalary === undefined) return [];
+  return db
+    .select({ dueDate: scheduleInstances.dueDate })
+    .from(scheduleInstances)
+    .where(
+      and(
+        eq(scheduleInstances.scheduleId, mainSalary.scheduleId),
+        eq(scheduleInstances.state, 'upcoming'),
+        gte(scheduleInstances.dueDate, addDaysLocal(today, 1)),
+        lte(scheduleInstances.dueDate, throughDate),
+      ),
+    )
+    .orderBy(asc(scheduleInstances.dueDate))
+    .all()
+    .map((row) => row.dueDate);
 }
 
 /**
@@ -932,8 +967,13 @@ export function getHorizonProjectionView(
   // Projected day-to-day spending (SPEC §7.3, v0.6.0): episodic events
   // anchored on actual shops/fills, household-level like the configured
   // figures were — pot scoping filters commitments and receipts, never the
-  // day-to-day events. "Bills only" passes no events at all.
-  const dayToDayEvents = includeDayToDay ? projectDayToDayEvents(db, today, windowUpper) : [];
+  // day-to-day events. Only actual dates belonging to the main salary schedule
+  // are excluded; other receipt dates remain ordinary days. "Bills only"
+  // passes no events at all.
+  const mainSalaryDates = mainSalaryDatesInWindow(db, today, windowUpper);
+  const dayToDayEvents = includeDayToDay
+    ? excludeMainSalaryDayToDay(projectDayToDayEvents(db, today, windowUpper), mainSalaryDates)
+    : [];
   const dayToDaySplit = splitDayToDayEvents(dayToDayEvents);
 
   // Commitments: unconverted dd/so instances in (today, through].
@@ -1065,6 +1105,7 @@ export function getHorizonProjectionView(
     receipts,
     projectedGroceries: dayToDayEventsToLines(dayToDaySplit.groceries),
     projectedFuel: dayToDayEventsToLines(dayToDaySplit.fuel),
+    mainSalaryDates,
     warningThresholdPence,
     potWatches,
   });
