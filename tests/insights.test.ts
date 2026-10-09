@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  ANNUAL_COVER_MONTHS,
   GROCERIES_PARENT,
   FUEL_CHILD,
   compareCalendarMonths,
   computeHonestyLoop,
   personalSpending,
+  spreadOverCoverMonths,
   startOfWeekLocal,
   summarizeSpending,
   vehicleRunningCosts,
@@ -294,6 +296,181 @@ describe('insights: vehicle running costs (panel 3)', () => {
     assert.equal(a?.rolling12Pence, 100);
     const b = result.find((row) => row.vehicleId === 2);
     assert.equal(b?.rolling12Pence, 0);
+  });
+});
+
+describe('insights: annual payments spread ÷ 12 (decision 190)', () => {
+  const vehicles = [
+    { id: 1, label: 'Vehicle A' },
+    { id: 2, label: 'Vehicle B' },
+  ];
+  /** An annual premium on Vehicle A's insurance (cover = 12 months, as the DB assembly sets it). */
+  const premium = (
+    occurredDate: string,
+    amountPence: number,
+    partial: Partial<SpendingLineInput> = {},
+  ): SpendingLineInput =>
+    line({
+      occurredDate,
+      amountPence,
+      parentName: 'Vehicle Running',
+      childName: 'Insurance',
+      targetKind: 'vehicle',
+      targetId: 1,
+      coversMonths: ANNUAL_COVER_MONTHS,
+      ...partial,
+    });
+
+  it('splits a payment into twelve shares, one per month from the payment month', () => {
+    const shares = spreadOverCoverMonths(premium('2026-08-24', 61500));
+    assert.deepEqual(
+      shares.map((share) => share.occurredDate),
+      [
+        '2026-08-01',
+        '2026-09-01',
+        '2026-10-01',
+        '2026-11-01',
+        '2026-12-01',
+        '2027-01-01',
+        '2027-02-01',
+        '2027-03-01',
+        '2027-04-01',
+        '2027-05-01',
+        '2027-06-01',
+        '2027-07-01',
+      ],
+    );
+    assert.ok(shares.every((share) => share.amountPence === 5125));
+    assert.ok(shares.every((share) => share.coversMonths === 1));
+  });
+
+  it('gives the leftover pence to the earliest months, so the shares always sum to the premium', () => {
+    const shares = spreadOverCoverMonths(premium('2026-08-24', 100));
+    assert.deepEqual(
+      shares.map((share) => share.amountPence),
+      [9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8],
+    );
+    assert.equal(
+      shares.reduce((sum, share) => sum + share.amountPence, 0),
+      100,
+    );
+  });
+
+  it('keeps the sum exact and the shares within one penny of each other, including refunds and odd totals', () => {
+    for (const amount of [0, 1, 11, 12, 13, 61499, 61500, 61501, 99999, -1, -13, -100, -61501]) {
+      const shares = spreadOverCoverMonths(premium('2026-08-24', amount));
+      assert.equal(
+        shares.reduce((sum, share) => sum + share.amountPence, 0),
+        amount,
+        `sum for ${amount}`,
+      );
+      const values = shares.map((share) => share.amountPence);
+      assert.ok(Math.max(...values) - Math.min(...values) <= 1, `spread for ${amount}`);
+    }
+    const refund = spreadOverCoverMonths(premium('2026-08-24', -100));
+    assert.deepEqual(
+      refund.map((share) => share.amountPence),
+      [-8, -8, -8, -8, -8, -8, -8, -8, -9, -9, -9, -9],
+    );
+  });
+
+  it('leaves a monthly payment or an ordinary purchase unchanged', () => {
+    const monthly = line({
+      occurredDate: '2026-09-24',
+      amountPence: 5125,
+      targetKind: 'vehicle',
+      targetId: 1,
+    });
+    assert.deepEqual(spreadOverCoverMonths(monthly), [monthly]);
+  });
+
+  it('rejects a cover length outside 1–12 instead of inventing a spread', () => {
+    for (const months of [0, 13, 1.5, -12]) {
+      assert.throws(
+        () => spreadOverCoverMonths(premium('2026-08-24', 61500, { coversMonths: months })),
+        /covering 1–12 months/,
+      );
+    }
+  });
+
+  it('shows a yearly premium as one twelfth in each month it covers; the in-progress month counts in full', () => {
+    // Paid 24 Aug 2026. Today is 20 Sep 2026, so September's share is in progress.
+    const [a] = vehicleRunningCosts([premium('2026-08-24', 61500)], vehicles, '2026-09-20');
+    assert.equal(a?.previousMonthPence, 5125); // August
+    assert.equal(a?.monthPence, 5125); // September (partial)
+    assert.equal(a?.rolling12From, '2025-10-01');
+    // Only August and September have started; later shares are not yet due.
+    assert.equal(a?.rolling12Pence, 10250);
+    assert.equal(a?.annualSpreadPence, 10250);
+  });
+
+  it('a window edge: a payment whose cover reaches the window counts from its first month; one that ends before it counts nothing', () => {
+    // Covers Oct 2025 – Sep 2026: the whole window (opens 1 Oct 2025).
+    const covering = vehicleRunningCosts([premium('2025-10-15', 61500)], vehicles, '2026-09-20')[0];
+    assert.equal(covering?.rolling12Pence, 61500);
+    // Covers Oct 2024 – Sep 2025: ends the month before the window opens.
+    const ended = vehicleRunningCosts([premium('2024-10-15', 61500)], vehicles, '2026-09-20')[0];
+    assert.equal(ended?.rolling12Pence, 0);
+    // Covers Sep 2025 – Aug 2026: only Oct 2025 – Aug 2026 (eleven shares) fall in the window.
+    const partial = vehicleRunningCosts([premium('2025-09-15', 61500)], vehicles, '2026-09-20')[0];
+    assert.equal(partial?.rolling12Pence, 11 * 5125);
+  });
+
+  it('a share dated after today is outside every figure', () => {
+    // Paid 1 Oct 2026: nothing of it has started by 20 Sep 2026.
+    const [a] = vehicleRunningCosts([premium('2026-10-01', 61500)], vehicles, '2026-09-20');
+    assert.equal(a?.monthPence, 0);
+    assert.equal(a?.previousMonthPence, 0);
+    assert.equal(a?.rolling12Pence, 0);
+  });
+
+  it('a steady year: two annual payments in the window total exactly one premium', () => {
+    const lines = [premium('2025-08-24', 60000), premium('2026-08-24', 60000)];
+    const [a] = vehicleRunningCosts(lines, vehicles, '2026-10-09');
+    assert.equal(a?.rolling12From, '2025-11-01');
+    assert.equal(a?.rolling12Pence, 60000);
+    assert.equal(a?.monthPence, 5000); // October 2026
+    assert.equal(a?.previousMonthPence, 5000); // September 2026
+  });
+
+  it('reports the spread apart from the rest in each child category, and per vehicle', () => {
+    const lines = [
+      premium('2025-08-24', 60000), // Vehicle A: Oct 2025 – Jul 2026 in the window = 10 shares
+      line({
+        occurredDate: '2026-09-05',
+        amountPence: 5820,
+        parentName: 'Vehicle Running',
+        childName: FUEL_CHILD,
+        targetKind: 'vehicle',
+        targetId: 1,
+      }),
+      // Vehicle B pays monthly: nothing spread.
+      line({
+        occurredDate: '2026-09-01',
+        amountPence: 5000,
+        parentName: 'Vehicle Running',
+        childName: 'Insurance',
+        targetKind: 'vehicle',
+        targetId: 2,
+      }),
+    ];
+    const [a, b] = vehicleRunningCosts(lines, vehicles, '2026-09-20');
+    const insurance = a?.byChild.find((row) => row.child === 'Insurance');
+    assert.equal(insurance?.amountPence, 50000);
+    assert.equal(insurance?.spreadPence, 50000);
+    const fuel = a?.byChild.find((row) => row.child === FUEL_CHILD);
+    assert.equal(fuel?.amountPence, 5820);
+    assert.equal(fuel?.spreadPence, 0);
+    assert.equal(a?.rolling12Pence, 55820);
+    assert.equal(a?.annualSpreadPence, 50000);
+    assert.equal(b?.annualSpreadPence, 0);
+    assert.equal(b?.rolling12Pence, 5000);
+  });
+
+  it('leaves every cash-basis summary on the payment date', () => {
+    const lines = [premium('2026-08-24', 61500)];
+    assert.equal(summarizeSpending(lines, '2026-08-01', '2026-08-31').totalPence, 61500);
+    assert.equal(summarizeSpending(lines, '2026-09-01', '2026-09-30').totalPence, 0);
   });
 });
 

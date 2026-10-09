@@ -188,6 +188,13 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
+      // Own project: adds its own vehicle and an annual premium, so it runs near
+      // the end, after the backup restore, and moves no seeded figure.
+      name: 'insights',
+      testMatch: /insights\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
       // The payday example rewrites only the isolated E2E seed. Keep it last so
       // its fictional account, schedules and settings cannot affect other specs.
       name: 'payday-summary',

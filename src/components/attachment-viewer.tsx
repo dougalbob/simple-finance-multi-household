@@ -2,8 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { AttachmentSummary } from './attachment-form';
+import { PdfPages } from './pdf-pages';
 
-/** Native modal: focus trap, Escape, focus return; no navigation out of the PWA. */
+/**
+ * Native modal: focus trap, Escape, focus return; no navigation out of the PWA.
+ *
+ * Layout (SPEC §23.2, decisions 191–192): full screen on a phone, a centred panel
+ * from 640px up. The header holds Close, the file name (wrapping, not cut
+ * short) and the size. A PDF is drawn page by page by pdf.js (decision 192), the
+ * same on every device. The footer always holds the actions, within reach on a
+ * phone: "Open in PDF app" hands the file to the system share sheet, where the
+ * browser offers one, and Download works everywhere.
+ */
+const ACTION = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded border px-4 py-2';
+
 export function AttachmentViewer({
   attachment,
   onClose,
@@ -50,6 +62,25 @@ export function AttachmentViewer({
       trigger.focus({ preventScroll: true });
     };
   }, [attachment, trigger]);
+
+  const isPdf = attachment.mime === 'application/pdf';
+  // Read at render, after the file has loaded. Not every browser offers file sharing.
+  const canShareFile =
+    file !== null &&
+    typeof navigator.canShare === 'function' &&
+    navigator.canShare({ files: [file] });
+
+  async function shareFile() {
+    if (file === null) return;
+    // Called straight from the tap, so the browser still counts it as a user gesture.
+    try {
+      await navigator.share({ files: [file] });
+    } catch (cause) {
+      if (!(cause instanceof Error && cause.name === 'AbortError'))
+        setError('Sharing unavailable. Use Download instead.');
+    }
+  }
+
   return (
     <dialog
       ref={dialog}
@@ -58,43 +89,22 @@ export function AttachmentViewer({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 m-auto h-[90dvh] max-h-[90dvh] w-[96vw] max-w-5xl rounded-lg bg-surface p-0 text-ink backdrop:bg-ink/70"
+      className="fixed inset-0 m-0 h-auto max-h-none w-auto max-w-none bg-surface p-0 text-ink backdrop:bg-ink/70 sm:m-auto sm:h-[90dvh] sm:max-h-[90dvh] sm:w-[96vw] sm:max-w-5xl sm:rounded-lg"
     >
       <div className="flex h-full flex-col">
-        <header className="flex flex-wrap items-center gap-3 border-b border-border p-3">
-          <button type="button" onClick={onClose} className="rounded border px-3 py-2">
+        <header className="flex items-center gap-3 border-b border-border p-3">
+          <button type="button" onClick={onClose} className={ACTION}>
             Close
           </button>
           <span className="min-w-0 flex-1 break-words font-semibold">
             {attachment.originalName}
           </span>
-          <span>{Math.ceil(attachment.sizeBytes / 1024)} KB</span>
-          {url ? (
-            <a href={url} download={attachment.originalName} className="rounded border px-3 py-2">
-              Download
-            </a>
-          ) : null}
-          {file &&
-          typeof navigator.canShare === 'function' &&
-          navigator.canShare({ files: [file] }) ? (
-            <button
-              type="button"
-              className="rounded border px-3 py-2"
-              onClick={async () => {
-                try {
-                  await navigator.share({ files: [file] });
-                } catch (cause) {
-                  if (!(cause instanceof Error && cause.name === 'AbortError'))
-                    setError('Sharing unavailable. Use Download instead.');
-                }
-              }}
-            >
-              Share
-            </button>
-          ) : null}
+          <span className="shrink-0 text-sm text-ink-muted">
+            {Math.ceil(attachment.sizeBytes / 1024)} KB
+          </span>
         </header>
         {error ? (
-          <p role="alert" className="p-3">
+          <p role="alert" className="border-b border-border p-3">
             {error}
           </p>
         ) : null}
@@ -104,22 +114,31 @@ export function AttachmentViewer({
           </p>
         ) : null}
         {url ? (
-          <div className="min-h-0 flex-1 overflow-auto bg-till-inset p-2">
-            {attachment.mime === 'application/pdf' ? (
-              <>
-                <p className="bg-surface p-2 text-sm">
-                  If your browser cannot preview this PDF, use Download or Share.
-                </p>
-                <iframe
-                  title={attachment.originalName}
-                  src={url}
-                  className="h-[90%] w-full border-0 bg-surface"
-                />
-              </>
-            ) : (
-              <img src={url} alt={attachment.originalName} className="mx-auto h-auto max-w-full" />
-            )}
-          </div>
+          isPdf && file !== null ? (
+            <div className="relative min-h-0 flex-1 bg-till-inset">
+              <PdfPages file={file} />
+            </div>
+          ) : (
+            <div className="relative min-h-0 flex-1 overflow-auto bg-till-inset">
+              <img
+                src={url}
+                alt={attachment.originalName}
+                className="mx-auto h-auto max-w-full p-2"
+              />
+            </div>
+          )
+        ) : null}
+        {url ? (
+          <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {canShareFile ? (
+              <button type="button" className={ACTION} onClick={shareFile}>
+                {isPdf ? 'Open in PDF app' : 'Share'}
+              </button>
+            ) : null}
+            <a href={url} download={attachment.originalName} className={ACTION}>
+              Download
+            </a>
+          </footer>
         ) : null}
       </div>
     </dialog>

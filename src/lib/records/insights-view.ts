@@ -1,9 +1,10 @@
 import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { allocations, categories, purchases } from '../db/schema';
+import { allocations, categories, purchases, scheduleInstances, schedules } from '../db/schema';
 import { toLocalDateString } from '../time';
 import { addMonthsClamped } from './dates';
 import {
+  ANNUAL_COVER_MONTHS,
   compareCalendarMonths,
   computeHonestyLoop,
   firstOfLocalMonth,
@@ -80,9 +81,12 @@ export function getVehicleCostsView(db: Db, nowArg?: Date): VehicleCosts[] {
   const now = nowArg ?? new Date();
   ensureScheduleState(db, now);
   const today = toLocalDateString(now);
-  // The rolling window starts 11 months back (before the previous month),
-  // so the query window must reach that far to feed the engine.
-  const windowFrom = addMonthsClamped(firstOfLocalMonth(today), -11);
+  // The rolling window starts 11 months back (before the previous month). An
+  // annual payment covers twelve months from its own month (decision 190), so
+  // one made up to 22 months back can still reach the window: query that far.
+  // Lines outside the window are dropped by the engine, so the wider read
+  // changes no figure that is not spread.
+  const windowFrom = addMonthsClamped(firstOfLocalMonth(today), -22);
   const lines = spendingLinesBetween(db, windowFrom, today);
   const vehicles = listVehicles(db);
   return vehicleRunningCosts(lines, vehicles, today);
@@ -134,10 +138,14 @@ function spendingLinesBetween(db: Db, from: string, to: string): SpendingLineInp
       targetKind: allocations.targetKind,
       targetId: allocations.targetId,
       amountPence: allocations.amountPence,
+      // Cadence of the schedule a converted payment came from, if any (decision 190).
+      scheduleFrequency: schedules.frequency,
     })
     .from(allocations)
     .innerJoin(purchases, eq(purchases.id, allocations.purchaseId))
     .innerJoin(categories, eq(categories.id, allocations.categoryId))
+    .leftJoin(scheduleInstances, eq(scheduleInstances.id, purchases.scheduleInstanceId))
+    .leftJoin(schedules, eq(schedules.id, scheduleInstances.scheduleId))
     .where(
       and(
         isNull(purchases.voidedAt),
@@ -154,5 +162,6 @@ function spendingLinesBetween(db: Db, from: string, to: string): SpendingLineInp
     targetKind: row.targetKind as 'household' | 'person' | 'vehicle',
     targetId: row.targetId,
     amountPence: row.amountPence,
+    coversMonths: row.scheduleFrequency === 'annual' ? ANNUAL_COVER_MONTHS : 1,
   }));
 }

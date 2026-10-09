@@ -1,3 +1,38 @@
+# Release prep: v0.38.0 — Annual vehicle payments as ÷ 12 and PDFs read in the app (decisions 190–193)
+
+**Status at PR preparation:** the household approved, in order: PDF.js as a new dependency; road tax as built; the release once PDF was implemented; the tag and Publish. This is a pre-merge record only. It asserts no merge, tag, Publish run, GitHub release or registry digest. After publication, the next working session must add independently verified post-merge facts at the top, per decision 173.
+
+## What changed
+
+- **Running costs (decision 190).** A converted annual schedule payment against a vehicle is spread as one twelfth in each of the twelve months it covers, starting in the month it is paid. Insights labels spread rows and footnotes them, and its subtitle names the one exception to exact reconciliation. Overview shows a one-line note. Purchases, the month comparison, Horizon and Charts stay on the payment date.
+- **Road tax (decision 193).** Confirmed as built: an annual road-tax payment against a vehicle is spread too. None is annual today, so nothing changes until one is added.
+- **PDFs in the app (decisions 191–192).** Full screen on a phone. PDF.js (`pdfjs-dist`, Apache-2.0, legacy build) draws each page to a canvas, fitted to the viewer's width, and only the pages near the screen. The footer holds Open in PDF app and Download. One code path for every device; nothing checks which phone it is. Text is not selectable or searchable in the reader, and standard-font data is not shipped, so a non-embedded font is drawn with a stand-in.
+- **Version.** 0.37.0 → 0.38.0 in `package.json`, `package-lock.json`, `src/lib/version.ts`, `simple-finance.xml` and `docs/RELEASE_NOTES_v0.38.0.md`.
+- No schema, migration or backup-format change. One new dependency: `pdfjs-dist`.
+
+## Gates at PR preparation
+
+`npm test`: **723 passed**, 172 suites, 0 failed (717 before, plus 6 geometry tests). `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` passed. `npm audit --omit=dev`: 0 vulnerabilities. The attachments project passed 3/3 locally. The full local browser run is recorded in the release notes. The PR's `gates`, `browser` and `docker` checks are mandatory and must all be green before merge. Do not infer their status from these local results.
+
+## Not verified
+
+- A real iPhone Safari or Android Chrome. The reader is proven on the headless Chromium used here, which draws pages through pdf.js. The production build emits the worker, and `next start` serves it (HTTP 200, `application/javascript`, identical bytes). The household's phones are the test that remains.
+- The household's live car-insurance data: whether its recurring payment targets the car, and whether earlier years exist as purchases (decision 193).
+
+## What the household does
+
+In Unraid, take a backup, then Force Update. The version badge should read `v0.38.0 · pre-release`. Then open a PDF attachment on each phone and check that it displays, scrolls and opens in a PDF app.
+
+---
+
+**v0.37.0 — verified post-merge facts (recorded per decision 173, by the session after its merge):**
+
+- Merge commit `abbd1374799fb733faa0554e52b44983b8a48aa9` (PR #98). The annotated tag `v0.37.0` points at that merge commit.
+- Publish run `37916778432` succeeded. The GitHub release `v0.37.0` was published 2026-10-09T10:22:29Z and is marked Latest.
+- Digest `sha256:f5610d92ca1b5d312db355c75c2d82af2320ac07cc7f46c94e9b834af932cfa2`, as printed in the release body by the Publish run's own registry check, shared by `v0.37.0`, `latest` and `sha-abbd137`. This sandbox cannot reach ghcr.io (SANDBOX entry 6), so this session did not repeat that check.
+
+---
+
 **v0.36.0 — verified post-merge facts (recorded per decision 173):**
 
 - Merge commit `005e1e6022df02863b625e70155059b90e3d4fee` (PR #97); PR CI run `37820874589` and `main` CI run `37822242713` — all green.

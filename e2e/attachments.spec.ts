@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { waitForTill } from './support';
 
 /**
@@ -12,6 +12,53 @@ const PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 );
+
+/**
+ * A generated PDF with `pages` pages, each carrying one blue square (0 0 1 rg)
+ * so a rendered page can be checked by its pixels. Fictional, and built by hand
+ * so the test needs no PDF library.
+ */
+function fictionalPdf(pages: number): Buffer {
+  const objects: string[] = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${Array.from({ length: pages }, (_, i) => `${3 + 2 * i} 0 R`).join(' ')}] /Count ${pages} >>`,
+  ];
+  const square = '0 0 1 rg 20 20 160 160 re f';
+  for (let i = 0; i < pages; i += 1) {
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents ${4 + 2 * i} 0 R >>`,
+      `<< /Length ${square.length} >>\nstream\n${square}\nendstream`,
+    );
+  }
+  let body = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(body));
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(body);
+  const count = objects.length + 1;
+  body +=
+    `xref\n0 ${count}\n0000000000 65535 f \n` +
+    offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('') +
+    `trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body);
+}
+
+/** True when the canvas's centre pixel is the blue of the generated square. */
+async function isBluePixel(canvas: Locator): Promise<boolean> {
+  return canvas.evaluate((node: HTMLCanvasElement) => {
+    const context = node.getContext('2d');
+    if (context === null || node.width === 0 || node.height === 0) return false;
+    const pixel = context.getImageData(
+      Math.floor(node.width / 2),
+      Math.floor(node.height / 2),
+      1,
+      1,
+    ).data;
+    return (pixel[0] ?? 255) < 80 && (pixel[1] ?? 255) < 80 && (pixel[2] ?? 0) > 180;
+  });
+}
 
 test.describe('removing a receipt', () => {
   test('removes it from Purchases and Suppliers, and keeps the audit', async ({ page }) => {
@@ -74,40 +121,87 @@ test.describe('removing a receipt', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
     await page.unroute(`**${href}`);
 
-    // A generated blank PDF exercises the PDF branch without household data.
-    const objects = [
-      '<< /Type /Catalog /Pages 2 0 R >>',
-      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
-    ];
-    let pdf = '%PDF-1.4\n';
-    const offsets = [0];
-    objects.forEach((object, i) => {
-      offsets.push(Buffer.byteLength(pdf));
-      pdf += `${i + 1} 0 obj\n${object}\nendobj\n`;
-    });
-    const xref = Buffer.byteLength(pdf);
-    pdf += `xref\n0 4\n0000000000 65535 f \n${offsets
-      .slice(1)
-      .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
-      .join('')}trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    // Generated PDFs exercise the in-app reader without household data (decision 192).
     await row.locator('input[type="file"]').setInputFiles({
       name: 'fictional.pdf',
       mimeType: 'application/pdf',
-      buffer: Buffer.from(pdf),
+      buffer: fictionalPdf(3),
     });
     await row.getByRole('button', { name: 'Attach receipt' }).click();
     const pdfLink = row.getByRole('link', { name: /fictional.pdf/ });
     await expect(pdfLink).toBeVisible();
     for (const width of [393, 1400]) {
       await page.setViewportSize({ width, height: 950 });
+      // The share API is read when the viewer draws its footer, so mock it before opening.
+      // Headless Linux has no share API (SANDBOX entry 16).
+      if (width === 393) {
+        await page.evaluate(() => {
+          const shared: Array<{ name: string; type: string; size: number }> = [];
+          Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+          Object.defineProperty(navigator, 'share', {
+            configurable: true,
+            value: async (data: { files?: File[] }) => {
+              for (const file of data.files ?? []) {
+                shared.push({ name: file.name, type: file.type, size: file.size });
+              }
+            },
+          });
+          (window as unknown as { __shared: typeof shared }).__shared = shared;
+        });
+      }
       await pdfLink.click();
       const dialog = page.getByRole('dialog');
-      await expect(dialog.locator('iframe')).toHaveAttribute('src', /^blob:/);
+      // pdf.js draws every page onto a canvas. The first page must show the generated
+      // square, so the page itself is checked, not only the wiring around it.
+      await expect(dialog.getByRole('img', { name: /^Page \d of 3$/ })).toHaveCount(3);
+      const firstPage = dialog.getByRole('img', { name: 'Page 1 of 3' });
+      await expect(firstPage).toBeVisible({ timeout: 30_000 });
+      await expect.poll(() => isBluePixel(firstPage), { timeout: 30_000 }).toBe(true);
+      await expect(dialog.getByRole('link', { name: 'Download' })).toHaveAttribute(
+        'download',
+        'fictional.pdf',
+      );
+      const box = await dialog.boundingBox();
+      if (width === 393) {
+        // A phone gets the whole screen. The pages fill it less an 8px gap either side,
+        // and the actions stay in reach without scrolling.
+        expect(box?.width).toBe(393);
+        expect(box?.height).toBe(950);
+        const pageBox = await firstPage.boundingBox();
+        expect(Math.abs((pageBox?.width ?? 0) - (393 - 16))).toBeLessThan(2);
+        await expect(dialog.getByRole('link', { name: 'Download' })).toBeInViewport();
+        await dialog.getByRole('button', { name: 'Open in PDF app' }).click();
+        const shared = await page.evaluate(
+          () => (window as unknown as { __shared?: unknown[] }).__shared ?? [],
+        );
+        expect(shared).toEqual([
+          expect.objectContaining({ name: 'fictional.pdf', type: 'application/pdf' }),
+        ]);
+      } else {
+        // From 640px up the viewer is a centred panel, not the whole screen.
+        expect(box?.width).toBeLessThan(1400);
+      }
       await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
       await dialog.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(pdfLink).toBeFocused();
     }
+
+    // A file the reader cannot open gets the message and the footer, not a blank panel.
+    // It starts with %PDF- so the upload's content check accepts it.
+    await row.locator('input[type="file"]').setInputFiles({
+      name: 'broken.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\nnot a PDF body\n'),
+    });
+    await row.getByRole('button', { name: 'Attach receipt' }).click();
+    await row.getByRole('link', { name: /broken.pdf/ }).click();
+    const broken = page.getByRole('dialog');
+    await expect(broken.getByRole('alert')).toContainText('could not be shown here', {
+      timeout: 30_000,
+    });
+    await expect(broken.getByRole('link', { name: 'Download' })).toBeVisible();
+    await broken.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(broken).toHaveCount(0);
 
     await page.goto('/suppliers');
     const supplierCard = page.getByRole('article').filter({
