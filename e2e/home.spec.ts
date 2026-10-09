@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { addDaysIso, waitForTill } from './support';
+import { formatPence } from '../src/lib/money';
 import { APP_RELEASE_STAGE, APP_VERSION } from '../src/lib/version';
 import { seedPaydayScenario } from './payday-scenario';
 
@@ -967,7 +968,7 @@ test.describe('mobile quick entry', () => {
     // Isolated fictional household: Main £242.22, salary due on the 26th,
     // Natwest direct debits on the 21st, and a projected £90 fuel item on
     // payday to prove that the shared filter applies to every read surface.
-    const { paydayDate } = seedPaydayScenario();
+    const { paydayDate, natwestBillsOnlyShortfallPence } = seedPaydayScenario();
     const dayBefore = addDaysIso(paydayDate, -1);
 
     await page.goto('/');
@@ -1009,7 +1010,7 @@ test.describe('mobile quick entry', () => {
     await expect(till).toContainText('Last checkpoint £312.00');
     await expect(till).toContainText('current account balance £312.00');
     await expect(till).toContainText(
-      'Bills-only shortfall: Natwest would be £1,338.57 short before income lands.',
+      `Bills-only shortfall: Natwest would be ${formatPence(natwestBillsOnlyShortfallPence)} short before income lands.`,
     );
     await expect(till).not.toContainText('Scenario Council Tax');
     await expect(till).not.toContainText(

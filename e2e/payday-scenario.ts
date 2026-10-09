@@ -60,7 +60,10 @@ const bills = [
  * every other projected day-to-day figure is set to zero to make the exclusion
  * visible in the Overview and Horizon as well as in the shared projection.
  */
-export function seedPaydayScenario(): { paydayDate: string } {
+export function seedPaydayScenario(): {
+  paydayDate: string;
+  natwestBillsOnlyShortfallPence: number;
+} {
   const databasePath = path.resolve(process.cwd(), '.e2e-data/simple-finance.sqlite');
   const handle = openDatabase(databasePath);
   try {
@@ -303,7 +306,15 @@ export function seedPaydayScenario(): { paydayDate: string } {
       throw new Error('Payday E2E fixture did not resolve to the expected isolated projection');
     }
 
-    return { paydayDate: projection.result.paydayDate };
+    const natwestWatch = projection.result.potWatches.find((watch) => watch.potId === natwest.id);
+    if (natwestWatch === undefined) {
+      throw new Error('Payday E2E fixture has no bills-only shortfall for Natwest');
+    }
+
+    return {
+      paydayDate: projection.result.paydayDate,
+      natwestBillsOnlyShortfallPence: natwestWatch.shortfallPence,
+    };
   } finally {
     handle.raw.close();
   }
