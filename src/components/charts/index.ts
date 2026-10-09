@@ -9,6 +9,8 @@ export type { ChartBasis, ChartFigureProps, ChartTableColumn, ChartTableRow } fr
 export { CHART_COLOURS } from './chart-primitives';
 export { StepAreaChart } from './step-area-chart';
 export type { StepAreaChartProps, StepAreaPoint } from './step-area-chart';
+export { PieChart } from './pie-chart';
+export type { PieChartProps, PieSlice } from './pie-chart';
 export { BarChart } from './bar-chart';
 export type { BarChartProps, BarDatum } from './bar-chart';
 export { StackedBarChart } from './stacked-bar-chart';

@@ -5,25 +5,31 @@ import {
   CHART_COLOURS,
   ChartFigure,
   ChartLegend,
+  PieChart,
   StackedBarChart,
   StepAreaChart,
   chartDomain,
   type BarDatum,
   type ChartTableRow,
+  type PieSlice,
   type StackedGroup,
 } from '@/components/charts';
 import { currentUserFromRequest } from '@/lib/auth/next';
 import { getDbHandle } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
 import {
+  PIE_SPLIT_PARENTS,
   getCommitmentChartView,
   getForecastChartView,
   getGroceriesChartView,
   getPersonalChartView,
+  getSpendingMixView,
   type CommitmentChartView,
   type ForecastChartView,
   type GroceriesChartView,
+  type MixWindow,
   type PersonalChartView,
+  type SpendingMixView,
 } from '@/lib/records/charts-view';
 import {
   purchasesHref,
@@ -31,6 +37,12 @@ import {
   type PersonalSeries,
   type WeekBucket,
 } from '@/lib/records/chart-series';
+import {
+  householdSliceKey,
+  mixSliceKey,
+  type MixLine,
+  type MixSlice,
+} from '@/lib/records/spending-mix';
 import { formatShortLocalDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +63,12 @@ export const dynamic = 'force-dynamic';
 interface SearchParams {
   who?: string;
   scheduleOnly?: string;
+  /** Spending mix (E): the window, the category ticks and the selected slice. */
+  from?: string;
+  to?: string;
+  cat?: string | string[];
+  catset?: string;
+  slice?: string;
 }
 
 const PHONE_WIDTH = 320;
@@ -75,6 +93,16 @@ export default async function ChartsPage({
   const include = parseWho(params.who, everyone);
   const personal = include === null ? everyone : getPersonalChartView(db, { include }, now);
   const commitments = getCommitmentChartView(db, { scheduleOnly }, now);
+  const mixView = getSpendingMixView(
+    db,
+    {
+      from: params.from ?? null,
+      to: params.to ?? null,
+      includedParentIds: parseCategoryIds(params),
+    },
+    now,
+  );
+  const sliceKey = typeof params.slice === 'string' ? params.slice : null;
 
   return (
     <main className="mx-auto max-w-7xl overflow-x-clip px-4 py-6 sm:py-8">
@@ -82,9 +110,9 @@ export default async function ChartsPage({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Charts</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">The money, drawn</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          Four questions: where the balance goes next month, whether the shopping is creeping up,
-          whose discretionary spending is moving, and whether the fixed bills are coming down. Every
-          chart carries its numbers underneath —{' '}
+          Five questions: where the balance goes next month, where this payday cycle&apos;s money
+          goes, whether the shopping is creeping up, whose discretionary spending is moving, and
+          whether the fixed bills are coming down. Every chart carries its numbers underneath —{' '}
           <Link href="/insights" className="font-medium text-accent hover:underline">
             Insights
           </Link>{' '}
@@ -97,6 +125,7 @@ export default async function ChartsPage({
         <GroceriesSection view={groceries} />
         <PersonalSection view={personal} everyone={everyone} selected={include} params={params} />
         <CommitmentsSection view={commitments} params={params} />
+        <MixLayout view={mixView} selectedKey={sliceKey} />
       </div>
 
       <p className="mt-6 text-xs text-ink-muted">
@@ -857,6 +886,453 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
         </ChartFigure>
       </div>
     </ChartCard>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* E. Where the money goes — the spending-mix pie                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The selector and the pie side by side on a laptop, stacked on a phone. The
+ * selector is a plain GET form, so the choices live in the URL and the page
+ * works with JavaScript switched off.
+ */
+function MixLayout({ view, selectedKey }: { view: SpendingMixView; selectedKey: string | null }) {
+  return (
+    <div className="grid min-w-0 gap-6 lg:col-span-2 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+      <MixSelector view={view} />
+      <MixSection view={view} selectedKey={selectedKey} />
+    </div>
+  );
+}
+
+/**
+ * Which parent ids the selector counted. The form always sends `catset`, so
+ * an unticked category is an exclusion rather than a missing field; without
+ * `catset` (a fresh visit) every category counts.
+ */
+function parseCategoryIds(params: SearchParams): number[] | null {
+  if (params.catset !== '1') return null;
+  const raw = Array.isArray(params.cat) ? params.cat : params.cat === undefined ? [] : [params.cat];
+  return raw
+    .flatMap((part) => part.split(','))
+    .map((part) => Number(part.trim()))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+/** The page's own URL for a window, a category set and an optional slice. */
+function mixHref(
+  window: { from: string; to: string },
+  options: { cats: readonly number[] | null; slice?: string },
+): string {
+  const query = new URLSearchParams();
+  query.set('from', window.from);
+  query.set('to', window.to);
+  if (options.cats !== null) {
+    query.set('catset', '1');
+    for (const id of options.cats) query.append('cat', String(id));
+  }
+  if (options.slice !== undefined) query.set('slice', options.slice);
+  return `/charts?${query.toString()}#mix`;
+}
+
+interface PresetLink {
+  key: string;
+  label: string;
+  window: MixWindow;
+}
+
+function MixSelector({ view }: { view: SpendingMixView }) {
+  const { window, presets, parents, includedParentIds, allParentsIncluded } = view;
+  const cats = allParentsIncluded ? null : includedParentIds;
+  const presetLinks: PresetLink[] = [];
+  if (presets.payday !== null) {
+    presetLinks.push({ key: 'payday', label: 'Payday cycle', window: presets.payday });
+  }
+  if (presets.previousPayday !== null) {
+    presetLinks.push({
+      key: 'previous-payday',
+      label: 'Previous payday cycle',
+      window: presets.previousPayday,
+    });
+  }
+  presetLinks.push({ key: 'month', label: 'This calendar month', window: presets.month });
+
+  return (
+    <section
+      id="mix-controls"
+      aria-labelledby="mix-controls-heading"
+      className="min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm"
+    >
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">Selector</p>
+      <h2 id="mix-controls-heading" className="text-lg font-semibold">
+        Choose what to count
+      </h2>
+      <p className="mt-1 text-xs text-ink-muted">
+        By default this is the payday cycle: from the last payday up to the day before the next one.
+        Press Show after changing anything.
+      </p>
+
+      <form method="get" action="/charts#mix" className="mt-4 space-y-4">
+        <input type="hidden" name="catset" value="1" />
+        <fieldset className="grid grid-cols-2 gap-2">
+          <legend className="mb-1 text-xs font-medium text-ink-soft">Time window</legend>
+          <label className="flex flex-col gap-1 text-xs text-ink-soft">
+            From
+            <input
+              type="date"
+              name="from"
+              required
+              defaultValue={window.from}
+              className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-ink-soft">
+            To
+            <input
+              type="date"
+              name="to"
+              required
+              defaultValue={window.to}
+              className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
+            />
+          </label>
+          <div className="col-span-2">
+            <button
+              type="submit"
+              className="rounded bg-till px-3 py-1.5 text-sm font-medium text-till-ink"
+            >
+              Show
+            </button>
+          </div>
+        </fieldset>
+
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick windows">
+          {presetLinks.map((preset) => {
+            const on = window.kind === preset.window.kind;
+            return (
+              <Link
+                key={preset.key}
+                href={mixHref(preset.window, { cats })}
+                aria-current={on ? 'true' : undefined}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  on
+                    ? 'border-till bg-till text-till-ink'
+                    : 'border-border-strong bg-surface text-ink-soft hover:bg-canvas'
+                }`}
+              >
+                {on ? '✓ ' : ''}
+                {preset.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        <fieldset>
+          <legend className="mb-1 text-xs font-medium text-ink-soft">
+            Which categories count?{' '}
+            <span className="font-normal text-ink-faint">
+              {allParentsIncluded
+                ? 'Every category counts.'
+                : `${includedParentIds.length} of ${parents.length} counted.`}
+            </span>
+          </legend>
+          <ul className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1">
+            {parents.map((parent) => (
+              <li key={parent.id}>
+                <label className="flex items-center gap-2 text-sm text-ink-body">
+                  <input
+                    type="checkbox"
+                    name="cat"
+                    value={parent.id}
+                    defaultChecked={includedParentIds.includes(parent.id)}
+                    className="h-4 w-4 rounded border-border-strong"
+                  />
+                  {parent.name}
+                  {parent.retired ? (
+                    <span className="text-xs text-ink-faint">(retired)</span>
+                  ) : null}
+                </label>
+              </li>
+            ))}
+          </ul>
+          {allParentsIncluded ? null : (
+            <Link
+              href={mixHref(window, { cats: null })}
+              className="mt-2 inline-block text-xs font-medium text-accent hover:underline"
+            >
+              Count every category
+            </Link>
+          )}
+        </fieldset>
+      </form>
+    </section>
+  );
+}
+
+/** Colour slots are fixed by the category tree, so a slice keeps its colour. */
+function mixColourSlots(view: SpendingMixView): string[] {
+  const split = new Set<string>(PIE_SPLIT_PARENTS);
+  const slots: string[] = [];
+  for (const parent of view.parents) {
+    if (split.has(parent.name)) {
+      for (const person of view.people) slots.push(mixSliceKey(parent.id, person.id));
+      slots.push(householdSliceKey(parent.id));
+    } else {
+      slots.push(mixSliceKey(parent.id, null));
+    }
+  }
+  return slots;
+}
+
+/** Five series colours, then tints of them: enough for a household's categories. */
+function mixColour(index: number): string {
+  const series = CHART_COLOURS.series;
+  const base = series[index % series.length] as string;
+  if (index < series.length) return base;
+  const tint = index < series.length * 2 ? 62 : 40;
+  return `color-mix(in srgb, ${base} ${tint}%, var(--color-surface))`;
+}
+
+function sharePercent(share: number): string {
+  return `${Math.round(share * 100)}%`;
+}
+
+function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey: string | null }) {
+  const { mix, window, today, notice } = view;
+  const slots = mixColourSlots(view);
+  const colourOf = (key: string): string => {
+    const index = slots.indexOf(key);
+    return mixColour(index < 0 ? slots.length : index);
+  };
+  const cats = view.allParentsIncluded ? null : view.includedParentIds;
+  const selected =
+    selectedKey === null ? null : (mix.slices.find((slice) => slice.key === selectedKey) ?? null);
+  const drawn = mix.slices.filter((slice) => slice.drawn);
+  const largest = drawn[0];
+  const windowText = `${formatShortLocalDate(window.from)} to ${formatShortLocalDate(window.to)}`;
+
+  const sliceHref = (slice: MixSlice): string =>
+    // Pressing the selected slice again closes its line items.
+    selected?.key === slice.key
+      ? mixHref(window, { cats })
+      : mixHref(window, { cats, slice: slice.key });
+
+  const pieSlices: PieSlice[] = drawn.map((slice) => ({
+    key: slice.key,
+    label: slice.label,
+    valuePence: slice.amountPence,
+    fill: colourOf(slice.key),
+    href: sliceHref(slice),
+    hint: `${slice.label}: ${formatPence(slice.amountPence)}, ${sharePercent(slice.share)} — show the line items`,
+    selected: slice.key === selected?.key,
+  }));
+
+  const headline =
+    view.allParentsIncluded === false && view.includedParentIds.length === 0
+      ? 'No categories are ticked, so nothing is counted.'
+      : largest === undefined
+        ? `Nothing is above zero from ${windowText}.`
+        : `${formatPence(mix.totalPence)} net spending from ${windowText}. ${largest.label} is the biggest slice, at ${sharePercent(largest.share)}.`;
+
+  const runningPast = window.to > today;
+  const caption = `Net spending by parent category, drawn from the purchase lines in the window — refunds net off their category. Personal is split by “For: …”: each person’s own slice, and household-marked personal spending as its own slice, never split between people. A category that nets to zero or below is listed in the table but not drawn.${
+    runningPast ? ' The window runs past today, so days still to come are not counted yet.' : ''
+  }`;
+
+  const columns = [
+    { key: 'slice', label: 'Slice' },
+    { key: 'spent', label: 'Net spent', align: 'right' as const },
+    { key: 'share', label: 'Share', align: 'right' as const },
+  ];
+  const rows: ChartTableRow[] = mix.slices.map((slice) => ({
+    key: slice.key,
+    muted: !slice.drawn,
+    cells: [
+      <a key="link" href={sliceHref(slice)} className="text-accent hover:underline">
+        {slice.label}
+      </a>,
+      formatPence(slice.amountPence),
+      slice.drawn ? sharePercent(slice.share) : 'not drawn',
+    ],
+  }));
+
+  const mixFigure = (variant: 'phone' | 'laptop', size: number) => (
+    <ChartFigure
+      chart="mix"
+      variant={variant}
+      headline={headline}
+      basis="Reported"
+      caption={caption}
+      columns={columns}
+      rows={rows}
+      totals={['Total', formatPence(mix.totalPence), '']}
+      footer={
+        <ul className="grid gap-1 text-xs text-ink-soft sm:grid-cols-2">
+          {mix.slices.map((slice) => (
+            <li key={slice.key}>
+              <Link
+                href={sliceHref(slice)}
+                aria-current={slice.key === selected?.key ? 'true' : undefined}
+                className={`flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-canvas ${
+                  slice.key === selected?.key ? 'font-semibold text-ink-body' : ''
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                    style={
+                      slice.drawn
+                        ? { backgroundColor: colourOf(slice.key) }
+                        : { boxShadow: `inset 0 0 0 1px ${CHART_COLOURS.axis}` }
+                    }
+                  />
+                  <span className="truncate">{slice.label}</span>
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {formatPence(slice.amountPence)}
+                  {slice.drawn ? ` · ${sharePercent(slice.share)}` : ' · not drawn'}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      }
+    >
+      <div className="mx-auto max-w-[17rem] sm:max-w-[20rem]">
+        <PieChart
+          slices={pieSlices}
+          size={size}
+          ariaLabel={`Share of net spending by category, ${windowText}. ${headline}`}
+        />
+      </div>
+    </ChartFigure>
+  );
+
+  return (
+    <ChartCard id="mix" eyebrow="E · Spending mix" title="Where the money goes" className="min-w-0">
+      {notice === null ? null : (
+        <p className="mb-3 rounded-lg border border-dashed border-border-strong bg-canvas p-3 text-xs text-ink-soft">
+          {notice}
+        </p>
+      )}
+      <div className="lg:hidden">{mixFigure('phone', 240)}</div>
+      <div className="hidden lg:block">{mixFigure('laptop', 260)}</div>
+
+      {selected === null ? (
+        <p className="mt-4 text-xs text-ink-muted">
+          Select a slice, or its name below, to see the line items behind it.
+        </p>
+      ) : (
+        <MixLineItems view={view} slice={selected} closeHref={mixHref(window, { cats })} />
+      )}
+    </ChartCard>
+  );
+}
+
+function MixLineItems({
+  view,
+  slice,
+  closeHref,
+}: {
+  view: SpendingMixView;
+  slice: MixSlice;
+  closeHref: string;
+}) {
+  const { window } = view;
+  const target =
+    slice.kind === 'person' && slice.personId !== null
+      ? { targetKind: 'person' as const, targetId: slice.personId }
+      : slice.kind === 'household'
+        ? { targetKind: 'household' as const }
+        : {};
+  const openHref = purchasesHref({
+    from: window.from,
+    to: window.to,
+    categoryIds: [slice.parentId],
+    ...target,
+  });
+  return (
+    <section
+      id="mix-lines"
+      aria-labelledby="mix-lines-heading"
+      className="mt-4 rounded-xl border border-border bg-canvas p-4"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 id="mix-lines-heading" className="text-sm font-semibold">
+          Line items: {slice.label}
+        </h3>
+        <p className="text-sm tabular-nums text-ink-soft">
+          {formatPence(slice.amountPence)} · {slice.lines.length}{' '}
+          {slice.lines.length === 1 ? 'line' : 'lines'}
+        </p>
+      </div>
+      {slice.lines.length === 0 ? (
+        <p className="mt-2 text-sm text-ink-muted">Nothing was spent here in this window.</p>
+      ) : (
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-left text-[11px] uppercase tracking-wide text-ink-muted">
+              <tr>
+                <th scope="col" className="py-1 pr-3 font-medium">
+                  Date
+                </th>
+                <th scope="col" className="py-1 pr-3 font-medium">
+                  Where
+                </th>
+                <th scope="col" className="py-1 pr-3 font-medium">
+                  Category
+                </th>
+                <th scope="col" className="py-1 pr-3 font-medium">
+                  For
+                </th>
+                <th scope="col" className="py-1 pr-0 text-right font-medium">
+                  Amount
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {slice.lines.map((line) => (
+                <MixLineRow
+                  key={`${line.purchaseId}-${line.categoryId}-${line.targetKind}-${line.targetId ?? 'x'}-${line.amountPence}`}
+                  line={line}
+                  labels={view.targetLabels}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+        <Link href={openHref} className="font-medium text-accent hover:underline">
+          Open these purchases →
+        </Link>
+        <Link href={closeHref} className="font-medium text-ink-soft hover:underline">
+          Close line items
+        </Link>
+        <span className="text-ink-muted">
+          A matching purchase comes back whole, with all of its lines.
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function MixLineRow({ line, labels }: { line: MixLine; labels: Map<string, string> }) {
+  const forText =
+    line.targetKind === 'household'
+      ? 'Household'
+      : (labels.get(`${line.targetKind}:${line.targetId}`) ?? 'Unknown');
+  return (
+    <tr className="border-t border-border-hairline align-top">
+      <td className="whitespace-nowrap py-1 pr-3">{formatShortLocalDate(line.occurredDate)}</td>
+      <td className="py-1 pr-3">{line.supplierName ?? line.note ?? '—'}</td>
+      <td className="py-1 pr-3 text-ink-soft">{line.childName}</td>
+      <td className="py-1 pr-3 text-ink-soft">{forText}</td>
+      <td className="py-1 pr-0 text-right tabular-nums">{formatPence(line.amountPence)}</td>
+    </tr>
   );
 }
 

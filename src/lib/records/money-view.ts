@@ -715,6 +715,30 @@ export function nextScheduledIncomeDate(db: Db, today: string): string | null {
   return nextReceiptScheduleInstance(db, today)?.dueDate ?? null;
 }
 
+/**
+ * The main salary's dates on or before `today`, newest first — the paydays
+ * the household has already lived through. Only the schedule that defines the
+ * next payday counts, so a benefit or refund never moves the cycle (the same
+ * rule as `nextScheduledIncomeDate`). Empty when no payday is scheduled.
+ */
+export function recentScheduledIncomeDates(db: Db, today: string, count: number): string[] {
+  const mainSalary = nextReceiptScheduleInstance(db, today);
+  if (mainSalary === undefined || count <= 0) return [];
+  return db
+    .select({ dueDate: scheduleInstances.dueDate })
+    .from(scheduleInstances)
+    .where(
+      and(
+        eq(scheduleInstances.scheduleId, mainSalary.scheduleId),
+        lte(scheduleInstances.dueDate, today),
+      ),
+    )
+    .orderBy(desc(scheduleInstances.dueDate))
+    .limit(count)
+    .all()
+    .map((row) => row.dueDate);
+}
+
 function nextExpectedIncome(db: Db, today: string): NextIncome | null {
   const schedule = nextReceiptScheduleInstance(db, today);
   const scheduleOption: NextIncome | null =
