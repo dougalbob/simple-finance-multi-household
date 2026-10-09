@@ -2779,13 +2779,17 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
 
     A premium is spread only when its recurring payment targets the vehicle (`Vehicle — <name>` on the Recurring form) and its start date reaches back far enough for the past years to exist as purchases (SPEC §11.1). Both are checks for the household's car insurance.
 
-194. **Where the money goes: a spending-mix pie on /charts (2026-10-09, unreleased; the version is still 0.38.0).**
+194. **Horizon card-header totals (2026-10-09, v0.39.0).**
+
+    Each Horizon card now shows its total in the card summary, beside the count: the commitments total, the expected money in total, and the day-to-day total. The totals are summed from the same lists the card renders, so they cannot drift from the rows. Expected money in carries the existing "≈ … expected — never received" support lines, so an expected receipt is never presented as money received. The household approved the change on the preview.
+
+195. **Where the money goes: a spending-mix pie on /charts (2026-10-09, v0.39.0).**
 
     The household asked for a pie of what share of the money each parent category takes, with Personal split per person and a selector for the window and the categories counted. Built as SPEC §16.7 E. The pie is hand-rolled SVG like the other charts, with no client JavaScript, so the selector and the slice drill-down work as plain links and GET forms.
 
-    Decisions taken on the household's behalf, to confirm: the default window is the **payday cycle** (last payday to the day before the next), using the main salary schedule and its weekend shift (decision 112). The payday split applies to **Personal only**, not to Entertainment & Eating Out. Category selection is at **parent level** (the pie's slices), not child level. A parent that nets to zero or below is listed in the table but not drawn. Household-marked personal spending is its own slice.
+    Decisions as built, approved by the household on the preview: the default window is the **payday cycle** (last payday to the day before the next), using the main salary schedule and its weekend shift (decision 112). The payday split applies to **Personal only**, not to Entertainment & Eating Out. Category selection is at **parent level** (the pie's slices), not child level. A parent that nets to zero or below is listed in the table but not drawn. Household-marked personal spending is its own slice.
 
-    The pure arithmetic is `src/lib/records/spending-mix.ts`, and the DB assembly is `getSpendingMixView` in `charts-view.ts`. `recentScheduledIncomeDates` in `money-view.ts` finds the paydays already lived through. Tests: `tests/spending-mix.test.ts` (the rules, with no database) and `tests/spending-mix-view.test.ts` (the pie against an independent sum over `listPurchases`, and against the Insights roll-up, plus the payday windows and voids). Playwright is not run and no e2e spec was added, as the household asked for Playwright to be skipped for now.
+    The pure arithmetic is `src/lib/records/spending-mix.ts`, and the DB assembly is `getSpendingMixView` in `charts-view.ts`. `recentScheduledIncomeDates` in `money-view.ts` finds the paydays already lived through. Tests: `tests/spending-mix.test.ts` (the rules, with no database) and `tests/spending-mix-view.test.ts` (the pie against an independent sum over `listPurchases`, and against the Insights roll-up, plus the payday windows and voids). No Playwright spec was added for the pie, as the household asked for Playwright to be skipped for now; the release's `browser` check runs the existing acceptance suite in CI.
 
     Not verified: a real phone or laptop render. The sandbox has no browser, so the layout is checked through the server HTML only.
 

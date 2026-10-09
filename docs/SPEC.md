@@ -1208,7 +1208,7 @@ household's own direct debits and standing orders already use, and says so. A **
 toggle narrows the chart to purchases the app converted from a schedule (`purchases.scheduleInstanceId`) —
 true DD/SOs, no hand-typed bills.
 
-**E. Where the money goes (decision 194).** A pie of **net spending by parent category**
+**E. Where the money goes (decision 195).** A pie of **net spending by parent category**
 over a window the household chooses, so the question "what share of our money goes on each thing" has a picture.
 The default window is the **payday cycle**: from the most recent payday up to the day before the next one
 (a weekend payday counts as the Friday before, decision 112). The selector offers the previous payday cycle and
