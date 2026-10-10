@@ -1,10 +1,10 @@
-# Release notes — v1.0.0-rc.2 — First multi-household candidate
+# Release notes — v1.0.0-rc.3 — First multi-household candidate
 
 **Type:** release candidate. This is a GitHub pre-release. It does **not** move `latest`, and it is not the stable `v1.0.0`.
-**Install this exact image:** `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.2`. The Unraid template in this repository already pins it.
-**Version badge:** `v1.0.0-rc.2 (pre-release)`.
+**Install this exact image:** `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.3`. The Unraid template in this repository already pins it.
+**Version badge:** `v1.0.0-rc.3 (pre-release)`.
 
-**Why rc.2:** the first candidate tag `v1.0.0-rc.1` (commit `ef02e95`) failed its Publish run before anything was pushed to GHCR, so no `rc.1` image exists. This candidate has the same application code as `rc.1`, with the publish workflow fix from `main` (PR #7) and the new version number. Use `v1.0.0-rc.2` in place of `v1.0.0-rc.1` everywhere in the install steps below.
+**Why rc.3:** `v1.0.0-rc.1` (commit `ef02e95`) failed its Publish run at the container smoke test, and `v1.0.0-rc.2` failed at the upgrade smoke test, which tried to use the unpublished `rc.1` tag as an upgrade base. Neither run pushed anything to GHCR, so no `rc.1` or `rc.2` image exists. This candidate has the same application code, plus the publish workflow fix that skips version tags without a published image. Use `v1.0.0-rc.3` everywhere in the install steps below.
 
 ## What this release is
 
@@ -51,7 +51,7 @@ This is the first build of the multi-household edition, a separate product from 
 
    `REGISTRY_ADMIN_EMAIL` must also appear in `AUTH_ALLOWED_EMAILS`. The first time the app opens its registry, it creates that administrator's household. This happens only once, while the registry is empty.
 4. In Cloudflare, create a **new** Access application for a **new** hostname. Point its route at host port `3009`. Do not change the original route on port `3007`.
-5. Add the container from the template. Check that the host port is `3009`, the appdata path is `/mnt/user/appdata/simple-finance-multi-household`, and the repository is `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.2`.
+5. Add the container from the template. Check that the host port is `3009`, the appdata path is `/mnt/user/appdata/simple-finance-multi-household`, and the repository is `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.3`.
 6. Open the new hostname and sign in as `REGISTRY_ADMIN_EMAIL`. Then, on `/admin`, pre-assign the other sign-in emails to their households before those people first visit.
 
 Keep the `.env` file secret and out of backups. It is not part of a household backup.

@@ -140,7 +140,20 @@ jobs:
           # therefore correctly skips upgrade smoke; later releases upgrade
           # the two most recent product-line images on a shared volume and
           # check every migration exactly once.
-          BASE_TAGS="$(git tag --sort=-v:refname | grep -E '^v[1-9][0-9]*\.' | grep -v "^${VERSION}$" | head -2 || true)"
+          # A tag only counts as a base when its image exists in GHCR. A tag
+          # whose publish failed before pushing (for example v1.0.0-rc.1) has
+          # no image and is skipped, so it cannot break later releases.
+          BASE_TAGS=""
+          BASE_COUNT=0
+          for CANDIDATE in $(git tag --sort=-v:refname | grep -E '^v[1-9][0-9]*\.' | grep -v "^${VERSION}$" || true); do
+            if [ "$BASE_COUNT" -ge 2 ]; then break; fi
+            if docker buildx imagetools inspect "$IMAGE:$CANDIDATE" >/dev/null 2>&1; then
+              BASE_TAGS="$BASE_TAGS $CANDIDATE"
+              BASE_COUNT=$((BASE_COUNT + 1))
+            else
+              echo "skipping $CANDIDATE: no image published in $IMAGE"
+            fi
+          done
           if [ -z "$BASE_TAGS" ]; then
             echo "no previously published tag found - skipping upgrade smoke"
             exit 0
