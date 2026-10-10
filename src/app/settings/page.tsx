@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { BackupPanel } from '@/components/backup-panel';
 import { ProjectionSettingsForm } from '@/components/recurring';
 import {
   AddVehicleForm,
@@ -13,11 +12,9 @@ import {
   WarningLeadsForm,
 } from '@/components/settings-forms';
 import { ThemeGallery } from '@/components/theme-gallery';
-import { currentUserFromRequest } from '@/lib/auth/next';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { signInEmailChoices } from '@/lib/auth/sign-in-choices';
 import { loadAppConfig } from '@/lib/config';
-import { inspectDocuments } from '@/lib/backup/backup';
-import { getDbHandle } from '@/lib/db/client';
 import { categoryTree } from '@/lib/records/categories';
 import { getCommitmentCategoryPicker } from '@/lib/records/charts-view';
 import { listPeople } from '@/lib/records/people';
@@ -33,7 +30,6 @@ import {
 import { listVehicles } from '@/lib/records/vehicles';
 import { currentTheme } from '@/lib/theme/next';
 import { themeFamilies } from '@/lib/theme/theme';
-import { APP_VERSION } from '@/lib/version';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,10 +40,10 @@ export const dynamic = 'force-dynamic';
  * there are no hidden switches (blueprint §1 transparency rule).
  */
 export default async function SettingsPage() {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const people = listPeople(db);
   const vehicles = listVehicles(db);
@@ -58,7 +54,6 @@ export default async function SettingsPage() {
   const defaultPurchasePotId = getDefaultPurchasePotId(db);
   const commitmentPicker = getCommitmentCategoryPicker(db);
   const projection = getProjectionView(db, now);
-  const documentsStatus = await inspectDocuments(getDbHandle());
   const theme = await currentTheme();
 
   return (
@@ -290,12 +285,11 @@ export default async function SettingsPage() {
           <h2 id="backup-heading" className="mb-1 text-lg font-semibold">
             Backup &amp; restore
           </h2>
-          <p className="mb-3 text-xs text-ink-muted">
-            Encrypted archives of the database and the attached receipts, and the one-way door that
-            puts one back. Read the wording on each button before you press it — the restore
-            replaces this installation's data.
+          <p className="text-sm text-ink-soft">
+            Household-scoped backup and restore are temporarily unavailable while tenant-specific
+            archives and recovery are being implemented. No backup or restore request can access or
+            replace another household&apos;s data.
           </p>
-          <BackupPanel appVersion={APP_VERSION} documentsStatus={documentsStatus} />
         </section>
 
         <section

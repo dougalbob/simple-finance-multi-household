@@ -1,7 +1,6 @@
 import { desc, eq, inArray } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth/current-user';
+import { householdContextFromHeaders } from '@/lib/auth/household-context';
 import { loadAppConfig } from '@/lib/config';
-import { getDbHandle } from '@/lib/db/client';
 import { auditEntries, tasks as tasksTable } from '@/lib/db/schema';
 import { getKeyDateAlerts } from '@/lib/records/money-view';
 import { listTasks } from '@/lib/records/tasks';
@@ -32,15 +31,23 @@ function normalizedEmail(email: string): string {
  */
 export async function GET(request: Request) {
   const config = loadAppConfig();
-  const user = await getCurrentUser(request.headers, config);
+  let user;
+  try {
+    user = await householdContextFromHeaders(request.headers, config);
+  } catch {
+    return Response.json(
+      { error: 'household_data_unavailable' },
+      { status: 503, headers: { 'cache-control': 'private, no-store' } },
+    );
+  }
   if (user === null) {
     return Response.json(
       { error: 'unauthorised' },
-      { status: 401, headers: { 'cache-control': 'no-store' } },
+      { status: 401, headers: { 'cache-control': 'private, no-store' } },
     );
   }
 
-  const { db } = getDbHandle(config);
+  const { db } = user;
   const now = new Date();
   const today = toLocalDateString(now);
 
@@ -183,7 +190,7 @@ export async function GET(request: Request) {
       noticedCount: noticed.length,
       newSinceLastSeen: newSinceLastSeenDisplay,
     },
-    { headers: { 'cache-control': 'no-store' } },
+    { headers: { 'cache-control': 'private, no-store' } },
   );
 }
 
@@ -194,14 +201,21 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   const config = loadAppConfig();
-  const user = await getCurrentUser(request.headers, config);
+  let user;
+  try {
+    user = await householdContextFromHeaders(request.headers, config);
+  } catch {
+    return Response.json(
+      { error: 'household_data_unavailable' },
+      { status: 503, headers: { 'cache-control': 'private, no-store' } },
+    );
+  }
   if (user === null) {
     return Response.json(
       { error: 'unauthorised' },
-      { status: 401, headers: { 'cache-control': 'no-store' } },
+      { status: 401, headers: { 'cache-control': 'private, no-store' } },
     );
   }
-  const { db } = getDbHandle(config);
-  setBellSeenAt(db, user.email, new Date());
-  return Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
+  setBellSeenAt(user.db, user.email, new Date());
+  return Response.json({ ok: true }, { headers: { 'cache-control': 'private, no-store' } });
 }

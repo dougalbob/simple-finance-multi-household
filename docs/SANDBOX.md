@@ -241,13 +241,11 @@ produce. `cp -r .e2e-data /tmp/low-data`, open it with the repo's own domain fun
 `DATA_DIR=/tmp/low-data`. That is how the below-zero forecast (sub-zero tint, overdraft line, "£1,831.27
 below zero" headline) was checked in a real browser before release without touching the seeded specs.
 
-Related: never start the dev preview with a **relative** `DATA_DIR`/`DATABASE_PATH` — `getDbHandle()`'s
-identity check compared better-sqlite3's `raw.name` (the path **as passed**) with
-`path.resolve(config.databasePath)`, so with a relative path the two never matched and every call closed
-the previous handle and reopened a new one. `/settings` is the only page that calls `getDbHandle()`
-twice, so its first handle died mid-render and the page 500'd with "The database connection is not
-open". Both sides are resolved as of the v0.14.0 stamp (`tests/db-handle.test.ts`), but absolute paths
-(`DATA_DIR=$PWD/.e2e-data …`) remain the safe habit.
+Current multi-household runtime note: there is no global `DATABASE_PATH` or `DOCUMENTS_DIR` setting.
+Each finance handle is cached by the absolute path derived from the active registry household ID, and
+its documents path comes from the same resolved context. Relative `DATA_DIR` is supported and covered
+by `tests/db-handle.test.ts`; absolute roots (`DATA_DIR=$PWD/.e2e-data …`) remain easiest to inspect.
+Never select a tenant by setting an ID in a URL, form or environment variable.
 
 ---
 

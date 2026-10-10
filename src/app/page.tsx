@@ -2,9 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { HouseholdSetup } from '@/components/household-setup';
 import { QuickEntry } from '@/components/quick-entry';
-import { currentUserFromRequest } from '@/lib/auth/next';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { APP_RELEASE_STAGE, APP_VERSION } from '@/lib/version';
-import { getDbHandle } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
 import { addDaysLocal } from '@/lib/records/dates';
 import { buildEntryData } from '@/lib/records/entry-view';
@@ -31,10 +30,10 @@ export const dynamic = 'force-dynamic';
  * dates live on their own pages — not here.
  */
 export default async function HomePage() {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
 

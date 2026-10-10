@@ -14,8 +14,7 @@ import {
   type PieSlice,
   type StackedGroup,
 } from '@/components/charts';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import {
   PIE_SPLIT_PARENTS,
@@ -79,10 +78,10 @@ export default async function ChartsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const params = await searchParams;
   const scheduleOnly = params.scheduleOnly === '1';

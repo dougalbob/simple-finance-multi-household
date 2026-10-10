@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { RenewalEditForm } from '@/components/schedule-forms';
 import { TaskDueBadge } from '@/components/task-forms';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import { creditCardPaymentReminderDate } from '@/lib/records/credit-cards';
 import { listPots } from '@/lib/records/pots';
@@ -32,10 +31,10 @@ export const dynamic = 'force-dynamic';
  * direct debit keeps going until they change it at the bank (SPEC §22.1).
  */
 export default async function ContractsPage() {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
   const renewals = listRenewals(db);

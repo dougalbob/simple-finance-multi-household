@@ -12,9 +12,8 @@ import { addDaysIso, londonToday } from './support';
  * support (flagged `expected`, never income — the £1,000 loan from Mum is
  * borrowed money, which is owed, never income).
  *
- * Runs after `income` and before `backup`: it only reads the seeded support
- * loan, mutates nothing another spec counts, and finishes before the backup
- * project's restore rewinds the install.
+ * Runs after `income`: it only reads the seeded support loan and mutates
+ * nothing another spec counts.
  */
 
 /* Scoped locators: the page is a single form + cards + <details> blocks. */

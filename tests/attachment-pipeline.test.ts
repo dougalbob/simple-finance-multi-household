@@ -5,8 +5,11 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { eq } from 'drizzle-orm';
 import { GET } from '../src/app/api/attachments/[fileKey]/route';
-import { closeDbHandle, getDbHandle } from '../src/lib/db/client';
+import { closeDbHandles, getHouseholdDbHandle } from '../src/lib/db/client';
 import { loadAppConfig } from '../src/lib/config';
+import { closeRegistry, openRegistry } from '../src/lib/registry/db';
+import { assignIdentity, createHousehold } from '../src/lib/registry/domain';
+import { householdDocumentsDir, systemRegistryPath } from '../src/lib/registry/paths';
 import { attachments, auditEntries, purchases } from '../src/lib/db/schema';
 import { findChildCategory } from '../src/lib/records/categories';
 import { createPerson } from '../src/lib/records/people';
@@ -29,7 +32,7 @@ import {
   storeAttachment,
 } from '../src/lib/records/attachments';
 import { createHouseholdFixture } from './household';
-import { makeTempDir, seedTestRegistry } from './helpers';
+import { makeTempDir } from './helpers';
 
 /**
  * Attachment pipeline (SPEC §23.3, plan test strategy): content-sniffed MIME
@@ -186,25 +189,53 @@ describe('storing an attachment', () => {
 
 describe('GET /api/attachments/[fileKey]', () => {
   let dataDir: string;
+  let householdId: string;
+  let otherHouseholdId: string;
 
   before(async () => {
     dataDir = await makeTempDir('sf-attachment-route-');
     process.env.DATA_DIR = dataDir;
     process.env.AUTH_DEV_BYPASS = 'false';
     delete process.env.AUTH_DEV_IDENTITY_EMAIL;
-    // The app denies any authenticated identity without a registry
-    // assignment; the dev identity gets one here, as an administrator would.
-    await seedTestRegistry(dataDir, [{ email: 'dev@example.com', role: 'platform_admin' }]);
+
+    const registry = openRegistry(systemRegistryPath(dataDir));
+    try {
+      const primary = createHousehold(registry, {
+        displayName: 'Primary test household',
+        actor: 'system',
+      });
+      const other = createHousehold(registry, {
+        displayName: 'Other test household',
+        actor: 'system',
+      });
+      householdId = primary.id;
+      otherHouseholdId = other.id;
+      assignIdentity(registry, {
+        email: 'dev@example.com',
+        householdId,
+        role: 'platform_admin',
+        actor: 'system',
+      });
+      assignIdentity(registry, {
+        email: 'other@example.com',
+        householdId: otherHouseholdId,
+        actor: 'system',
+      });
+    } finally {
+      registry.close();
+    }
   });
 
   after(() => {
-    closeDbHandle();
+    closeDbHandles();
+    closeRegistry();
     delete process.env.DATA_DIR;
     delete process.env.AUTH_DEV_BYPASS;
+    delete process.env.AUTH_DEV_IDENTITY_EMAIL;
   });
 
-  function callRoute(fileKey: string) {
-    return GET(new Request(`http://localhost:3000/api/attachments/${fileKey}`), {
+  function callRoute(fileKey: string, headers: Record<string, string> = {}) {
+    return GET(new Request(`http://localhost:3000/api/attachments/${fileKey}`, { headers }), {
       params: Promise.resolve({ fileKey }),
     });
   }
@@ -219,7 +250,7 @@ describe('GET /api/attachments/[fileKey]', () => {
     process.env.AUTH_DEV_IDENTITY_EMAIL = 'dev@example.com';
     try {
       const config = loadAppConfig();
-      const { db } = getDbHandle(config);
+      const { db } = getHouseholdDbHandle(householdId, config);
       const pot = createPot(db, {
         label: 'Main account',
         kind: 'bank',
@@ -244,7 +275,7 @@ describe('GET /api/attachments/[fileKey]', () => {
         originalName: 'till receipt.png',
         bytes: JPEG_BYTES,
         actor: 'dev@example.com',
-        documentsDir: config.documentsDir,
+        documentsDir: householdDocumentsDir(config.dataDir, householdId),
       });
 
       const response = await callRoute(stored.fileKey);
@@ -257,6 +288,31 @@ describe('GET /api/attachments/[fileKey]', () => {
         'inline; filename="till receipt.png"',
       );
       assert.deepEqual(Buffer.from(await response.arrayBuffer()), JPEG_BYTES);
+
+      // Tenant-looking headers cannot change the registry-resolved context.
+      assert.equal(
+        (await callRoute(stored.fileKey, { 'x-household-id': otherHouseholdId })).status,
+        200,
+      );
+      process.env.AUTH_DEV_IDENTITY_EMAIL = 'other@example.com';
+      assert.equal(
+        (await callRoute(stored.fileKey, { 'x-household-id': householdId })).status,
+        404,
+        'another assigned household cannot read this row or file',
+      );
+      assert.equal(
+        existsSync(
+          path.join(householdDocumentsDir(config.dataDir, otherHouseholdId), stored.fileKey),
+        ),
+        false,
+      );
+      process.env.AUTH_DEV_IDENTITY_EMAIL = 'outsider@example.com';
+      assert.equal(
+        (await callRoute(stored.fileKey)).status,
+        401,
+        'an unassigned identity is denied',
+      );
+      process.env.AUTH_DEV_IDENTITY_EMAIL = 'dev@example.com';
 
       // Unsafe key shapes never reach the filesystem.
       assert.equal((await callRoute('../../etc/passwd')).status, 404);

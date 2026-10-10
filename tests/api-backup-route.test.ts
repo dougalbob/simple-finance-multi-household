@@ -1,106 +1,80 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { POST } from '../src/app/api/backup/route';
-import { restoreEncryptedBackup } from '../src/lib/backup/restore';
-import { closeDbHandle, getDbHandle } from '../src/lib/db/client';
-import { loadAppConfig } from '../src/lib/config';
-import { addCheckpoint, createPot } from '../src/lib/records/pots';
-import { APP_VERSION } from '../src/lib/version';
+import { closeDbHandles } from '../src/lib/db/client';
+import { householdDatabasePath } from '../src/lib/registry/paths';
 import { makeTempDir, seedTestRegistry } from './helpers';
 
 /**
- * Exercises the real route handler (auth guard, validation, archive response)
- * against an isolated DATA_DIR, then proves the downloaded bytes restore.
+ * Household-scoped backup/restore is a later implementation step. Pin the
+ * route's authentication and same-origin checks, and prove the fail-closed
+ * response does not open, create or snapshot any household finance database.
  */
 describe('POST /api/backup (route handler)', () => {
   let dataDir: string;
+  let householdId: string;
 
   before(async () => {
     dataDir = await makeTempDir('sf-api-backup-');
     process.env.DATA_DIR = dataDir;
     process.env.AUTH_DEV_BYPASS = 'false';
-    // The app denies any authenticated identity without a registry
-    // assignment; the dev identity gets one here, as an administrator would.
-    await seedTestRegistry(dataDir, [{ email: 'dev@example.com', role: 'platform_admin' }]);
+    householdId = await seedTestRegistry(dataDir, [
+      { email: 'dev@example.com', role: 'platform_admin' },
+    ]);
   });
 
-  after(async () => {
-    closeDbHandle();
+  after(() => {
+    closeDbHandles();
     delete process.env.DATA_DIR;
     delete process.env.AUTH_DEV_BYPASS;
     delete process.env.AUTH_DEV_IDENTITY_EMAIL;
   });
 
-  function request(body: unknown): Request {
+  function request(body: unknown, headers: Record<string, string> = {}): Request {
     return new Request('http://localhost:3000/api/backup', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
     });
   }
 
-  it('rejects unauthenticated requests (no bypass, auth unconfigured)', async () => {
-    const response = await POST(request({ password: 'x' }));
+  it('rejects unauthenticated requests', async () => {
+    const response = await POST(request({ password: 'anything' }));
     assert.equal(response.status, 401);
   });
 
-  it('rejects a missing/empty password before doing any work', async () => {
+  it('rejects cross-origin requests before reporting the feature unavailable', async () => {
     process.env.AUTH_DEV_BYPASS = 'true';
     process.env.AUTH_DEV_IDENTITY_EMAIL = 'dev@example.com';
     try {
-      const noPassword = await POST(request({}));
-      assert.equal(noPassword.status, 400);
-      const emptyPassword = await POST(request({ password: '' }));
-      assert.equal(emptyPassword.status, 400);
+      const response = await POST(
+        request({ password: 'anything' }, { origin: 'https://attacker.example' }),
+      );
+      assert.equal(response.status, 403);
     } finally {
       process.env.AUTH_DEV_BYPASS = 'false';
     }
   });
 
-  it('returns an encrypted, restorable archive for an authenticated user', async () => {
+  it('fails closed for authenticated same-origin requests without touching tenant data', async () => {
     process.env.AUTH_DEV_BYPASS = 'true';
     process.env.AUTH_DEV_IDENTITY_EMAIL = 'dev@example.com';
+    try {
+      for (const body of [{ password: 'backup-passphrase-1' }, {}, { password: '' }]) {
+        const response = await POST(request(body, { origin: 'http://localhost:3000' }));
+        assert.equal(response.status, 501);
+        assert.equal(response.headers.get('cache-control'), 'private, no-store');
+        assert.deepEqual(await response.json(), {
+          error: 'household_scoped_backup_not_implemented',
+        });
+      }
 
-    const config = loadAppConfig();
-    const handle = getDbHandle(config);
-    const pot = createPot(handle.db, {
-      label: 'Main account',
-      kind: 'bank',
-      actor: 'dev@example.com',
-    });
-    addCheckpoint(handle.db, {
-      potId: pot.id,
-      amountPence: 41235,
-      effectiveAt: new Date('2026-09-26T18:05:00Z'),
-      actor: 'dev@example.com',
-      now: new Date('2026-09-26T18:06:00Z'),
-    });
-
-    const response = await POST(request({ password: 'backup-passphrase-1' }));
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get('cache-control'), 'no-store');
-
-    const disposition = response.headers.get('content-disposition') ?? '';
-    // Tied to the version module, not a literal — a version bump must not
-    // break the filename-contract assertion (it broke once at v0.1.1).
-    assert.match(
-      disposition,
-      new RegExp(
-        `^attachment; filename="simple-finance-backup-v${APP_VERSION.replaceAll('.', '\\.')}-`,
-      ),
-    );
-    const filename = /filename="([^"]+)"/.exec(disposition)?.[1];
-    assert.ok(filename !== undefined);
-
-    const bytes = Buffer.from(await response.arrayBuffer());
-    const targetDir = await makeTempDir('sf-api-restore-');
-    const summary = await restoreEncryptedBackup({
-      archive: bytes,
-      password: 'backup-passphrase-1',
-      targetDatabasePath: path.join(targetDir, 'restored.sqlite'),
-    });
-    assert.equal(summary.manifest.counts.pots, 1);
-    assert.equal(summary.manifest.counts.checkpoints, 1);
+      assert.equal(existsSync(householdDatabasePath(dataDir, householdId)), false);
+      assert.equal(existsSync(path.join(dataDir, 'simple-finance.sqlite')), false);
+    } finally {
+      process.env.AUTH_DEV_BYPASS = 'false';
+    }
   });
 });

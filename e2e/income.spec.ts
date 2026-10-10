@@ -9,9 +9,7 @@ import { londonToday } from './support';
  * Desktop-shaped on purpose: income is not a till-side task for this
  * household, so these specs drive the Income page rather than Quick Entry.
  *
- * Runs after `transactions` and before `backup`, so the records it creates
- * cannot disturb the specs that count rows, and the backup project's restore
- * cannot rewind them mid-spec.
+ * Runs after `transactions`; all writes remain inside the isolated E2E seed.
  */
 test.describe('income', () => {
   test('records one-off income with a source and shows it in the list', async ({ page }) => {

@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import { addDaysLocal } from '@/lib/records/dates';
 import { HorizonLookAheadForm } from '@/components/horizon-look-ahead-form';
@@ -49,10 +48,10 @@ export default async function HorizonPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
   // Lazy due pass as on every read page (SPEC §11.2): a commitment due today

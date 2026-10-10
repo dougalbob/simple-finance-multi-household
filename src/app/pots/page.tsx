@@ -13,8 +13,7 @@ import {
 import { AddCheckpointForm, CreatePotForm } from '@/components/pot-forms';
 import { VoidForm } from '@/components/record-forms';
 import { PotEditForm } from '@/components/settings-forms';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import type { Db } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
 import { debtBalanceLabel, listDebtsWithBalances } from '@/lib/records/debts';
@@ -64,10 +63,10 @@ export default async function PotsPage({
 }: {
   searchParams: Promise<{ external?: string; transfer?: string }>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
   const params = await searchParams;

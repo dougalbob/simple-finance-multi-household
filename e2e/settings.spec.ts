@@ -93,8 +93,8 @@ test.describe('category tree', () => {
  * project, after the mobile project has asserted the seeded default, and
  * leaves the installation with the default *cleared* — that state is the point
  * of the last assertion. So any spec that runs after this one and records a
- * purchase names its pot itself (see `backup.spec.ts`); the till cannot save
- * without one.
+ * purchase names its pot explicitly (the payday scenario does so); the till
+ * cannot save without one.
  */
 test.describe('quick entry settings', () => {
   test('the default purchase pot moves the till form', async ({ page }) => {

@@ -7,20 +7,23 @@ describe('loadAppConfig', () => {
   it('defaults the data root to ./data in development and /data in production', () => {
     const dev = loadAppConfig({ NODE_ENV: 'development' });
     assert.equal(dev.dataDir, './data');
-    assert.equal(dev.databasePath, 'data/simple-finance.sqlite'); // path.join normalises ./data
+    assert.equal(dev.registryPath, path.join('data', 'system', 'registry.sqlite'));
 
     const prod = loadAppConfig({ NODE_ENV: 'production' });
     assert.equal(prod.dataDir, '/data');
-    assert.equal(prod.databasePath, '/data/simple-finance.sqlite');
+    assert.equal(prod.registryPath, '/data/system/registry.sqlite');
   });
 
-  it('honours explicit DATA_DIR and DATABASE_PATH overrides', () => {
+  it('honours only the data root; finance paths cannot be overridden globally', () => {
     const config = loadAppConfig({
       DATA_DIR: '/srv/finance',
       DATABASE_PATH: '/elsewhere/x.sqlite',
+      DOCUMENTS_DIR: '/elsewhere/documents',
     });
     assert.equal(config.dataDir, '/srv/finance');
-    assert.equal(config.databasePath, '/elsewhere/x.sqlite');
+    assert.equal(config.registryPath, path.join('/srv/finance', 'system', 'registry.sqlite'));
+    assert.equal('databasePath' in config, false);
+    assert.equal('documentsDir' in config, false);
   });
 
   it('derives the JWKS URL from the issuer unless overridden', () => {

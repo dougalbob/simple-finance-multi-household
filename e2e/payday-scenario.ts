@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
-import { openDatabase } from '../src/lib/db/client';
+import { getCurrentUser } from '../src/lib/auth/current-user';
+import { loadAppConfig } from '../src/lib/config';
+import { closeDbHandles, getHouseholdDbHandle, type Db } from '../src/lib/db/client';
 import { checkpoints } from '../src/lib/db/schema';
 import { addDaysLocal } from '../src/lib/records/dates';
 import { getProjectionView } from '../src/lib/records/money-view';
@@ -60,12 +62,20 @@ const bills = [
  * every other projected day-to-day figure is set to zero to make the exclusion
  * visible in the Overview and Horizon as well as in the shared projection.
  */
-export function seedPaydayScenario(): {
+export async function seedPaydayScenario(): Promise<{
   paydayDate: string;
   natwestBillsOnlyShortfallPence: number;
-} {
-  const databasePath = path.resolve(process.cwd(), '.e2e-data/simple-finance.sqlite');
-  const handle = openDatabase(databasePath);
+}> {
+  const config = loadAppConfig({
+    ...process.env,
+    NODE_ENV: 'development',
+    DATA_DIR: path.resolve(process.cwd(), '.e2e-data'),
+    AUTH_DEV_BYPASS: 'true',
+    AUTH_DEV_IDENTITY_EMAIL: 'alex@example.com',
+  });
+  const user = await getCurrentUser({ get: () => null }, config);
+  if (user === null) throw new Error('E2E seed identity has no active household assignment.');
+  const handle = getHouseholdDbHandle(user.householdId, config);
   try {
     const { db } = handle;
     const now = new Date();
@@ -316,12 +326,12 @@ export function seedPaydayScenario(): {
       natwestBillsOnlyShortfallPence: natwestWatch.shortfallPence,
     };
   } finally {
-    handle.raw.close();
+    closeDbHandles();
   }
 }
 
 function ensureCheckpoint(
-  db: ReturnType<typeof openDatabase>['db'],
+  db: Db,
   potId: number,
   amountPence: number,
   note: string,

@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SupplierCardData, SupplierCardList } from '@/components/supplier-card';
 import { TaskDueBadge } from '@/components/task-forms';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { listStoredAttachments, listStoredSupplierAttachments } from '@/lib/records/attachments';
 import { categoryTree } from '@/lib/records/categories';
 import { listPeople } from '@/lib/records/people';
@@ -41,10 +40,10 @@ export default async function SuppliersPage({
 }: {
   searchParams: Promise<{ supplierId?: string; id?: string; q?: string }>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
   const suppliers = listSuppliers(db);

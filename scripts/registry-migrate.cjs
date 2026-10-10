@@ -18,10 +18,9 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 
 function resolveRegistryPath() {
-  const dataDir = (
-    process.env.DATA_DIR || (process.env.NODE_ENV === 'production' ? '/data' : './data')
-  ).trim();
-  return (process.env.REGISTRY_PATH || path.join(dataDir, 'system', 'registry.sqlite')).trim();
+  const configuredDataDir = process.env.DATA_DIR?.trim();
+  const dataDir = configuredDataDir || (process.env.NODE_ENV === 'production' ? '/data' : './data');
+  return path.join(dataDir, 'system', 'registry.sqlite');
 }
 
 function loadMigrations(folder) {

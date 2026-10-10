@@ -24,7 +24,7 @@ import { createTask } from '../src/lib/records/tasks';
 import { seedFenceDemoProject } from '../src/lib/projects/demo';
 import { assignIdentity, createHousehold } from '../src/lib/registry/domain';
 import { openRegistry } from '../src/lib/registry/db';
-import { systemRegistryPath } from '../src/lib/registry/paths';
+import { householdDatabasePath, systemRegistryPath } from '../src/lib/registry/paths';
 import { toLocalDateString } from '../src/lib/time';
 import { recentMonthlyDueDay } from './e2e-seed-dates';
 
@@ -42,12 +42,13 @@ import { recentMonthlyDueDay } from './e2e-seed-dates';
  */
 const DATA_DIR = path.resolve(process.cwd(), '.e2e-data');
 const PORT = Number(process.env.E2E_PORT ?? 3100);
-const DATABASE_PATH = path.join(DATA_DIR, 'simple-finance.sqlite');
 const ACTOR = 'alex@example.com';
 
 function seed(): void {
   rmSync(DATA_DIR, { recursive: true, force: true });
-  const handle = openDatabase(DATABASE_PATH);
+  const householdId = seedRegistry();
+  const databasePath = householdDatabasePath(DATA_DIR, householdId);
+  const handle = openDatabase(databasePath);
   applyMigrations(handle.db);
   const db = handle.db;
 
@@ -495,7 +496,7 @@ function localDate(base: Date, dayOffset: number): string {
  * the administrator would. Alex carries the platform-administrator role so
  * the `/admin` specs can run against this seed. Fictional emails only.
  */
-function seedRegistry(): void {
+function seedRegistry(): string {
   const registry = openRegistry(systemRegistryPath(DATA_DIR));
   try {
     const household = createHousehold(registry, {
@@ -513,13 +514,13 @@ function seedRegistry(): void {
       householdId: household.id,
       actor: 'system',
     });
+    return household.id;
   } finally {
     registry.close();
   }
 }
 
 seed();
-seedRegistry();
 
 // `E2E_SEED_ONLY=1` prepares (or refreshes) the fictional data and exits. CI
 // uses it to check the harness itself; a human can use it to inspect the seed
@@ -536,7 +537,6 @@ const child = spawn('node_modules/.bin/next', ['dev', '-H', '0.0.0.0', '-p', Str
     NODE_ENV: 'development',
     NEXT_TELEMETRY_DISABLED: '1',
     DATA_DIR,
-    DATABASE_PATH,
     PORT: String(PORT),
     AUTH_DEV_BYPASS: 'true',
     AUTH_DEV_IDENTITY_EMAIL: ACTOR,

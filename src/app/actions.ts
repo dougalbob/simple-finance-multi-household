@@ -14,8 +14,8 @@ import {
   updateSupplierContact,
 } from '@/lib/records/suppliers';
 import { revalidatePath } from 'next/cache';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
+import type { Db } from '@/lib/db/client';
 import { loadAppConfig } from '@/lib/config';
 import { formatPence, parsePence } from '@/lib/money';
 import {
@@ -231,7 +231,7 @@ export async function addSupplierReferenceAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = supplierReferenceEntrySchema.safeParse({
     supplierId: Number(formData.get('supplierId')),
@@ -241,7 +241,7 @@ export async function addSupplierReferenceAction(
   if (!parsed.success)
     return { status: 'error', message: firstIssue(parsed.error, 'Check the reference.') };
   try {
-    const reference = addSupplierReference(getDbHandle().db, {
+    const reference = addSupplierReference(user.db, {
       supplierId: parsed.data.supplierId,
       label: parsed.data.label,
       value: parsed.data.value,
@@ -260,7 +260,7 @@ export async function addSupplierInteractionAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = supplierInteractionEntrySchema.safeParse({
     supplierId: Number(formData.get('supplierId')),
@@ -275,7 +275,7 @@ export async function addSupplierInteractionAction(
   try {
     // One transaction (decision 175): the interaction and the follow-up task
     // it promised are saved together or not at all.
-    const { followUpTask } = addSupplierInteraction(getDbHandle().db, {
+    const { followUpTask } = addSupplierInteraction(user.db, {
       supplierId: parsed.data.supplierId,
       channel: parsed.data.channel,
       summary: parsed.data.summary,
@@ -308,7 +308,7 @@ export async function saveSupplierContactAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = supplierContactEntrySchema.safeParse({
     id: Number(formData.get('id')),
@@ -323,7 +323,7 @@ export async function saveSupplierContactAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the contact details.') };
   }
   try {
-    updateSupplierContact(getDbHandle().db, {
+    updateSupplierContact(user.db, {
       id: parsed.data.id,
       expectedVersion: parsed.data.expectedVersion,
       contactPhone: parsed.data.contactPhone,
@@ -350,7 +350,7 @@ export async function uploadAttachmentAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   // A purchase's receipt, (v0.10.0, decision 138) an income record's
   // document, or (v0.25.0, decision 175) a supplier's letter or policy — the
@@ -369,7 +369,7 @@ export async function uploadAttachmentAction(
     // entry (SPEC §23): the action, the serving route and the backup engine
     // cannot drift apart.
     const stored = await storeAttachment({
-      db: getDbHandle().db,
+      db: user.db,
       ...(purchaseId !== null
         ? { purchaseId }
         : supplierId !== null
@@ -378,7 +378,7 @@ export async function uploadAttachmentAction(
       originalName: file.name,
       bytes,
       actor: user.email,
-      documentsDir: loadAppConfig().documentsDir,
+      documentsDir: user.documentsDir,
     });
     revalidateAttachmentPages();
     return { status: 'ok', message: `Attached ${stored.originalName}.` };
@@ -406,7 +406,7 @@ export async function deleteAttachmentAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const id = numberOrNull(formData.get('attachmentId'));
   if (id === null || id <= 0) {
@@ -417,10 +417,10 @@ export async function deleteAttachmentAction(
   }
   try {
     const result = await deleteAttachment({
-      db: getDbHandle().db,
+      db: user.db,
       id,
       actor: user.email,
-      documentsDir: loadAppConfig().documentsDir,
+      documentsDir: user.documentsDir,
     });
     revalidateAttachmentPages();
     const name = result.originalName ?? 'That document';
@@ -493,7 +493,7 @@ export async function createTaskAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = taskCreateEntrySchema.safeParse({
     title: String(formData.get('title') ?? ''),
@@ -505,7 +505,7 @@ export async function createTaskAction(
   if (!parsed.success)
     return { status: 'error', message: firstIssue(parsed.error, 'Check the task.') };
   try {
-    const task = createTask(getDbHandle().db, { ...parsed.data, actor: user.email });
+    const task = createTask(user.db, { ...parsed.data, actor: user.email });
     revalidateTaskPages();
     return {
       status: 'ok',
@@ -522,7 +522,7 @@ export async function completeTaskAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = taskCompleteEntrySchema.safeParse({
     id: Number(formData.get('id')),
@@ -535,7 +535,7 @@ export async function completeTaskAction(
       message: firstIssue(parsed.error, 'That task link is incomplete. Refresh and try again.'),
     };
   try {
-    const task = completeTask(getDbHandle().db, { ...parsed.data, actor: user.email });
+    const task = completeTask(user.db, { ...parsed.data, actor: user.email });
     revalidateTaskPages();
     return { status: 'ok', message: `Done: “${task.title}”.` };
   } catch (err) {
@@ -552,7 +552,7 @@ export async function reopenTaskAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = taskVersionEntrySchema.safeParse({
     id: Number(formData.get('id')),
@@ -561,7 +561,7 @@ export async function reopenTaskAction(
   if (!parsed.success)
     return { status: 'error', message: 'That task link is incomplete. Refresh and try again.' };
   try {
-    const task = reopenTask(getDbHandle().db, { ...parsed.data, actor: user.email });
+    const task = reopenTask(user.db, { ...parsed.data, actor: user.email });
     revalidateTaskPages();
     return { status: 'ok', message: `Reopened “${task.title}”.` };
   } catch (err) {
@@ -576,7 +576,7 @@ export async function editTaskAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = taskEditEntrySchema.safeParse({
     id: Number(formData.get('id')),
@@ -596,7 +596,7 @@ export async function editTaskAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the task.') };
   try {
     const { id, expectedVersion, ...patch } = parsed.data;
-    const task = editTask(getDbHandle().db, { id, expectedVersion, patch, actor: user.email });
+    const task = editTask(user.db, { id, expectedVersion, patch, actor: user.email });
     revalidateTaskPages();
     return { status: 'ok', message: `Saved “${task.title}”.` };
   } catch (err) {
@@ -622,7 +622,7 @@ export async function createPotAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   const label = potLabelSchema.safeParse(formData.get('label'));
@@ -636,7 +636,7 @@ export async function createPotAction(
   const ownerPersonId = positiveNumber(formData.get('ownerPersonId'));
 
   try {
-    createPot(getDbHandle().db, {
+    createPot(user.db, {
       label: label.data,
       kind: kind.data,
       ownerPersonId,
@@ -662,7 +662,7 @@ export async function addCheckpointAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   const potId = potIdSchema.safeParse(formData.get('potId'));
@@ -690,7 +690,7 @@ export async function addCheckpointAction(
   }
 
   try {
-    addCheckpoint(getDbHandle().db, {
+    addCheckpoint(user.db, {
       potId: parsed.data.potId,
       amountPence: parsed.data.amountPence,
       effectiveDate: parsed.data.effectiveDate ?? undefined,
@@ -714,12 +714,12 @@ export async function addPurchaseAction(
   _previous: PurchaseActionState,
   formData: FormData,
 ): Promise<PurchaseActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return purchaseError(NOT_SIGNED_IN.message ?? 'Not signed in.');
 
   const raw = parsePurchaseForm(formData);
   if (!raw.success) return purchaseError(raw.message);
-  const db = getDbHandle().db;
+  const db = user.db;
   const paidByPersonId = resolvePaidByPerson(db, raw.data.paidByPersonId, user.email);
   if (paidByPersonId === null) {
     return purchaseError('Set up at least one household person before recording a purchase.');
@@ -755,7 +755,7 @@ export async function addFuelAction(
   _previous: PurchaseActionState,
   formData: FormData,
 ): Promise<PurchaseActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return purchaseError(NOT_SIGNED_IN.message ?? 'Not signed in.');
 
   const amountRaw = formData.get('amount');
@@ -774,7 +774,7 @@ export async function addFuelAction(
   });
   if (!parsed.success) return purchaseError(firstIssue(parsed.error, 'Check the fuel fields.'));
 
-  const db = getDbHandle().db;
+  const db = user.db;
   const fuel = findChildCategory(db, 'Vehicle Running', 'Fuel');
   if (fuel === null)
     return purchaseError('The Fuel category is missing. Run the current database migration.');
@@ -854,7 +854,7 @@ export async function editFuelDetailsAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const extras = parseFuelExtras(formData);
   if (!extras.ok) return { status: 'error', message: extras.error };
@@ -866,7 +866,7 @@ export async function editFuelDetailsAction(
   if (!parsed.success) {
     return { status: 'error', message: firstIssue(parsed.error, 'Check the fuel details.') };
   }
-  const db = getDbHandle().db;
+  const db = user.db;
   try {
     editFuelDetails(db, {
       id: parsed.data.purchaseId,
@@ -904,7 +904,7 @@ export async function voidDuplicatePurchaseAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const id = positiveNumber(formData.get('purchaseId'));
   const version = positiveNumber(formData.get('version'));
@@ -915,7 +915,7 @@ export async function voidDuplicatePurchaseAction(
     };
   }
   try {
-    voidPurchase(getDbHandle().db, {
+    voidPurchase(user.db, {
       id,
       expectedVersion: version,
       actor: user.email,
@@ -964,11 +964,7 @@ function parsePurchaseForm(
   return { success: true, data: parsed.data };
 }
 
-function resolvePaidByPerson(
-  db: ReturnType<typeof getDbHandle>['db'],
-  explicit: number | null,
-  email: string,
-): number | null {
+function resolvePaidByPerson(db: Db, explicit: number | null, email: string): number | null {
   const people = listPeople(db);
   if (people.length === 0) return null;
   if (explicit !== null) return explicit;
@@ -982,7 +978,7 @@ function resolvePaidByPerson(
 }
 
 function duplicateNoticeState(
-  db: ReturnType<typeof getDbHandle>['db'],
+  db: Db,
   purchaseId: number,
   notice: { enteredBy: string; totalPence: number; minutesAgo: number },
 ): DuplicateNoticeState {
@@ -1028,13 +1024,13 @@ export async function addPersonAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const label = formData.get('label');
   if (typeof label !== 'string' || label.trim() === '')
     return { status: 'error', message: 'Give the person a name.' };
   try {
-    createPerson(getDbHandle().db, { label, actor: user.email });
+    createPerson(user.db, { label, actor: user.email });
     revalidatePages();
     return { status: 'ok', message: 'Person added.' };
   } catch (err) {
@@ -1046,14 +1042,14 @@ export async function addVehicleAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const label = formData.get('label');
   const ownerPersonId = numberOrNull(formData.get('ownerPersonId'));
   if (typeof label !== 'string' || label.trim() === '')
     return { status: 'error', message: 'Give the vehicle a name.' };
   try {
-    createVehicle(getDbHandle().db, { label, ownerPersonId, actor: user.email });
+    createVehicle(user.db, { label, ownerPersonId, actor: user.email });
     // Vehicle options are rendered independently on every primary page; clear
     // all of them so a vehicle added from Settings is immediately selectable.
     revalidatePages();
@@ -1073,7 +1069,7 @@ export async function addScheduleAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   const today = new Date();
@@ -1084,7 +1080,7 @@ export async function addScheduleAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the schedule fields.') };
   }
   try {
-    const { schedule } = createSchedule(getDbHandle().db, {
+    const { schedule } = createSchedule(user.db, {
       ...parsed.data,
       categoryId: parsed.data.kind === 'receipt' ? null : parsed.data.categoryId,
       supplierId: parsed.data.kind === 'receipt' ? null : parsed.data.supplierId,
@@ -1115,7 +1111,7 @@ export async function cancelScheduleAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = cancelScheduleEntrySchema.safeParse({
     scheduleId: numberOrNull(formData.get('scheduleId')),
@@ -1129,7 +1125,7 @@ export async function cancelScheduleAction(
     };
   }
   try {
-    const result = cancelSchedule(getDbHandle().db, {
+    const result = cancelSchedule(user.db, {
       id: parsed.data.scheduleId,
       expectedVersion: parsed.data.expectedVersion,
       effectiveOn: parsed.data.effectiveOn ?? '',
@@ -1157,7 +1153,7 @@ export async function addRenewalAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = renewalEntrySchema.safeParse({
     label: textOrNull(formData.get('label')) ?? '',
@@ -1173,7 +1169,7 @@ export async function addRenewalAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the renewal fields.') };
   }
   try {
-    const renewal = createRenewal(getDbHandle().db, {
+    const renewal = createRenewal(user.db, {
       ...parsed.data,
       actor: user.email,
     });
@@ -1194,7 +1190,7 @@ export async function saveProjectionSettingsAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   const groceriesRaw = formData.get('weeklyGroceries');
@@ -1224,7 +1220,7 @@ export async function saveProjectionSettingsAction(
     };
   }
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     setWeeklyGroceriesPence(db, parsed.data.weeklyGroceriesPence, user.email);
     for (const [vehicleId, pence] of Object.entries(parsed.data.monthlyFuelPence)) {
       setMonthlyFuelPence(db, Number(vehicleId), pence, user.email);
@@ -1326,7 +1322,7 @@ export async function saveDefaultPurchasePotAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   const raw = formData.get('potId');
@@ -1336,7 +1332,7 @@ export async function saveDefaultPurchasePotAction(
     return { status: 'error', message: 'Choose a pot from the list, or “No default”.' };
   }
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     setDefaultPurchasePotId(db, potId, user.email);
     revalidatePages();
     return {
@@ -1363,7 +1359,7 @@ export async function savePersonEmailAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const personId = Number(formData.get('personId'));
   const raw = formData.get('email');
@@ -1372,7 +1368,7 @@ export async function savePersonEmailAction(
     return { status: 'error', message: 'That person could not be found.' };
   }
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     const updated = setPersonEmail(db, {
       id: personId,
       email,
@@ -1397,7 +1393,7 @@ export async function editPurchaseAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   const editableLines = parseEditableLines(formData);
@@ -1417,7 +1413,7 @@ export async function editPurchaseAction(
   }
 
   try {
-    const { purchase } = editPurchase(getDbHandle().db, {
+    const { purchase } = editPurchase(user.db, {
       id: parsed.data.purchaseId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -1492,7 +1488,7 @@ export async function addRefundAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   let lines: unknown;
@@ -1523,7 +1519,7 @@ export async function addRefundAction(
   try {
     // The form types positive magnitudes; the domain takes the negative
     // record (refunds are negative records, SPEC §9.5).
-    const result = createRefund(getDbHandle().db, {
+    const result = createRefund(user.db, {
       refundOfPurchaseId: parsed.data.refundOfPurchaseId,
       totalPence: -parsed.data.totalPence,
       potId: parsed.data.potId,
@@ -1560,7 +1556,7 @@ export async function voidPurchaseAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
@@ -1577,7 +1573,7 @@ export async function voidPurchaseAction(
     };
   }
   try {
-    voidPurchase(getDbHandle().db, {
+    voidPurchase(user.db, {
       id: parsed.data.recordId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -1605,7 +1601,7 @@ export async function addTransferAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
@@ -1621,7 +1617,7 @@ export async function addTransferAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the transfer fields.') };
   }
   try {
-    const transfer = createTransfer(getDbHandle().db, {
+    const transfer = createTransfer(user.db, {
       fromPotId: parsed.data.fromPotId,
       toPotId: parsed.data.toPotId,
       amountPence: parsed.data.amountPence,
@@ -1646,7 +1642,7 @@ export async function voidTransferAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
@@ -1661,7 +1657,7 @@ export async function voidTransferAction(
     };
   }
   try {
-    voidTransfer(getDbHandle().db, {
+    voidTransfer(user.db, {
       id: parsed.data.recordId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -1696,7 +1692,7 @@ export async function addDebtAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = debtEntrySchema.safeParse({
     counterparty: String(formData.get('counterparty') ?? ''),
@@ -1707,7 +1703,7 @@ export async function addDebtAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the debt fields.') };
   }
   try {
-    const debt = createDebt(getDbHandle().db, {
+    const debt = createDebt(user.db, {
       counterparty: parsed.data.counterparty,
       direction: parsed.data.direction,
       note: parsed.data.note,
@@ -1733,7 +1729,7 @@ export async function editDebtAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const inflowAmountRaw = formData.get('expectedInflowAmount');
   const inflowDayRaw = formData.get('expectedInflowDay');
@@ -1774,7 +1770,7 @@ export async function editDebtAction(
     } else {
       patch.expectedInflow = parsed.data.expectedInflow;
     }
-    const debt = editDebt(getDbHandle().db, {
+    const debt = editDebt(user.db, {
       id: parsed.data.debtId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -1798,7 +1794,7 @@ export async function deleteDebtAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = deleteDebtEntrySchema.safeParse({
     debtId: numberOrNull(formData.get('debtId')),
@@ -1811,7 +1807,7 @@ export async function deleteDebtAction(
     };
   }
   try {
-    const deleted = deleteDebt(getDbHandle().db, {
+    const deleted = deleteDebt(user.db, {
       id: parsed.data.debtId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -1835,7 +1831,7 @@ export async function addExternalMovementAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
@@ -1854,7 +1850,7 @@ export async function addExternalMovementAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the money fields.') };
   }
   try {
-    const movement = createExternalMovement(getDbHandle().db, {
+    const movement = createExternalMovement(user.db, {
       potId: parsed.data.potId,
       direction: parsed.data.direction,
       kind: parsed.data.kind,
@@ -1891,7 +1887,7 @@ export async function addSwapAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
@@ -1908,7 +1904,7 @@ export async function addSwapAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the swap fields.') };
   }
   try {
-    const swap = createSwap(getDbHandle().db, {
+    const swap = createSwap(user.db, {
       inPotId: parsed.data.inPotId,
       outPotId: parsed.data.outPotId,
       amountPence: parsed.data.amountPence,
@@ -1934,7 +1930,7 @@ export async function voidExternalMovementAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
@@ -1948,7 +1944,7 @@ export async function voidExternalMovementAction(
     };
   }
   try {
-    voidExternalMovement(getDbHandle().db, {
+    voidExternalMovement(user.db, {
       id: parsed.data.recordId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -1983,7 +1979,7 @@ export async function editExternalMovementAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
@@ -2002,7 +1998,7 @@ export async function editExternalMovementAction(
   }
   const data = parsed.data;
   try {
-    const movement = editExternalMovement(getDbHandle().db, {
+    const movement = editExternalMovement(user.db, {
       id: data.movementId,
       expectedVersion: data.expectedVersion,
       actor: user.email,
@@ -2044,7 +2040,7 @@ export async function voidSwapAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = voidSwapEntrySchema.safeParse({
     exchangeKey: String(formData.get('exchangeKey') ?? ''),
@@ -2061,7 +2057,7 @@ export async function voidSwapAction(
     };
   }
   try {
-    voidSwap(getDbHandle().db, {
+    voidSwap(user.db, {
       exchangeKey: parsed.data.exchangeKey,
       inLegId: parsed.data.inLegId,
       outLegId: parsed.data.outLegId,
@@ -2097,7 +2093,7 @@ export async function addReceiptAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
@@ -2113,7 +2109,7 @@ export async function addReceiptAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the income fields.') };
   }
   try {
-    const receipt = createReceipt(getDbHandle().db, {
+    const receipt = createReceipt(user.db, {
       potId: parsed.data.potId,
       amountPence: parsed.data.amountPence,
       occurredDate: parsed.data.occurredDate ?? undefined,
@@ -2144,7 +2140,7 @@ export async function editReceiptAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
@@ -2162,7 +2158,7 @@ export async function editReceiptAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the income fields.') };
   }
   try {
-    const receipt = editReceipt(getDbHandle().db, {
+    const receipt = editReceipt(user.db, {
       id: parsed.data.receiptId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -2200,7 +2196,7 @@ export async function voidReceiptAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
@@ -2214,7 +2210,7 @@ export async function voidReceiptAction(
     };
   }
   try {
-    voidReceipt(getDbHandle().db, {
+    voidReceipt(user.db, {
       id: parsed.data.recordId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -2239,7 +2235,7 @@ export async function archivePotAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = archivePotEntrySchema.safeParse({
     potId: numberOrNull(formData.get('potId')),
@@ -2252,7 +2248,7 @@ export async function archivePotAction(
     };
   }
   try {
-    const pot = archivePot(getDbHandle().db, {
+    const pot = archivePot(user.db, {
       id: parsed.data.potId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -2278,7 +2274,7 @@ export async function editScheduleAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
@@ -2312,7 +2308,7 @@ export async function editScheduleAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the schedule fields.') };
   }
   try {
-    const { schedule, backfilledInstances } = editSchedule(getDbHandle().db, {
+    const { schedule, backfilledInstances } = editSchedule(user.db, {
       id: parsed.data.scheduleId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -2370,7 +2366,7 @@ export async function editRenewalAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = editRenewalEntrySchema.safeParse({
     renewalId: numberOrNull(formData.get('renewalId')),
@@ -2388,7 +2384,7 @@ export async function editRenewalAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the renewal fields.') };
   }
   try {
-    const renewal = editRenewal(getDbHandle().db, {
+    const renewal = editRenewal(user.db, {
       id: parsed.data.renewalId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -2424,7 +2420,7 @@ export async function editPotAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const limitRaw = formData.get('overdraftLimit');
   const limit =
@@ -2483,7 +2479,7 @@ export async function editPotAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the pot fields.') };
   }
   try {
-    const pot = editPot(getDbHandle().db, {
+    const pot = editPot(user.db, {
       id: parsed.data.potId,
       expectedVersion: parsed.data.expectedVersion,
       actor: user.email,
@@ -2518,7 +2514,7 @@ export async function renameTargetAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = renameTargetEntrySchema.safeParse({
     kind: textOrNull(formData.get('kind')) ?? 'person',
@@ -2530,7 +2526,7 @@ export async function renameTargetAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the name fields.') };
   }
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     if (parsed.data.kind === 'person') {
       renamePerson(db, {
         id: parsed.data.targetId,
@@ -2566,7 +2562,7 @@ export async function saveCategoryAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = categoryEntrySchema.safeParse({
     op: textOrNull(formData.get('op')) ?? 'add-parent',
@@ -2579,7 +2575,7 @@ export async function saveCategoryAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the category fields.') };
   }
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     const { op } = parsed.data;
     // Every successful write revalidates the same page set as the other
     // Settings actions: the category tree is server-rendered into
@@ -2640,7 +2636,7 @@ export async function saveWarningLeadsAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const parsed = warningLeadsEntrySchema.safeParse({
     renewalLeadDays: numberOrNull(formData.get('renewalLeadDays')) ?? 21,
@@ -2653,7 +2649,7 @@ export async function saveWarningLeadsAction(
     };
   }
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     setRenewalWarningLeadDays(db, parsed.data.renewalLeadDays, user.email);
     setContractEndWarningLeadDays(db, parsed.data.contractEndLeadDays, user.email);
     revalidatePages();
@@ -2677,7 +2673,7 @@ export async function saveCommitmentCategoriesAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   const ids: number[] = [];
   for (const value of formData.getAll('categoryId')) {
@@ -2688,7 +2684,7 @@ export async function saveCommitmentCategoriesAction(
     ids.push(id);
   }
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     setCommitmentCategoryIds(db, ids, user.email);
     revalidatePages();
     return {
@@ -2719,7 +2715,7 @@ export async function saveThemeAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
   const raw = formData.get('themeId');
@@ -2780,7 +2776,7 @@ export async function createProjectAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectCreateEntrySchema.safeParse({
     name: String(formData.get('name') ?? ''),
@@ -2793,7 +2789,7 @@ export async function createProjectAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the project fields.') };
   }
   try {
-    const project = createProject(getDbHandle().db, { ...parsed.data, actor: user.email });
+    const project = createProject(user.db, { ...parsed.data, actor: user.email });
     revalidateProjectPages(project.id);
     return { status: 'ok', message: `Project “${project.name}” started.` };
   } catch (err) {
@@ -2807,7 +2803,7 @@ export async function editProjectAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectEditEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
@@ -2822,7 +2818,7 @@ export async function editProjectAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the project fields.') };
   }
   try {
-    const project = editProject(getDbHandle().db, {
+    const project = editProject(user.db, {
       id: parsed.data.projectId,
       expectedVersion: parsed.data.expectedVersion,
       patch: {
@@ -2847,7 +2843,7 @@ export async function deleteProjectAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const projectId = positiveNumber(formData.get('projectId'));
   const expectedVersion = positiveNumber(formData.get('expectedVersion'));
@@ -2855,7 +2851,7 @@ export async function deleteProjectAction(
     return { status: 'error', message: 'That project could not be read. Refresh and try again.' };
   }
   try {
-    deleteProject(getDbHandle().db, { id: projectId, expectedVersion, actor: user.email });
+    deleteProject(user.db, { id: projectId, expectedVersion, actor: user.email });
     revalidateProjectPages();
     return { status: 'ok', message: 'Project deleted.' };
   } catch (err) {
@@ -2869,7 +2865,7 @@ export async function createProjectItemAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectItemEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
@@ -2884,7 +2880,7 @@ export async function createProjectItemAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the item fields.') };
   }
   try {
-    const item = createProjectItem(getDbHandle().db, { ...parsed.data, actor: user.email });
+    const item = createProjectItem(user.db, { ...parsed.data, actor: user.email });
     revalidateProjectPages(item.projectId);
     return {
       status: 'ok',
@@ -2901,7 +2897,7 @@ export async function editProjectItemAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectItemEditEntrySchema.safeParse({
     itemId: numberOrNull(formData.get('itemId')),
@@ -2917,7 +2913,7 @@ export async function editProjectItemAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the item fields.') };
   }
   try {
-    const item = editProjectItem(getDbHandle().db, {
+    const item = editProjectItem(user.db, {
       id: parsed.data.itemId,
       expectedVersion: parsed.data.expectedVersion,
       patch: {
@@ -2943,7 +2939,7 @@ export async function deleteProjectItemAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const itemId = positiveNumber(formData.get('itemId'));
   const expectedVersion = positiveNumber(formData.get('expectedVersion'));
@@ -2952,7 +2948,7 @@ export async function deleteProjectItemAction(
     return { status: 'error', message: 'That item could not be read. Refresh and try again.' };
   }
   try {
-    deleteProjectItem(getDbHandle().db, { id: itemId, expectedVersion, actor: user.email });
+    deleteProjectItem(user.db, { id: itemId, expectedVersion, actor: user.email });
     revalidateProjectPages(projectId);
     return { status: 'ok', message: 'Item deleted.' };
   } catch (err) {
@@ -2966,7 +2962,7 @@ export async function createProjectSupplierAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectSupplierEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
@@ -2983,7 +2979,7 @@ export async function createProjectSupplierAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the supplier fields.') };
   }
   try {
-    const supplier = createProjectSupplier(getDbHandle().db, {
+    const supplier = createProjectSupplier(user.db, {
       ...parsed.data,
       actor: user.email,
     });
@@ -3000,7 +2996,7 @@ export async function editProjectSupplierAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectSupplierEditEntrySchema.safeParse({
     supplierId: numberOrNull(formData.get('supplierId')),
@@ -3018,7 +3014,7 @@ export async function editProjectSupplierAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the supplier fields.') };
   }
   try {
-    const supplier = editProjectSupplier(getDbHandle().db, {
+    const supplier = editProjectSupplier(user.db, {
       id: parsed.data.supplierId,
       expectedVersion: parsed.data.expectedVersion,
       patch: {
@@ -3046,7 +3042,7 @@ export async function deleteProjectSupplierAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const supplierId = positiveNumber(formData.get('supplierId'));
   const expectedVersion = positiveNumber(formData.get('expectedVersion'));
@@ -3055,7 +3051,7 @@ export async function deleteProjectSupplierAction(
     return { status: 'error', message: 'That supplier could not be read. Refresh and try again.' };
   }
   try {
-    deleteProjectSupplier(getDbHandle().db, {
+    deleteProjectSupplier(user.db, {
       id: supplierId,
       expectedVersion,
       actor: user.email,
@@ -3074,7 +3070,7 @@ export async function saveProjectQuoteAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectQuoteEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
@@ -3091,7 +3087,7 @@ export async function saveProjectQuoteAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the quote fields.') };
   }
   try {
-    saveProjectQuote(getDbHandle().db, { ...parsed.data, actor: user.email });
+    saveProjectQuote(user.db, { ...parsed.data, actor: user.email });
     revalidateProjectPages(parsed.data.projectId);
     return { status: 'ok', message: 'Quote saved.' };
   } catch (err) {
@@ -3105,7 +3101,7 @@ export async function deleteProjectQuoteAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectQuoteDeleteEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
@@ -3116,7 +3112,7 @@ export async function deleteProjectQuoteAction(
     return { status: 'error', message: firstIssue(parsed.error, 'That quote could not be read.') };
   }
   try {
-    deleteProjectQuote(getDbHandle().db, { ...parsed.data, actor: user.email });
+    deleteProjectQuote(user.db, { ...parsed.data, actor: user.email });
     revalidateProjectPages(parsed.data.projectId);
     return { status: 'ok', message: 'Quote removed.' };
   } catch (err) {
@@ -3131,7 +3127,7 @@ export async function selectProjectSupplierAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectSelectionEntrySchema.safeParse({
     itemId: numberOrNull(formData.get('itemId')),
@@ -3142,7 +3138,7 @@ export async function selectProjectSupplierAction(
   }
   const projectId = positiveNumber(formData.get('projectId'));
   try {
-    selectProjectItemSupplier(getDbHandle().db, {
+    selectProjectItemSupplier(user.db, {
       itemId: parsed.data.itemId,
       supplierId: parsed.data.supplierId,
       actor: user.email,
@@ -3170,7 +3166,7 @@ export async function applyProjectPlanAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   const parsed = projectApplyPlanEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
@@ -3182,7 +3178,7 @@ export async function applyProjectPlanAction(
   }
   const { projectId, plan: kind, expectedTotalPence } = parsed.data;
   try {
-    const db = getDbHandle().db;
+    const db = user.db;
     const computed = computeProjectOptimiser(db, projectId);
     if (computed === null) throw new ProjectNotFoundError(projectId);
     if (computed.projectMode !== 'mix_and_match') {

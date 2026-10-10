@@ -14,7 +14,8 @@ import { attachments, purchases, receipts, suppliers } from '../db/schema';
  * - MIME is decided by **content sniffing** of the leading bytes, never by the
  *   filename or the browser-supplied type (SPEC §23.3);
  * - the size limit is enforced here, server-side (SPEC §23, plan OQ12: 10 MB);
- * - storage keys are server-generated under `<dataDir>/documents/` and must
+ * - storage keys are server-generated under the resolved household's
+ *   `<dataDir>/households/<id>/documents/` and must
  *   match a strict pattern before anything touches the filesystem — that same
  *   pattern is what makes an archive member safe to restore (SPEC §18.4);
  * - removal flips `state` to `deleted` and audits it, and only then unlinks
@@ -136,7 +137,7 @@ export interface StoreAttachmentInput {
   originalName: string;
   bytes: Buffer;
   actor: string;
-  /** `<dataDir>/documents` — from AppConfig, never from a request (SPEC §18.1). */
+  /** Resolved tenant `<dataDir>/households/<id>/documents`, never request input. */
   documentsDir: string;
   now?: Date;
 }
@@ -226,7 +227,7 @@ export interface DeleteAttachmentInput {
   db: Db;
   id: number;
   actor: string;
-  /** `<dataDir>/documents` — from AppConfig, never from a request (SPEC §18.1). */
+  /** Resolved tenant `<dataDir>/households/<id>/documents`, never request input. */
   documentsDir: string;
   now?: Date;
 }

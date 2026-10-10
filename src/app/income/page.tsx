@@ -9,8 +9,7 @@ import {
   IncomeScheduleForm,
 } from '@/components/income-forms';
 import { VoidForm } from '@/components/record-forms';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import {
   describeIncome,
@@ -54,10 +53,10 @@ export default async function IncomePage({
 }: {
   searchParams: Promise<{ receipt?: string }>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
   const params = await searchParams;

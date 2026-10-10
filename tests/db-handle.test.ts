@@ -1,67 +1,126 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { cpSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { loadAppConfig, type AppConfig } from '../src/lib/config';
-import { closeDbHandle, getDbHandle } from '../src/lib/db/client';
+import { loadAppConfig } from '../src/lib/config';
+import { closeDbHandles, getHouseholdDbHandle, openDatabase } from '../src/lib/db/client';
+import { applyMigrations } from '../src/lib/db/migrate';
+import { householdDatabasePath } from '../src/lib/registry/paths';
 import { createPot, listPots } from '../src/lib/records/pots';
 import { makeTempDir } from './helpers';
 
-/**
- * getDbHandle()'s identity check: better-sqlite3's `raw.name` is the path AS
- * PASSED, so comparing it with `path.resolve(config.databasePath)` never
- * matched when DATABASE_PATH/DATA_DIR was relative — every call closed the
- * previous handle and reopened a new one. /settings is the only page that
- * calls getDbHandle() twice, so its first handle died mid-render and the page
- * 500'd with "The database connection is not open". Both sides must resolve.
- */
-describe('getDbHandle identity check', () => {
-  it('returns the same live handle twice for a relative DATABASE_PATH', async () => {
+const HOUSEHOLD_A = 'a'.repeat(32);
+const HOUSEHOLD_B = 'b'.repeat(32);
+
+describe('per-household database handle cache', () => {
+  it('returns the same live tenant handle twice for a relative data root', async () => {
     const originalCwd = process.cwd();
     const dir = await makeTempDir('sf-db-handle-');
-    // getDbHandle() applies the checked-in ./drizzle migrations in development,
-    // resolved from the working directory — take them along.
     cpSync(path.join(originalCwd, 'drizzle'), path.join(dir, 'drizzle'), { recursive: true });
     process.chdir(dir);
-    closeDbHandle();
+    closeDbHandles();
     try {
-      const config: AppConfig = loadAppConfig({
-        NODE_ENV: 'development',
-        DATABASE_PATH: 'relative-data/simple-finance.sqlite',
-      });
-      assert.equal(config.databasePath, 'relative-data/simple-finance.sqlite');
-
-      const first = getDbHandle(config);
+      const config = loadAppConfig({ NODE_ENV: 'development', DATA_DIR: 'relative-data' });
+      const first = getHouseholdDbHandle(HOUSEHOLD_A, config);
       createPot(first.db, { label: 'Main account', kind: 'bank', actor: 'alex@example.com' });
 
-      const second = getDbHandle(config);
-      assert.equal(second, first, 'the same handle must come back, not a reopened one');
-      assert.equal(first.raw.open, true, 'the first connection must not be closed');
+      const second = getHouseholdDbHandle(HOUSEHOLD_A, config);
+      assert.equal(second, first, 'the same tenant path returns the cached handle');
+      assert.equal(first.raw.open, true, 'the first connection remains open');
       assert.deepEqual(
         listPots(first.db).map((pot) => pot.label),
         ['Main account'],
-        'the first db must still answer queries',
       );
     } finally {
-      closeDbHandle();
+      closeDbHandles();
       process.chdir(originalCwd);
     }
   });
 
-  it('still reopens when the database path really changes', async () => {
-    const dir = await makeTempDir('sf-db-handle-');
-    closeDbHandle();
+  it('keeps simultaneous household handles and data independent', async () => {
+    const dir = await makeTempDir('sf-db-tenants-');
+    const config = loadAppConfig({ NODE_ENV: 'test', DATA_DIR: dir });
+    closeDbHandles();
     try {
-      const first = getDbHandle(
-        loadAppConfig({ NODE_ENV: 'development', DATABASE_PATH: path.join(dir, 'one.sqlite') }),
+      const handleA = getHouseholdDbHandle(HOUSEHOLD_A, config);
+      const handleB = getHouseholdDbHandle(HOUSEHOLD_B, config);
+      createPot(handleA.db, { label: 'A only', kind: 'cash', actor: 'alex@example.com' });
+      createPot(handleB.db, { label: 'B only', kind: 'bank', actor: 'sam@example.com' });
+
+      assert.notEqual(handleA, handleB);
+      assert.equal(handleA.raw.open, true, 'opening B must not close A');
+      assert.equal(handleB.raw.open, true);
+      assert.deepEqual(
+        listPots(handleA.db).map((pot) => pot.label),
+        ['A only'],
       );
-      const second = getDbHandle(
-        loadAppConfig({ NODE_ENV: 'development', DATABASE_PATH: path.join(dir, 'two.sqlite') }),
+      assert.deepEqual(
+        listPots(handleB.db).map((pot) => pot.label),
+        ['B only'],
       );
-      assert.notEqual(second, first, 'a different database must get a fresh handle');
-      assert.equal(second.raw.name, path.join(dir, 'two.sqlite'));
+      assert.equal(handleA.raw.name, householdDatabasePath(dir, HOUSEHOLD_A));
+      assert.equal(handleB.raw.name, householdDatabasePath(dir, HOUSEHOLD_B));
     } finally {
-      closeDbHandle();
+      closeDbHandles();
     }
+  });
+
+  it('reopens only the replaced tenant file while retaining other tenant handles', async () => {
+    const dir = await makeTempDir('sf-live-swap-');
+    const config = loadAppConfig({ NODE_ENV: 'test', DATA_DIR: dir });
+    closeDbHandles();
+    try {
+      const liveA = getHouseholdDbHandle(HOUSEHOLD_A, config);
+      const liveB = getHouseholdDbHandle(HOUSEHOLD_B, config);
+      createPot(liveA.db, { label: 'Before replacement', kind: 'cash', actor: 'alex@example.com' });
+      createPot(liveB.db, { label: 'B stays live', kind: 'bank', actor: 'sam@example.com' });
+
+      const replacementPath = path.join(dir, 'replacement.sqlite');
+      const replacement = openDatabase(replacementPath);
+      try {
+        applyMigrations(replacement.db);
+        createPot(replacement.db, {
+          label: 'After replacement',
+          kind: 'bank',
+          actor: 'alex@example.com',
+        });
+        replacement.raw.pragma('wal_checkpoint(TRUNCATE)');
+      } finally {
+        replacement.raw.close();
+      }
+
+      const tenantPath = householdDatabasePath(dir, HOUSEHOLD_A);
+      fs.renameSync(tenantPath, `${tenantPath}.before-replacement`);
+      for (const suffix of ['-wal', '-shm']) {
+        const current = `${tenantPath}${suffix}`;
+        if (fs.existsSync(current)) fs.renameSync(current, `${current}.before-replacement`);
+      }
+      fs.renameSync(replacementPath, tenantPath);
+
+      const reopenedA = getHouseholdDbHandle(HOUSEHOLD_A, config);
+      const stillLiveB = getHouseholdDbHandle(HOUSEHOLD_B, config);
+      assert.notEqual(reopenedA, liveA, 'the changed file identity reopens only tenant A');
+      assert.equal(stillLiveB, liveB);
+      assert.equal(liveA.raw.open, false);
+      assert.equal(liveB.raw.open, true);
+      assert.deepEqual(
+        listPots(reopenedA.db).map((pot) => pot.label),
+        ['After replacement'],
+      );
+      assert.deepEqual(
+        listPots(stillLiveB.db).map((pot) => pot.label),
+        ['B stays live'],
+      );
+    } finally {
+      closeDbHandles();
+    }
+  });
+
+  it('refuses malformed IDs before creating a database path', async () => {
+    const dir = await makeTempDir('sf-invalid-household-');
+    const config = loadAppConfig({ NODE_ENV: 'test', DATA_DIR: dir });
+    assert.throws(() => getHouseholdDbHandle('../outside', config), /household ID/i);
+    assert.deepEqual(fs.readdirSync(dir), []);
   });
 });

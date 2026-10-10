@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ProjectCreateForm } from '@/components/project-forms';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { getProjectsPageView, type ProjectListRow } from '@/lib/projects/projects-view';
 
 export const dynamic = 'force-dynamic';
@@ -22,10 +21,10 @@ const BUDGET_STATE_CLASS: Record<ProjectListRow['budgetState'], string> = {
 };
 
 export default async function ProjectsPage() {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const view = getProjectsPageView(getDbHandle().db);
+  const view = getProjectsPageView(user.db);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">

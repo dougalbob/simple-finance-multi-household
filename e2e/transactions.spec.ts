@@ -8,8 +8,7 @@ import { waitForTill } from './support';
  * the honest "movements shown" total — and that every row's deep link lands
  * on the record in the page that can still edit or void it.
  *
- * Runs after `checkpoint` and before `backup`, so the backup project's
- * restore cannot rewind records this spec asserts on.
+ * Runs after `checkpoint`; all writes remain inside the isolated E2E seed.
  */
 
 test.describe('all transactions', () => {

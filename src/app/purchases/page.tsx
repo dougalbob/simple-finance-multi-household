@@ -6,8 +6,7 @@ import { PurchaseFilterForm } from '@/components/purchase-filter-form';
 import { OpenTaskList, TaskCreateForm } from '@/components/task-forms';
 import { listAuditForEntity, type AuditEntry } from '@/lib/audit';
 import { formatPence } from '@/lib/money';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { categoryTree } from '@/lib/records/categories';
 import { buildEntryData } from '@/lib/records/entry-view';
 import { listPeople } from '@/lib/records/people';
@@ -72,10 +71,10 @@ export default async function PurchasesPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
   const params = await searchParams;
