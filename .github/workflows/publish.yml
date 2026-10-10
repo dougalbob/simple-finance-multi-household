@@ -141,17 +141,51 @@ jobs:
             echo "no previously published tag found - skipping upgrade smoke"
             exit 0
           fi
+          HOUSEHOLD_ID="0123456789abcdef0123456789abcdef"
+          TENANT_DB="/data/households/$HOUSEHOLD_ID/simple-finance.sqlite"
+          seed_household() {
+            local data_dir="$1"
+            local image="$2"
+            docker run --rm -v "$data_dir:/data" --entrypoint node "$image" scripts/registry-migrate.cjs
+            docker run --rm -e HOUSEHOLD_ID="$HOUSEHOLD_ID" -v "$data_dir:/data" --entrypoint node "$image" -e '
+              const Database = require("better-sqlite3");
+              const id = process.env.HOUSEHOLD_ID;
+              if (!/^[a-f0-9]{32}$/.test(id || "")) throw new Error("invalid smoke-test household ID");
+              const db = new Database("/data/system/registry.sqlite");
+              const now = new Date().toISOString();
+              db.prepare("INSERT INTO households (id, display_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
+                .run(id, "Publish smoke household", "active", now, now);
+              db.close();
+            '
+          }
+          check_tenant_database() {
+            local container="$1"
+            docker exec "$container" node -e '
+              const fs = require("fs");
+              const Database = require("better-sqlite3");
+              const file = process.argv[1];
+              if (!fs.existsSync(file)) throw new Error("tenant database was not created: " + file);
+              const db = new Database(file, { readonly: true });
+              const row = db.prepare("SELECT COUNT(*) AS count FROM __drizzle_migrations").get();
+              db.close();
+              if (!row || row.count === 0) throw new Error("tenant database has no applied migrations");
+              console.log("tenant database exists with " + row.count + " migrations: " + file);
+            ' "$TENANT_DB"
+          }
           for BASE_TAG in $BASE_TAGS; do
             echo "=== upgrade smoke: $BASE_TAG -> $VERSION ==="
             docker pull "$IMAGE:$BASE_TAG"
             VOL="sf-upg-$(echo "$BASE_TAG" | tr '.' '-')"
+            docker volume create "$VOL" >/dev/null
+            seed_household "$VOL" "$IMAGE:$BASE_TAG"
             docker run -d --name sf-upg-base -p 3000:3000 -v "$VOL":/data $AUTH_ENV "$IMAGE:$BASE_TAG"
             for i in $(seq 1 40); do
               if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
               sleep 1
             done
             curl -fsS http://127.0.0.1:3000/api/health
-            echo "base $BASE_TAG: healthy, database created"
+            check_tenant_database sf-upg-base
+            echo "base $BASE_TAG: healthy, registry-selected tenant database migrated"
             docker rm -f sf-upg-base
             docker run -d --name sf-upg-new -p 3000:3000 -v "$VOL":/data $AUTH_ENV "$IMAGE:$VERSION"
             for i in $(seq 1 40); do
@@ -159,14 +193,14 @@ jobs:
               sleep 1
             done
             curl -fsS http://127.0.0.1:3000/api/health
-            echo "upgraded $BASE_TAG -> $VERSION: healthy"
-            docker exec sf-upg-new node -e '
+            check_tenant_database sf-upg-new
+            docker exec -e TENANT_DB="$TENANT_DB" sf-upg-new node -e '
               const fs = require("fs");
               const crypto = require("crypto");
               const Database = require("better-sqlite3");
               const folder = "/app/drizzle";
               const journal = JSON.parse(fs.readFileSync(folder + "/meta/_journal.json", "utf8"));
-              const db = new Database("/data/simple-finance.sqlite", { readonly: true });
+              const db = new Database(process.env.TENANT_DB, { readonly: true });
               const rows = db.prepare("SELECT hash, created_at FROM __drizzle_migrations").all();
               const byHash = new Map();
               for (const row of rows) byHash.set(row.hash, Number(row.created_at));
@@ -182,6 +216,7 @@ jobs:
               if (bad > 0) { console.log(bad + " journal entries are not applied exactly once"); process.exit(1); }
               console.log("all " + journal.entries.length + " journal entries applied exactly once");
             '
+            echo "upgraded $BASE_TAG -> $VERSION: healthy, every journal entry applied once"
             docker rm -f sf-upg-new
             docker volume rm "$VOL"
           done
@@ -203,16 +238,19 @@ jobs:
           SERVER_UID="$(docker exec sf-release awk '/^Uid:/{print $2}' /proc/1/status)"
           test "$SERVER_UID" = "99" || { echo "server runs as uid $SERVER_UID, expected 99" >&2; exit 1; }
           echo "least privilege: server runs as uid 99"
-          test -n "$(docker exec sf-release ls -A /data/simple-finance.sqlite)"
-          echo "database created under /data"
+          # The multi-household layout creates the registry at start. Finance
+          # databases live under households/<id>/ and only exist once a household
+          # is registered, so the root-level database is never expected here.
+          docker exec sf-release test -s /data/system/registry.sqlite
+          echo "registry created under /data"
           docker rm -f sf-release
           docker run -d --name sf-release2 -p 3000:3000 -v sf-release-data:/data $AUTH_ENV "$IMAGE"
           for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
             sleep 1
           done
-          test -n "$(docker exec sf-release2 ls -A /data/simple-finance.sqlite)"
-          echo "database survived container recreation"
+          docker exec sf-release2 test -s /data/system/registry.sqlite
+          echo "registry survived container recreation"
           docker rm -f sf-release2
           docker volume rm sf-release-data
 
