@@ -1,3 +1,20 @@
+# Current handoff — v1.0.0-rc.1 publish run failed; smoke-test fix awaits approval (2026-10-10)
+
+**State:** PR #5 (release PR) merged to `main` as merge commit `ef02e95db43193c7f8974fea35ff7c694f19fd63`. CI on that `main` commit passed. The annotated tag `v1.0.0-rc.1` was pushed to that commit. The **Publish run 38083365013 failed** at "Smoke test the built image". Nothing was pushed to GHCR, and no GitHub release was created.
+
+**Cause (from the run's step results; the job log cannot be downloaded here):** the Publish workflow's fresh-start smoke test checked for the inherited root-level database `/data/simple-finance.sqlite`. The multi-household layout creates only `/data/system/registry.sqlite` at start. Finance databases live under `households/<id>/`, and the app never creates the root-level file. The CI `docker` job already checks the new layout, and it passed. The Publish workflow's upgrade smoke had the same stale path, and it would have failed on the next release candidate.
+
+**Fix (branch `arena/124de12d-simple-finance-multi-household`, not merged):** `.github/workflows/publish.yml` now checks the registry in the fresh-start smoke test. The upgrade smoke now follows the CI job: it seeds a household in the previous release's volume, checks its tenant database, and checks that every journal entry was applied exactly once. The YAML parses, the shell steps pass `bash -n`, the journal check passes locally on a seeded household (17 of 17 entries), and the contract test and formatting pass. Docker was not available here, so the fixed Publish run has not been seen.
+
+**Why the fix is not merged yet:** the release process allows one merge per Arena session, and PR #5 used it. Merging this fix needs the owner's approval to exceed that limit.
+
+**Next, once the owner decides:**
+- Option A: approve merging the fix PR. Then run Publish with `workflow_dispatch` on `main`, with input `tag=v1.0.0-rc.1`. This publishes the same commit (`ef02e95`), so the candidate does not change.
+- Option B: run Publish from the session branch with `workflow_dispatch`, without merging the fix. The release process does not describe this route.
+- The tag stays on `ef02e95` in both cases. Nothing has been published, and `latest` has not been touched.
+
+---
+
 # Current handoff — release candidate v1.0.0-rc.1 (2026-10-10)
 
 **Owner approval:** the owner said "You can publish v1.0.0-rc.1" after the step 6 acceptance run. The owner will ask follow-up questions after publication.
