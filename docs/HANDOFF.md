@@ -1,3 +1,120 @@
+# Current handoff — system registry and identity-to-household assignment (2026-10-10)
+
+**Continuation of:** the multi-household foundation (PR #1, merge `e3720c5`) and its delivery sequence.
+**Scope of this change (approved step):** the system registry and secure identity-to-household assignment —
+households of one or two people, administrator pre-assignment, and app-side first-login denial. Nothing else:
+no per-household database routing, no tenant backup/restore, no support consent, no version bump, no image or
+tag, no deployment, no real data touched. The original installation (port 3007, `/mnt/user/appdata/simple-finance`,
+its route and backups) is untouched.
+
+## What landed
+
+- **System registry (control plane)** at `<dataDir>/system/registry.sqlite` — `households`, `identities`,
+  `registry_audit`; membership/admin metadata only, never finance rows (SPEC §18.1). SQL lives in
+  `drizzle/registry/0001_initial.sql` and is applied by `src/lib/registry/schema.ts` (app/tests) and the
+  production twin `scripts/registry-migrate.cjs` (entrypoint runs it before `next start`; migration failure
+  refuses startup). `tests/registry-migrations.test.ts` pins idempotence and that the twin builds an identical
+  schema. New npm script: `db:migrate:registry`.
+- **Registry domain** (`src/lib/registry/domain.ts`), every write audited in one transaction:
+  - one or two assigned sign-in identities per household (one person is complete; a third is refused);
+  - one household per identity — normalised (trimmed, lower-cased), globally unique email; unassign then
+    reassign is the supported move; there is no self-sign-up;
+  - create/rename/deactivate/reactivate households (deactivation denies members without deleting anything);
+  - grant/revoke the `platform_admin` role; the **last administrator can never be removed or demoted**;
+  - `bootstrapRegistryAdmin` — consumed once while the roster is empty.
+- **Identity resolution** (`src/lib/registry/paths.ts`, `ids.ts`): opaque 128-bit hex household IDs; every
+  household path (`households/<id>/simple-finance.sqlite`, `documents/`) derives from the data root plus a
+  validated ID — traversal-proof, and the browser never supplies an ID. These helpers are the ones the later
+  per-household routing step must use.
+- **App-side first-login denial at one choke point** (`src/lib/auth/current-user.ts`): `getCurrentUser` now
+  requires authentication **and** an active registry assignment for an active household. Every page, server
+  action and API route already calls it, so an authenticated-but-unassigned identity is denied everywhere with
+  zero per-route drift (fail closed; a missing/unreadable registry denies everyone). `describeSession` reports
+  the same decision with its reason (`ok` / `not-signed-in` / `unassigned` with the email /
+  `household-deactivated` carrying the role / `registry-unavailable`); `appSessionFromRequest` is the Next
+  adapter. `User` now carries `householdId` and `role` (call sites only read `.email`).
+- **Denial page** (`/unauthorized`) explains the state: not signed in, signed in but not assigned yet (it
+  names the address to give the administrator), household deactivated (nothing deleted), or registry
+  unavailable.
+- **Administrator surface `/admin`** (platform administrators only; operational metadata only — no financial
+  records, no standing access to any household's data): household roster with assigned identities and
+  one-or-two slots, create/rename/deactivate/reactivate households, pre-assign/unassign sign-in emails, and a
+  registry audit tail. Server actions in `src/app/admin/actions.ts` re-check the role on every write. A
+  platform administrator whose own household is deactivated keeps `/admin` (to restore it) but no household
+  pages. **Reach it at `/admin` on the household link** — deliberately not in the household nav.
+- **First-administrator bootstrap:** while the registry roster is empty, the first app open consumes
+  `REGISTRY_ADMIN_EMAIL` (optional `REGISTRY_ADMIN_HOUSEHOLD_NAME`, default "Main household") and creates that
+  household + `platform_admin` assignment together (`.env.example` documents both). Once the roster is
+  non-empty the bootstrap cannot run again. For the real install: set `REGISTRY_ADMIN_EMAIL` in `/data/.env`,
+  start once, then manage everything at `/admin`.
+- **Entrypoint** prepares `system/` and `households/`, aligns ownership for them (including
+  `households/<id>/*.sqlite*`), and runs the registry migrator alongside the existing one. The transitional
+  single-database app (see below) is migrated exactly as before.
+- **Tests:** `tests/registry-domain.test.ts` (assignment rules, audit, bootstrap, last-admin guard),
+  `tests/registry-paths.test.ts` (opaque IDs, traversal refusal), `tests/registry-migrations.test.ts`
+  (idempotence + CJS/TS twin), `tests/session-gate.test.ts` (unassigned denial, deactivated households, dev
+  bypass gated too, registry-unavailable fail-closed, choke point), updated `tests/current-user.test.ts`,
+  `tests/config.test.ts` and the three API-route test files (they now seed a registry for the dev identity via
+  `seedTestRegistry` in `tests/helpers.ts`). e2e: the seed assigns fictional Alex (platform admin) and Sam to
+  their household; new `e2e/admin.spec.ts` (project `admin`, before `backup`) covers the roster, the
+  one-or-two limit copy, create/assign/unassign, deactivate/reactivate and the audit tail.
+
+## The deliberate transition (read this before the next step)
+
+Pages, server actions and the backup/restore endpoints still use the **inherited single-database handle**
+(`getDbHandle()` → `dataDir/simple-finance.sqlite`) and the single `documents/` directory. The gate above is
+real and enforced, but an assigned identity's household database is **not** what pages read yet. The next
+approved step (delivery sequence step 2, second half) replaces that with safe request-scoped household
+context and per-household handles — resolving the household from the registry assignment (never from the
+browser), passing an immutable context through every request/action/route, and caching handles by safe path or
+stable household ID. Then documents, caches, exports, backup and restore get scoped the same way (step 4),
+before any import rehearsal (step 5). Do not treat the current screens or the backup endpoint as
+multi-household-safe.
+
+## Gates at PR preparation
+
+`npm test`: **783 passed**, 184 suites, 0 failed (749 before; +34 across the four new registry/session
+suites and the config additions). `npm run typecheck`, `npm run format:check` and `npm run themes:check`
+clean. `npm run build` clean (`next-env.d.ts` restored before commit). Playwright: **122 passed** across
+every project (119 before + 3 in the new `admin` project), locally via `docs/SANDBOX.md` entry 8. The PR's
+`gates`, `browser` and `docker` checks are mandatory and must all be green before merge — do not infer their
+status from these local results.
+No version bump, no image, no tag: this is not a release.
+
+## What a future session should know
+
+1. **`getCurrentUser` is the choke point — keep it that way.** Any new entry point that skips it opens a hole.
+   If the next step introduces `requireHousehold()`-style helpers, they must build on `describeSession`, not
+   beside it. `AUTH_ALLOWED_EMAILS` and the registry are two separate checks (plan §2): both must pass.
+2. **The registry schema's SQL is frozen** once shipped (decision 172's rule): change it only by adding
+   `drizzle/registry/0002_*.sql`, and update BOTH runners (`src/lib/registry/schema.ts` and
+   `scripts/registry-migrate.cjs`) — the twin test will catch a drift in the schema, not a missing runner
+   entry for a new file (both discover files by directory listing, so a new file is picked up by both).
+3. **Household IDs are opaque hex32** and `paths.ts` refuses anything else — the import step (step 5) should
+   mint IDs through `newHouseholdId()` and never hand-craft paths.
+4. **Bootstrap is consumed once** and the last-admin guard means the registry can never become
+   unadministrable via the UI. There is intentionally no UI for granting `platform_admin` yet (role changes
+   are domain-level, used by bootstrap); add one to `/admin` if the household wants a second administrator.
+5. **e2e locator lesson (cost a red run):** the roster cells repeat their email in the Unassign button label
+   and in the action message, and "Deactivated" repeats in the confirmation sentence. `admin.spec.ts`
+   therefore matches cell text with `{ exact: true }` — do the same for any new roster assertion.
+6. **Playwright locally:** SANDBOX entry 8 still holds. A full 16-minute run once lost its `next dev` server
+   mid-run (`ERR_CONNECTION_REFUSED` on the projects after `admin`) without any server-side error in the log;
+   the identical tree passed on re-run. If a long local run reddens late projects with connection refused,
+   re-run before believing it — and prefer per-project runs while iterating.
+7. **Registry handle caching** (`src/lib/registry/db.ts`) opens first and caches after, so a failed open
+   cannot leave a closed handle that still answers path checks (same lesson as `getDbHandle` in v0.14.0).
+8. The `/admin` page is intentionally absent from `NAV_ITEMS`; link it from docs only unless the household
+   asks for a nav entry.
+
+## What the household does
+
+Nothing yet — no release, no Unraid change. When the later RC exists: take a backup of the original app as
+usual before any cutover, and bootstrap the new install by setting `REGISTRY_ADMIN_EMAIL` in the new
+appdata `.env` and opening `/admin`. Do not install this build against real data.
+
+---
+
 # Current handoff — multi-household isolation foundation (2026-10-10)
 
 **Current project:** independent repository `dougalbob/simple-finance-multi-household`, copied from the original

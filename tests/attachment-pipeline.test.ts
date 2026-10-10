@@ -29,7 +29,7 @@ import {
   storeAttachment,
 } from '../src/lib/records/attachments';
 import { createHouseholdFixture } from './household';
-import { makeTempDir } from './helpers';
+import { makeTempDir, seedTestRegistry } from './helpers';
 
 /**
  * Attachment pipeline (SPEC §23.3, plan test strategy): content-sniffed MIME
@@ -192,6 +192,9 @@ describe('GET /api/attachments/[fileKey]', () => {
     process.env.DATA_DIR = dataDir;
     process.env.AUTH_DEV_BYPASS = 'false';
     delete process.env.AUTH_DEV_IDENTITY_EMAIL;
+    // The app denies any authenticated identity without a registry
+    // assignment; the dev identity gets one here, as an administrator would.
+    await seedTestRegistry(dataDir, [{ email: 'dev@example.com', role: 'platform_admin' }]);
   });
 
   after(() => {

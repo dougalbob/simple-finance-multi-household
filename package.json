@@ -18,6 +18,7 @@
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.cjs",
+    "db:migrate:registry": "node scripts/registry-migrate.cjs",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium"
   },

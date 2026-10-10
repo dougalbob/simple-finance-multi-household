@@ -1,6 +1,6 @@
 # Simple Finance — Product Specification
 
-**Status:** original single-household requirements were agreed 2026-09-20; the multi-household direction and decisions below were approved 2026-10-10. This is the authoritative product spec for the independent multi-household edition. The target is not yet implemented in the inherited source.
+**Status:** original single-household requirements were agreed 2026-09-20; the multi-household direction and decisions below were approved 2026-10-10. This is the authoritative product spec for the independent multi-household edition. Implementation is in progress: the system registry, identity pre-assignment and first-login denial (§3, §19) are built; per-household storage and routing (§18), tenant-scoped backup/restore and support-consent sessions are not yet.
 **Companion documents:** [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md) (active isolation, storage and release contract), `docs/HANDOFF.md` (session continuation point), and `docs/IMPLEMENTATION_PLAN.md` (phases and dated decisions). `AGENT_APP_BLUEPRINT.md` is historical and its original product-specific defaults are superseded here.
 
 > **Privacy notice — applies to this entire repository.**
@@ -88,6 +88,10 @@ with its inputs inspectable.
 
 - Each household has **one or two members**. One-person households are valid and complete; no household may
   have more than two people or more than two assigned sign-in identities.
+  *As built (2026-10-10):* the system registry (`<dataDir>/system/registry.sqlite`, `src/lib/registry`)
+  enforces one-or-two assigned identities per household, one household per identity, and the pre-assignment
+  rule; the administrator surface is `/admin`. The `people`-to-verified-identity link inside each household
+  database is not yet wired to the registry assignment.
 - Cloudflare Access + Google sign-in is the outer identity gate; the app independently verifies the Access JWT.
   The administrator pre-creates the household and assigns each allowed email to exactly one household before
   first login. There is no self-sign-up. A verified but unassigned identity is denied by the app. The Cloudflare

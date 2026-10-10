@@ -22,6 +22,9 @@ import { createVehicle } from '../src/lib/records/vehicles';
 import { addSupplierInteraction } from '../src/lib/records/supplier-details';
 import { createTask } from '../src/lib/records/tasks';
 import { seedFenceDemoProject } from '../src/lib/projects/demo';
+import { assignIdentity, createHousehold } from '../src/lib/registry/domain';
+import { openRegistry } from '../src/lib/registry/db';
+import { systemRegistryPath } from '../src/lib/registry/paths';
 import { toLocalDateString } from '../src/lib/time';
 import { recentMonthlyDueDay } from './e2e-seed-dates';
 
@@ -485,7 +488,38 @@ function localDate(base: Date, dayOffset: number): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+/**
+ * System registry seed (MULTI_HOUSEHOLD_PLAN §2): the app denies any
+ * identity without a pre-assignment, including the development identity, so
+ * the fictional household's two sign-ins are assigned here exactly the way
+ * the administrator would. Alex carries the platform-administrator role so
+ * the `/admin` specs can run against this seed. Fictional emails only.
+ */
+function seedRegistry(): void {
+  const registry = openRegistry(systemRegistryPath(DATA_DIR));
+  try {
+    const household = createHousehold(registry, {
+      displayName: 'Alex & Sam',
+      actor: 'system',
+    });
+    assignIdentity(registry, {
+      email: 'alex@example.com',
+      householdId: household.id,
+      role: 'platform_admin',
+      actor: 'system',
+    });
+    assignIdentity(registry, {
+      email: 'sam@example.com',
+      householdId: household.id,
+      actor: 'system',
+    });
+  } finally {
+    registry.close();
+  }
+}
+
 seed();
+seedRegistry();
 
 // `E2E_SEED_ONLY=1` prepares (or refreshes) the fictional data and exits. CI
 // uses it to check the harness itself; a human can use it to inspect the seed

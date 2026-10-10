@@ -5,6 +5,9 @@ import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { exportJWK, SignJWT } from 'jose';
+import { openRegistry } from '../src/lib/registry/db';
+import { assignIdentity, createHousehold } from '../src/lib/registry/domain';
+import { systemRegistryPath } from '../src/lib/registry/paths';
 
 /** Isolated scratch directory per test (blueprint §9: never touch real appdata). */
 export async function makeTempDir(prefix = 'simple-finance-test-'): Promise<string> {
@@ -112,4 +115,31 @@ export async function migrationsFolderBefore(firstMissingTag: string): Promise<s
   journal.entries = journal.entries.filter((entry) => entry.idx < cut.idx);
   writeFileSync(journalPath, JSON.stringify(journal));
   return dir;
+}
+
+/**
+ * Seed a system registry in an isolated DATA_DIR so tests can exercise the
+ * app-side assignment gate: authenticated identities pass only when they are
+ * pre-assigned here (there is no self-sign-up). Returns the household id.
+ */
+export async function seedTestRegistry(
+  dataDir: string,
+  identities: ReadonlyArray<{ email: string; role?: 'member' | 'platform_admin' }>,
+  householdName = 'Test household',
+): Promise<string> {
+  const registry = openRegistry(systemRegistryPath(dataDir));
+  try {
+    const household = createHousehold(registry, { displayName: householdName, actor: 'system' });
+    for (const entry of identities) {
+      assignIdentity(registry, {
+        email: entry.email,
+        householdId: household.id,
+        role: entry.role ?? 'member',
+        actor: 'system',
+      });
+    }
+    return household.id;
+  } finally {
+    registry.close();
+  }
 }

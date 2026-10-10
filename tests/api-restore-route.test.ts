@@ -6,7 +6,7 @@ import { POST as restorePOST } from '../src/app/api/restore/route';
 import { closeDbHandle, getDbHandle } from '../src/lib/db/client';
 import { loadAppConfig } from '../src/lib/config';
 import { listPots, createPot, addCheckpoint } from '../src/lib/records/pots';
-import { makeTempDir } from './helpers';
+import { makeTempDir, seedTestRegistry } from './helpers';
 
 /**
  * The restore entry point (SPEC §18.4, blueprint §4.4/§4.7). Exercised through
@@ -26,6 +26,9 @@ describe('POST /api/restore (route handler)', () => {
     process.env.DATA_DIR = dataDir;
     process.env.AUTH_DEV_BYPASS = 'false';
     delete process.env.AUTH_DEV_IDENTITY_EMAIL;
+    // The app denies any authenticated identity without a registry
+    // assignment; the dev identity gets one here, as an administrator would.
+    await seedTestRegistry(dataDir, [{ email: 'dev@example.com', role: 'platform_admin' }]);
 
     // An installation with a pot and a checkpoint, archived with two pots'
     // worth of later activity left out.

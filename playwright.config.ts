@@ -177,6 +177,16 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
+      // Own project (multi-household registry): platform administration —
+      // households and sign-in pre-assignment. Writes only registry roster
+      // rows for households it creates itself; the household backup project
+      // never reads the registry, but this still runs before backup so the
+      // suite keeps its mutate-before-restore order.
+      name: 'admin',
+      testMatch: /admin\.spec\.ts/,
+      use: { viewport: { width: 1400, height: 950 } },
+    },
+    {
       name: 'backup',
       testMatch: /backup\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },

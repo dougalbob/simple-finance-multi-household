@@ -2,7 +2,7 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household will have its own database and saved documents; households share the application, not financial data.
 
-> **Important status:** this repository is an independent copy of the original `dougalbob/simple-finance` project. The multi-household features are **not implemented or released yet**; the current source is the inherited single-household v0.39.0 baseline. Do not install this template, import real data, or treat inherited v0.x tags/releases as multi-household releases. The first planned candidate is `v1.0.0-rc.1`; see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md).
+> **Important status:** this repository is an independent copy of the original `dougalbob/simple-finance` project. The multi-household features are being implemented step by step and **no release exists yet**; the current source is the inherited single-household v0.39.0 baseline plus the system registry, identity-to-household pre-assignment (`/admin`) and the app-side first-login denial. Per-household databases and routing, support consent and tenant backups are **not implemented yet**. Do not install this template or import real data. The first planned candidate is `v1.0.0-rc.1`; see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md).
 
 ## Non-negotiable separation
 

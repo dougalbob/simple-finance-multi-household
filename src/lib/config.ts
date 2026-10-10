@@ -37,6 +37,21 @@ export interface AppConfig {
    * restore path goes through this one field.
    */
   readonly documentsDir: string;
+  /**
+   * System registry (control plane, SPEC §18.1): `<dataDir>/system/registry.sqlite`.
+   * Household roster and assignments only — never finance records. Derived
+   * from the data root; the layout is fixed by the product owner.
+   */
+  readonly registryPath: string;
+  /**
+   * One-time administrator bootstrap (SPEC §3, MULTI_HOUSEHOLD_PLAN §2):
+   * consumed only while the registry roster is empty. The household name is
+   * operational metadata for the administrator's own household.
+   */
+  readonly registryBootstrap: {
+    readonly adminEmail: string | null;
+    readonly householdName: string;
+  };
   readonly auth: AuthConfig;
 }
 
@@ -57,6 +72,12 @@ export function loadAppConfig(env: EnvSource = process.env): AppConfig {
   const dataDir = trimmed(env.DATA_DIR) ?? (isProduction ? '/data' : './data');
   const databasePath = trimmed(env.DATABASE_PATH) ?? path.join(dataDir, 'simple-finance.sqlite');
   const documentsDir = trimmed(env.DOCUMENTS_DIR) ?? path.join(dataDir, 'documents');
+  const registryPath = path.join(dataDir, 'system', 'registry.sqlite');
+
+  const registryBootstrap = {
+    adminEmail: trimmed(env.REGISTRY_ADMIN_EMAIL)?.toLowerCase() ?? null,
+    householdName: trimmed(env.REGISTRY_ADMIN_HOUSEHOLD_NAME) ?? 'Main household',
+  };
 
   const issuer = trimmed(env.AUTH_ISSUER);
   const audience = trimmed(env.AUTH_AUDIENCE);
@@ -76,6 +97,8 @@ export function loadAppConfig(env: EnvSource = process.env): AppConfig {
     dataDir,
     databasePath,
     documentsDir,
+    registryPath,
+    registryBootstrap,
     auth: { issuer, audience, certsUrl, allowedEmails, devBypass, devIdentityEmail },
   };
 }
