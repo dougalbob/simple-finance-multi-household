@@ -24,15 +24,15 @@ The complete active contract is [`MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN
   `/mnt/user/appdata/simple-finance`. New deployment is bridge / host **`3009`** → container `3000` / appdata
   **`/mnt/user/appdata/simple-finance-multi-household`**. Never mount or alter the original data path or route.
 - The only image allowed is `ghcr.io/dougalbob/simple-finance-multi-household`; the original
-  `ghcr.io/dougalbob/simple-finance` is forbidden. The workflow hard-fails for a wrong GitHub repository and
-  ignores inherited v0.x tags as release/upgrade bases.
+  `ghcr.io/dougalbob/simple-finance` is forbidden. CI and Publish hard-fail for a wrong GitHub repository and
+  ignore inherited v0.x tags as release/upgrade bases.
 - First candidate is `v1.0.0-rc.1`; RCs publish only their version and SHA tags and never move `latest`. Accepted
   production release is a separate `v1.0.0` tag; stable releases alone may move `latest`.
 
 ## State of this foundation change
 
 This change updates the operating contract, product/spec/implementation docs, template defaults and guarded
-publish workflow. It does **not** implement household routing, registry, admin UI, support-consent flow, tenant
+CI/Publish workflows. It does **not** implement household routing, registry, admin UI, support-consent flow, tenant
 backups, data migration, or change the current source app version. No release tag or image is to be created from
 this change. The production app and the recent encrypted backup have not been mounted, restored or modified.
 

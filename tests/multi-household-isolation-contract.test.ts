@@ -23,6 +23,15 @@ describe('multi-household isolation contract', () => {
     assert.match(workflow, /--latest/);
   });
 
+  it('keeps CI upgrade smoke on this product line and excludes inherited v0 tags', () => {
+    const workflow = repoFile('.github/workflows/ci.yml');
+    assert.match(workflow, /EXPECTED_REPOSITORY="dougalbob\/simple-finance-multi-household"/);
+    assert.match(workflow, /IMAGE="ghcr\.io\/dougalbob\/simple-finance-multi-household"/);
+    assert.ok(workflow.includes("grep -E '^v[1-9][0-9]*\\.'"));
+    assert.match(workflow, /no previously published v1\+ tag found/);
+    assert.doesNotMatch(workflow, /IMAGE="ghcr\.io\/\$\{GITHUB_REPOSITORY/);
+  });
+
   it('keeps the Unraid template on the new package, appdata root and host port', () => {
     const template = repoFile('simple-finance.xml');
     assert.match(
