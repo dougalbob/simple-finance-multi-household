@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import { isAuthConfigComplete, loadAppConfig } from '../src/lib/config';
 
@@ -87,5 +88,29 @@ describe('loadAppConfig', () => {
       ),
       true,
     );
+  });
+
+  it('derives the system registry path from the data root (fixed layout)', () => {
+    assert.equal(
+      loadAppConfig({ DATA_DIR: '/srv/finance' }).registryPath,
+      path.join('/srv/finance', 'system', 'registry.sqlite'),
+    );
+    assert.equal(
+      loadAppConfig({ NODE_ENV: 'production' }).registryPath,
+      path.join('/data', 'system', 'registry.sqlite'),
+    );
+  });
+
+  it('reads the administrator bootstrap knobs, defaulting the household name', () => {
+    const none = loadAppConfig({});
+    assert.equal(none.registryBootstrap.adminEmail, null);
+    assert.equal(none.registryBootstrap.householdName, 'Main household');
+
+    const configured = loadAppConfig({
+      REGISTRY_ADMIN_EMAIL: ' Owner@Example.com ',
+      REGISTRY_ADMIN_HOUSEHOLD_NAME: 'Owner household',
+    });
+    assert.equal(configured.registryBootstrap.adminEmail, 'owner@example.com');
+    assert.equal(configured.registryBootstrap.householdName, 'Owner household');
   });
 });

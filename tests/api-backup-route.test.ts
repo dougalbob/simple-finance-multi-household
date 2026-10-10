@@ -7,7 +7,7 @@ import { closeDbHandle, getDbHandle } from '../src/lib/db/client';
 import { loadAppConfig } from '../src/lib/config';
 import { addCheckpoint, createPot } from '../src/lib/records/pots';
 import { APP_VERSION } from '../src/lib/version';
-import { makeTempDir } from './helpers';
+import { makeTempDir, seedTestRegistry } from './helpers';
 
 /**
  * Exercises the real route handler (auth guard, validation, archive response)
@@ -20,6 +20,9 @@ describe('POST /api/backup (route handler)', () => {
     dataDir = await makeTempDir('sf-api-backup-');
     process.env.DATA_DIR = dataDir;
     process.env.AUTH_DEV_BYPASS = 'false';
+    // The app denies any authenticated identity without a registry
+    // assignment; the dev identity gets one here, as an administrator would.
+    await seedTestRegistry(dataDir, [{ email: 'dev@example.com', role: 'platform_admin' }]);
   });
 
   after(async () => {

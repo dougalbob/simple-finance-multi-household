@@ -35,7 +35,7 @@ PUID="${PUID:-99}"
 PGID="${PGID:-100}"
 START_COMMAND="node_modules/.bin/next start -H 0.0.0.0 -p $PORT"
 
-mkdir -p "$DATA_DIR/documents" "$DATA_DIR/logging"
+mkdir -p "$DATA_DIR/documents" "$DATA_DIR/logging" "$DATA_DIR/system" "$DATA_DIR/households"
 
 # --- Ownership alignment -----------------------------------------------------
 # The server writes as PUID:PGID, so every path it must write has to belong to
@@ -64,13 +64,15 @@ if [ "$(id -u)" = "0" ]; then
   if [ "$PUID" = "0" ]; then
     echo "[entrypoint] PUID=0 requested - running as root (documented trade-off)"
   else
-    for target in "$DATA_DIR" "$DATA_DIR/documents" "$DATA_DIR/logging"; do
+    for target in "$DATA_DIR" "$DATA_DIR/documents" "$DATA_DIR/logging" "$DATA_DIR/system" "$DATA_DIR/households"; do
       owned_by_app "$target" || take_ownership "$target"
     done
     # The database and its WAL sidecars (any name: DATABASE_PATH may be
-    # overridden in /data/.env). A root-owned database makes the migration below
-    # fail, and the container then refuses to start.
-    for dbfile in "$DATA_DIR"/*.sqlite*; do
+    # overridden in /data/.env), plus the system registry and every household
+    # database under households/<id>/. A root-owned database makes the
+    # migration below fail, and the container then refuses to start.
+    for dbfile in "$DATA_DIR"/*.sqlite* "$DATA_DIR"/system/*.sqlite* "$DATA_DIR"/households/*/*.sqlite*; do
+      [ -e "$dbfile" ] || continue
       owned_by_app "$dbfile" || take_ownership "$dbfile"
     done
     # Files an older root-running container wrote *inside* an otherwise correctly
@@ -78,11 +80,12 @@ if [ "$(id -u)" = "0" ]; then
     # viewer), so repair those two trees as well. `find` stops at the first
     # mismatch, which keeps this cheap on every start.
     #
-    # Deliberately scoped to documents/ and logging/ rather than a recursive
-    # chown of $DATA_DIR: /data/.env is the trusted, admin-owned configuration
-    # (SPEC §18.1, sourced as root above) and the application must never be able
-    # to write it. A root-owned .env is correct, not a fault to "repair".
-    for target in "$DATA_DIR/documents" "$DATA_DIR/logging"; do
+    # Deliberately scoped to documents/, logging/, system/ and households/
+    # rather than a recursive chown of $DATA_DIR: /data/.env is the trusted,
+    # admin-owned configuration (SPEC §18.1, sourced as root above) and the
+    # application must never be able to write it. A root-owned .env is correct,
+    # not a fault to "repair".
+    for target in "$DATA_DIR/documents" "$DATA_DIR/logging" "$DATA_DIR/system" "$DATA_DIR/households"; do
       [ -d "$target" ] || continue
       if command -v find >/dev/null 2>&1; then
         stray="$(
@@ -112,9 +115,17 @@ if [ -n "$RUN_AS" ]; then
     echo "[entrypoint] migration failed - refusing to start (blueprint section 7)" >&2
     exit 1
   fi
+  if ! gosu "$RUN_AS" node scripts/registry-migrate.cjs; then
+    echo "[entrypoint] registry migration failed - refusing to start (blueprint section 7)" >&2
+    exit 1
+  fi
 else
   if ! node scripts/migrate.cjs; then
     echo "[entrypoint] migration failed - refusing to start (blueprint section 7)" >&2
+    exit 1
+  fi
+  if ! node scripts/registry-migrate.cjs; then
+    echo "[entrypoint] registry migration failed - refusing to start (blueprint section 7)" >&2
     exit 1
   fi
 fi

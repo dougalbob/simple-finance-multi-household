@@ -56,6 +56,36 @@
 > package, lockfile, version module, template and release notes to that version together in the actual RC release
 > PR. See [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
 
+## Multi-household decision log (additions)
+
+- **2026-10-10 — registry and identity assignment landed (delivery step 2, first half).** The system registry is
+  `system/registry.sqlite` (control plane only: `households`, `identities`, `registry_audit`; SQL at
+  `drizzle/registry/`, applied by `src/lib/registry/schema.ts` and the production twin
+  `scripts/registry-migrate.cjs`, which the entrypoint runs and whose schema equality is pinned by
+  `tests/registry-migrations.test.ts`). Household IDs are opaque 128-bit hex; all household paths derive from
+  `src/lib/registry/paths.ts` with ID validation (no browser-supplied id or path is ever authority).
+- **Assignment rules (enforced in `src/lib/registry/domain.ts`, audited row per change):** one or two assigned
+  sign-in identities per household (a third is refused; one person is complete), one household per identity
+  (normalised, globally unique email; unassign + reassign is the supported move), no self-sign-up, households are
+  deactivated rather than deleted, and the last platform administrator can never be removed or demoted.
+- **First-login denial is one choke point.** `getCurrentUser` (`src/lib/auth/current-user.ts`) now requires
+  authentication **and** an active registry assignment for an active household — every page, server action and
+  route handler already calls it, so unassigned or deactivated identities are denied everywhere with no
+  per-route drift. `describeSession` reports the same decision with its reason for the denial page and `/admin`.
+  A missing or unreadable registry denies everyone (fail closed).
+- **Administrator surface:** `/admin` (platform-administrator role only) lists the operational roster, creates,
+  renames and deactivates households, pre-assigns and unassigns sign-in emails, and shows the registry audit
+  tail. It never exposes financial records. Bootstrap of the first administrator is a one-time environment
+  consumption (`REGISTRY_ADMIN_EMAIL`, optional `REGISTRY_ADMIN_HOUSEHOLD_NAME`) while the roster is empty; the
+  last-administrator guard keeps it from ever locking itself out. A platform administrator whose own household
+  is deactivated retains `/admin` (so they can restore it) but no household pages.
+- **Transitional layout:** registry and household directories live under the new appdata root
+  (`<dataDir>/system/`, `<dataDir>/households/<id>/`; entrypoint prepares and owns them). Pages and actions
+  deliberately still use the inherited single-database handle (`dataDir/simple-finance.sqlite`) until the next
+  step replaces it with request-scoped household context and per-household handles; documents, caches and
+  backup/restore remain single-tenant in this change and are the following step. Nothing here touches the
+  original installation, its data, route or port 3007.
+
 ---
 
 ## Historical single-household source-project record
