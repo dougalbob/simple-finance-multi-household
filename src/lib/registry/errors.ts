@@ -60,3 +60,15 @@ export class LastAdministratorError extends Error {
     this.name = 'LastAdministratorError';
   }
 }
+
+/**
+ * A support-grant rule was broken (not a member, not an administrator, a
+ * second active grant, an unsupported duration, an ended or unknown grant).
+ * Messages are plain sentences shown to the household or administrator.
+ */
+export class SupportGrantError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SupportGrantError';
+  }
+}

@@ -11,10 +11,23 @@ import {
   TargetRenameForm,
   WarningLeadsForm,
 } from '@/components/settings-forms';
+import { BackupPanel } from '@/components/backup-panel';
+import { GrantSupportForm, RevokeSupportForm } from '@/components/support-forms';
 import { ThemeGallery } from '@/components/theme-gallery';
 import { householdContextFromRequest } from '@/lib/auth/next';
-import { signInEmailChoices } from '@/lib/auth/sign-in-choices';
-import { loadAppConfig } from '@/lib/config';
+import { householdSignInEmails, signInEmailChoices } from '@/lib/auth/sign-in-choices';
+import { inspectDocuments } from '@/lib/backup/backup';
+import { getRegistry } from '@/lib/registry/db';
+import { listIdentities } from '@/lib/registry/domain';
+import {
+  listSupportAudit,
+  listSupportGrants,
+  supportGrantStatus,
+  type SupportGrant,
+  type SupportGrantStatus,
+} from '@/lib/registry/support';
+import { formatInstantLocal } from '@/lib/time';
+import { APP_VERSION } from '@/lib/version';
 import { categoryTree } from '@/lib/records/categories';
 import { getCommitmentCategoryPicker } from '@/lib/records/charts-view';
 import { listPeople } from '@/lib/records/people';
@@ -48,7 +61,16 @@ export default async function SettingsPage() {
   const people = listPeople(db);
   const vehicles = listVehicles(db);
   const pots = listPots(db);
-  const emailChoices = signInEmailChoices(loadAppConfig(), people);
+  const registry = getRegistry();
+  // The household's own assigned sign-ins only (MULTI_HOUSEHOLD_PLAN §2).
+  const emailChoices = signInEmailChoices(
+    householdSignInEmails(registry, user.householdId),
+    people,
+  );
+  const documentsStatus = user.readOnly
+    ? null
+    : await inspectDocuments(user.dbHandle, user.documentsDir);
+  const support = supportSettingsView(registry, user.householdId, now);
   const tree = categoryTree(db);
   const fuelByVehicle = getMonthlyFuelByVehicle(db);
   const defaultPurchasePotId = getDefaultPurchasePotId(db);
@@ -285,11 +307,40 @@ export default async function SettingsPage() {
           <h2 id="backup-heading" className="mb-1 text-lg font-semibold">
             Backup &amp; restore
           </h2>
-          <p className="text-sm text-ink-soft">
-            Household-scoped backup and restore are temporarily unavailable while tenant-specific
-            archives and recovery are being implemented. No backup or restore request can access or
-            replace another household&apos;s data.
-          </p>
+          {documentsStatus === null ? (
+            <p className="text-sm text-ink-soft">
+              Backup and restore are not available from a support view. Nothing here can take or
+              replace the household&apos;s records.
+            </p>
+          ) : (
+            <>
+              <p className="mb-3 max-w-3xl text-xs text-ink-muted">
+                This household&apos;s backup holds only this household&apos;s records and
+                attachments, with a checksum manifest that names this household. A restore replaces
+                this household&apos;s data only — never another household&apos;s — and keeps the
+                previous copy on disk.
+              </p>
+              <BackupPanel appVersion={APP_VERSION} documentsStatus={documentsStatus} />
+            </>
+          )}
+        </section>
+
+        <section
+          id="support-access"
+          aria-labelledby="support-access-heading"
+          className="scroll-mt-24 rounded-xl border border-border bg-surface p-4 shadow-sm"
+        >
+          <h2 id="support-access-heading" className="mb-1 text-lg font-semibold">
+            Support access
+          </h2>
+          {user.readOnly ? (
+            <p className="text-sm text-ink-soft">
+              You are viewing this household as support, read-only. Support access is managed by the
+              household itself.
+            </p>
+          ) : (
+            <SupportAccessPanel view={support} />
+          )}
         </section>
 
         <section
@@ -357,5 +408,112 @@ export default async function SettingsPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+const SUPPORT_STATUS_WORDS: Record<SupportGrantStatus, string> = {
+  active: 'active',
+  expired: 'expired',
+  revoked: 'ended by the household',
+};
+
+const SUPPORT_AUDIT_WORDS: Record<string, string> = {
+  'support.grant': 'Access granted',
+  'support.revoke': 'Access ended',
+  'support.open': 'Administrator opened the view',
+  'support.access': 'First use of the view',
+};
+
+interface SupportSettingsView {
+  active: { grant: SupportGrant; supportEmail: string } | null;
+  history: SupportGrant[];
+  administrators: Array<{ email: string }>;
+  audit: Array<{ id: number; at: string; actor: string; action: string }>;
+}
+
+function supportSettingsView(
+  registry: ReturnType<typeof getRegistry>,
+  householdId: string,
+  now: Date,
+): SupportSettingsView {
+  const grants = listSupportGrants(registry, householdId);
+  const activeGrant = grants.find((grant) => supportGrantStatus(grant, now) === 'active') ?? null;
+  return {
+    active:
+      activeGrant === null ? null : { grant: activeGrant, supportEmail: activeGrant.supportEmail },
+    history: grants.slice(0, 10),
+    administrators: listIdentities(registry)
+      .filter(
+        (identity) => identity.role === 'platform_admin' && identity.householdId !== householdId,
+      )
+      .map((identity) => ({ email: identity.email })),
+    audit: listSupportAudit(registry, householdId, 12),
+  };
+}
+
+function SupportAccessPanel({ view }: { view: SupportSettingsView }) {
+  return (
+    <div className="space-y-4">
+      <p className="max-w-3xl text-sm text-ink-soft">
+        A platform administrator can see this household only if you grant it here. The access is
+        read-only, lasts 1, 4 or 24 hours, is shown on every page while it is active, and ends the
+        moment you end it. Nobody can see your records otherwise.
+      </p>
+
+      {view.active !== null ? (
+        <div className="rounded-lg border border-border-strong bg-canvas p-3">
+          <p className="text-sm font-semibold">
+            Support access is active for {view.active.supportEmail}
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            Read-only until {formatInstantLocal(new Date(view.active.grant.expiresAt))}.
+          </p>
+          <div className="mt-2">
+            <RevokeSupportForm
+              grantId={view.active.grant.id}
+              supportEmail={view.active.supportEmail}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm text-ink-muted">No support access is granted right now.</p>
+          <GrantSupportForm administrators={view.administrators} />
+        </div>
+      )}
+
+      {view.history.length > 0 ? (
+        <div>
+          <h3 className="mb-1 text-sm font-semibold">Recent grants</h3>
+          <ul className="space-y-1 text-xs text-ink-soft">
+            {view.history.map((grant) => (
+              <li key={grant.id}>
+                {grant.supportEmail} — {SUPPORT_STATUS_WORDS[supportGrantStatus(grant, new Date())]}
+                {' · '}granted by {grant.grantedByEmail}{' '}
+                {formatInstantLocal(new Date(grant.createdAt))}
+                {' · '}until {formatInstantLocal(new Date(grant.expiresAt))}
+                {grant.firstUsedAt !== null
+                  ? ` · first used ${formatInstantLocal(new Date(grant.firstUsedAt))}`
+                  : ' · not used yet'}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {view.audit.length > 0 ? (
+        <div>
+          <h3 className="mb-1 text-sm font-semibold">Support activity</h3>
+          <ul className="space-y-1 text-xs text-ink-soft">
+            {view.audit.map((entry) => (
+              <li key={entry.id}>
+                {formatInstantLocal(new Date(entry.at))} —{' '}
+                {SUPPORT_AUDIT_WORDS[entry.action] ?? entry.action} ({entry.actor})
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }

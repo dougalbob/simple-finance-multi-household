@@ -366,6 +366,19 @@ empty — the fetch was blocked.
 
 ---
 
+## 17. The full Playwright run can lose its web server mid-run; `pkill -f` can kill your own shell (2026-10-10)
+
+- **Symptom:** a full `npx playwright test` run on this 4 GB sandbox reports many unrelated failures with
+  `page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3100/...` after one long spec (about 2 minutes). The
+  server log shows no crash. Rerunning just the failing specs passes, and a clean full rerun passed 123/123.
+- **Do:** when `ERR_CONNECTION_REFUSED` appears mid-run, rerun the failing specs by title with `-g` before you treat them
+  as real. Confirm port 3100 is free with `ss -ltnp | grep 3100` before a clean run.
+- **Don't:** `pkill -f e2e-server` (or any pattern that appears in your own command) from a shell whose command line
+  contains that pattern. It kills the shell and the command exits `-1` with no output. Stop servers by PID or with
+  `stop_process`.
+- **Smoke-check pages without a browser:** `node --import tsx scripts/e2e-server.mts` serves the seeded app on port
+  3100 with dev identity bypass, so `curl` can check status codes, headers and rendered text for any route.
+
 ## History
 
 - **2026-10-09 (v0.37.0 follow-up, session `arena/9d0d4627-simple-finance`, unreleased):** entry 16 added. Entry 8 re-proved: `@sparticuz/chromium` Chromium 153.0.8010.0 with the local overlay. The full local run (`npx playwright test --config playwright.local.config.ts`, 119 tests) gave **114 passed**. The 5 red were the backup download timing out at 120 s; the dev server then stopped, so four later tests failed with `ERR_CONNECTION_REFUSED`. The same five tests then passed 5/5 on a fresh server, run as their projects (backup, credit-card-pots, insights, payday-summary). `npm test` 717/717, typecheck, format, themes and build pass, and `npm audit --omit=dev` reports 0. This sandbox's Chromium draws no PDF, so the PDF viewer is proven for wiring and layout only.

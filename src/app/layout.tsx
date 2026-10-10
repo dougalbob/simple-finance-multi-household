@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { SiteNav } from '@/components/site-nav';
+import { SupportBanner } from '@/components/support-banner';
 import { currentTheme } from '@/lib/theme/next';
 import { APP_NAME, APP_RELEASE_STAGE, APP_VERSION } from '@/lib/version';
 import './globals.css';
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang="en-GB" data-theme={theme.id}>
       <body className="sf-app-canvas min-h-screen bg-canvas text-ink antialiased">
         <SiteNav />
+        <SupportBanner />
         {children}
         <footer className="mx-auto mt-12 max-w-3xl px-4 pb-8 text-center text-xs text-ink-faint">
           {APP_NAME} v{APP_VERSION} ({APP_RELEASE_STAGE}) · estimates and projections, never a bank

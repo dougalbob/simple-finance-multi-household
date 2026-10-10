@@ -11,6 +11,7 @@ import {
   ARCHIVE_FORMAT,
   ARCHIVE_FORMAT_VERSION,
   DOCUMENTS_MEMBER_PREFIX,
+  HOUSEHOLD_ARCHIVE_FORMAT_VERSION,
   type BackupManifest,
 } from './backup';
 import { openDatabase } from '../db/client';
@@ -59,7 +60,8 @@ const manifestCountsSchema = z
 
 const manifestSchema = z.object({
   format: z.literal(ARCHIVE_FORMAT),
-  formatVersion: z.number().int().min(1).max(ARCHIVE_FORMAT_VERSION),
+  formatVersion: z.number().int().min(1).max(HOUSEHOLD_ARCHIVE_FORMAT_VERSION),
+  household: z.object({ id: z.string() }).optional(),
   app: z.string(),
   appVersion: z.string(),
   createdAt: z.string(),
@@ -115,6 +117,20 @@ export interface RestoreOptions {
    * `./drizzle`, which the container image carries (tests may point elsewhere).
    */
   migrationsFolder?: string;
+  /**
+   * Household-scoped restore: the archive must be a format 3 archive whose
+   * manifest names exactly this opaque household ID. Anything else — a legacy
+   * archive, or another household's archive — is refused before the target
+   * is touched.
+   */
+  expectedHouseholdId?: string;
+  /**
+   * Runs on the verified, upgraded staged database before anything is swapped
+   * in. Lets the caller apply a household-specific rule (for example, dropping
+   * a sign-in link the household no longer owns) to the copy only. Throwing
+   * aborts the restore with the live data untouched.
+   */
+  beforeSwap?: (stagedDatabasePath: string) => void;
 }
 
 export interface RestoreSummary {
@@ -229,6 +245,17 @@ export async function restoreEncryptedBackup(options: RestoreOptions): Promise<R
     }
     const manifest = manifestParsed.data as BackupManifest;
 
+    if (options.expectedHouseholdId !== undefined) {
+      if (
+        manifest.formatVersion !== HOUSEHOLD_ARCHIVE_FORMAT_VERSION ||
+        manifest.household?.id !== options.expectedHouseholdId
+      ) {
+        throw new RestoreError(
+          'This archive was not made for this household, so it cannot be restored here. Nothing was changed.',
+        );
+      }
+    }
+
     // Verify every listed member's size and sha256 before touching the target.
     // The manifest describes the payload files (it cannot hash itself), so it
     // is the one member expected in the archive and absent from the list.
@@ -267,6 +294,14 @@ export async function restoreEncryptedBackup(options: RestoreOptions): Promise<R
       path.join(extractDir, DATABASE_MEMBER),
       options.migrationsFolder ?? path.resolve(process.cwd(), 'drizzle'),
     );
+    if (options.beforeSwap !== undefined) {
+      try {
+        options.beforeSwap(path.join(extractDir, DATABASE_MEMBER));
+      } catch (err) {
+        if (err instanceof RestoreError) throw err;
+        throw new RestoreError('The restored copy could not be prepared for this household');
+      }
+    }
 
     // Swap in, preserving the previous copies until success.
     const stamp = localStamp(now);

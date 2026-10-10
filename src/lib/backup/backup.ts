@@ -8,6 +8,7 @@ import type { DbHandle } from '../db/client';
 import { attachments } from '../db/schema';
 import { formatInstantLocal } from '../time';
 import { isSafeFileKey } from '../records/attachments';
+import { assertSafeHouseholdId } from '../registry/ids';
 import { encryptBackupPayload } from './crypto';
 import { backupFilename } from './filename';
 
@@ -36,11 +37,19 @@ import { backupFilename } from './filename';
  */
 export const ARCHIVE_FORMAT = 'simple-finance-backup';
 export const ARCHIVE_FORMAT_VERSION = 2;
+/**
+ * Format 3 is a household-scoped archive (MULTI_HOUSEHOLD_PLAN §5): the same
+ * members as format 2 plus the opaque household ID the archive belongs to.
+ * Restore into a household refuses any archive whose ID does not match.
+ */
+export const HOUSEHOLD_ARCHIVE_FORMAT_VERSION = 3;
 export const DOCUMENTS_MEMBER_PREFIX = 'documents/';
 
 export interface BackupManifest {
   format: typeof ARCHIVE_FORMAT;
   formatVersion: number;
+  /** Present on household-scoped (format 3) archives only. */
+  household?: { id: string };
   app: string;
   appVersion: string;
   /** ISO instant the archive was created */
@@ -83,6 +92,12 @@ export interface CreateBackupOptions {
    * household context; this utility is not exposed until scoped backup exists.
    */
   documentsDir?: string;
+  /**
+   * When set, the archive is a household-scoped format 3 archive for this
+   * opaque household ID. The caller must derive `handle` and `documentsDir`
+   * from that household's verified context.
+   */
+  householdId?: string;
 }
 
 export interface CreatedBackup {
@@ -169,6 +184,8 @@ export async function createEncryptedBackup(options: CreateBackupOptions): Promi
   const appVersion = options.appVersion ?? APP_VERSION;
   const { db, raw } = options.handle;
   const documentsDir = options.documentsDir ?? documentsDirForDatabase(raw.name);
+  const householdId =
+    options.householdId === undefined ? null : assertSafeHouseholdId(options.householdId);
 
   // Stage on the same filesystem as the database (EXDEV lesson, blueprint §6).
   const staging = await fs.mkdtemp(path.join(path.dirname(raw.name), '.backup-staging-'));
@@ -209,7 +226,9 @@ export async function createEncryptedBackup(options: CreateBackupOptions): Promi
 
     const manifest: BackupManifest = {
       format: ARCHIVE_FORMAT,
-      formatVersion: ARCHIVE_FORMAT_VERSION,
+      formatVersion:
+        householdId === null ? ARCHIVE_FORMAT_VERSION : HOUSEHOLD_ARCHIVE_FORMAT_VERSION,
+      ...(householdId === null ? {} : { household: { id: householdId } }),
       app: APP_NAME,
       appVersion,
       createdAt: now.toISOString(),
