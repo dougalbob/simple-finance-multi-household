@@ -58,8 +58,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history: the upgrade smoke resolves the most recently
-          # published release tag.
+          # Full history: the upgrade smoke resolves the most recent
+          # eligible v1+ product-line tag.
           fetch-depth: 0
       - name: Build production image
         run: docker build -t simple-finance:ci .
@@ -69,24 +69,27 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Upgrade smoke test (latest published release must migrate cleanly)
+      - name: Upgrade smoke test (latest published v1+ release must migrate cleanly)
         run: |
           set -eu
-          # v0.23.0 shipped with an out-of-order migration journal stamp that
-          # silently skipped migration 0012 on upgraded databases while fresh
-          # installs stayed green (docs/RELEASE_NOTES_v0.23.1.md). The Docker
-          # job therefore upgrades the most recently published release image
-          # to this build on the same volume before anything merges; the
-          # Publish workflow repeats the check against the two most recent
-          # releases before pushing.
+          # The original v0.23.0 migration bug showed why the upgrade path
+          # matters, but this repository's inherited v0.x tags belong to the
+          # original product and have no images in this package. Only use
+          # published v1+ images from this product line. The Publish workflow
+          # repeats the check against the two most recent eligible releases.
+          EXPECTED_REPOSITORY="dougalbob/simple-finance-multi-household"
+          if [ "${GITHUB_REPOSITORY,,}" != "$EXPECTED_REPOSITORY" ]; then
+            echo "Refusing Docker upgrade smoke for $GITHUB_REPOSITORY; expected $EXPECTED_REPOSITORY" >&2
+            exit 1
+          fi
+          IMAGE="ghcr.io/dougalbob/simple-finance-multi-household"
           PR_VERSION="v$(sed -n 's/^  "version": "\(.*\)",$/\1/p' package.json)"
-          BASE_TAG="$(git tag --sort=-v:refname | grep -v "^${PR_VERSION}$" | head -1 || true)"
+          BASE_TAG="$(git tag --sort=-v:refname | grep -E '^v[1-9][0-9]*\.' | grep -v "^${PR_VERSION}$" | head -1 || true)"
           if [ -z "$BASE_TAG" ]; then
-            echo "no previously published tag found - skipping upgrade smoke"
+            echo "no previously published v1+ tag found - skipping upgrade smoke"
             exit 0
           fi
           echo "=== upgrade smoke: $BASE_TAG -> this PR's image ==="
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           AUTH_ENV="-e AUTH_ISSUER=https://example.cloudflareaccess.com -e AUTH_AUDIENCE=dummy-audience -e AUTH_ALLOWED_EMAILS=alex@example.com,sam@example.com"
           docker pull "$IMAGE:$BASE_TAG"
           VOL="sf-upg-$(echo "$BASE_TAG" | tr '.' '-')"

@@ -1,48 +1,46 @@
 <?xml version="1.0"?>
 <!--
-  Simple Finance — Unraid container template (AGENT_APP_BLUEPRINT.md §7).
+  Simple Finance Multi-household — separate Unraid template for the new product line.
 
-  Installation:
-    1. Put this file in /boot/config/plugins/dockerMan/templates-user/ (or add
-       the container manually with the same settings).
-    2. Pick a free host port — 3000 is only a default, never inherit another
-       app's port.
-    3. Point /data at /mnt/user/appdata/simple-finance (fixed by the product
-       owner, docs/SPEC.md §18.1) and review PUID/PGID.
-    4. Start the container once, then put the Cloudflare Access values in
-       /data/.env (admin-owned, 0600). The entrypoint sources that file on
-       every start, and it is deliberately excluded from backups.
+  Safety boundary:
+    - New image: ghcr.io/dougalbob/simple-finance-multi-household only.
+    - New host path: /mnt/user/appdata/simple-finance-multi-household only.
+    - New host port: 3009 -> container port 3000, bridge networking.
+    - Do not replace or reconfigure the original app (port 3007,
+      /mnt/user/appdata/simple-finance).
 
-  Configuration precedence: environment values set in Unraid are the defaults;
-  anything defined in /data/.env overrides them (the .env file is the trusted,
-  admin-owned configuration described in docs/SPEC.md §18.1).
+  Stable installs use :latest only after v1.0.0 is accepted for production.
+  For RC acceptance, explicitly pin Repository to the exact tag, e.g.
+  ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1. RCs never move
+  :latest. Do not install this template until the release notes say the
+  multi-household implementation is ready.
 -->
 <Container version="2">
-  <Name>Simple Finance</Name>
-  <Repository>ghcr.io/dougalbob/simple-finance:latest</Repository>
-  <Registry>https://github.com/dougalbob/simple-finance/pkgs/container/simple-finance</Registry>
+  <Name>Simple Finance Multi-household</Name>
+  <Repository>ghcr.io/dougalbob/simple-finance-multi-household:latest</Repository>
+  <Registry>https://github.com/dougalbob/simple-finance-multi-household/pkgs/container/simple-finance-multi-household</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/dougalbob/simple-finance/issues</Support>
-  <Project>https://github.com/dougalbob/simple-finance</Project>
+  <Support>https://github.com/dougalbob/simple-finance-multi-household/issues</Support>
+  <Project>https://github.com/dougalbob/simple-finance-multi-household</Project>
   <Overview>
-    Private household spending tracker for two people: fast mobile entry at the
-    till, recurring payments with a read-only month calendar, honest "available
-    now" estimates and a payday-to-payday projection, per-vehicle running costs,
-    supplier contact cards, contract-end and renewal alerts, credit-card pots
-    with statement and promotional-date reminders, receipt/invoice attachments,
-    and encrypted downloadable backups.
+    Private finance app for multiple separate households. Each household has
+    one or two members, its own SQLite database and its own documents directory.
+    The administrator pre-assigns Cloudflare-authenticated email identities
+    before first sign-in; there is no self-sign-up. Cross-household financial
+    access is denied unless that household explicitly grants a visible,
+    time-limited, audited support session.
 
-    Access is through Cloudflare Tunnel + Access (Google sign-in) with an
-    allowlist of exactly two identities; the app verifies the Access JWT
-    itself. Keep this container off the public internet.
+    Cloudflare Tunnel + Access (Google sign-in) is required. Keep this
+    container off the public internet. This is a separate appdata directory,
+    image and host port from the original Simple Finance installation.
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/dougalbob/simple-finance/main/simple-finance.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/dougalbob/simple-finance/main/docs/assets/simple-finance-icon.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/simple-finance.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/docs/assets/simple-finance-icon.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>
@@ -50,16 +48,17 @@
   <DonateText/>
   <DonateLink/>
   <Description>
-    Simple Finance (v0.39.0). Internal port 3000; choose a free host port.
-    Data lives in /mnt/user/appdata/simple-finance (database, .env, documents,
-    logging). Health endpoint: /api/health. Backups: Settings → Backup &amp;
-    restore (encrypted archive of the database and every attachment).
+    Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
+    First candidate planned as v1.0.0-rc.1; for RC testing pin the exact RC tag
+    instead of latest. Internal port 3000; host port 3009. New data root:
+    /mnt/user/appdata/simple-finance-multi-household. Do not use the original
+    appdata path or original image.
   </Description>
   <Networking>
     <Mode>bridge</Mode>
     <Publish>
       <Port>
-        <HostPort>3000</HostPort>
+        <HostPort>3009</HostPort>
         <ContainerPort>3000</ContainerPort>
         <Protocol>tcp</Protocol>
       </Port>
@@ -67,7 +66,7 @@
   </Networking>
   <Data>
     <Volume>
-      <HostDir>/mnt/user/appdata/simple-finance</HostDir>
+      <HostDir>/mnt/user/appdata/simple-finance-multi-household</HostDir>
       <ContainerDir>/data</ContainerDir>
       <Mode>rw</Mode>
     </Volume>
@@ -85,11 +84,11 @@
     </Variable>
   </Environment>
   <Labels/>
-  <Config Name="WebUI (host port)" Target="3000" Default="3000" Mode="tcp" Description="Pick a free host port on your server; the container always listens on 3000. Cloudflare Tunnel points at this host port." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
-  <Config Name="Appdata (/data)" Target="/data" Default="/mnt/user/appdata/simple-finance" Mode="rw" Description="Database (+WAL/SHM), .env, documents/ (receipts) and logging/. Fixed by the product owner — do not relocate without reading docs/SPEC.md §18.1." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/simple-finance</Config>
+  <Config Name="WebUI (host port)" Target="3000" Default="3009" Mode="tcp" Description="Host port 3009 is reserved for the new multi-household container; the container listens on 3000. Cloudflare Tunnel's new route points here. Keep the original route on host port 3007." Type="Port" Display="always" Required="true" Mask="false">3009</Config>
+  <Config Name="Appdata (/data)" Target="/data" Default="/mnt/user/appdata/simple-finance-multi-household" Mode="rw" Description="Separate root for this product line. Contains .env, system registry, and households/&lt;id&gt;/ databases and documents. Never point it at /mnt/user/appdata/simple-finance." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/simple-finance-multi-household</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="Owner of the data directory. Unraid's nobody is 99; the entrypoint aligns ownership once, then the app runs as this user (never root)." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group of the data directory. Unraid's users group is 100." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
   <Config Name="AUTH_ISSUER" Target="AUTH_ISSUER" Default="" Mode="" Description="Cloudflare Access team URL, e.g. https://your-team.cloudflareaccess.com. Optional here — values in /data/.env override the template." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
-  <Config Name="AUTH_AUDIENCE" Target="AUTH_AUDIENCE" Default="" Mode="" Description="The Access application's AUD tag. Optional here — values in /data/.env override the template." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
-  <Config Name="AUTH_ALLOWED_EMAILS" Target="AUTH_ALLOWED_EMAILS" Default="" Mode="" Description="Exactly the two household identities, comma-separated. Optional here — values in /data/.env override the template." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="AUTH_AUDIENCE" Target="AUTH_AUDIENCE" Default="" Mode="" Description="The new Cloudflare Access application's AUD tag. Optional here — values in /data/.env override the template." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="AUTH_ALLOWED_EMAILS" Target="AUTH_ALLOWED_EMAILS" Default="" Mode="" Description="Transitional only for inherited single-household code. Final household assignment is managed in the app registry; do not use this variable as the onboarding process." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
 </Container>

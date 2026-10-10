@@ -1,5 +1,5 @@
 # ==============================================================================
-# Simple Finance — .gitignore
+# Simple Finance Multi-household — .gitignore
 # This repository is PUBLIC. No real personal financial data may ever be
 # committed: no databases, backups, receipts, exports, or credentials.
 # Fictional demo/seed data lives in tracked source paths (e.g. src/lib/demo,
@@ -24,8 +24,9 @@ coverage/
 *.p12
 
 # --- Runtime / real household data (NEVER commit) ---
-# Mirrors the production data root /mnt/user/appdata/simple-finance (container /data):
-# database files, .env, documents/ (receipt & invoice attachments), logging/.
+# Mirrors the target multi-household root /mnt/user/appdata/simple-finance-multi-household
+# (container /data): system/ registry plus households/<opaque-id>/ database, documents/ and logs.
+# The original /mnt/user/appdata/simple-finance is a separate production installation; never copy it here.
 data/
 backups/
 receipts/
