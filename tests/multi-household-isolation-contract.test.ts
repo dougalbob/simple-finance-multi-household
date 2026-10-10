@@ -36,7 +36,7 @@ describe('multi-household isolation contract', () => {
     const template = repoFile('simple-finance-multi-household.xml');
     assert.match(
       template,
-      /<Repository>ghcr\.io\/dougalbob\/simple-finance-multi-household:latest<\/Repository>/,
+      /<Repository>ghcr\.io\/dougalbob\/simple-finance-multi-household:(latest|v\d+\.\d+\.\d+(-rc\.\d+)?)<\/Repository>/,
     );
     assert.match(template, /<HostPort>3009<\/HostPort>/);
     assert.match(template, /<ContainerPort>3000<\/ContainerPort>/);

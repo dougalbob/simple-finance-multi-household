@@ -1,3 +1,26 @@
+# Current handoff — release candidate v1.0.0-rc.1 (2026-10-10)
+
+**Owner approval:** the owner said "You can publish v1.0.0-rc.1" after the step 6 acceptance run. The owner will ask follow-up questions after publication.
+
+**Release PR contents (one PR to `main`, from `arena/124de12d-simple-finance-multi-household`):**
+
+- Version `1.0.0-rc.1` in `package.json`, `package-lock.json` (root and `packages[""]`), `src/lib/version.ts` and the Unraid template. Release notes are in `docs/RELEASE_NOTES_v1.0.0-rc.1.md`, and their first line is the exact title the publish workflow checks.
+- The Unraid template is `simple-finance-multi-household.xml`. It is pinned to `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1`, because `latest` will not exist until the stable release. The isolation contract test now allows that pinned form. Switch the template back to `:latest` with the stable release.
+- Steps 5 and 6 on fictional data: `scripts/rehearse-import.mts` and `scripts/acceptance.mts` (`npm run rehearse:import`, `npm run acceptance`), with their tests and docs. Scratch folders are git-ignored.
+- README status text updated. It no longer says no release exists.
+
+**Gates run locally before the PR:** `npm run typecheck` pass; `npm run format:check` pass; `npm test` **825 passed**, 0 failed; `npm run build` pass (`next-env.d.ts` restored); `npm run acceptance` **31 of 31**; `npm run rehearse:import` **17 of 17**; `npm audit --omit=dev` **0 vulnerabilities**.
+
+**Required before merge:** CI checks `gates`, `browser` and `docker` must pass on the PR. Merge with a merge commit (`gh pr merge --merge`). Do not squash.
+
+**After merge:** create an annotated, lower-case tag `v1.0.0-rc.1` on the merge commit and push only that tag. The Publish workflow publishes only `v1.0.0-rc.1` and `sha-<short>`, does not move `latest`, and creates a GitHub pre-release. Then verify the GitHub release type, the digest and the tags. The next working session records the merge SHA, check run IDs, the Publish run and the digest here.
+
+**Not verified in the sandbox:** real Cloudflare Access; the Docker image build (Docker is not installed here, so the CI `docker` job and Publish build it); the Unraid install; any real household data. The release notes say so.
+
+**Still not approved:** the stable `v1.0.0`, any real-data import, and any change to the original app (`dougalbob/simple-finance`, its GHCR package, appdata or port 3007).
+
+---
+
 # Current handoff — step 6 acceptance on fictional data (2026-10-10)
 
 **Owner approval:** the owner said "ok go ahead" to step 6 after the synthetic rehearsal, on fictional data only.

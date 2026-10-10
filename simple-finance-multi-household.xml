@@ -17,7 +17,7 @@
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
-  <Repository>ghcr.io/dougalbob/simple-finance-multi-household:latest</Repository>
+  <Repository>ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1</Repository>
   <Registry>https://github.com/dougalbob/simple-finance-multi-household/pkgs/container/simple-finance-multi-household</Registry>
   <Network>bridge</Network>
   <MyIP/>
