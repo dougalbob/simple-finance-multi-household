@@ -1,25 +1,31 @@
-import { getCurrentUser } from '@/lib/auth/current-user';
+import { householdContextFromHeaders } from '@/lib/auth/household-context';
 import { loadAppConfig } from '@/lib/config';
-import { getDbHandle } from '@/lib/db/client';
 import { setBellSeenAt } from '@/lib/records/bell-seen';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/attention/seen — mark bell as seen now (SPEC §26, decision 176).
- * Fired when the panel is opened, after the GET has been used to compute
- * the "new" list, so the list stays visible while open.
+ * POST /api/attention/seen — mark the signed-in household member's bell as
+ * seen now (SPEC §26). Both the resolved database and the email key are from
+ * the verified request context; no tenant value comes from the browser.
  */
 export async function POST(request: Request) {
-  const config = loadAppConfig();
-  const user = await getCurrentUser(request.headers, config);
+  let user;
+  try {
+    user = await householdContextFromHeaders(request.headers, loadAppConfig());
+  } catch {
+    return Response.json(
+      { error: 'household_data_unavailable' },
+      { status: 503, headers: { 'cache-control': 'private, no-store' } },
+    );
+  }
   if (user === null) {
     return Response.json(
       { error: 'unauthorised' },
-      { status: 401, headers: { 'cache-control': 'no-store' } },
+      { status: 401, headers: { 'cache-control': 'private, no-store' } },
     );
   }
-  const { db } = getDbHandle(config);
-  setBellSeenAt(db, user.email, new Date());
-  return Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
+
+  setBellSeenAt(user.db, user.email, new Date());
+  return Response.json({ ok: true }, { headers: { 'cache-control': 'private, no-store' } });
 }

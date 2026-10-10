@@ -16,8 +16,7 @@ const E2E_BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${E2E_PORT}`;
  */
 export default defineConfig({
   testDir: './e2e',
-  // One worker: these tests share a single server and database, and one of them
-  // deliberately restores an archive over the installation.
+  // One worker: all projects share a single server and fictional household seed.
   workers: 1,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
@@ -54,22 +53,19 @@ export default defineConfig({
     },
     {
       // Own project: testMatch is per-project, so a new spec file is not picked
-      // up by mobile/desktop/backup. Runs before backup so a restore in that
-      // project cannot hide a missing receipt-removal control.
+      // up by mobile/desktop; include attachment specs explicitly.
       name: 'attachments',
       testMatch: /(?:attachments|remainder)\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project for the same reason. Runs before backup so the restore in
-      // that project cannot rewind the category tree this spec mutates.
+      // Own project for the same reason; this spec mutates the shared category tree.
       name: 'settings',
       testMatch: /settings\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project for the same reason: household-boundary money mutates
-      // pots and debts, so it runs before the backup project's restore.
+      // Own project for the same reason: household-boundary money mutates pots and debts.
       name: 'external',
       testMatch: /external-money\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
@@ -84,71 +80,61 @@ export default defineConfig({
     },
     {
       // Read-only activity view (SPEC §15.3). Records a transfer through the
-      // ordinary Move tab, so it runs after checkpoint and before the backup
-      // project's restore.
+      // ordinary Move tab, so it runs after checkpoint.
       name: 'transactions',
       testMatch: /transactions\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project for the same reason: it records and voids income, so it
-      // runs after the transaction list is asserted and before the backup
-      // project's restore rewinds the installation.
+      // Own project for the same reason: it records and voids income after
+      // the transaction list has been asserted.
       name: 'income',
       testMatch: /income\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project: the horizon page only reads, so it runs after income's
-      // additions exist to be projected and before the backup project's
-      // restore rewinds the installation.
+      // Own project: the horizon page reads income additions made by the income specs.
       name: 'horizon',
       testMatch: /horizon\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project (v0.10.0): adds its own vehicle and three fuel fills, so it
-      // runs after the specs that assert Insights and vehicle lists, and before
-      // the backup project's restore rewinds the installation.
+      // Own project (v0.10.0): adds its own vehicle and three fuel fills after
+      // the specs that assert Insights and vehicle lists.
       name: 'fuel',
       testMatch: /fuel\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project (v0.14.0): the charts are read-only, but the spec ticks a
-      // commitment category in Settings — household configuration — so it
-      // runs after the specs that add history to chart and before the backup
-      // project's restore rewinds the installation.
+      // Own project (v0.14.0): charts are read-only, but the spec ticks a
+      // commitment category in Settings, so it runs after history is added.
       name: 'charts',
       testMatch: /charts\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
       // Own project (v0.17.0): the theme lives in a per-device cookie, so each
-      // test's fresh context is a fresh device. It writes no household data —
-      // it only needs to run before the backup project's restore because the
-      // restore reloads the page mid-flight.
+      // test's fresh context is a fresh device. It writes no household data.
       name: 'theme',
       testMatch: /theme\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project (v0.22.1): the category picker bug — renaming a non-first parent/child
-      // must keep visible selection correct and version in sync. Runs before backup.
+      // Own project (v0.22.1): renaming a non-first category keeps visible selection
+      // and version in sync; it runs before the backup-status project.
       name: 'category-picker',
       testMatch: /category-picker\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project (v0.22.1): debt deletion and honest awaiting status. Mutates debts,
-      // so runs before backup.
+      // Own project (v0.22.1): debt deletion and honest awaiting status; mutates debts.
       name: 'debt-lifecycle',
       testMatch: /debt-lifecycle\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
       // Own project (v0.25.0): creates, ticks and reopens tasks, and logs a
-      // follow-up on a supplier card. Mutates the seed, so runs before backup.
+      // follow-up on a supplier card in the shared E2E seed.
       name: 'tasks',
       testMatch: /tasks\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
@@ -156,32 +142,27 @@ export default defineConfig({
     {
       // Own project (v0.26.0): bell badge, panel, freshness without reload,
       // phone layout, and Sam's seeded task for "Since you last looked".
-      // Mutates tasks and bell_seen, so runs before backup.
       name: 'bell',
       testMatch: /bell\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project (v0.28.0): the till's Checkpoint cash card and the
-      // Accounts, Pots & Checkpoints page order. Checkpoints Alex's cash and
-      // rewrites a pot owner, so it runs before the backup project's restore.
+      // Own project (v0.28.0): tests the till's Checkpoint cash card and
+      // Accounts, Pots & Checkpoints order; it checkpoints Alex's cash and
+      // rewrites a pot owner.
       name: 'cash-checkpoint',
       testMatch: /cash-checkpoint\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project: applying a plan rewrites the fence demo's selections, so
-      // it runs before the backup project's restore.
+      // Own project: applying a plan rewrites the fence demo's selections.
       name: 'projects',
       testMatch: /projects\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
       // Own project (multi-household registry): platform administration —
-      // households and sign-in pre-assignment. Writes only registry roster
-      // rows for households it creates itself; the household backup project
-      // never reads the registry, but this still runs before backup so the
-      // suite keeps its mutate-before-restore order.
+      // households and sign-in pre-assignment. Writes registry rows only.
       name: 'admin',
       testMatch: /admin\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
@@ -192,14 +173,14 @@ export default defineConfig({
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project, deliberately last: it adds a card pot and statement terms to the shared seed.
+      // Own project late in the suite: it adds a card pot and statement terms to the shared seed.
       name: 'credit-card-pots',
       testMatch: /credit-card-pots\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },
     },
     {
-      // Own project: adds its own vehicle and an annual premium, so it runs near
-      // the end, after the backup restore, and moves no seeded figure.
+      // Own project: adds its own vehicle and an annual premium near the end;
+      // it moves no seeded figure.
       name: 'insights',
       testMatch: /insights\.spec\.ts/,
       use: { viewport: { width: 1400, height: 950 } },

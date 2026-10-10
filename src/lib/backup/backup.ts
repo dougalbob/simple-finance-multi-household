@@ -78,8 +78,9 @@ export interface CreateBackupOptions {
   appVersion?: string;
   now?: Date;
   /**
-   * Attachment directory. Defaults to `documents/` beside the database file —
-   * the layout the container and the entrypoint create (SPEC §18.1).
+   * Attachment directory. Defaults to a `documents/` sibling of the database
+   * file. Runtime callers must use the directory derived from the verified
+   * household context; this utility is not exposed until scoped backup exists.
    */
   documentsDir?: string;
 }
@@ -245,8 +246,9 @@ export async function createEncryptedBackup(options: CreateBackupOptions): Promi
 
 /**
  * A honest, read-only health check of the attachment directory: what the
- * database references versus what is on disk. Used by the UI to show the
- * household whether anything needs attention, and by tests. Never deletes.
+ * database references versus what is on disk. Available to an explicitly
+ * scoped caller and tests; it is not exposed in the UI while tenant backup is
+ * deferred. Never deletes.
  */
 export interface DocumentsStatus {
   referenced: number;
@@ -255,9 +257,11 @@ export interface DocumentsStatus {
   orphans: string[];
 }
 
-export async function inspectDocuments(handle: DbHandle): Promise<DocumentsStatus> {
-  const { db, raw } = handle;
-  const documentsDir = documentsDirForDatabase(raw.name);
+export async function inspectDocuments(
+  handle: DbHandle,
+  documentsDir: string,
+): Promise<DocumentsStatus> {
+  const { db } = handle;
   const rows = db
     .select({ fileKey: attachments.fileKey, state: attachments.state })
     .from(attachments)

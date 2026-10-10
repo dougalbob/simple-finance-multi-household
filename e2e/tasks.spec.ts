@@ -9,7 +9,7 @@ import { addDaysIso, londonToday } from './support';
  * reload; a follow-up promised on a call turns into a task on the card; a
  * purchase can carry "Chase the refund".
  *
- * Own project, before `backup`: it adds tasks to the shared seed.
+ * Own project: it adds tasks to the shared, fictional E2E seed.
  */
 
 test.use({ viewport: { width: 1400, height: 950 } });

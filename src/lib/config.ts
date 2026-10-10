@@ -3,10 +3,15 @@ import path from 'node:path';
 /**
  * Environment configuration for Simple Finance.
  *
+ * The finance database and documents paths are deliberately not configurable
+ * independently: both are derived from the authenticated registry household
+ * via `src/lib/registry/paths.ts`. The data root is deployment configuration;
+ * a browser request never chooses a tenant or path.
+ *
  * Fail-closed rule (AGENT_APP_BLUEPRINT.md §4): when authentication is not
  * fully configured in production, every protected entry point must reject.
- * `isAuthConfigComplete` is what the auth guards consult — nothing may cache
- * a partial config as "good enough".
+ * `isAuthConfigComplete` is what the auth guards consult — nothing may cache a
+ * partial config as "good enough".
  */
 export interface AuthConfig {
   /** Expected Cloudflare Access issuer, e.g. https://team.cloudflareaccess.com */
@@ -15,7 +20,7 @@ export interface AuthConfig {
   readonly audience: string | null;
   /** JWKS URL; defaults to `${issuer}/cdn-cgi/access/certs` */
   readonly certsUrl: string | null;
-  /** Exactly the allowed household identities (lower-cased) */
+  /** The Cloudflare Access email policy, mirrored at the app boundary. */
   readonly allowedEmails: readonly string[];
   /**
    * Development identity bypass. Computed as false whenever NODE_ENV is
@@ -30,17 +35,10 @@ export interface AppConfig {
   readonly isProduction: boolean;
   /** Data root: ./data in development, /data in the production container */
   readonly dataDir: string;
-  readonly databasePath: string;
   /**
-   * Attachment root (SPEC §18.1, §23.2): `<dataDir>/documents` — derived from
-   * the data root, never from user input. Every read, write, backup and
-   * restore path goes through this one field.
-   */
-  readonly documentsDir: string;
-  /**
-   * System registry (control plane, SPEC §18.1): `<dataDir>/system/registry.sqlite`.
-   * Household roster and assignments only — never finance records. Derived
-   * from the data root; the layout is fixed by the product owner.
+   * System registry (control plane, SPEC §18.1):
+   * `<dataDir>/system/registry.sqlite`. It contains membership/admin metadata,
+   * never finance records.
    */
   readonly registryPath: string;
   /**
@@ -70,8 +68,8 @@ export type EnvSource = Record<string, string | undefined>;
 export function loadAppConfig(env: EnvSource = process.env): AppConfig {
   const isProduction = env.NODE_ENV === 'production';
   const dataDir = trimmed(env.DATA_DIR) ?? (isProduction ? '/data' : './data');
-  const databasePath = trimmed(env.DATABASE_PATH) ?? path.join(dataDir, 'simple-finance.sqlite');
-  const documentsDir = trimmed(env.DOCUMENTS_DIR) ?? path.join(dataDir, 'documents');
+  // The registry location is fixed under the data root; finance paths are
+  // derived later from the authenticated household ID, never environment input.
   const registryPath = path.join(dataDir, 'system', 'registry.sqlite');
 
   const registryBootstrap = {
@@ -95,8 +93,6 @@ export function loadAppConfig(env: EnvSource = process.env): AppConfig {
   return {
     isProduction,
     dataDir,
-    databasePath,
-    documentsDir,
     registryPath,
     registryBootstrap,
     auth: { issuer, audience, certsUrl, allowedEmails, devBypass, devIdentityEmail },

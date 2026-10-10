@@ -10,9 +10,10 @@ import { assertSafeHouseholdId } from './ids';
  *     documents/
  *
  * Every household path is derived here from the data root plus a validated
- * opaque household ID — never from a browser-supplied path or ID. Later steps
- * (per-household request context, documents, backup) must derive their roots
- * through these helpers so the validation cannot be skipped.
+ * opaque household ID — never from a browser-supplied path or ID. Request
+ * contexts and document operations use these helpers; any later backup,
+ * restore or import implementation must do the same so validation cannot be
+ * skipped.
  */
 
 export function systemRegistryPath(dataDir: string): string {

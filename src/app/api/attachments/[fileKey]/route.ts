@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth/current-user';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromHeaders } from '@/lib/auth/household-context';
 import { loadAppConfig } from '@/lib/config';
 import { attachments } from '@/lib/db/schema';
 import {
@@ -10,37 +9,38 @@ import {
 } from '@/lib/records/attachments';
 
 /**
- * Authenticated attachment viewer (SPEC §23.2). Guarded independently of any
- * page (blueprint §4.4), responses private and uncached, `Content-Disposition`
- * built from a sanitized display name while the file itself is addressed by
- * the server-generated key — a key that is validated against the same pattern
- * the backup engine and the restore path use, so no request can reach outside
- * `documents/`.
+ * Authenticated, tenant-scoped attachment viewer (SPEC §23.2). The DB row and
+ * bytes are both resolved from the same verified household context. The
+ * browser supplies only the opaque storage key, never a household ID or path.
  */
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, { params }: { params: Promise<{ fileKey: string }> }) {
-  // Route handlers guard themselves from the Request, not from a page context
-  // (src/lib/auth/next.ts documents why — this is the same verification path).
-  const user = await getCurrentUser(request.headers, loadAppConfig());
-  if (user === null)
+  let user;
+  try {
+    user = await householdContextFromHeaders(request.headers, loadAppConfig());
+  } catch {
+    return new Response('Household data unavailable', {
+      status: 503,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  }
+  if (user === null) {
     return new Response('Unauthorized', {
       status: 401,
       headers: { 'Cache-Control': 'private, no-store' },
     });
+  }
 
   const { fileKey } = await params;
-  if (!isSafeFileKey(fileKey))
+  if (!isSafeFileKey(fileKey)) {
     return new Response('Not found', {
       status: 404,
       headers: { 'Cache-Control': 'private, no-store' },
     });
+  }
 
-  const row = getDbHandle()
-    .db.select()
-    .from(attachments)
-    .where(eq(attachments.fileKey, fileKey))
-    .get();
+  const row = user.db.select().from(attachments).where(eq(attachments.fileKey, fileKey)).get();
   if (row === undefined || row.state !== 'stored') {
     return new Response('Not found', {
       status: 404,
@@ -49,7 +49,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   }
 
   try {
-    const body = await readAttachmentBytes(loadAppConfig().documentsDir, row.fileKey);
+    const body = await readAttachmentBytes(user.documentsDir, row.fileKey);
     return new Response(new Uint8Array(body), {
       headers: {
         'Content-Type': row.mime,

@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test';
  * selection sits beside the cheapest split and the best single supplier; one
  * click applies a plan to the matrix and the totals follow.
  *
- * Own project, before `backup`: applying a plan rewrites the demo selections.
+ * Own project: applying a plan rewrites the demo selections in the E2E seed.
  */
 
 test.use({ viewport: { width: 1400, height: 950 } });

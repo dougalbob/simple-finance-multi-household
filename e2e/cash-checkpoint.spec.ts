@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test';
  *
  * Own project: it checkpoints Alex's cash and rewrites a pot's owner, so it
  * must not run inside another project's assertions — and it runs before the
- * backup project's restore rewinds the installation.
+ * all changes remain in the isolated E2E seed.
  */
 test.describe('checkpoint cash (decision 178)', () => {
   test('the till card opens the signed-in person’s own cash pot and checkpoints it', async ({

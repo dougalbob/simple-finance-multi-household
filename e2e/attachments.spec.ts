@@ -4,7 +4,7 @@ import { waitForTill } from './support';
 /**
  * Receipt removal (SPEC §23.4). The PNG is generated fictional bytes — never a
  * real receipt. This spec creates its own purchase so it does not depend on
- * seed rows surviving a later restore in the backup project.
+ * seed rows surviving other specs in the shared E2E installation.
  */
 const RECEIPT_NAME = 'fictional-receipt.png';
 /** 1×1 PNG. Generated fixture, not a household document. */

@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { DoneTaskList, OpenTaskList, TaskCreateForm } from '@/components/task-forms';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import {
   getTasksPageView,
   TASKS_DONE_RECENTLY_DAYS,
@@ -21,10 +20,10 @@ export const dynamic = 'force-dynamic';
  * notification (decision 19).
  */
 export default async function TasksPage() {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const view = getTasksPageView(db, new Date());
   const groups: Array<{ id: string; title: string; tasks: TaskRowView[] }> = [
     { id: 'overdue', title: 'Overdue', tasks: view.open.overdue },

@@ -968,7 +968,7 @@ test.describe('mobile quick entry', () => {
     // Isolated fictional household: Main £242.22, salary due on the 26th,
     // Natwest direct debits on the 21st, and a projected £90 fuel item on
     // payday to prove that the shared filter applies to every read surface.
-    const { paydayDate, natwestBillsOnlyShortfallPence } = seedPaydayScenario();
+    const { paydayDate, natwestBillsOnlyShortfallPence } = await seedPaydayScenario();
     const dayBefore = addDaysIso(paydayDate, -1);
 
     await page.goto('/');

@@ -91,15 +91,57 @@ jobs:
           fi
           echo "=== upgrade smoke: $BASE_TAG -> this PR's image ==="
           AUTH_ENV="-e AUTH_ISSUER=https://example.cloudflareaccess.com -e AUTH_AUDIENCE=dummy-audience -e AUTH_ALLOWED_EMAILS=alex@example.com,sam@example.com"
+          HOUSEHOLD_ID="0123456789abcdef0123456789abcdef"
+          TENANT_DB="/data/households/$HOUSEHOLD_ID/simple-finance.sqlite"
+          seed_household() {
+            local data_dir="$1"
+            local image="$2"
+            docker run --rm -v "$data_dir:/data" --entrypoint node "$image" scripts/registry-migrate.cjs
+            docker run --rm -e HOUSEHOLD_ID="$HOUSEHOLD_ID" -v "$data_dir:/data" --entrypoint node "$image" -e '
+              const Database = require("better-sqlite3");
+              const id = process.env.HOUSEHOLD_ID;
+              if (!/^[a-f0-9]{32}$/.test(id || "")) throw new Error("invalid smoke-test household ID");
+              const db = new Database("/data/system/registry.sqlite");
+              const now = new Date().toISOString();
+              db.prepare("INSERT INTO households (id, display_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
+                .run(id, "CI smoke household", "active", now, now);
+              db.close();
+            '
+          }
+          check_tenant_database() {
+            local container="$1"
+            docker exec "$container" node -e '
+              const fs = require("fs");
+              const Database = require("better-sqlite3");
+              const file = process.argv[1];
+              if (!fs.existsSync(file)) throw new Error("tenant database was not created: " + file);
+              const db = new Database(file, { readonly: true });
+              const row = db.prepare("SELECT COUNT(*) AS count FROM __drizzle_migrations").get();
+              db.close();
+              if (!row || row.count === 0) throw new Error("tenant database has no applied migrations");
+              console.log("tenant database exists with " + row.count + " migrations: " + file);
+            ' "$TENANT_DB"
+          }
           docker pull "$IMAGE:$BASE_TAG"
           VOL="sf-upg-$(echo "$BASE_TAG" | tr '.' '-')"
+          docker volume create "$VOL" >/dev/null
+          seed_household "$VOL" "$IMAGE:$BASE_TAG"
           docker run -d --name sf-upg-base -p 3000:3000 -v "$VOL":/data $AUTH_ENV "$IMAGE:$BASE_TAG"
           for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
             sleep 1
           done
           curl -fsS http://127.0.0.1:3000/api/health
-          echo "base $BASE_TAG: healthy, database created"
+          check_tenant_database sf-upg-base
+          docker exec sf-upg-base node -e '
+            const Database = require("better-sqlite3");
+            const db = new Database(process.argv[1]);
+            db.exec("CREATE TABLE IF NOT EXISTS ci_upgrade_probe (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+            db.prepare("INSERT OR REPLACE INTO ci_upgrade_probe (key, value) VALUES (?, ?)")
+              .run("tenant-persistence", "preserved");
+            db.close();
+          ' "$TENANT_DB"
+          echo "base $BASE_TAG: healthy, registry-selected tenant database migrated"
           docker rm -f sf-upg-base
           docker run -d --name sf-upg-new -p 3000:3000 -v "$VOL":/data $AUTH_ENV simple-finance:ci
           for i in $(seq 1 40); do
@@ -114,7 +156,10 @@ jobs:
             const Database = require("better-sqlite3");
             const folder = "/app/drizzle";
             const journal = JSON.parse(fs.readFileSync(folder + "/meta/_journal.json", "utf8"));
-            const db = new Database("/data/simple-finance.sqlite", { readonly: true });
+            const file = process.argv[1];
+            const db = new Database(file, { readonly: true });
+            const probe = db.prepare("SELECT value FROM ci_upgrade_probe WHERE key = ?").get("tenant-persistence");
+            if (!probe || probe.value !== "preserved") throw new Error("tenant data did not survive upgrade");
             const rows = db.prepare("SELECT hash, created_at FROM __drizzle_migrations").all();
             const byHash = new Map();
             for (const row of rows) byHash.set(row.hash, Number(row.created_at));
@@ -128,8 +173,8 @@ jobs:
             }
             db.close();
             if (bad > 0) { console.log(bad + " journal entries are not applied exactly once"); process.exit(1); }
-            console.log("all " + journal.entries.length + " journal entries applied exactly once");
-          '
+            console.log("all " + journal.entries.length + " journal entries applied exactly once; tenant marker preserved");
+          ' "$TENANT_DB"
           docker rm -f sf-upg-new
           docker volume rm "$VOL"
       - name: Smoke test (start, health, unprivileged, volume, bind-mount ownership)
@@ -149,40 +194,104 @@ jobs:
           echo "least privilege: uid 99"
           docker rm -f sf-run1
 
+          HOUSEHOLD_ID="0123456789abcdef0123456789abcdef"
+          TENANT_DB="/data/households/$HOUSEHOLD_ID/simple-finance.sqlite"
+          TENANT_DOCS="/data/households/$HOUSEHOLD_ID/documents"
+          seed_household() {
+            local data_dir="$1"
+            local image="$2"
+            docker run --rm -v "$data_dir:/data" --entrypoint node "$image" scripts/registry-migrate.cjs
+            docker run --rm -e HOUSEHOLD_ID="$HOUSEHOLD_ID" -v "$data_dir:/data" --entrypoint node "$image" -e '
+              const Database = require("better-sqlite3");
+              const id = process.env.HOUSEHOLD_ID;
+              if (!/^[a-f0-9]{32}$/.test(id || "")) throw new Error("invalid smoke-test household ID");
+              const db = new Database("/data/system/registry.sqlite");
+              const now = new Date().toISOString();
+              db.prepare("INSERT INTO households (id, display_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
+                .run(id, "CI smoke household", "active", now, now);
+              db.close();
+            '
+          }
+          check_tenant_database() {
+            local container="$1"
+            docker exec "$container" node -e '
+              const fs = require("fs");
+              const Database = require("better-sqlite3");
+              const file = process.argv[1];
+              if (!fs.existsSync(file)) throw new Error("tenant database was not created: " + file);
+              const db = new Database(file, { readonly: true });
+              const row = db.prepare("SELECT COUNT(*) AS count FROM __drizzle_migrations").get();
+              db.close();
+              if (!row || row.count === 0) throw new Error("tenant database has no applied migrations");
+              console.log("tenant database exists with " + row.count + " migrations: " + file);
+            ' "$TENANT_DB"
+          }
+
+          docker volume create sf-smoke-data >/dev/null
+          seed_household sf-smoke-data simple-finance:ci
           docker run -d --name sf-run2 -p 3000:3000 -v sf-smoke-data:/data $AUTH_ENV simple-finance:ci
           for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
             sleep 1
           done
           curl -fsS http://127.0.0.1:3000/api/health
-          echo "recreated container with existing volume: healthy"
-          test -n "$(docker exec sf-run2 ls -A /data/simple-finance.sqlite)"
-          echo "database persisted across container recreation"
+          check_tenant_database sf-run2
+          docker exec sf-run2 node -e '
+            const Database = require("better-sqlite3");
+            const db = new Database(process.argv[1]);
+            db.exec("CREATE TABLE IF NOT EXISTS ci_persistence_probe (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+            db.prepare("INSERT OR REPLACE INTO ci_persistence_probe (key, value) VALUES (?, ?)")
+              .run("tenant-persistence", "preserved");
+            db.close();
+          ' "$TENANT_DB"
           docker rm -f sf-run2
+          docker run -d --name sf-run2-recreated -p 3000:3000 -v sf-smoke-data:/data $AUTH_ENV simple-finance:ci
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3000/api/health
+          docker exec sf-run2-recreated node -e '
+            const Database = require("better-sqlite3");
+            const db = new Database(process.argv[1], { readonly: true });
+            const row = db.prepare("SELECT value FROM ci_persistence_probe WHERE key = ?").get("tenant-persistence");
+            db.close();
+            if (!row || row.value !== "preserved") throw new Error("tenant database did not persist across container recreation");
+          ' "$TENANT_DB"
+          echo "registry-selected tenant database persisted across container recreation"
+          docker rm -f sf-run2-recreated
           docker volume rm sf-smoke-data
 
-          # Regression for the v0.1.1 field bug: a BIND MOUNT (Unraid's appdata
-          # folder) whose root is already PUID:PGID while documents/ is still
-          # root-owned. The entrypoint used to gate its recursive chown on the
-          # mount root alone, so documents/ was never repaired and the first
-          # receipt upload died with EACCES. A named volume cannot reproduce
-          # this: it inherits the image's already-correct /data ownership.
-          mkdir -p /tmp/sf-bind/documents
+          # Regression for tenant ownership on an Unraid-style bind mount. Keep
+          # the mount root owned by uid 99 while the tenant subtree is root-owned;
+          # the entrypoint must repair the tenant tree recursively. Legacy root-
+          # level database/documents fixtures must remain completely untouched.
+          mkdir -p "/tmp/sf-bind/system" "/tmp/sf-bind/households/$HOUSEHOLD_ID/documents" /tmp/sf-bind/documents
           sudo chown -R 99:100 /tmp/sf-bind
-          sudo chown -R 0:0 /tmp/sf-bind/documents
+          sudo sh -c 'printf "legacy-root-db-fixture-do-not-open\\n" > /tmp/sf-bind/simple-finance.sqlite; printf "legacy-documents-fixture-do-not-touch\\n" > /tmp/sf-bind/documents/legacy.keep'
+          sudo chown -R 0:0 "/tmp/sf-bind/households/$HOUSEHOLD_ID" /tmp/sf-bind/documents
+          seed_household /tmp/sf-bind simple-finance:ci
+          LEGACY_DB_HASH="$(sha256sum /tmp/sf-bind/simple-finance.sqlite | cut -d ' ' -f1)"
           docker run -d --name sf-run3 -p 3000:3000 -v /tmp/sf-bind:/data $AUTH_ENV simple-finance:ci
           for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then break; fi
             sleep 1
           done
           curl -fsS http://127.0.0.1:3000/api/health
-          echo "bind mount with a root-owned documents/: healthy"
-          DOCS_OWNER="$(docker exec sf-run3 stat -c %u:%g /data/documents)"
-          test "$DOCS_OWNER" = "99:100" || { echo "documents/ is $DOCS_OWNER, expected 99:100" >&2; exit 1; }
-          echo "documents/ repaired to 99:100"
-          # ...and the server user can really write a receipt into it.
-          docker exec -u 99:100 sf-run3 sh -c 'touch /data/documents/.ci-write-probe && rm -f /data/documents/.ci-write-probe'
-          echo "documents/ writable by uid 99"
+          echo "bind mount with a root-owned tenant subtree: healthy"
+          check_tenant_database sf-run3
+          TENANT_DOCS_OWNER="$(docker exec sf-run3 stat -c %u:%g "$TENANT_DOCS")"
+          test "$TENANT_DOCS_OWNER" = "99:100" || { echo "tenant documents/ is $TENANT_DOCS_OWNER, expected 99:100" >&2; exit 1; }
+          echo "tenant documents/ repaired to 99:100"
+          docker exec -u 99:100 sf-run3 sh -c 'touch "$1/.ci-write-probe" && rm -f "$1/.ci-write-probe"' _ "$TENANT_DOCS"
+          echo "tenant documents/ writable by uid 99"
+          LEGACY_DOCS_OWNER="$(docker exec sf-run3 stat -c %u:%g /data/documents)"
+          LEGACY_DB_OWNER="$(docker exec sf-run3 stat -c %u:%g /data/simple-finance.sqlite)"
+          test "$LEGACY_DOCS_OWNER" = "0:0" || { echo "legacy /data/documents was changed to $LEGACY_DOCS_OWNER" >&2; exit 1; }
+          test "$LEGACY_DB_OWNER" = "0:0" || { echo "legacy root-level database was changed to $LEGACY_DB_OWNER" >&2; exit 1; }
+          test "$(sha256sum /tmp/sf-bind/simple-finance.sqlite | cut -d ' ' -f1)" = "$LEGACY_DB_HASH" || { echo "legacy root-level database contents changed" >&2; exit 1; }
+          test -f /tmp/sf-bind/documents/legacy.keep || { echo "legacy document was removed" >&2; exit 1; }
+          echo "legacy root-level paths left untouched"
           docker rm -f sf-run3
           sudo rm -rf /tmp/sf-bind
 

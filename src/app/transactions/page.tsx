@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import { listPotActivity, type ActivityRow } from '@/lib/records/activity';
 import { ensureScheduleState } from '@/lib/records/money-view';
@@ -33,10 +32,10 @@ export default async function TransactionsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   ensureScheduleState(db, now);
 

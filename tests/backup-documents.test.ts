@@ -291,7 +291,7 @@ describe('removing a receipt does not compromise backup or restore', () => {
           .where(eq(attachments.fileKey, stored.fileKey))
           .get();
         assert.equal(row?.state, 'deleted');
-        const status = await inspectDocuments(afterHandle);
+        const status = await inspectDocuments(afterHandle, afterDocuments);
         assert.deepEqual(status.missing, []);
         assert.deepEqual(status.orphans, []);
       } finally {
@@ -320,7 +320,7 @@ describe('removing a receipt does not compromise backup or restore', () => {
           .where(eq(attachments.fileKey, stored.fileKey))
           .get();
         assert.equal(row?.state, 'stored');
-        const status = await inspectDocuments(beforeHandle);
+        const status = await inspectDocuments(beforeHandle, beforeDocuments);
         assert.deepEqual(status.missing, []);
         assert.deepEqual(status.orphans, []);
       } finally {

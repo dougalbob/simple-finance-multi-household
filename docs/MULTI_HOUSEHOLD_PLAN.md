@@ -1,6 +1,6 @@
 # Multi-household edition — active product and safety contract
 
-**Status:** Approved direction recorded 2026-10-10. This document describes the target behaviour. Implemented so far (2026-10-10): the system registry (`system/registry.sqlite` with household roster, identity assignments, platform-administrator roles and a registry audit log), administrator pre-assignment at `/admin` with the one-or-two-member rule, and app-side first-login denial — an authenticated identity without an active registry assignment is denied by every page, server action and route handler. **Not implemented yet:** per-household databases and request-scoped routing (the inherited single-database handle is still what pages use), tenant-scoped documents/backup/restore, the household `people` link to the verified identity, and the consent flow for support access. Until those land, do not treat the current screens, schema, backup endpoint or database connection as multi-household-safe.
+**Status:** Approved direction recorded 2026-10-10. This document describes the target behaviour. Implemented so far: the system registry (`system/registry.sqlite` with household roster, identity assignments, platform-administrator roles and audit log), `/admin` pre-assignment with the one-or-two-member rule, app-side first-login denial, and per-household request contexts/database handles for finance pages, actions, attachment storage/viewing, and the attention/attachment APIs. The container migration path now discovers tenants from the registry and never selects the inherited root-level finance database. **Not implemented yet:** the verified identity-to-`people` link, consent-based support access, tenant backup/restore, and live-data import/rehearsal. The old global backup/restore endpoints are disabled (authenticated same-origin requests return `501`) and Settings says the feature is unavailable. No real data has been imported; do not install this source against the original appdata or treat it as a release candidate.
 
 This is the concise active contract for future agents. It is also reflected in `AGENTS.md`, `README.md`, `docs/HANDOFF.md`, `docs/SPEC.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/RELEASE_PROCESS.md`, the publish workflow and the Unraid template. If historical source documents disagree, this contract and the current product spec take precedence for the multi-household edition. Historical v0.x release notes describe the original single-household product and must not be rewritten or published as releases of this edition.
 
@@ -37,7 +37,7 @@ Target host/container layout:
 - Each household gets its own SQLite database and documents directory. Do not put all households' financial rows into one shared finance database with a UI-only filter.
 - The registry is a control plane, not a financial database. It must not contain purchases, balances, receipts or other finance records. A household backup must not include the registry or any other household's material; the control-plane configuration needs a separate, administrator-managed backup/recovery procedure.
 - The database path is selected only after verifying the request's identity and resolving its assignment from trusted registry data. Use a stable opaque household ID and safe path construction. Never trust a household ID supplied by the browser.
-- Replace the current process-wide single-database assumption with safe per-household handles/context. Do not implement this as a mutable global “current household” pointer: simultaneous requests from different households must never be able to switch one another's database context.
+- The runtime now uses immutable per-request contexts and separate tenant handles, never a mutable process-wide “current household” pointer. Preserve that design: simultaneous requests from different households must never be able to switch one another's database context.
 - Every page, server action, route handler, document read/write, background operation, cache key, export, backup and restore must be household-scoped. Fail closed if the identity, membership, household status or database cannot be resolved.
 
 ## 4. Admin and support access
@@ -63,10 +63,10 @@ Target host/container layout:
 
 ## 7. Delivery sequence
 
-1. Lock repository/package/template/appdata/port identity and the RC/stable publication rules (the current foundation change).
-2. Design and implement the control-plane household registry, secure identity-to-household assignment and safe request-scoped database selection.
-3. Add household administration, first-login onboarding and explicit support consent/audit.
-4. Make all data/document routes and encrypted backup/restore tenant-scoped; enforce the one-or-two-member limit.
-5. Implement and rehearse the legacy database/documents import into the owner's household using an isolated copy of the recent backup.
-6. Run cross-tenant security, two-household concurrency, backup/restore, Unraid and real Cloudflare acceptance tests. Before importing live data, use a separate test household and route; with the test account holder's consent, use a separately signed-in mobile Google account to verify the first-login path. Confirm an authenticated but unassigned identity is denied.
-7. Prepare and publish `v1.0.0-rc.1` to the new GHCR package only; after the candidate is accepted, make the separate stable `v1.0.0` release.
+1. Lock repository/package/template/appdata/port identity and the RC/stable publication rules (foundation, delivered).
+2. Implement the registry, secure identity assignment, `/admin`, and first-login denial (PR #2 merged at `ab3fda9698e078322e5cb26e604c877242f328f8`).
+3. Route finance pages, actions, attachment operations and the relevant APIs through a verified, immutable household context and independent tenant database handles; discover startup migrations from the registry (current implementation work).
+4. Separately approve and implement the identity-to-`people` link, explicit support consent/audit, and household-scoped backup/restore. Until backup/restore is approved and tested, its API remains disabled and Settings must not offer the inherited global controls.
+5. Rehearse import of the legacy database/documents into the owner's tenant using an isolated backup copy. Verify database integrity, records, attachment hashes and any later approved backup/restore path; never touch live data.
+6. Run cross-tenant denial/concurrency, container, Unraid and real Cloudflare acceptance tests. Before any live import/cutover, use a separate test household/route and verify the unassigned denial; take a fresh source backup if data has changed.
+7. Prepare `v1.0.0-rc.1` only after implementation and acceptance; publish only to the new GHCR package. After candidate acceptance, make the separate stable `v1.0.0` release.

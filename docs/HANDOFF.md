@@ -1,6 +1,74 @@
-# Current handoff — system registry and identity-to-household assignment (2026-10-10)
+# Current handoff — per-household finance routing (2026-10-10)
+
+**Baseline:** PR #2, which delivered the system registry and administrator assignment, merged to `main` at
+`ab3fda9698e078322e5cb26e604c877242f328f8`. This implementation continues from that commit on the fixed Arena
+branch `arena/f5b6a64a-simple-finance-multi-household`.
+
+**Approved scope:** implement HANDOFF “next implementation work” item 2 only: replace the inherited global
+`getDbHandle()` assumption with a verified, immutable household context and independent handles under
+`households/<id>/simple-finance.sqlite`, using `src/lib/registry/paths.ts`. Do not add consent-based support or
+tenant backup/restore without asking first.
+
+## What is implemented on this branch
+
+- `householdContextFromHeaders` / `householdContextFromRequest` build a frozen request context only from
+  `describeSession`'s active registry assignment. `getHouseholdDbHandle` validates the opaque hex32 ID through
+  `paths.ts`, caches by absolute tenant path, detects a replaced DB file, and keeps simultaneous household
+  handles independent. There is no mutable current-household pointer or request-selected tenant ID.
+- Every finance page and server action uses the resolved context's DB. Audit entries therefore remain in the
+  selected household's finance DB. Purchase/income/supplier document upload and deletion use that context's
+  `documentsDir`; the attachment API queries the same tenant DB and reads only from its matching directory.
+- The attention GET/seen APIs now use the selected tenant DB and private no-store responses. Database/path
+  failures fail closed; attachment/attention endpoints return no-store 503 responses if tenant data cannot open.
+- `scripts/migrate.cjs` discovers validated IDs from `<DATA_DIR>/system/registry.sqlite` and migrates only
+  `<DATA_DIR>/households/<id>/simple-finance.sqlite`. Entrypoint order is registry migration first, then tenant
+  migrations; failures refuse startup. Global `DATABASE_PATH` / `DOCUMENTS_DIR` overrides and the inherited
+  root-level finance/document paths are not selected or prepared. Newly created households migrate on first DB
+  open.
+- Global backup/restore is deliberately **disabled**, not made tenant-safe: authenticated same-origin API calls
+  return `501`, live restore throws a dedicated unavailable error, and Settings shows the deferred status with no
+  legacy controls. The underlying archive utility is not exposed. Support consent, per-household backup/restore,
+  the identity-to-`people` link and data import remain later, separately approved work.
+- E2E setup now seeds the fictional Alex/Sam registry first and derives the finance path from its assigned
+  household. The payday scenario resolves Alex via the same registry context. No real data or the original app
+  has been read, mounted, migrated or changed.
+
+## Gates completed locally
+
+- `npm ci --ignore-scripts` restored the partial dependency tree; four moderate **development-only** audit notices
+  remain as before. `npm audit --omit=dev`: 0 vulnerabilities.
+- `npm test`: **782 passed**, 186 suites, 0 failed. `npm run typecheck`, `npm run format:check`,
+  `npm run themes:check`, and `npm run build` passed. `next-env.d.ts` was restored after build.
+- Playwright local run via the throwaway Chromium setup in `docs/SANDBOX.md` entry 8: **121 passed** across all
+  projects. `playwright.local.config.ts` and `.e2e-data` are local-only/ignored and must not be committed.
+
+No version bump, image/tag publication, deployment, live-data operation, or Unraid change is part of this work.
+`package.json` remains `0.39.0`. The original Unraid app remains at host port `3007` and
+`/mnt/user/appdata/simple-finance`; the new app remains a future, separate installation at host `3009` and
+`/mnt/user/appdata/simple-finance-multi-household` → `/data`.
+
+## Pull request and checks
+
+PR #3 is open from `arena/f5b6a64a-simple-finance-multi-household` to `main`:
+https://github.com/dougalbob/simple-finance-multi-household/pull/3. The first CI run exposed a stale Docker
+smoke-test assumption that every install creates `/data/simple-finance.sqlite` and `/data/documents`; the
+workflow was corrected to seed a fictional registry household, verify migration and persistence at the tenant
+path, repair only the tenant subtree on a bind mount, and assert that legacy root-level fixtures remain unchanged.
+On commit `d0aa7bc`, all three GitHub jobs passed: gates (format, types, tests, build, audit), Browser acceptance
+(Playwright), and Docker image build/entrypoint smoke.
+
+## Next work
+
+Implementation and validation for HANDOFF item 2 are complete. PR #3 remains open for review; do not merge,
+publish, deploy, touch live data, or bump the version as part of this task. Any future work on support consent,
+tenant backup/restore or live-data import requires its own approval and isolated-copy rehearsal.
+
+---
+
+# Historical handoff — system registry and identity-to-household assignment (PR #2)
 
 **Continuation of:** the multi-household foundation (PR #1, merge `e3720c5`) and its delivery sequence.
+**Merged:** PR #2 merged to `main` at `ab3fda9698e078322e5cb26e604c877242f328f8`.
 **Scope of this change (approved step):** the system registry and secure identity-to-household assignment —
 households of one or two people, administrator pre-assignment, and app-side first-login denial. Nothing else:
 no per-household database routing, no tenant backup/restore, no support consent, no version bump, no image or
@@ -115,7 +183,7 @@ appdata `.env` and opening `/admin`. Do not install this build against real data
 
 ---
 
-# Current handoff — multi-household isolation foundation (2026-10-10)
+# Historical handoff — multi-household isolation foundation (2026-10-10)
 
 **Current project:** independent repository `dougalbob/simple-finance-multi-household`, copied from the original
 single-household product. The old v0.x release preparations, tags, package digests and implementation decisions

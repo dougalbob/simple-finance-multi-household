@@ -11,8 +11,7 @@ import {
   ProjectSupplierDeleteButton,
   ProjectSupplierEditForm,
 } from '@/components/project-forms';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { getProjectWorkspaceView } from '@/lib/projects/projects-view';
 
 export const dynamic = 'force-dynamic';
@@ -30,14 +29,14 @@ export default async function ProjectWorkspacePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
   const { id } = await params;
   const projectId = Number(id);
   if (!Number.isInteger(projectId) || projectId < 1) notFound();
 
-  const view = getProjectWorkspaceView(getDbHandle().db, projectId);
+  const view = getProjectWorkspaceView(user.db, projectId);
   if (view === null) notFound();
 
   return (

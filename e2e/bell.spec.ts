@@ -4,8 +4,8 @@ import { addDaysIso, londonToday } from './support';
 /**
  * Bell — an in-app "needs attention" prompt (v0.26.0, SPEC §26, decision 176).
  *
- * Own project, before backup: it adds tasks and marks bell seen, so runs
- * before the backup project's restore rewinds the installation.
+ * Own project: it adds tasks and marks bell seen, keeping all changes inside
+ * the isolated E2E seed.
  */
 
 test.use({ viewport: { width: 1400, height: 950 } });

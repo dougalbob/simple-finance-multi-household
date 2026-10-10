@@ -3,8 +3,7 @@ import { redirect } from 'next/navigation';
 import { PotOutlookLine } from '@/components/pot-outlook';
 import { QuickEntry } from '@/components/quick-entry';
 import { formatPence } from '@/lib/money';
-import { currentUserFromRequest } from '@/lib/auth/next';
-import { getDbHandle } from '@/lib/db/client';
+import { householdContextFromRequest } from '@/lib/auth/next';
 import { categoryTree } from '@/lib/records/categories';
 import { getMonthComparisonView, getVehicleCostsView } from '@/lib/records/insights-view';
 import { addDaysLocal } from '@/lib/records/dates';
@@ -32,10 +31,10 @@ export const dynamic = 'force-dynamic';
  * beside the projection and shares its code path with the phone home.
  */
 export default async function OverviewPage() {
-  const user = await currentUserFromRequest();
+  const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
 
-  const { db } = getDbHandle();
+  const db = user.db;
   const now = new Date();
   const today = toLocalDateString(now);
 

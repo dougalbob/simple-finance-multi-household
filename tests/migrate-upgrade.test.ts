@@ -9,6 +9,9 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { describe, it } from 'node:test';
 import { openDatabase } from '../src/lib/db/client';
+import { openRegistry } from '../src/lib/registry/db';
+import { createHousehold } from '../src/lib/registry/domain';
+import { householdDatabasePath, systemRegistryPath } from '../src/lib/registry/paths';
 import { repairMigrationJournal } from '../src/lib/db/migrate-repair';
 import { completeTask, listTasks, taskDue } from '../src/lib/records/tasks';
 import { migrationsFolderBefore } from './helpers';
@@ -88,7 +91,7 @@ function buildDatabase(databasePath: string, migrationsFolder: string): void {
 function runProductionRunner(dataDir: string): string {
   const script = path.resolve('scripts/migrate.cjs');
   return execFileSync('node', [script], {
-    env: { ...process.env, DATA_DIR: dataDir, DATABASE_PATH: path.join(dataDir, 'db.sqlite') },
+    env: { ...process.env, DATA_DIR: dataDir },
     encoding: 'utf8',
   });
 }
@@ -143,12 +146,28 @@ function tmpDataDir(prefix: string): string {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
+/** Create an isolated registry household and return its derived finance path. */
+function createTenantDatabasePath(dataDir: string): string {
+  const registry = openRegistry(systemRegistryPath(dataDir));
+  try {
+    const household = createHousehold(registry, {
+      displayName: 'Migration fixture',
+      actor: 'test',
+    });
+    const databasePath = householdDatabasePath(dataDir, household.id);
+    mkdirSync(path.dirname(databasePath), { recursive: true });
+    return databasePath;
+  } finally {
+    registry.close();
+  }
+}
+
 describe('migration upgrade path (v0.23.0 incident regression)', () => {
   it('a v0.22.1-era database (0011 at the old future stamp) applies 0012 on upgrade', () => {
     // Exactly the household's database: upgraded through v0.22.1, so 0011 is
     // recorded at the hand-stamped future value and 0012 does not exist.
     const dir = tmpDataDir('sf-upgrade-a-');
-    const databasePath = path.join(dir, 'db.sqlite');
+    const databasePath = createTenantDatabasePath(dir);
     buildDatabase(databasePath, legacyMigrationsFolder(12));
     assert.ok(!potColumns(databasePath).includes('credit_card_payment_day_of_month'));
 
@@ -176,7 +195,7 @@ describe('migration upgrade path (v0.23.0 incident regression)', () => {
     // journal re-apply 0012 and crash with "duplicate column name" if the
     // repair did not re-date it first.
     const dir = tmpDataDir('sf-upgrade-b-');
-    const databasePath = path.join(dir, 'db.sqlite');
+    const databasePath = createTenantDatabasePath(dir);
     buildDatabase(databasePath, legacyMigrationsFolder(13));
     assert.ok(potColumns(databasePath).includes('credit_card_payment_day_of_month'));
 
@@ -195,7 +214,7 @@ describe('migration upgrade path (v0.23.0 incident regression)', () => {
 
   it('a fresh database on the current journal applies everything once', () => {
     const dir = tmpDataDir('sf-upgrade-c-');
-    const databasePath = path.join(dir, 'db.sqlite');
+    const databasePath = createTenantDatabasePath(dir);
     runProductionRunner(dir);
     assert.ok(potColumns(databasePath).includes('credit_card_payment_day_of_month'));
     assertEveryJournalEntryAppliedExactlyOnce(databasePath);
@@ -218,14 +237,15 @@ describe('migration upgrade path (v0.23.0 incident regression)', () => {
     for (const entryCount of [12, 13]) {
       const cjsDir = tmpDataDir('sf-parity-cjs-');
       const tsDir = tmpDataDir('sf-parity-ts-');
-      for (const dir of [cjsDir, tsDir]) {
-        buildDatabase(path.join(dir, 'db.sqlite'), legacyMigrationsFolder(entryCount));
-      }
+      const cjsDatabasePath = createTenantDatabasePath(cjsDir);
+      const tsDatabasePath = path.join(tsDir, 'db.sqlite');
+      buildDatabase(cjsDatabasePath, legacyMigrationsFolder(entryCount));
+      buildDatabase(tsDatabasePath, legacyMigrationsFolder(entryCount));
 
       // Production path: scripts/migrate.cjs runs the CJS repair, then drizzle.
       runProductionRunner(cjsDir);
       // Dev path: the TS repair, then drizzle, against an identical fixture.
-      const tsRaw = new Database(path.join(tsDir, 'db.sqlite'));
+      const tsRaw = new Database(tsDatabasePath);
       tsRaw.pragma('journal_mode = WAL');
       try {
         repairMigrationJournal(tsRaw, path.resolve('drizzle'));
@@ -235,14 +255,11 @@ describe('migration upgrade path (v0.23.0 incident regression)', () => {
       }
 
       assert.deepEqual(
-        [...migrationRows(path.join(cjsDir, 'db.sqlite')).entries()].sort(),
-        [...migrationRows(path.join(tsDir, 'db.sqlite')).entries()].sort(),
+        [...migrationRows(cjsDatabasePath).entries()].sort(),
+        [...migrationRows(tsDatabasePath).entries()].sort(),
         `CJS and TS repairs disagree for a ${entryCount}-entry legacy database`,
       );
-      assert.deepEqual(
-        potColumns(path.join(cjsDir, 'db.sqlite')).sort(),
-        potColumns(path.join(tsDir, 'db.sqlite')).sort(),
-      );
+      assert.deepEqual(potColumns(cjsDatabasePath).sort(), potColumns(tsDatabasePath).sort());
       rmSync(cjsDir, { recursive: true, force: true });
       rmSync(tsDir, { recursive: true, force: true });
     }
@@ -260,7 +277,7 @@ describe('migration 0013: follow-up dates become tasks (decision 175)', () => {
 
   it('a v0.24.0 database upgrades: dated follow-ups become open tasks, the column goes', async () => {
     const dir = tmpDataDir('sf-upgrade-0013-');
-    const databasePath = path.join(dir, 'db.sqlite');
+    const databasePath = createTenantDatabasePath(dir);
     buildDatabase(databasePath, await migrationsFolderBefore('0013_tasks_and_supplier_documents'));
 
     // Seed it the way the household's looks: one interaction carrying a
@@ -451,7 +468,7 @@ describe('migration 0014: bell_seen and task assignee (decision 176)', () => {
 
   it('a v0.25.0 database upgrades: bell_seen table and tasks.assigned_to column', async () => {
     const dir = tmpDataDir('sf-upgrade-0014-');
-    const databasePath = path.join(dir, 'db.sqlite');
+    const databasePath = createTenantDatabasePath(dir);
     buildDatabase(databasePath, await migrationsFolderBefore('0014_bell_and_task_assignee'));
 
     const seed = new Database(databasePath);
@@ -547,7 +564,7 @@ describe('migration 0015: pot owner and cash-pot normalisation (decision 178)', 
 
   it('a v0.27.0 database upgrades: pots.owner_person_id, cash limits cleared', async () => {
     const dir = tmpDataDir('sf-upgrade-0015-');
-    const databasePath = path.join(dir, 'db.sqlite');
+    const databasePath = createTenantDatabasePath(dir);
     buildDatabase(databasePath, await migrationsFolderBefore('0015_pot_owner'));
 
     const seed = new Database(databasePath);

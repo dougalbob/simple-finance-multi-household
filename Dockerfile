@@ -56,7 +56,7 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 # The default runtime user owns the build output (Next writes its cache there)
 # and the data volume mount point; the entrypoint re-chowns when PUID differs.
 RUN chmod +x docker-entrypoint.sh \
-    && mkdir -p /data/documents /data/logging \
+    && mkdir -p /data/system /data/households \
     && chown -R 99:100 /app/.next /data
 VOLUME /data
 EXPOSE 3000

@@ -2,9 +2,12 @@
 
 > **ACTIVE PLAN (approved 2026-10-10):** this repository is the independent multi-household edition. The concise
 > binding contract is [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md); the product requirements are in
-> [`docs/SPEC.md`](SPEC.md). The current source is inherited single-household v0.39.0 code; tenant routing,
-> per-household databases, onboarding, consent-based support and household backup isolation are not implemented.
-> Do not treat the legacy v0.x release notes, source tags, project profile or session plan below as current.
+> [`docs/SPEC.md`](SPEC.md). Current source version remains inherited v0.39.0. The registry, `/admin` assignment,
+> first-login denial and per-household request contexts/database handles are implemented. Explicit support
+> consent, the verified identity-to-`people` link, tenant backup/restore and migration of live data remain
+> unimplemented. The inherited backup/restore API is disabled until household-scoped recovery is separately
+> approved. Do not treat the legacy v0.x release notes, source tags, project profile or session plan below as
+> current.
 
 ## Current multi-household decisions
 
@@ -37,29 +40,40 @@
 
 ## Approved implementation order
 
-1. Lock documentation, Unraid template, GHCR repository/image guard, RC behavior and first-release upgrade-smoke
-   filtering (the current foundation PR; no image/tag publication).
-2. Implement the control-plane registry, safe request-scoped household resolution and separate database handles.
-3. Add the admin onboarding/assignment screen and first-login behavior; enforce one or two members.
-4. Scope all pages, actions, APIs, document operations, caches, backup and restore to the resolved household;
-   implement explicit support grants and audit.
-5. Import and rehearse the existing household backup in an isolated tenant directory; verify its records, SQLite
-   integrity, attachments and per-household backup/restore.
-6. Test concurrent households, denial of cross-household access, Cloudflare sign-in and a separate Unraid route
-   on port 3009 before migrating current production data. With the test account holder's consent, use a separately
-   signed-in mobile Google account and test household/route to verify first login; confirm an unassigned identity
-   is denied.
-7. When the implementation and notes are ready, publish `v1.0.0-rc.1` only to the new package. After acceptance,
-   publish a distinct stable `v1.0.0`.
+1. Lock the documentation, Unraid template, GHCR repository/image guard, RC behavior and first-release upgrade-
+   smoke filtering (foundation, delivered; no image/tag publication).
+2. Implement the control-plane registry, admin pre-assignment, one-or-two identity limit and first-login denial
+   (PR #2 merged at `ab3fda9698e078322e5cb26e604c877242f328f8`).
+3. Route finance pages, server actions, attachment storage/viewing and attention APIs through immutable contexts
+   resolved only from active registry assignments; cache independent handles by validated tenant path and migrate
+   only registry-discovered tenant databases (current implementation work).
+4. Separately approve/implement the person-to-identity link, consent-based support grants and audit, and
+   tenant-scoped backup/restore. Until backup/restore is approved and isolated against multiple tenants, the old
+   global API remains disabled and Settings has no backup/restore controls.
+5. Rehearse the legacy finance database/documents import using an isolated backup copy; verify integrity, records,
+   attachments and any separately approved tenant recovery path. Never touch live data in rehearsal.
+6. Test concurrent households, cross-tenant denial, Cloudflare sign-in and a separate Unraid route on port 3009
+   before any live import. Use a separate test household/route and account holder consent for mobile Google
+   acceptance, and verify an unassigned identity is denied.
+7. Publish `v1.0.0-rc.1` only after implementation and acceptance gates are complete; after RC acceptance, publish
+   a distinct stable `v1.0.0`.
 
-> **Versioning rule:** the current source version is not changed to `1.0.0-rc.1` by the foundation PR. Set the
+> **Versioning rule:** the current source version is not changed to `1.0.0-rc.1` by this implementation work. Set the
 > package, lockfile, version module, template and release notes to that version together in the actual RC release
 > PR. See [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
 
+## Current branch validation (2026-10-10)
+
+`npm test`: **782 passed**, 186 suites, 0 failed. `npm run typecheck`, `npm run format:check`,
+`npm run themes:check`, `npm run build` and `npm audit --omit=dev` passed. The full local Playwright suite
+passed **121 tests** using the throwaway browser setup in `docs/SANDBOX.md` entry 8. The build-updated
+`next-env.d.ts` was restored. These are local results only; check PR CI conclusions separately before any merge.
+
 ## Multi-household decision log (additions)
 
-- **2026-10-10 — registry and identity assignment landed (delivery step 2, first half).** The system registry is
-  `system/registry.sqlite` (control plane only: `households`, `identities`, `registry_audit`; SQL at
+- **2026-10-10 — registry and identity assignment landed (PR #2 merged at
+  `ab3fda9698e078322e5cb26e604c877242f328f8`).** The system registry is `system/registry.sqlite` (control plane
+  only: `households`, `identities`, `registry_audit`; SQL at
   `drizzle/registry/`, applied by `src/lib/registry/schema.ts` and the production twin
   `scripts/registry-migrate.cjs`, which the entrypoint runs and whose schema equality is pinned by
   `tests/registry-migrations.test.ts`). Household IDs are opaque 128-bit hex; all household paths derive from
@@ -79,11 +93,20 @@
   consumption (`REGISTRY_ADMIN_EMAIL`, optional `REGISTRY_ADMIN_HOUSEHOLD_NAME`) while the roster is empty; the
   last-administrator guard keeps it from ever locking itself out. A platform administrator whose own household
   is deactivated retains `/admin` (so they can restore it) but no household pages.
-- **Transitional layout:** registry and household directories live under the new appdata root
-  (`<dataDir>/system/`, `<dataDir>/households/<id>/`; entrypoint prepares and owns them). Pages and actions
-  deliberately still use the inherited single-database handle (`dataDir/simple-finance.sqlite`) until the next
-  step replaces it with request-scoped household context and per-household handles; documents, caches and
-  backup/restore remain single-tenant in this change and are the following step. Nothing here touches the
+- **2026-10-10 — per-household finance routing implemented on this branch.** `householdContextFromHeaders` /
+  `householdContextFromRequest` build an immutable context from `describeSession`'s active registry assignment.
+  The process-wide `getDbHandle()` is gone; `getHouseholdDbHandle()` caches independent handles by validated,
+  absolute tenant path, and pages/actions use that context for reads, writes and audit. Attachment uploads,
+  deletion and viewing use the same household's documents directory. Attention and attachment APIs are tenant
+  scoped; tests pin spoofed-header refusal, concurrent handles and data isolation.
+- **Container migration now follows the registry.** Startup runs registry migrations first, then migrates only
+  each validated household ID in the registry at `households/<id>/simple-finance.sqlite`. It ignores inherited
+  `DATABASE_PATH` overrides and never creates, migrates or chowns the old root-level finance/document paths.
+  Finance handles migrate idempotently on first open so a household created after startup is usable.
+- **Backup/restore remains a separately deferred feature.** The old global APIs authenticate and enforce
+  same-origin, then return `501`; Settings explains the unavailable status. No request reads, writes or replaces
+  tenant finance data through those routes. The archive library is legacy code and must not be exposed until a
+  separately approved tenant-scoped implementation passes isolation tests. Nothing in this work touches the
   original installation, its data, route or port 3007.
 
 ---
@@ -135,20 +158,21 @@ Domain rules live in small pure modules (estimate engine, projection engine, sch
 validation, category tree), shared by UI hints, server validation, insights and tests. Money is integer pence
 everywhere; per-period rounding, half-up, once (SPEC §7.3).
 
-### Tenant/control-plane architecture (approved target)
+### Tenant/control-plane architecture (approved target and current runtime)
 
-Use one small control-plane registry at `/data/system/registry.sqlite` for household identity/status, normalized
-email-to-household membership, the platform administrator bootstrap/role and explicit support grants. It stores no
-finance records or documents. Household finance data remains in separate SQLite files at
+The control-plane registry at `/data/system/registry.sqlite` holds household identity/status, normalized email-to-
+household membership, administrator bootstrap/role and registry audit metadata. It stores no finance records or
+documents. Household finance remains in separate SQLite files at
 `/data/households/<opaque-id>/simple-finance.sqlite`, with that tenant's own `documents/` and optional `logging/`
 siblings. This physical separation is why existing finance tables do not need a `household_id` column in every
 row; migrations apply independently to each tenant database.
 
-Resolve identity and membership before selecting a tenant database. Pass an immutable household context through
-each request/action/route and cache handles by safe database path or stable tenant ID. Never use a mutable global
-"current household" handle; the inherited singleton `getDbHandle()` is a refactor point, not a safe tenant router.
-Only registry assignments—not browser-provided IDs or paths—may select data. Registry recovery is separate from
-member backups. See `docs/MULTI_HOUSEHOLD_PLAN.md` for the binding details and consent policy.
+The runtime resolves identity and active assignment before selecting a tenant database. Finance pages and server
+actions use `householdContextFromRequest`; Request-based APIs use `householdContextFromHeaders`. Both derive from
+the shared `describeSession` gate. `getHouseholdDbHandle` caches by the validated absolute tenant path; there is
+no mutable global current-household handle and no browser-selected ID/path. The unscoped backup/restore API
+remains disabled pending a separately approved tenant recovery implementation. Registry recovery is separate
+from any later member backup. See `docs/MULTI_HOUSEHOLD_PLAN.md` for binding details and deferred consent policy.
 
 ### Data model sketch (entities — v1, inside each household database)
 

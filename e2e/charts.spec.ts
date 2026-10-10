@@ -11,9 +11,8 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
  * chart draws, and does clicking through actually land on the purchases the
  * bar was made of.
  *
- * It runs in its own project, after `fuel` and before `backup`: it ticks a
- * commitment category in Settings, which is household configuration, and the
- * backup project's restore rewinds the installation.
+ * It runs in its own project after `fuel`: it ticks a commitment category in
+ * Settings, keeping all changes inside the isolated E2E seed.
  */
 
 const CHARTS = ['forecast', 'groceries', 'personal', 'commitments'] as const;

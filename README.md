@@ -2,7 +2,7 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household will have its own database and saved documents; households share the application, not financial data.
 
-> **Important status:** this repository is an independent copy of the original `dougalbob/simple-finance` project. The multi-household features are being implemented step by step and **no release exists yet**; the current source is the inherited single-household v0.39.0 baseline plus the system registry, identity-to-household pre-assignment (`/admin`) and the app-side first-login denial. Per-household databases and routing, support consent and tenant backups are **not implemented yet**. Do not install this template or import real data. The first planned candidate is `v1.0.0-rc.1`; see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md).
+> **Important status (2026-10-10):** this repository is an independent copy of the original `dougalbob/simple-finance` project. The current source remains version `0.39.0` and **no release exists yet**. The system registry, `/admin` pre-assignment, first-login denial, per-household request context/database handles, and routing of finance pages, actions, attachment operations and selected APIs are implemented. Consent-based support access, the identity-to-`people` link, tenant backup/restore, and migration of the existing live household are **not implemented**. The inherited global backup/restore API is disabled (authenticated same-origin requests return `501`) and Settings says it is unavailable. Do not install this template or import real data. The first planned candidate is `v1.0.0-rc.1`; see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md) and [`docs/HANDOFF.md`](docs/HANDOFF.md).
 
 ## Non-negotiable separation
 
@@ -47,15 +47,17 @@ For first-login onboarding, the admin provisions the household and email assignm
 ```sh
 npm ci
 cp .env.example .env
-npm run db:migrate
+# In .env, set an isolated DATA_DIR, REGISTRY_ADMIN_EMAIL, and matching
+# AUTH_DEV_BYPASS=true / AUTH_DEV_IDENTITY_EMAIL for local-only development.
+npm run db:migrate:registry
 npm run dev
 ```
 
-The inherited development identity bypass is not a substitute for testing household assignment or cross-household isolation. Those require dedicated tests and real Cloudflare acceptance on the isolated RC installation.
+On first local access, the empty registry bootstraps the configured development administrator; the verified registry assignment then selects and migrates that household's database. `npm run db:migrate` migrates only registry-listed household databases and never a global `data/simple-finance.sqlite`. The E2E harness seeds fictional `alex@example.com` and `sam@example.com` in a separate ignored `.e2e-data` root. Local dev bypass is not a substitute for real Cloudflare acceptance on the isolated RC installation.
 
 ### Release-candidate and production releases
 
-Merging a pull request does not publish an image. A lower-case annotated tag and the Publish workflow do. The first candidate is planned as `v1.0.0-rc.1`; any additional candidate increments the suffix. An accepted production release is `v1.0.0`, not a retagged RC. See [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md). No version tag or image is being created by the current foundation change.
+Merging a pull request does not publish an image. A lower-case annotated tag and the Publish workflow do. The first candidate is planned as `v1.0.0-rc.1`; any additional candidate increments the suffix. An accepted production release is `v1.0.0`, not a retagged RC. See [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md). This implementation work does not bump the version or create a tag/image; current version remains `0.39.0`.
 
 ## Everyday use
 
@@ -106,7 +108,7 @@ Merging a pull request does not publish an image. A lower-case annotated tag and
 
 Each household must be able to restore its backup only into its own selected household context. A restore rehearsal must use a clean isolated installation and verify both records and attachment hashes. Never restore or rehearse against `/mnt/user/appdata/simple-finance` or the original production container.
 
-The existing backup and restore code belongs to the inherited single-household baseline. Do not assume it is tenant-safe until it has been refactored and tested against two households.
+**Current runtime status:** `/api/backup` and `/api/restore` authenticate and enforce same-origin, then return `501` without reading or replacing finance data. Settings displays an unavailable notice; it no longer exposes the inherited global backup/restore controls. The underlying archive utilities remain legacy library code and are not tenant-scoped; do not re-enable the endpoints until household-scoped backup, restore, and isolation tests have separate approval.
 
 ## Stack (as built)
 
