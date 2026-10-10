@@ -3,7 +3,6 @@ import { after, before, describe, it } from 'node:test';
 import { eq } from 'drizzle-orm';
 import { auditEntries } from '../src/lib/db/schema';
 import { signInEmailChoices } from '../src/lib/auth/sign-in-choices';
-import { loadAppConfig } from '../src/lib/config';
 import { listPotActivity } from '../src/lib/records/activity';
 import { buildEntryData, entryDefaults } from '../src/lib/records/entry-view';
 import { listFuelSupplierIds } from '../src/lib/records/fuel';
@@ -141,18 +140,14 @@ describe('Signs in as — in the database', () => {
 });
 
 describe('signInEmailChoices', () => {
-  it('offers the allowlist, the dev identity when bypassing, and stored links', () => {
-    const config = loadAppConfig({
-      AUTH_ALLOWED_EMAILS: 'Alex@example.com, sam@example.com',
-      AUTH_DEV_BYPASS: 'true',
-      AUTH_DEV_IDENTITY_EMAIL: 'dev@example.com',
-    });
-    assert.deepEqual(signInEmailChoices(config, [{ email: 'old@example.com' }, { email: null }]), [
-      'alex@example.com',
-      'sam@example.com',
-      'dev@example.com',
-      'old@example.com',
-    ]);
+  it('offers only this household’s assigned sign-ins and stored links, never the installation allowlist', () => {
+    assert.deepEqual(
+      signInEmailChoices(
+        ['Alex@example.com', 'sam@example.com'],
+        [{ email: 'old@example.com' }, { email: null }],
+      ),
+      ['alex@example.com', 'sam@example.com', 'old@example.com'],
+    );
   });
 });
 

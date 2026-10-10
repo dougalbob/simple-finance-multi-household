@@ -26,6 +26,12 @@ export async function POST(request: Request) {
     );
   }
 
+  if (user.readOnly) {
+    return Response.json(
+      { error: 'read_only_support_view' },
+      { status: 403, headers: { 'cache-control': 'private, no-store' } },
+    );
+  }
   setBellSeenAt(user.db, user.email, new Date());
   return Response.json({ ok: true }, { headers: { 'cache-control': 'private, no-store' } });
 }

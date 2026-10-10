@@ -216,6 +216,7 @@ export async function POST(request: Request) {
       { status: 401, headers: { 'cache-control': 'private, no-store' } },
     );
   }
-  setBellSeenAt(user.db, user.email, new Date());
+  // A support view is read-only: the bell's seen-time is never written from it.
+  if (!user.readOnly) setBellSeenAt(user.db, user.email, new Date());
   return Response.json({ ok: true }, { headers: { 'cache-control': 'private, no-store' } });
 }

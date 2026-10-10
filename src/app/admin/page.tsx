@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
   AssignIdentityForm,
@@ -89,6 +90,12 @@ export default async function AdminPage() {
           Pre-assign each sign-in email to exactly one household before its first login — there is
           no self sign-up. Households hold one or two people. This page shows operational metadata
           only; household financial records stay in each household and are never visible here.
+        </p>
+        <p className="mt-2 text-sm">
+          <Link href="/support" className="font-medium text-accent underline">
+            Support access granted to you
+          </Link>{' '}
+          <span className="text-ink-muted">— read-only views a household has opened to you.</span>
         </p>
       </header>
 

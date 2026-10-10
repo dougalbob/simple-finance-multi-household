@@ -1,4 +1,80 @@
-# Current handoff — per-household finance routing (2026-10-10)
+# Current handoff — plan step 4: support consent and household-scoped backup/restore (2026-10-10)
+
+**Baseline:** PR #3 (per-household finance routing) merged to `main` at `72dfb46`. This work is on the fixed Arena
+branch `arena/c8a5b27d-simple-finance-multi-household`.
+
+**Approval:** the owner explicitly approved this step's scope on 2026-10-10: consent-based support access **and**
+household-scoped backup/restore, as the PR #3 handoff required and MULTI_HOUSEHOLD_PLAN §7 item 4 describes. This
+approval does **not** cover step 5 (import rehearsal) or step 6 (acceptance); each needs its own approval.
+
+## What is implemented
+
+- **Identity-to-person link.** `savePersonEmailAction` accepts only a sign-in the registry assigns to the viewer's
+  own household (`householdSignInEmails`). Settings' "Signs in as" choices no longer come from the installation-wide
+  Cloudflare allowlist, which named every household's members.
+- **Support consent** (registry table `support_grants`, migration `0002`):
+  - Only a member of a household can grant or end support access. The grantee must be a platform administrator who
+    is not a member of that household. Durations are fixed at 1, 4 or 24 hours. One active grant per household.
+    Ending a grant takes effect on the next request.
+  - An administrator opens a live grant from `/support`. The browser sends a grant ID; the `sf_support_view` cookie
+    holds only that ID (httpOnly, SameSite strict, at most 24 hours). Every request re-checks the verified sign-in,
+    expiry, revocation, the grantee's administrator role and the household's active status. Any failure falls back to
+    the administrator's own household.
+  - A support view is read-only at three layers: a read-only SQLite handle (the engine refuses writes), a `readOnly`
+    refusal in every household server action (`saveThemeAction` is the one exemption, because it is a device
+    preference), and refusals in backup, restore and the bell's seen-time. A view never creates a household database.
+  - Audit: `support.grant`, `support.revoke`, `support.open`, `support.access` (first use, then last use throttled to
+    once a minute). Settings → Support access shows the household its recent grants and that activity. A banner shows
+    on every page while a view or a granted share is active.
+- **Household-scoped backup/restore.**
+  - `POST /api/backup` takes a passphrase of at least 12 characters and returns a format 3 archive. The archive names
+    its household, and holds only that household's database snapshot and attachments: never the registry or another
+    household. A support view gets 403. A missing attachment file gets 409, and nothing downloads.
+  - `POST /api/restore` takes the archive, passphrase and the typed word `RESTORE`. It refuses, before any change, an
+    archive for another household, a legacy format 1 or 2 archive, a wrong passphrase or a tampered archive. A valid
+    archive replaces only the caller's household, under a maintenance lock, and the previous copy is kept under a
+    `.pre-restore` name. Sign-in links the registry no longer assigns to the household are cleared from the restored
+    copy and reported as `personLinksCleared`.
+  - Settings shows the household's own backup and restore controls. A support view shows a message instead.
+- **Settings and admin.** The inherited global backup controls are gone. `/admin` links to `/support`.
+
+## Gates completed locally
+
+- `npm run typecheck`: pass.
+- `npm test`: **824 passed**, 0 failed (was 782). New suites: `support-consent`, `support-context`,
+  `household-backup`, `identity-link`, `support-readonly-guard`. The `api-backup-route` and `api-restore-route` tests
+  now cover the live behaviour rather than the 501 stubs.
+- `npm run format:check`: pass.
+- `npx next build`: pass. `next-env.d.ts` was restored afterwards.
+- Migrator: `scripts/registry-migrate.cjs` applies `0001` and `0002` to a fresh registry.
+- Playwright, via the throwaway Chromium overlay in `docs/SANDBOX.md` entry 8: **123 passed** on a clean run. Its
+  backup and support-access specs were rewritten for this UI.
+- HTTP smoke against the seeded e2e server: pages render; a cross-origin backup is refused (403); a short passphrase
+  is refused (400); the download is `no-store`, `attachment`, named for the household; a wrong passphrase, a missing
+  confirmation word and a matching archive give 400, 400 and 200 respectively.
+
+No version bump, image or tag publication, deployment, live-data operation or Unraid change is part of this work.
+`package.json` remains `0.39.0`. The original app stays at port `3007` and `/mnt/user/appdata/simple-finance`, and the
+new app stays on host port `3009` with appdata at `/mnt/user/appdata/simple-finance-multi-household`.
+
+## Not verified here
+
+- The support grant flow has no browser test. The Playwright seed has one administrator, who is also a member of the
+  seeded household, so there is nobody to grant to. The flow is covered by the registry, context, route and
+  read-only-guard tests. A browser test needs a second household and administrator in the seed.
+- The `secure` cookie flag applies only in production.
+- Restore reads the whole archive into memory, up to the 512 MiB policy limit.
+- `npm audit` was not re-run in this session.
+
+## Next work
+
+Step 4 is complete on this branch and awaiting review. Do not merge, tag, publish, deploy or touch live data as part
+of this work. Step 5 (import rehearsal in an isolated copy of the legacy database and documents) and step 6
+(acceptance) need separate approval. Before merge, update this file and `docs/SANDBOX.md` for the final state.
+
+---
+
+# Historical handoff — per-household finance routing, PR #3 (2026-10-10)
 
 **Baseline:** PR #2, which delivered the system registry and administrator assignment, merged to `main` at
 `ab3fda9698e078322e5cb26e604c877242f328f8`. This implementation continues from that commit on the fixed Arena

@@ -16,7 +16,6 @@ import {
 import { revalidatePath } from 'next/cache';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import type { Db } from '@/lib/db/client';
-import { loadAppConfig } from '@/lib/config';
 import { formatPence, parsePence } from '@/lib/money';
 import {
   AttachmentInputError,
@@ -62,7 +61,8 @@ import {
   renamePerson,
   setPersonEmail,
 } from '@/lib/records/people';
-import { signInEmailChoices } from '@/lib/auth/sign-in-choices';
+import { householdSignInEmails } from '@/lib/auth/sign-in-choices';
+import { getRegistry } from '@/lib/registry/db';
 import {
   createPurchase,
   createRefund,
@@ -233,6 +233,7 @@ export async function addSupplierReferenceAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = supplierReferenceEntrySchema.safeParse({
     supplierId: Number(formData.get('supplierId')),
     label: String(formData.get('label') ?? ''),
@@ -262,6 +263,7 @@ export async function addSupplierInteractionAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = supplierInteractionEntrySchema.safeParse({
     supplierId: Number(formData.get('supplierId')),
     channel: String(formData.get('channel') ?? ''),
@@ -310,6 +312,7 @@ export async function saveSupplierContactAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = supplierContactEntrySchema.safeParse({
     id: Number(formData.get('id')),
     expectedVersion: Number(formData.get('expectedVersion')),
@@ -352,6 +355,7 @@ export async function uploadAttachmentAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   // A purchase's receipt, (v0.10.0, decision 138) an income record's
   // document, or (v0.25.0, decision 175) a supplier's letter or policy — the
   // form posts exactly one of the three ids.
@@ -408,6 +412,7 @@ export async function deleteAttachmentAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const id = numberOrNull(formData.get('attachmentId'));
   if (id === null || id <= 0) {
     return {
@@ -495,6 +500,7 @@ export async function createTaskAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = taskCreateEntrySchema.safeParse({
     title: String(formData.get('title') ?? ''),
     detail: textOrNull(formData.get('detail')),
@@ -524,6 +530,7 @@ export async function completeTaskAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = taskCompleteEntrySchema.safeParse({
     id: Number(formData.get('id')),
     expectedVersion: Number(formData.get('expectedVersion')),
@@ -554,6 +561,7 @@ export async function reopenTaskAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = taskVersionEntrySchema.safeParse({
     id: Number(formData.get('id')),
     expectedVersion: Number(formData.get('expectedVersion')),
@@ -578,6 +586,7 @@ export async function editTaskAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = taskEditEntrySchema.safeParse({
     id: Number(formData.get('id')),
     expectedVersion: Number(formData.get('expectedVersion')),
@@ -613,6 +622,16 @@ export async function editTaskAction(
  * Zod validates at the boundary — browser validation is assistance only.
  */
 
+/**
+ * A support view (MULTI_HOUSEHOLD_PLAN §4) is read-only: every write action
+ * refuses here before touching anything. The read-only database connection is
+ * the engine-level backstop behind this check.
+ */
+const READ_ONLY_VIEW: ActionState = {
+  status: 'error',
+  message: 'This is a read-only support view. Nothing can be changed from here.',
+};
+
 const NOT_SIGNED_IN: ActionState = {
   status: 'error',
   message: 'You are not signed in. Open the app through your usual Cloudflare Access link.',
@@ -624,6 +643,7 @@ export async function createPotAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
 
   const label = potLabelSchema.safeParse(formData.get('label'));
   if (!label.success) {
@@ -664,6 +684,7 @@ export async function addCheckpointAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
 
   const potId = potIdSchema.safeParse(formData.get('potId'));
   if (!potId.success) {
@@ -716,6 +737,7 @@ export async function addPurchaseAction(
 ): Promise<PurchaseActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return purchaseError(NOT_SIGNED_IN.message ?? 'Not signed in.');
+  if (user.readOnly) return purchaseError(READ_ONLY_VIEW.message ?? 'Read-only.');
 
   const raw = parsePurchaseForm(formData);
   if (!raw.success) return purchaseError(raw.message);
@@ -757,6 +779,7 @@ export async function addFuelAction(
 ): Promise<PurchaseActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return purchaseError(NOT_SIGNED_IN.message ?? 'Not signed in.');
+  if (user.readOnly) return purchaseError(READ_ONLY_VIEW.message ?? 'Read-only.');
 
   const amountRaw = formData.get('amount');
   const amount = parsePence(typeof amountRaw === 'string' ? amountRaw : '');
@@ -856,6 +879,7 @@ export async function editFuelDetailsAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const extras = parseFuelExtras(formData);
   if (!extras.ok) return { status: 'error', message: extras.error };
   const parsed = fuelDetailsEntrySchema.safeParse({
@@ -906,6 +930,7 @@ export async function voidDuplicatePurchaseAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const id = positiveNumber(formData.get('purchaseId'));
   const version = positiveNumber(formData.get('version'));
   if (id === null || version === null) {
@@ -1026,6 +1051,7 @@ export async function addPersonAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const label = formData.get('label');
   if (typeof label !== 'string' || label.trim() === '')
     return { status: 'error', message: 'Give the person a name.' };
@@ -1044,6 +1070,7 @@ export async function addVehicleAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const label = formData.get('label');
   const ownerPersonId = numberOrNull(formData.get('ownerPersonId'));
   if (typeof label !== 'string' || label.trim() === '')
@@ -1071,6 +1098,7 @@ export async function addScheduleAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
 
   const today = new Date();
   const raw = parseScheduleForm(formData, today);
@@ -1113,6 +1141,7 @@ export async function cancelScheduleAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = cancelScheduleEntrySchema.safeParse({
     scheduleId: numberOrNull(formData.get('scheduleId')),
     expectedVersion: numberOrNull(formData.get('version')),
@@ -1155,6 +1184,7 @@ export async function addRenewalAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = renewalEntrySchema.safeParse({
     label: textOrNull(formData.get('label')) ?? '',
     nextRenewalDate: textOrNull(formData.get('nextRenewalDate')) ?? '',
@@ -1192,6 +1222,7 @@ export async function saveProjectionSettingsAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
 
   const groceriesRaw = formData.get('weeklyGroceries');
   const groceries =
@@ -1324,6 +1355,7 @@ export async function saveDefaultPurchasePotAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
 
   const raw = formData.get('potId');
   const text = typeof raw === 'string' ? raw.trim() : '';
@@ -1361,6 +1393,7 @@ export async function savePersonEmailAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const personId = Number(formData.get('personId'));
   const raw = formData.get('email');
   const email = typeof raw === 'string' && raw.trim() !== '' ? raw.trim().toLowerCase() : null;
@@ -1369,10 +1402,12 @@ export async function savePersonEmailAction(
   }
   try {
     const db = user.db;
+    // Verified link (MULTI_HOUSEHOLD_PLAN §2): only an identity the registry
+    // assigns to THIS household may be linked to one of its people.
     const updated = setPersonEmail(db, {
       id: personId,
       email,
-      allowedEmails: signInEmailChoices(loadAppConfig(), listPeople(db)),
+      allowedEmails: householdSignInEmails(getRegistry(), user.householdId),
       actor: user.email,
     });
     revalidatePages();
@@ -1395,6 +1430,7 @@ export async function editPurchaseAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
 
   const editableLines = parseEditableLines(formData);
   if (!editableLines.success) {
@@ -1490,6 +1526,7 @@ export async function addRefundAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
 
   let lines: unknown;
   try {
@@ -1558,6 +1595,7 @@ export async function voidPurchaseAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
     // `VoidForm` names its hidden field `expectedVersion` (record-forms.tsx) —
@@ -1603,6 +1641,7 @@ export async function addTransferAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );
@@ -1644,6 +1683,7 @@ export async function voidTransferAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
     // Same contract as voidPurchaseAction: the field is `expectedVersion`.
@@ -1694,6 +1734,7 @@ export async function addDebtAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = debtEntrySchema.safeParse({
     counterparty: String(formData.get('counterparty') ?? ''),
     direction: String(formData.get('direction') ?? ''),
@@ -1731,6 +1772,7 @@ export async function editDebtAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const inflowAmountRaw = formData.get('expectedInflowAmount');
   const inflowDayRaw = formData.get('expectedInflowDay');
   const inflowUntilRaw = formData.get('expectedInflowUntil');
@@ -1796,6 +1838,7 @@ export async function deleteDebtAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = deleteDebtEntrySchema.safeParse({
     debtId: numberOrNull(formData.get('debtId')),
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
@@ -1833,6 +1876,7 @@ export async function addExternalMovementAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );
@@ -1889,6 +1933,7 @@ export async function addSwapAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );
@@ -1932,6 +1977,7 @@ export async function voidExternalMovementAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
@@ -1981,6 +2027,7 @@ export async function editExternalMovementAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );
@@ -2042,6 +2089,7 @@ export async function voidSwapAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = voidSwapEntrySchema.safeParse({
     exchangeKey: String(formData.get('exchangeKey') ?? ''),
     inLegId: numberOrNull(formData.get('inLegId')),
@@ -2095,6 +2143,7 @@ export async function addReceiptAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );
@@ -2142,6 +2191,7 @@ export async function editReceiptAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );
@@ -2198,6 +2248,7 @@ export async function voidReceiptAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = voidRecordEntrySchema.safeParse({
     recordId: numberOrNull(formData.get('recordId')),
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
@@ -2237,6 +2288,7 @@ export async function archivePotAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = archivePotEntrySchema.safeParse({
     potId: numberOrNull(formData.get('potId')),
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
@@ -2276,6 +2328,7 @@ export async function editScheduleAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );
@@ -2368,6 +2421,7 @@ export async function editRenewalAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = editRenewalEntrySchema.safeParse({
     renewalId: numberOrNull(formData.get('renewalId')),
     expectedVersion: numberOrNull(formData.get('version')),
@@ -2422,6 +2476,7 @@ export async function editPotAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const limitRaw = formData.get('overdraftLimit');
   const limit =
     limitRaw === null || String(limitRaw).trim() === '' ? null : parsePence(String(limitRaw));
@@ -2516,6 +2571,7 @@ export async function renameTargetAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = renameTargetEntrySchema.safeParse({
     kind: textOrNull(formData.get('kind')) ?? 'person',
     targetId: numberOrNull(formData.get('targetId')),
@@ -2564,6 +2620,7 @@ export async function saveCategoryAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = categoryEntrySchema.safeParse({
     op: textOrNull(formData.get('op')) ?? 'add-parent',
     parentId: numberOrNull(formData.get('parentId')),
@@ -2638,6 +2695,7 @@ export async function saveWarningLeadsAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = warningLeadsEntrySchema.safeParse({
     renewalLeadDays: numberOrNull(formData.get('renewalLeadDays')) ?? 21,
     contractEndLeadDays: numberOrNull(formData.get('contractEndLeadDays')) ?? 21,
@@ -2675,6 +2733,7 @@ export async function saveCommitmentCategoriesAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const ids: number[] = [];
   for (const value of formData.getAll('categoryId')) {
     const id = Number(typeof value === 'string' ? value.trim() : '');
@@ -2715,6 +2774,7 @@ export async function saveThemeAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  // A device preference (cookie), not household data: allowed in a support view.
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
 
@@ -2778,6 +2838,7 @@ export async function createProjectAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectCreateEntrySchema.safeParse({
     name: String(formData.get('name') ?? ''),
     projectMode: textOrNull(formData.get('projectMode')) ?? 'mix_and_match',
@@ -2805,6 +2866,7 @@ export async function editProjectAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectEditEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
@@ -2845,6 +2907,7 @@ export async function deleteProjectAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const projectId = positiveNumber(formData.get('projectId'));
   const expectedVersion = positiveNumber(formData.get('expectedVersion'));
   if (projectId === null || expectedVersion === null) {
@@ -2867,6 +2930,7 @@ export async function createProjectItemAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectItemEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
     name: String(formData.get('name') ?? ''),
@@ -2899,6 +2963,7 @@ export async function editProjectItemAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectItemEditEntrySchema.safeParse({
     itemId: numberOrNull(formData.get('itemId')),
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
@@ -2941,6 +3006,7 @@ export async function deleteProjectItemAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const itemId = positiveNumber(formData.get('itemId'));
   const expectedVersion = positiveNumber(formData.get('expectedVersion'));
   const projectId = positiveNumber(formData.get('projectId'));
@@ -2964,6 +3030,7 @@ export async function createProjectSupplierAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectSupplierEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
     name: String(formData.get('name') ?? ''),
@@ -2998,6 +3065,7 @@ export async function editProjectSupplierAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectSupplierEditEntrySchema.safeParse({
     supplierId: numberOrNull(formData.get('supplierId')),
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
@@ -3044,6 +3112,7 @@ export async function deleteProjectSupplierAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const supplierId = positiveNumber(formData.get('supplierId'));
   const expectedVersion = positiveNumber(formData.get('expectedVersion'));
   const projectId = positiveNumber(formData.get('projectId'));
@@ -3072,6 +3141,7 @@ export async function saveProjectQuoteAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectQuoteEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
     itemId: numberOrNull(formData.get('itemId')),
@@ -3103,6 +3173,7 @@ export async function deleteProjectQuoteAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectQuoteDeleteEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
     itemId: numberOrNull(formData.get('itemId')),
@@ -3129,6 +3200,7 @@ export async function selectProjectSupplierAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectSelectionEntrySchema.safeParse({
     itemId: numberOrNull(formData.get('itemId')),
     supplierId: positiveNumber(formData.get('supplierId')),
@@ -3168,6 +3240,7 @@ export async function applyProjectPlanAction(
 ): Promise<ActionState> {
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
   const parsed = projectApplyPlanEntrySchema.safeParse({
     projectId: numberOrNull(formData.get('projectId')),
     plan: formData.get('plan'),
