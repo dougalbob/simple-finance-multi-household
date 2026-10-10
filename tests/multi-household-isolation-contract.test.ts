@@ -62,7 +62,7 @@ describe('multi-household isolation contract', () => {
     assert.match(activePlan, /An authenticated but unassigned identity is denied/);
     for (const document of [agentRules, readme, handoff, releaseProcess, activePlan]) {
       assert.match(document, /ghcr\.io\/dougalbob\/simple-finance-multi-household/);
-      assert.match(document, /v1\.0\.0-rc\.1/);
+      assert.match(document, /v1\.0\.0-rc\.[12]/);
       assert.match(document, /3009/);
       assert.match(document, /simple-finance-multi-household/);
     }

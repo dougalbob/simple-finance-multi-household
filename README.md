@@ -2,7 +2,7 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household will have its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-10):** this is the independent multi-household edition. The first published build is the release candidate **`v1.0.0-rc.1`**, with its notes in [`docs/RELEASE_NOTES_v1.0.0-rc.1.md`](docs/RELEASE_NOTES_v1.0.0-rc.1.md). Install only the exact tag. The release candidate does not import any existing household data, and it is not the stable release. Consent-based support access, the identity-to-`people` link and per-household backup and restore are implemented. Importing the existing household is a separate, approved step (see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md)).
+> **Status (2026-10-10):** this is the independent multi-household edition. The first published build is the release candidate **`v1.0.0-rc.2`**, with its notes in [`docs/RELEASE_NOTES_v1.0.0-rc.2.md`](docs/RELEASE_NOTES_v1.0.0-rc.2.md). Install only the exact tag. The release candidate does not import any existing household data, and it is not the stable release. Consent-based support access, the identity-to-`people` link and per-household backup and restore are implemented. Importing the existing household is a separate, approved step (see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md)).
 
 ## Non-negotiable separation
 
@@ -10,7 +10,7 @@ A private finance app for multiple independent households, self-hosted by the pr
 - **Only GHCR image:** `ghcr.io/dougalbob/simple-finance-multi-household`. This repository must never push to `ghcr.io/dougalbob/simple-finance`, including the `latest` tag. The publish workflow contains a repository/image guard.
 - **Original production app:** remains on bridge networking, host port `3007` → container port `3000`, using `/mnt/user/appdata/simple-finance`. Do not mount, alter or migrate that location.
 - **New app target:** bridge networking, host port `3009` → container port `3000`, with `/mnt/user/appdata/simple-finance-multi-household` mapped to `/data`. Use a separate Cloudflare hostname/route to the new container; leave the existing route untouched.
-- **Versioning:** the first candidate is `v1.0.0-rc.1` (SemVer prerelease). RCs publish only their exact version and `sha-<short>` tags—not `latest`. Production gets a separate stable `v1.0.0`; only stable releases move `latest`.
+- **Versioning:** the first candidate is `v1.0.0-rc.2` (SemVer prerelease). RCs publish only their exact version and `sha-<short>` tags—not `latest`. Production gets a separate stable `v1.0.0`; only stable releases move `latest`.
 
 ## Product and tenancy target
 
@@ -57,7 +57,7 @@ On first local access, the empty registry bootstraps the configured development 
 
 ### Release-candidate and production releases
 
-Merging a pull request does not publish an image. A lower-case annotated tag and the Publish workflow do. The first candidate is `v1.0.0-rc.1`, published from its release pull request; any additional candidate increments the suffix. An accepted production release is `v1.0.0`, not a retagged RC. See [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
+Merging a pull request does not publish an image. A lower-case annotated tag and the Publish workflow do. The first candidate is `v1.0.0-rc.2`, published from its release pull request; any additional candidate increments the suffix. An accepted production release is `v1.0.0`, not a retagged RC. See [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
 
 ## Everyday use
 
@@ -144,6 +144,6 @@ Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.e
 
 ## Version and release line
 
-The first multi-household candidate is planned as **`v1.0.0-rc.1`** (package/app version `1.0.0-rc.1`). The suffix is a SemVer prerelease identifier; if another candidate is needed, increment it (`v1.0.0-rc.2`). An RC gets its exact version tag and `sha-<short>` tag in the new package, **not `latest`**, and its GitHub release is marked pre-release. Once accepted for production, publish a distinct stable `v1.0.0` tag; stable releases may move `latest`. Never rename or retag the RC.
+The first multi-household candidate is planned as **`v1.0.0-rc.2`** (package/app version `1.0.0-rc.2`). The suffix is a SemVer prerelease identifier; if another candidate is needed, increment it (`v1.0.0-rc.2`). An RC gets its exact version tag and `sha-<short>` tag in the new package, **not `latest`**, and its GitHub release is marked pre-release. Once accepted for production, publish a distinct stable `v1.0.0` tag; stable releases may move `latest`. Never rename or retag the RC.
 
 The only permitted registry is `ghcr.io/dougalbob/simple-finance-multi-household`. The inherited `v0.x` tags and release notes are history from the original single-household project; they must not be pushed or used as upgrade baselines for the new package. The version lives in `package.json`, `package-lock.json`, `src/lib/version.ts`, the Unraid template and the release notes, and these must be bumped together in each release pull request.

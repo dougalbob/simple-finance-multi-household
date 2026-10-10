@@ -11,13 +11,13 @@
 
   Stable installs use :latest only after v1.0.0 is accepted for production.
   For RC acceptance, explicitly pin Repository to the exact tag, e.g.
-  ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1. RCs never move
+  ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.2. RCs never move
   :latest. Do not install this template until the release notes say the
   multi-household implementation is ready.
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
-  <Repository>ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1</Repository>
+  <Repository>ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.2</Repository>
   <Registry>https://github.com/dougalbob/simple-finance-multi-household/pkgs/container/simple-finance-multi-household</Registry>
   <Network>bridge</Network>
   <MyIP/>
@@ -49,7 +49,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    First candidate planned as v1.0.0-rc.1; for RC testing pin the exact RC tag
+    First candidate planned as v1.0.0-rc.2; for RC testing pin the exact RC tag
     instead of latest. Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.
