@@ -64,3 +64,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# --- Import rehearsal scratch (fictional data only, see scripts/rehearse-import.mts) ---
+.import-rehearsal/

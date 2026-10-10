@@ -1,3 +1,48 @@
+# Current handoff — step 5 synthetic import rehearsal and template rename (2026-10-10)
+
+**Branch:** `arena/124de12d-simple-finance-multi-household` (session branch), on top of `main` at `c2cac66` (PR #4 merged).
+
+**Owner decisions recorded here:**
+
+- The owner cannot provide live or original backups (they hold sensitive data). Step 5 therefore runs on **fictional**
+  data only. The owner's request for a throwaway seed database is treated as approval for this synthetic rehearsal and
+  nothing else. Step 6, any publication, and any work on real data still need separate approval.
+- The Unraid template is renamed to **`simple-finance-multi-household.xml`**, because the original app's template is
+  `simple-finance.xml` and both must coexist. Its `TemplateURL`, README link, release-process reference and the
+  isolation contract test now use the new name. Historical release notes and the decision log keep the old name.
+
+**What was added:**
+
+- `scripts/rehearse-import.mts` (`npm run rehearse:import`). It builds a fictional legacy installation (two people, a
+  lodger with a stale sign-in, pots, checkpoints, purchases, two documents) with the checked-in migrations, then:
+  1. imports a WAL-consistent copy into an isolated `new-appdata` root with registry assignments and the documents folder;
+  2. runs the production startup scripts `registry-migrate.cjs` and `migrate.cjs`;
+  3. verifies row counts for every table, integrity, foreign keys, attachment hashes, no orphan files and sign-in links;
+  4. makes a household backup, refuses a restore into another household and a wrong passphrase (both with the database
+     unchanged), restores the same household, and checks counts, hashes and that the stale sign-in link was cleared.
+  Output goes to the git-ignored `.import-rehearsal/`. It refuses to run under `/mnt/`.
+- `tests/import-rehearsal.test.ts` runs the rehearsal as part of `npm test`.
+- `.gitignore` ignores `.import-rehearsal/`.
+
+**Result:** the rehearsal passes 17 of 17 checks. Gates: `npm run typecheck` pass; `npm run format:check` pass;
+`npm test` **825 passed**, 0 failed.
+
+**What this does not prove:**
+
+- It proves the import and restore path on fictional data, not on the owner's real database. Real data can differ
+  (older rows, unusual values, document quirks). A real-data rehearsal would need an approved, isolated copy handled by
+  the owner.
+- The "legacy" database is built with the checked-in migrations. The v0.39.0 release notes say that release added no
+  migration, and the newest finance migration (`0016`) arrived in v0.31.0, so the schema should match. The clone is
+  shallow, so this was not checked against the v0.39.0 commit itself.
+- The `secure` cookie flag, restore memory use and `npm audit` items from step 4 are unchanged.
+
+**Install note for the owner (not yet a release):** the container template's data folder must be exactly
+`/mnt/user/appdata/simple-finance-multi-household` and its port 3009. Nothing is published, tagged or bumped
+(`package.json` stays `0.39.0`).
+
+---
+
 # Current handoff — plan step 4: support consent and household-scoped backup/restore (2026-10-10)
 
 **Baseline:** PR #3 (per-household finance routing) merged to `main` at `72dfb46`. This work is on the fixed Arena

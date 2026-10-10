@@ -38,7 +38,7 @@ Fast mobile entry, checkpoints, payday projections, recurring schedules, insight
     logging/
 ```
 
-The central registry is for household identity, membership, administration and support grants—not finance records. A per-household backup excludes the registry and every other household. The target Unraid template is [`simple-finance.xml`](simple-finance.xml); its image, default appdata path and port are deliberately different from the original app. Stable template installs use the new image's `latest`; RC testing pins the exact candidate tag, such as `v1.0.0-rc.1`.
+The central registry is for household identity, membership, administration and support grants—not finance records. A per-household backup excludes the registry and every other household. The target Unraid template is [`simple-finance-multi-household.xml`](simple-finance-multi-household.xml); its image, default appdata path and port are deliberately different from the original app. Stable template installs use the new image's `latest`; RC testing pins the exact candidate tag, such as `v1.0.0-rc.1`.
 
 For first-login onboarding, the admin provisions the household and email assignment in the app before adding/allowing that email through Cloudflare Access. Cloudflare permission alone does not assign a household; the app denies a verified but unassigned identity. A separate hostname/route should direct to host port `3009`, while the original hostname continues to port `3007`.
 

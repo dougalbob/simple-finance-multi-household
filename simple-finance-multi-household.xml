@@ -39,7 +39,7 @@
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/simple-finance.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/simple-finance-multi-household.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/docs/assets/simple-finance-icon.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <PostArgs/>
