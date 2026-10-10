@@ -379,8 +379,32 @@ empty — the fetch was blocked.
 - **Smoke-check pages without a browser:** `node --import tsx scripts/e2e-server.mts` serves the seeded app on port
   3100 with dev identity bypass, so `curl` can check status codes, headers and rendered text for any route.
 
+## 18. The Node headers are already at `/usr/local`, and container smoke steps can be replayed without Docker (2026-10-10)
+
+- **Symptom:** after a snapshot restore `node_modules` is gone (entry 10), and plain `npm ci` then fails while building
+  `better-sqlite3`: `node-gyp` tries to fetch `https://nodejs.org/download/release/v22.22.3/node-v22.22.3-headers.tar.gz`,
+  which is blocked (entry 1).
+- **What works here:** this sandbox's official Node image already ships the headers (`/usr/local/include/node`), so no
+  codeload tarball is needed (entry 4 is about assembling one when they are *not* present):
+  ```bash
+  npm_config_nodedir=/usr/local npm ci   # full install, better-sqlite3 compiled, ~90 packages, ~15 s
+  ```
+  `npm ci --ignore-scripts` (entry 1) still works and is quicker; use the env var when a script-driven install is the
+  point (for example, to prove a production dependency really resolves).
+- **Replaying container steps with no Docker daemon and no `/data`:** the sandbox user is uid 1001, so `/data` cannot be
+  created, and there is no Docker. Replay the workflow's own logic against a scratch data root instead — export
+  `DATA_DIR=/tmp/<name>/data`, run `node scripts/registry-migrate.cjs`, insert a household into
+  `$DATA_DIR/system/registry.sqlite`, run `node scripts/migrate.cjs`, then run the workflow's `node -e` payloads with
+  `/data/...` rewritten to `$DATA_DIR/...` and `/app/drizzle` rewritten to the repo's `drizzle` folder. Extracting the
+  payloads from the YAML (rather than retyping them) is what makes the replay evidence rather than a paraphrase.
+
 ## History
 
+- **2026-10-10 (v1.0.0-rc.1 publish fix, session `arena/50895dfb-simple-finance-multi-household`):** entry 18 added.
+  `npm_config_nodedir=/usr/local npm ci` gives a full install (better-sqlite3 compiled) without any nodejs.org fetch,
+  and the Publish workflow's smoke steps were replayed locally against a scratch `DATA_DIR` with the workflow's own
+  `node -e` payloads (17 of 17 journal entries applied exactly once; the old root-level check fails as it did in CI
+  run 38083365013). `npm test` 825/825, `tsc --noEmit`, `format:check` all green.
 - **2026-10-09 (v0.37.0 follow-up, session `arena/9d0d4627-simple-finance`, unreleased):** entry 16 added. Entry 8 re-proved: `@sparticuz/chromium` Chromium 153.0.8010.0 with the local overlay. The full local run (`npx playwright test --config playwright.local.config.ts`, 119 tests) gave **114 passed**. The 5 red were the backup download timing out at 120 s; the dev server then stopped, so four later tests failed with `ERR_CONNECTION_REFUSED`. The same five tests then passed 5/5 on a fresh server, run as their projects (backup, credit-card-pots, insights, payday-summary). `npm test` 717/717, typecheck, format, themes and build pass, and `npm audit --omit=dev` reports 0. This sandbox's Chromium draws no PDF, so the PDF viewer is proven for wiring and layout only.
 - **2026-10-08 (v0.36.0, session `arena/3b32c31f-simple-finance`):** entry 8 re-proved. The full local run
   was flaky at the *tail* in a way worth recording: by the last three projects the sandbox was at
