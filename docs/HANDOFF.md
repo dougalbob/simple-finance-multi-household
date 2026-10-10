@@ -1,3 +1,44 @@
+# Current handoff — step 6 acceptance on fictional data (2026-10-10)
+
+**Owner approval:** the owner said "ok go ahead" to step 6 after the synthetic rehearsal, on fictional data only.
+
+**What was run:** `npm run acceptance` (after `npm run build`). It is `scripts/acceptance.mts`. It builds a fictional
+installation with three households (Alex & Sam, where Alex is an administrator; Other; and a Retired household that is
+deactivated). It then starts the **production** build with the container's production settings. A local stand-in for
+Cloudflare Access (a key server plus tokens signed in the same way) lets the real sign-in checks run over HTTP. Scratch
+data is in the git-ignored `.acceptance/`, and the report is `.acceptance/REPORT.md`.
+
+**Result: 31 of 31 checks pass.** They cover:
+
+- **Sign-in:** signed-out requests see no data (they redirect to /unauthorized). Each of these is refused: a stranger
+  (allowed by Cloudflare but not assigned in the registry), the retired household's member, a forged signature, a wrong
+  audience, a wrong issuer, an expired token, and an identity not on the allowlist.
+- **Isolation:** Alex, Sam and Other each see only their own household's data on the pots and purchases pages. Other
+  cannot open Alex's attachment (404). A stranger cannot open any attachment. A token whose two identity claims disagree
+  shows one household only.
+- **Concurrency:** 40 interleaved requests from two households were all correct.
+- **Backup and restore over HTTP:** Alex can back up. A cross-origin backup gets 403. A stranger gets 401. Other cannot
+  restore Alex's archive (400, nothing changed). Alex can restore her own archive and keeps her data.
+
+**Bug found and fixed in the test (not the app):** one check had a wrong expectation. The first run reported a
+failure. The test had a validly signed token for the Other household and treated the resulting access as a leak. The
+test now checks the conflicting-claims case properly, and no app change was needed. The app log had no errors or
+warnings.
+
+**Not done, and why:**
+
+- **Docker image build:** Docker is not installed in this sandbox, so the Dockerfile was not built. The production build
+  and settings were tested directly instead.
+- **Real Cloudflare Access, the Cloudflare Tunnel route, Unraid, and the new template install:** these need the owner's
+  environment. They are the remaining steps before any release candidate.
+- **Grant-flow browser test:** support grants are a server action, and the grant flow is still covered by unit tests only.
+- The `secure` cookie flag, restore memory use and `npm audit` items from step 4 are unchanged.
+
+**Still not approved:** publishing `v1.0.0-rc.1`, tags, the version bump, any real-data import, and any Unraid or
+Cloudflare change.
+
+---
+
 # Current handoff — step 5 synthetic import rehearsal and template rename (2026-10-10)
 
 **Branch:** `arena/124de12d-simple-finance-multi-household` (session branch), on top of `main` at `c2cac66` (PR #4 merged).

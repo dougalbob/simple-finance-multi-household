@@ -67,3 +67,4 @@ Thumbs.db
 
 # --- Import rehearsal scratch (fictional data only, see scripts/rehearse-import.mts) ---
 .import-rehearsal/
+.acceptance/
