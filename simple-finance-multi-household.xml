@@ -17,7 +17,7 @@
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
-  <Repository>ghcr.io/dougalbob/simple-finance-multi-household:latest</Repository>
+  <Repository>ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1</Repository>
   <Registry>https://github.com/dougalbob/simple-finance-multi-household/pkgs/container/simple-finance-multi-household</Registry>
   <Network>bridge</Network>
   <MyIP/>
@@ -39,7 +39,7 @@
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/simple-finance.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/simple-finance-multi-household.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/dougalbob/simple-finance-multi-household/main/docs/assets/simple-finance-icon.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <PostArgs/>

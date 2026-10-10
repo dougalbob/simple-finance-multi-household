@@ -1,6 +1,6 @@
 {
   "name": "simple-finance",
-  "version": "0.39.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "description": "Private household spending app for two people watching money carefully. See docs/SPEC.md.",
   "engines": {
@@ -19,6 +19,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.cjs",
     "db:migrate:registry": "node scripts/registry-migrate.cjs",
+    "rehearse:import": "node --import tsx scripts/rehearse-import.mts",
+    "acceptance": "node --import tsx scripts/acceptance.mts",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium"
   },

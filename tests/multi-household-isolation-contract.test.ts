@@ -33,10 +33,10 @@ describe('multi-household isolation contract', () => {
   });
 
   it('keeps the Unraid template on the new package, appdata root and host port', () => {
-    const template = repoFile('simple-finance.xml');
+    const template = repoFile('simple-finance-multi-household.xml');
     assert.match(
       template,
-      /<Repository>ghcr\.io\/dougalbob\/simple-finance-multi-household:latest<\/Repository>/,
+      /<Repository>ghcr\.io\/dougalbob\/simple-finance-multi-household:(latest|v\d+\.\d+\.\d+(-rc\.\d+)?)<\/Repository>/,
     );
     assert.match(template, /<HostPort>3009<\/HostPort>/);
     assert.match(template, /<ContainerPort>3000<\/ContainerPort>/);

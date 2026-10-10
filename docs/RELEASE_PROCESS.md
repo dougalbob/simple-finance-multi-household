@@ -23,7 +23,7 @@ For each release PR, these version-bearing files must agree exactly:
 - `package.json`
 - `package-lock.json` (root `version` and `packages[""]`)
 - `src/lib/version.ts` (`APP_VERSION`)
-- `simple-finance.xml` (template description)
+- `simple-finance-multi-household.xml` (template description)
 - `docs/RELEASE_NOTES_<tag>.md`
 
 The tag must be lower-case and match the checked-in package/module version. The Publish workflow accepts only v1+ `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N`; it rejects inherited v0.x tags and malformed versions.

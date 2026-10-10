@@ -2,7 +2,7 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household will have its own database and saved documents; households share the application, not financial data.
 
-> **Important status (2026-10-10):** this repository is an independent copy of the original `dougalbob/simple-finance` project. The current source remains version `0.39.0` and **no release exists yet**. The system registry, `/admin` pre-assignment, first-login denial, per-household request context/database handles, and routing of finance pages, actions, attachment operations and selected APIs are implemented. Consent-based support access, the identity-to-`people` link, tenant backup/restore, and migration of the existing live household are **not implemented**. The inherited global backup/restore API is disabled (authenticated same-origin requests return `501`) and Settings says it is unavailable. Do not install this template or import real data. The first planned candidate is `v1.0.0-rc.1`; see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md) and [`docs/HANDOFF.md`](docs/HANDOFF.md).
+> **Status (2026-10-10):** this is the independent multi-household edition. The first published build is the release candidate **`v1.0.0-rc.1`**, with its notes in [`docs/RELEASE_NOTES_v1.0.0-rc.1.md`](docs/RELEASE_NOTES_v1.0.0-rc.1.md). Install only the exact tag. The release candidate does not import any existing household data, and it is not the stable release. Consent-based support access, the identity-to-`people` link and per-household backup and restore are implemented. Importing the existing household is a separate, approved step (see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md)).
 
 ## Non-negotiable separation
 
@@ -38,7 +38,7 @@ Fast mobile entry, checkpoints, payday projections, recurring schedules, insight
     logging/
 ```
 
-The central registry is for household identity, membership, administration and support grants—not finance records. A per-household backup excludes the registry and every other household. The target Unraid template is [`simple-finance.xml`](simple-finance.xml); its image, default appdata path and port are deliberately different from the original app. Stable template installs use the new image's `latest`; RC testing pins the exact candidate tag, such as `v1.0.0-rc.1`.
+The central registry is for household identity, membership, administration and support grants—not finance records. A per-household backup excludes the registry and every other household. The target Unraid template is [`simple-finance-multi-household.xml`](simple-finance-multi-household.xml); its image, default appdata path and port are deliberately different from the original app. Stable template installs use the new image's `latest`; RC testing pins the exact candidate tag, such as `v1.0.0-rc.1`.
 
 For first-login onboarding, the admin provisions the household and email assignment in the app before adding/allowing that email through Cloudflare Access. Cloudflare permission alone does not assign a household; the app denies a verified but unassigned identity. A separate hostname/route should direct to host port `3009`, while the original hostname continues to port `3007`.
 
@@ -57,7 +57,7 @@ On first local access, the empty registry bootstraps the configured development 
 
 ### Release-candidate and production releases
 
-Merging a pull request does not publish an image. A lower-case annotated tag and the Publish workflow do. The first candidate is planned as `v1.0.0-rc.1`; any additional candidate increments the suffix. An accepted production release is `v1.0.0`, not a retagged RC. See [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md). This implementation work does not bump the version or create a tag/image; current version remains `0.39.0`.
+Merging a pull request does not publish an image. A lower-case annotated tag and the Publish workflow do. The first candidate is `v1.0.0-rc.1`, published from its release pull request; any additional candidate increments the suffix. An accepted production release is `v1.0.0`, not a retagged RC. See [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
 
 ## Everyday use
 
@@ -146,4 +146,4 @@ Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.e
 
 The first multi-household candidate is planned as **`v1.0.0-rc.1`** (package/app version `1.0.0-rc.1`). The suffix is a SemVer prerelease identifier; if another candidate is needed, increment it (`v1.0.0-rc.2`). An RC gets its exact version tag and `sha-<short>` tag in the new package, **not `latest`**, and its GitHub release is marked pre-release. Once accepted for production, publish a distinct stable `v1.0.0` tag; stable releases may move `latest`. Never rename or retag the RC.
 
-The only permitted registry is `ghcr.io/dougalbob/simple-finance-multi-household`. The inherited `v0.x` tags and release notes are history from the original single-household project; they must not be pushed or used as upgrade baselines for the new package. The first foundation change does not bump the app's current source version or create a tag/image; a later release PR will bump `package.json`, `package-lock.json`, `src/lib/version.ts`, the Unraid template and release notes together.
+The only permitted registry is `ghcr.io/dougalbob/simple-finance-multi-household`. The inherited `v0.x` tags and release notes are history from the original single-household project; they must not be pushed or used as upgrade baselines for the new package. The version lives in `package.json`, `package-lock.json`, `src/lib/version.ts`, the Unraid template and the release notes, and these must be bumped together in each release pull request.

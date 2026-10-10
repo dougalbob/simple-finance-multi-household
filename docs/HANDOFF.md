@@ -1,3 +1,112 @@
+# Current handoff — release candidate v1.0.0-rc.1 (2026-10-10)
+
+**Owner approval:** the owner said "You can publish v1.0.0-rc.1" after the step 6 acceptance run. The owner will ask follow-up questions after publication.
+
+**Release PR contents (one PR to `main`, from `arena/124de12d-simple-finance-multi-household`):**
+
+- Version `1.0.0-rc.1` in `package.json`, `package-lock.json` (root and `packages[""]`), `src/lib/version.ts` and the Unraid template. Release notes are in `docs/RELEASE_NOTES_v1.0.0-rc.1.md`, and their first line is the exact title the publish workflow checks.
+- The Unraid template is `simple-finance-multi-household.xml`. It is pinned to `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1`, because `latest` will not exist until the stable release. The isolation contract test now allows that pinned form. Switch the template back to `:latest` with the stable release.
+- Steps 5 and 6 on fictional data: `scripts/rehearse-import.mts` and `scripts/acceptance.mts` (`npm run rehearse:import`, `npm run acceptance`), with their tests and docs. Scratch folders are git-ignored.
+- README status text updated. It no longer says no release exists.
+
+**Gates run locally before the PR:** `npm run typecheck` pass; `npm run format:check` pass; `npm test` **825 passed**, 0 failed; `npm run build` pass (`next-env.d.ts` restored); `npm run acceptance` **31 of 31**; `npm run rehearse:import` **17 of 17**; `npm audit --omit=dev` **0 vulnerabilities**.
+
+**Required before merge:** CI checks `gates`, `browser` and `docker` must pass on the PR. Merge with a merge commit (`gh pr merge --merge`). Do not squash.
+
+**After merge:** create an annotated, lower-case tag `v1.0.0-rc.1` on the merge commit and push only that tag. The Publish workflow publishes only `v1.0.0-rc.1` and `sha-<short>`, does not move `latest`, and creates a GitHub pre-release. Then verify the GitHub release type, the digest and the tags. The next working session records the merge SHA, check run IDs, the Publish run and the digest here.
+
+**Not verified in the sandbox:** real Cloudflare Access; the Docker image build (Docker is not installed here, so the CI `docker` job and Publish build it); the Unraid install; any real household data. The release notes say so.
+
+**Still not approved:** the stable `v1.0.0`, any real-data import, and any change to the original app (`dougalbob/simple-finance`, its GHCR package, appdata or port 3007).
+
+---
+
+# Current handoff — step 6 acceptance on fictional data (2026-10-10)
+
+**Owner approval:** the owner said "ok go ahead" to step 6 after the synthetic rehearsal, on fictional data only.
+
+**What was run:** `npm run acceptance` (after `npm run build`). It is `scripts/acceptance.mts`. It builds a fictional
+installation with three households (Alex & Sam, where Alex is an administrator; Other; and a Retired household that is
+deactivated). It then starts the **production** build with the container's production settings. A local stand-in for
+Cloudflare Access (a key server plus tokens signed in the same way) lets the real sign-in checks run over HTTP. Scratch
+data is in the git-ignored `.acceptance/`, and the report is `.acceptance/REPORT.md`.
+
+**Result: 31 of 31 checks pass.** They cover:
+
+- **Sign-in:** signed-out requests see no data (they redirect to /unauthorized). Each of these is refused: a stranger
+  (allowed by Cloudflare but not assigned in the registry), the retired household's member, a forged signature, a wrong
+  audience, a wrong issuer, an expired token, and an identity not on the allowlist.
+- **Isolation:** Alex, Sam and Other each see only their own household's data on the pots and purchases pages. Other
+  cannot open Alex's attachment (404). A stranger cannot open any attachment. A token whose two identity claims disagree
+  shows one household only.
+- **Concurrency:** 40 interleaved requests from two households were all correct.
+- **Backup and restore over HTTP:** Alex can back up. A cross-origin backup gets 403. A stranger gets 401. Other cannot
+  restore Alex's archive (400, nothing changed). Alex can restore her own archive and keeps her data.
+
+**Bug found and fixed in the test (not the app):** one check had a wrong expectation. The first run reported a
+failure. The test had a validly signed token for the Other household and treated the resulting access as a leak. The
+test now checks the conflicting-claims case properly, and no app change was needed. The app log had no errors or
+warnings.
+
+**Not done, and why:**
+
+- **Docker image build:** Docker is not installed in this sandbox, so the Dockerfile was not built. The production build
+  and settings were tested directly instead.
+- **Real Cloudflare Access, the Cloudflare Tunnel route, Unraid, and the new template install:** these need the owner's
+  environment. They are the remaining steps before any release candidate.
+- **Grant-flow browser test:** support grants are a server action, and the grant flow is still covered by unit tests only.
+- The `secure` cookie flag, restore memory use and `npm audit` items from step 4 are unchanged.
+
+**Still not approved:** publishing `v1.0.0-rc.1`, tags, the version bump, any real-data import, and any Unraid or
+Cloudflare change.
+
+---
+
+# Current handoff — step 5 synthetic import rehearsal and template rename (2026-10-10)
+
+**Branch:** `arena/124de12d-simple-finance-multi-household` (session branch), on top of `main` at `c2cac66` (PR #4 merged).
+
+**Owner decisions recorded here:**
+
+- The owner cannot provide live or original backups (they hold sensitive data). Step 5 therefore runs on **fictional**
+  data only. The owner's request for a throwaway seed database is treated as approval for this synthetic rehearsal and
+  nothing else. Step 6, any publication, and any work on real data still need separate approval.
+- The Unraid template is renamed to **`simple-finance-multi-household.xml`**, because the original app's template is
+  `simple-finance.xml` and both must coexist. Its `TemplateURL`, README link, release-process reference and the
+  isolation contract test now use the new name. Historical release notes and the decision log keep the old name.
+
+**What was added:**
+
+- `scripts/rehearse-import.mts` (`npm run rehearse:import`). It builds a fictional legacy installation (two people, a
+  lodger with a stale sign-in, pots, checkpoints, purchases, two documents) with the checked-in migrations, then:
+  1. imports a WAL-consistent copy into an isolated `new-appdata` root with registry assignments and the documents folder;
+  2. runs the production startup scripts `registry-migrate.cjs` and `migrate.cjs`;
+  3. verifies row counts for every table, integrity, foreign keys, attachment hashes, no orphan files and sign-in links;
+  4. makes a household backup, refuses a restore into another household and a wrong passphrase (both with the database
+     unchanged), restores the same household, and checks counts, hashes and that the stale sign-in link was cleared.
+  Output goes to the git-ignored `.import-rehearsal/`. It refuses to run under `/mnt/`.
+- `tests/import-rehearsal.test.ts` runs the rehearsal as part of `npm test`.
+- `.gitignore` ignores `.import-rehearsal/`.
+
+**Result:** the rehearsal passes 17 of 17 checks. Gates: `npm run typecheck` pass; `npm run format:check` pass;
+`npm test` **825 passed**, 0 failed.
+
+**What this does not prove:**
+
+- It proves the import and restore path on fictional data, not on the owner's real database. Real data can differ
+  (older rows, unusual values, document quirks). A real-data rehearsal would need an approved, isolated copy handled by
+  the owner.
+- The "legacy" database is built with the checked-in migrations. The v0.39.0 release notes say that release added no
+  migration, and the newest finance migration (`0016`) arrived in v0.31.0, so the schema should match. The clone is
+  shallow, so this was not checked against the v0.39.0 commit itself.
+- The `secure` cookie flag, restore memory use and `npm audit` items from step 4 are unchanged.
+
+**Install note for the owner (not yet a release):** the container template's data folder must be exactly
+`/mnt/user/appdata/simple-finance-multi-household` and its port 3009. Nothing is published, tagged or bumped
+(`package.json` stays `0.39.0`).
+
+---
+
 # Current handoff — plan step 4: support consent and household-scoped backup/restore (2026-10-10)
 
 **Baseline:** PR #3 (per-household finance routing) merged to `main` at `72dfb46`. This work is on the fixed Arena
