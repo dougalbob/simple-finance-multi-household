@@ -1,3 +1,61 @@
+# Current handoff — v1.0.0-rc.1 Publish fix: replayed locally, then merged (PR #7, 2026-10-10)
+
+**Session branch:** `arena/50895dfb-simple-finance-multi-household`. It carries the previous session's fix
+(`3dbf042`, from branch `arena/124de12d-…`, open as PR #6) plus two accuracy corrections of its own and a sandbox
+note. PR #6 is superseded by PR #7 and is left open only until #7 lands.
+
+**Re-checked at the start of this session, with current facts:**
+
+- `main` is `ef02e95` (PR #5 merged). The annotated tag `v1.0.0-rc.1` points at it.
+- **Nothing was published between the sessions.** There is no GHCR package and no GitHub release for this
+  product. PR #6 was still open and mergeable; the previous session's note is accurate on every point.
+- The failing step in Publish run 38083365013 is *Smoke test the built image*, which looked for
+  `/data/simple-finance.sqlite`.
+
+**What PR #7 changes:**
+
+1. **Fresh-start smoke test** (`publish.yml`): checks `/data/system/registry.sqlite` (non-empty) instead of the
+   root-level database the multi-household layout never creates.
+2. **Upgrade smoke test** (`publish.yml`): now mirrors the CI `docker` job — create the volume, seed a household via
+   `registry-migrate.cjs` and a registry insert, check the tenant database at
+   `/data/households/<id>/simple-finance.sqlite`, and check every journal entry was applied exactly once against
+   that tenant database. (Previously it opened the stale root-level path.)
+3. **Two accuracy corrections added in this session:** the release body and the image's
+   `org.opencontainers.image.revision` label now name the **checked-out commit** (`steps.meta.outputs.sha`) rather
+   than `GITHUB_SHA`. On a tag push the two are the same commit. On a `workflow_dispatch` re-run they are not:
+   `GITHUB_SHA` is the ref the run was dispatched on. Without this fix, re-running Publish for `v1.0.0-rc.1` after
+   this merge would have written the *workflow-fix* commit into the release notes while the image was built from the
+   tagged release commit `ef02e95` — a released statement that is simply wrong. The release line now reads
+   "**Source commit:** …" instead of "**Merge commit:** …".
+4. `docs/SANDBOX.md` entry 18: `npm_config_nodedir=/usr/local npm ci` (no nodejs.org fetch) and how to replay the
+   container smoke steps without Docker or `/data`.
+
+**Verified in this sandbox — not inferred from CI:**
+
+- `npm test` **825 passed / 0 failed**; `tsc --noEmit` clean; `prettier --check .` clean.
+- `publish.yml` parses as YAML; all seven `run:` blocks pass `bash -n`.
+- The fixed smoke steps **replayed locally without Docker** (`docs/SANDBOX.md` entry 18), running the workflow's own
+  `node -e` payloads against a scratch `DATA_DIR`: registry created → household registered → finance migrations →
+  *"tenant database exists with 17 migrations"* → *"all 17 journal entries applied exactly once"* → registry
+  non-empty after restart. The **old** check fails on the same tree, which is exactly what CI saw.
+- The release step **replayed with a stubbed `gh`** in a worktree of the tag: title `v1.0.0-rc.1 — First
+  multi-household candidate`, body naming `ef02e95db43193c7f8974fea35ff7c694f19fd63`, tags `v1.0.0-rc.1` and
+  `sha-ef02e95`, created with `--prerelease`.
+- **Not verifiable here:** the Docker build and the GHCR push (no Docker daemon; `ghcr.io` blocked — SANDBOX
+  entries 6 and 18). CI's `docker` job and the Publish run are the proof for those.
+
+**Merge and publish (this session's plan, per `docs/RELEASE_PROCESS.md` §2 and §4):** merge PR #7 with a merge
+commit, wait for CI on the resulting `main`, then re-run Publish by `workflow_dispatch` on `main` with
+`tag=v1.0.0-rc.1`. The workflow checks out the tag, so the image is built from `ef02e95` — the code the tag already
+names — and only the smoke-test logic comes from the merged fix. **The tag is not moved and `latest` is untouched.**
+A successful run creates the GitHub pre-release; the merge SHA, check-run IDs, Publish run id and digest are
+recorded by the next session, as `docs/RELEASE_PROCESS.md` §7 asks.
+
+**Still not approved:** the stable `v1.0.0`, any real-data import, and any change to the original app
+(`dougalbob/simple-finance`, its GHCR package, appdata or port 3007).
+
+---
+
 # Current handoff — v1.0.0-rc.1 publish run failed; smoke-test fix awaits approval (2026-10-10)
 
 **State:** PR #5 (release PR) merged to `main` as merge commit `ef02e95db43193c7f8974fea35ff7c694f19fd63`. CI on that `main` commit passed. The annotated tag `v1.0.0-rc.1` was pushed to that commit. The **Publish run 38083365013 failed** at "Smoke test the built image". Nothing was pushed to GHCR, and no GitHub release was created.

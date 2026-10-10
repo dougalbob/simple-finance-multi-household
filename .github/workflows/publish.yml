@@ -81,6 +81,10 @@ jobs:
           {
             echo "version=$VERSION"
             echo "image=$IMAGE"
+            # The commit that is actually built: the checked-out release tag.
+            # Not GITHUB_SHA, which is the dispatch ref when this workflow is
+            # re-run by hand and can name a different commit than the image.
+            echo "sha=$(git rev-parse HEAD)"
             echo "short_sha=$SHORT_SHA"
             echo "prerelease=$PRERELEASE"
             echo "push_tags=$PUSH_TAGS"
@@ -113,7 +117,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=Simple Finance Multi-household
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Log in to GHCR
@@ -313,6 +317,7 @@ jobs:
           IMAGE: ${{ steps.meta.outputs.image }}
           VERSION: ${{ steps.meta.outputs.version }}
           SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+          PUBLISHED_SHA: ${{ steps.meta.outputs.sha }}
           DIGEST: ${{ steps.verify.outputs.digest }}
           PRERELEASE: ${{ steps.meta.outputs.prerelease }}
           PUSH_TAGS: ${{ steps.meta.outputs.push_tags }}
@@ -343,7 +348,10 @@ jobs:
           done
           {
             echo "**Published:** $(date -u +%Y-%m-%d) by Publish run ${GITHUB_RUN_ID}."
-            echo "**Merge commit:** \`${GITHUB_SHA}\` (short SHA \`$SHORT_SHA\`)."
+            # PUBLISHED_SHA is the checked-out release tag, so this names the
+            # commit the image was built from even when the workflow was
+            # re-run by dispatch (where GITHUB_SHA is the dispatch ref).
+            echo "**Source commit:** \`$PUBLISHED_SHA\` (short SHA \`$SHORT_SHA\`)."
             echo "**Image tags:** \`$IMAGE_TAGS\`."
             echo "**Digest:** \`$DIGEST\`, shared by all published tags and verified against the registry by this run."
             echo
