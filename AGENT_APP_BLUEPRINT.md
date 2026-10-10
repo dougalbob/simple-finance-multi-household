@@ -1,5 +1,7 @@
 # Agent blueprint: private apps on Unraid
 
+> **Superseded project-specific defaults:** this document was written for the original single-household Simple Finance build. This repository is the independent multi-household edition. Do not reuse its old repo/image, `/mnt/user/appdata/simple-finance` path, two-user allowlist, single-database model or historical `v0.x` release instructions as current requirements. The active contract is [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md); read it with `AGENTS.md`, `docs/SPEC.md` and the current handoff before implementation or release work.
+>
 > **Audience:** the coding agent building the next application.
 > **Provenance:** preferences and lessons from Estate Organiser (`dougalbob/estate-tracking`), captured 20 September 2026, after the v0.2.21 backup-filename fix.
 > **Purpose:** carry forward successful decisions, not the estate domain, private data, or a frozen dependency stack. This is a reusable build contract, not a claim that a new application already implements any of it.

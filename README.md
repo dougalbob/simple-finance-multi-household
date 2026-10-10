@@ -1,115 +1,61 @@
-# Simple Finance
+# Simple Finance Multi-household
 
-A private household finance app for two people, running on the household's own server (Unraid, Docker,
-Cloudflare Access in front). It records what actually happened, keeps reported balances honestly labelled
-as checkpoints, projects the shape of the month ahead, and warns before the dates that cost money to
-miss.
+A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household will have its own database and saved documents; households share the application, not financial data.
 
-- **Built for:** one household of two adults, one Unraid box, one Cloudflare Access application, no cloud
-  account, no bank connection.
-- **Not built for:** anyone else. There is no sign-up, no multi-tenancy, no telemetry, no external
-  services. The app talks to nothing but its own SQLite database and filesystem.
-- **Status:** Phases 0–5 are merged and released. The current published image is the latest
-  `vX.Y.Z` release — see the [releases page](https://github.com/dougalbob/simple-finance/releases)
-  and the matching `docs/RELEASE_NOTES_vX.Y.Z.md` for its facts; **v0.23.0 is broken on upgrade
-  and superseded by v0.23.1** (see [`docs/RELEASE_NOTES_v0.23.1.md`](docs/RELEASE_NOTES_v0.23.1.md)).
-  **The app is installable as a PWA** — a web app manifest and icons (no service worker,
-  no offline caching, no offline queue). Android Chrome offers Install; iOS Safari → Share → Add to Home Screen
-  gives the icon and a standalone window. The manifest and icon paths are served without Access credentials via
-  a path-scoped Bypass → Everyone policy; every other URL remains behind the email-policy app. Merging a pull
-  request publishes nothing on its own — the lower-case tag does. See
-  [`docs/HANDOFF.md`](docs/HANDOFF.md).
-- **Docs:** [`docs/HANDOFF.md`](docs/HANDOFF.md) (continuation point — read this first),
-  [`docs/SPEC.md`](docs/SPEC.md) (product spec), [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)
-  (plan + decision log). [`AGENT_APP_BLUEPRINT.md`](AGENT_APP_BLUEPRINT.md) is the engineering contract from
-  the initial build through the first release; it is historical context, not required reading for ongoing work.
+> **Important status:** this repository is an independent copy of the original `dougalbob/simple-finance` project. The multi-household features are **not implemented or released yet**; the current source is the inherited single-household v0.39.0 baseline. Do not install this template, import real data, or treat inherited v0.x tags/releases as multi-household releases. The first planned candidate is `v1.0.0-rc.1`; see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md).
 
-## What the app will be (and won't be)
+## Non-negotiable separation
 
-- **Will:** fast mobile entry at the till (supplier memory, splits, visible one-tap defaults); user-reported
-  checkpoints with honest labels; a payday projection with pessimistic day-to-day behaviour; recurring
-  schedule instances that convert automatically; two-tier warnings; renewal and contract-end alerts;
-  receipt/invoice attachments kept with the record they belong to, and removable without breaking a later
-  backup; encrypted, restorable backups that include the receipts still attached.
-- **Won't:** connect to a bank or read statements; move money; recommend products; share or upload
-  anything; run as more than one household.
+- **Repository:** `dougalbob/simple-finance-multi-household`.
+- **Only GHCR image:** `ghcr.io/dougalbob/simple-finance-multi-household`. This repository must never push to `ghcr.io/dougalbob/simple-finance`, including the `latest` tag. The publish workflow contains a repository/image guard.
+- **Original production app:** remains on bridge networking, host port `3007` → container port `3000`, using `/mnt/user/appdata/simple-finance`. Do not mount, alter or migrate that location.
+- **New app target:** bridge networking, host port `3009` → container port `3000`, with `/mnt/user/appdata/simple-finance-multi-household` mapped to `/data`. Use a separate Cloudflare hostname/route to the new container; leave the existing route untouched.
+- **Versioning:** the first candidate is `v1.0.0-rc.1` (SemVer prerelease). RCs publish only their exact version and `sha-<short>` tags—not `latest`. Production gets a separate stable `v1.0.0`; only stable releases move `latest`.
 
-## Install (Unraid)
+## Product and tenancy target
 
-The supported path is the Unraid container template. The household's data lives in one directory,
-`/mnt/user/appdata/simple-finance`, which maps to `/data` in the container.
+Each household has **one or two people**. An administrator pre-creates the household and assigns the Cloudflare email address(es) before first sign-in. Cloudflare Access verifies the identity; the app's own roster decides whether that verified identity is assigned and which household it can enter. There is no self-sign-up.
 
-1. **Create the appdata directory and its config file.**
-   ```
-   mkdir -p /mnt/user/appdata/simple-finance
-   cp .env.example /mnt/user/appdata/simple-finance/.env
-   chmod 600 /mnt/user/appdata/simple-finance/.env
-   ```
-2. **Fill in `/data/.env`** — the two Cloudflare Access values and the two allowed household e-mail
-   addresses (`AUTH_ISSUER`, `AUTH_AUDIENCE`, `AUTH_ALLOWED_EMAILS`). The file is sourced by the
-   entrypoint on every start and overrides the template; keep it owned by `root`/`99:100` and unreadable by
-   anyone else. `.env.example` explains every variable, including the optional `DOCUMENTS_DIR`.
-3. **Add the template in Unraid.** Docker → Templates → *Add Container*, then paste the template URL
-   `https://raw.githubusercontent.com/dougalbob/simple-finance/main/simple-finance.xml` (or copy the file
-   into `/boot/config/plugins/dockerMan/templates-user/`). Set a free host port (the template defaults to
-   `3000`; do not reuse another container's port) and leave `PUID`/`PGID` at `99`/`100` unless the array
-   uses different ownership.
-4. **Start the container.** The entrypoint aligns `/data` ownership, applies migrations, then runs the
-   server as `PUID:PGID` — never as root. The health endpoint is `/api/health`.
-5. **Set up Cloudflare Access with two applications:**
+The app uses a separate SQLite database and `documents/` directory per household under the one new appdata root. A household backup includes only that household's database and documents. The app administrator has no standing in-app access to another household's finance data; access for support requires an explicit, visible, auditable and time-limited permission from that household. The owner and participating households accept that a host administrator could inspect files directly on Unraid.
 
-   **First app — hostname-wide, email policy.** This is the main Access application protecting the
-   published port. It uses a Google sign-in policy with the two authorised household email addresses
-   as the allowlist. Point the hostname at the same origin as `AUTH_ISSUER`. Until `AUTH_ISSUER`,
-   `AUTH_AUDIENCE` and `AUTH_ALLOWED_EMAILS` are set, the app refuses everyone (fail closed,
-   `docs/SPEC.md` §3).
+See [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md) for the complete active contract and delivery sequence. [`docs/SPEC.md`](docs/SPEC.md) is the product specification; [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) tracks design and delivery; [`docs/HANDOFF.md`](docs/HANDOFF.md) is the session continuation point. The old `AGENT_APP_BLUEPRINT.md` and historical v0.x notes describe the original single-household project unless explicitly superseded.
 
-   **Second app — path-scoped, Bypass → Everyone.** A separate Access application for the four
-   PWA asset paths. Set the **application domain** to the same hostname as above but configure it
-   with the following specific paths under Bypass → Everyone:
-   - `/<host>/manifest.webmanifest`
-   - `/<host>/icon-192.png`
-   - `/<host>/icon-512.png`
-   - `/<host>/apple-touch-icon.png`
+## What will remain within each household
 
-   Remove any legacy `/sw.js` destination — no service worker ships, and a public 404 is worse than
-   no destination at all. Keep this app's bypass scoped to those four paths and nothing else.
+Fast mobile entry, checkpoints, payday projections, recurring schedules, insights, supplier and contract records, attachments, and encrypted backups remain household-specific. The app still does not connect to banks, read statements, move real money, or provide financial advice.
 
-   **Access sessions default to 24 hours.** If daily re-authentication on the home-screen app is
-   unwelcome, the application session duration can be raised to up to one month in the main app's
-   Access settings.
+## Unraid installation status and target
 
-   **Sanity check** (replace `<host>` with the real hostname):
-   ```
-   curl -sI https://<host>/manifest.webmanifest
-   ```
-   This should return `200` with `Content-Type: application/manifest+json` — and no Cloudflare
-   Access login redirect. Every other URL (including `/`) should still ask for sign-in.
+**Do not install the new template or point it at real data until the multi-household implementation and its first RC are ready.** The intended single data root is:
 
-6. **Open the app in a browser** and sign in through Cloudflare Access. On first run the Overview/Household
-   panels ask for the two people and any vehicles (household data is never seeded); categories already
-   exist because they are product content, not household data.
+```text
+/mnt/user/appdata/simple-finance-multi-household/  →  /data/
+  .env
+  system/registry.sqlite
+  households/<opaque-household-id>/
+    simple-finance.sqlite (+ WAL/SHM)
+    documents/
+    logging/
+```
 
-### Updating
+The central registry is for household identity, membership, administration and support grants—not finance records. A per-household backup excludes the registry and every other household. The target Unraid template is [`simple-finance.xml`](simple-finance.xml); its image, default appdata path and port are deliberately different from the original app. Stable template installs use the new image's `latest`; RC testing pins the exact candidate tag, such as `v1.0.0-rc.1`.
 
-The image is published to GHCR as `ghcr.io/dougalbob/simple-finance` — `vX.Y.Z`, `latest`, and
-`sha-<short>` all point at the same digest. In Unraid, Docker → check the container → **Force Update**
-(or `docker pull ghcr.io/dougalbob/simple-finance:latest`), then start it again. Migrations run on
-startup and are additive; there is no downgrade path, so **take a backup from Settings before updating**
-if the release notes say the database changed. Nothing is published by merging a pull request — a release
-is a `vX.Y.Z` tag, and the workflow refuses to push an image whose version does not match the tag.
+For first-login onboarding, the admin provisions the household and email assignment in the app before adding/allowing that email through Cloudflare Access. Cloudflare permission alone does not assign a household; the app denies a verified but unassigned identity. A separate hostname/route should direct to host port `3009`, while the original hostname continues to port `3007`.
 
 ### Local development
 
-```
-npm ci            # plain install (CI uses this; the sandbox here uses --ignore-scripts)
+```sh
+npm ci
 cp .env.example .env
 npm run db:migrate
-npm run dev       # http://localhost:3000 with the dev identity bypass
+npm run dev
 ```
 
-`AUTH_DEV_BYPASS=true` with `NODE_ENV` anything other than `production` signs every request in as the
-configured development identity; a production build ignores the bypass entirely.
+The inherited development identity bypass is not a substitute for testing household assignment or cross-household isolation. Those require dedicated tests and real Cloudflare acceptance on the isolated RC installation.
+
+### Release-candidate and production releases
+
+Merging a pull request does not publish an image. A lower-case annotated tag and the Publish workflow do. The first candidate is planned as `v1.0.0-rc.1`; any additional candidate increments the suffix. An accepted production release is `v1.0.0`, not a retagged RC. See [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md). No version tag or image is being created by the current foundation change.
 
 ## Everyday use
 
@@ -154,31 +100,13 @@ configured development identity; a production build ignores the bypass entirely.
   shopping list grouped by supplier with the grand total against your target budget. Planning
   only — it never records a purchase.
 
-## Backup, restore and recovery
+## Household backup, restore and recovery
 
-The Settings page holds the whole capability; nothing is automatic and nothing leaves the house.
+**Target behaviour, not yet implemented:** a backup is scoped to the selected household. It contains that household's consistent SQLite snapshot, only its stored attachments, and an integrity manifest. It never includes another household's database/documents, the system registry, `.env` or logs. The system registry/configuration has a separate administrator-managed recovery process.
 
-- **Backup** takes a password (at least 12 characters, never stored) and downloads
-  `simple-finance-backup-v<version>-<local timestamp>.simple-finance-backup` — an AES-256-GCM archive
-  (scrypt key derivation, `SFBA` frame) containing the database snapshot, every attachment the snapshot
-  references, and a `manifest.json` listing counts, sizes and sha256 values. If the snapshot references an
-  attachment that is missing on disk, the backup **fails loudly** instead of producing an archive that
-  only looks complete; unreferenced files are listed as orphans and left alone. Store the archive and the
-  password in two different places.
-- **Restore** replaces **everything** — database and attachments — from an archive. The form requires the
-  archive's password and the typed word `RESTORE`. Before anything is swapped, every member is checked
-  against the manifest (size, sha256, member allowlist) and the restored database is checked for the
-  attachments it references; if any check fails, the running installation is untouched. On success the
-  previous database and documents directory are kept beside the new ones as `.pre-restore-<stamp>`.
-- **Recovery checklist** (if a restore is interrupted or the app will not start). Both the database and
-  the documents directory are preserved under `.pre-restore-<stamp>…` names next to the live ones:
-  1. Stop the container. List the `/data` directory and note the preserved names (for example
-     `simple-finance.sqlite.pre-restore-20260921-143012` and
-     `documents.pre-restore-20260921-143012/`; the WAL sidecars are preserved the same way).
-  2. Move the live files aside — never overwrite them in place — then rename the preserved copies back to
-     `simple-finance.sqlite` and `documents/`.
-  3. Start the container and confirm the app shows the expected data; only then tidy up the copies you
-     no longer need. The app itself never deletes the last recoverable copy on any error path.
+Each household must be able to restore its backup only into its own selected household context. A restore rehearsal must use a clean isolated installation and verify both records and attachment hashes. Never restore or rehearse against `/mnt/user/appdata/simple-finance` or the original production container.
+
+The existing backup and restore code belongs to the inherited single-household baseline. Do not assume it is tenant-safe until it has been refactored and tested against two households.
 
 ## Stack (as built)
 
@@ -196,14 +124,13 @@ The same commands CI runs, all from the repository root:
 npm ci                 # CI uses a plain install; this sandbox needs --ignore-scripts
 npm run format:check   # Prettier (markdown is excluded deliberately)
 npm run typecheck      # tsc --noEmit
-npm test               # Node test runner: 340 tests across 85 suites
+npm test               # Node test runner; test count changes as work lands
 npm run build          # production build (Turbopack)
 npm audit --omit=dev   # production dependencies must report 0 vulnerabilities
 npm run test:e2e       # browser acceptance suite (needs: npx playwright install --with-deps chromium)
 ```
 
-The browser suite runs in CI's `browser` job; the release workflow smoke-tests the built image (health,
-unprivileged uid, database survival across recreation) before pushing it to GHCR. `npm audit` will suggest
+The browser suite runs in CI's `browser` job; the release workflow must smoke-test the built image before pushing it to the new GHCR package, including health, least privilege, persistence, and the applicable upgrade path. `npm audit` will suggest
 `npm audit fix --force` for four moderate advisories in the dev-only drizzle-kit/esbuild chain — **do not
 run it**: it downgrades drizzle-kit to 0.18.1.
 
@@ -211,18 +138,10 @@ run it**: it downgrades drizzle-kit to 0.18.1.
 
 No real names, balances, receipts or addresses exist anywhere in this repository, and none may be added —
 not in code, tests, fixtures, screenshots, issues or pull requests. `.env.example` holds placeholders only.
-Real configuration lives in `/data/.env` inside the private installation, and real data never leaves
-`/data`.
+Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.env` (container `/data/.env`) inside the private installation. Real household data lives only under `/data/households/<opaque-household-id>/`; never commit or publish it.
 
-## Version
+## Version and release line
 
-The app version is shown in the navigation bar. `package.json`, `src/lib/version.ts` and the
-release tag must agree; the publish workflow refuses to push an image when they do not. The current
-version lives in those files and in the latest `docs/RELEASE_NOTES_vX.Y.Z.md` — check there rather
-than trusting this paragraph's age.
+The first multi-household candidate is planned as **`v1.0.0-rc.1`** (package/app version `1.0.0-rc.1`). The suffix is a SemVer prerelease identifier; if another candidate is needed, increment it (`v1.0.0-rc.2`). An RC gets its exact version tag and `sha-<short>` tag in the new package, **not `latest`**, and its GitHub release is marked pre-release. Once accepted for production, publish a distinct stable `v1.0.0` tag; stable releases may move `latest`. Never rename or retag the RC.
 
-The tag must be lower-case `vX.Y.Z` *and must sit on a commit that already carries that version*. The first
-`v0.1.4` tag pointed at the PR #13 merge, whose `package.json` still said `0.1.3`; the run reached the
-version check, refused, and pushed nothing. Both the workflow's `on.push.tags` filter and its version check
-(`test "v${PKG_VERSION}" = "$VERSION"`) reject a capital `V` — which is why the `V0.1.1` tag never published an
-image and the registry held only v0.1.0 until v0.1.2.
+The only permitted registry is `ghcr.io/dougalbob/simple-finance-multi-household`. The inherited `v0.x` tags and release notes are history from the original single-household project; they must not be pushed or used as upgrade baselines for the new package. The first foundation change does not bump the app's current source version or create a tag/image; a later release PR will bump `package.json`, `package-lock.json`, `src/lib/version.ts`, the Unraid template and release notes together.

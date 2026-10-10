@@ -1,3 +1,66 @@
+# Current handoff — multi-household isolation foundation (2026-10-10)
+
+**Current project:** independent repository `dougalbob/simple-finance-multi-household`, copied from the original
+single-household product. The old v0.x release preparations, tags, package digests and implementation decisions
+below are upstream history only; do not apply them to the new package or installation without explicit review.
+The complete active contract is [`MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md). See also [`AGENTS.md`](../AGENTS.md),
+[`README.md`](../README.md), [`SPEC.md`](SPEC.md), [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and
+[`RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
+
+## Approved decisions
+
+- One application installation serves separate households of **one or two people**. A one-person household is
+  complete; a third member is prohibited.
+- Cloudflare Access + Google verifies identities. The app's administrator pre-assigns each email to a household
+  before first login; there is no self-sign-up. A Cloudflare-allowed but unassigned identity is denied by the app.
+- Each household will have its own SQLite database and documents directory. A separate central system registry
+  contains membership/admin/support metadata, not financial records. All server access, files, backups and restore
+  operations must be scoped to the verified household, including when requests from different households happen
+  at the same time.
+- The app admin has no standing in-app access to another household's financial data. A member may grant/revoke
+  visible, audited, time-limited support access, read-only by default. Host-admin access to raw Unraid files is an
+  accepted limitation.
+- Original Unraid deployment remains bridge / host `3007` → container `3000` / appdata
+  `/mnt/user/appdata/simple-finance`. New deployment is bridge / host **`3009`** → container `3000` / appdata
+  **`/mnt/user/appdata/simple-finance-multi-household`**. Never mount or alter the original data path or route.
+- The only image allowed is `ghcr.io/dougalbob/simple-finance-multi-household`; the original
+  `ghcr.io/dougalbob/simple-finance` is forbidden. The workflow hard-fails for a wrong GitHub repository and
+  ignores inherited v0.x tags as release/upgrade bases.
+- First candidate is `v1.0.0-rc.1`; RCs publish only their version and SHA tags and never move `latest`. Accepted
+  production release is a separate `v1.0.0` tag; stable releases alone may move `latest`.
+
+## State of this foundation change
+
+This change updates the operating contract, product/spec/implementation docs, template defaults and guarded
+publish workflow. It does **not** implement household routing, registry, admin UI, support-consent flow, tenant
+backups, data migration, or change the current source app version. No release tag or image is to be created from
+this change. The production app and the recent encrypted backup have not been mounted, restored or modified.
+
+The local backup taken on 2026-10-10 is a candidate **dry-run source** while it remains current; use only an
+isolated copy for migration rehearsal. Before a later real-data cutover, take a fresh backup if source data has
+changed and verify the archive/password and attachments through an isolated restore.
+
+## Next implementation work after this foundation
+
+1. Implement the small system registry and administrator onboarding/pre-assignment, including one-or-two member
+   enforcement and first-login denial for an unassigned email.
+2. Replace the single process-wide DB assumption with safe per-household request context/handles; scope every read,
+   write, document operation, cache, audit and API.
+3. Add explicit consent-based, revocable, expiring support access and audit visibility.
+4. Make household backup/restore contain only the selected household's DB and attachments; separately recover the
+   system registry/configuration.
+5. Rehearse import of the owner's existing database and documents into the owner's tenant using an isolated copy;
+   test a second empty household, concurrent requests, unauthorized access and the real Cloudflare path on host
+   port 3009 before migrating any live data. With a consenting test account holder, use a separately signed-in
+   mobile Google account and separate test route/household to verify first login; confirm an unassigned identity
+   is denied.
+6. Prepare `v1.0.0-rc.1` only after implementation and acceptance gates are complete; publish only to the new GHCR
+   package. Promote to separate `v1.0.0` only after RC acceptance.
+
+---
+
+# Historical upstream release preparation and handoff records
+
 # Release prep: v0.39.0 — Where the money goes, and Horizon totals (decisions 194–195)
 
 **Status at PR preparation:** the household approved the Horizon totals on the preview, and approved the Charts pie in this session ("I like it … happy with the scope of the chart"). This is a pre-merge record only. It asserts no merge, tag, Publish run, GitHub release or registry digest. After publication, the next working session must add independently verified post-merge facts at the top, per decision 173.

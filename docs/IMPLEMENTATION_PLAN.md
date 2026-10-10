@@ -1,28 +1,74 @@
-# Simple Finance — Implementation Plan
+# Simple Finance Multi-household — Implementation Plan
 
-> **Reading note (2026-09-22):** `AGENT_APP_BLUEPRINT.md` supported the initial build through the first
-> release. It is historical context, not required reading for ongoing work. The continuation point is
-> `docs/HANDOFF.md`; the product spec is `docs/SPEC.md`. Citations of the blueprint below are records of
-> how a decision was made, not a reading list.
->
-> **Current:** v0.8.0 is the published image (`latest` = `sha-45a1ad0`, built from `main` @ `45a1ad0` on
-> 2026-09-24). Merging does not publish; the image publishes only when the lower-case tag matches the
-> version already in the tree it points at — see decision 91.
+> **ACTIVE PLAN (approved 2026-10-10):** this repository is the independent multi-household edition. The concise
+> binding contract is [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md); the product requirements are in
+> [`docs/SPEC.md`](SPEC.md). The current source is inherited single-household v0.39.0 code; tenant routing,
+> per-household databases, onboarding, consent-based support and household backup isolation are not implemented.
+> Do not treat the legacy v0.x release notes, source tags, project profile or session plan below as current.
 
-**Status:** v0.8.0 is the published image (`latest` = `sha-45a1ad0`, built from `main` @ `45a1ad0` on
-2026-09-24). The app is now installable as a PWA (manifest + icons, no service worker, no offline access).
-340 tests / 85 suites green. The release-blocking backup/restore capability from Phase 5 covers attachments, live in-place restore exists,
-suppliers/interactions are audited domain operations, the container runs unprivileged, the Unraid template
-and the GHCR publish workflow are written, and the Playwright acceptance suite is defined (it runs in CI —
-this sandbox has no browser binaries and no access to the download host). **224 Node tests green** plus the
-browser suite in `e2e/`, all local gates green. Phases 0–4b are merged to `main` (PRs #2–#8). Discovery
-completed 2026-09-20.
-This plan follows `AGENT_APP_BLUEPRINT.md` (the build contract) and `docs/SPEC.md` (the product spec).
+## Current multi-household decisions
 
-> All names, amounts and dates in this document are fictional placeholders. Real values live only in the
-> private installation's configuration and database. See the privacy notice in `docs/SPEC.md`.
+- **Product:** one app container serves multiple private households; each household has one or two people. One
+  person is a complete household; a third person is rejected.
+- **Repository and registry:** only `dougalbob/simple-finance-multi-household` and
+  `ghcr.io/dougalbob/simple-finance-multi-household` are permitted. The publish workflow hard-fails for any other
+  GitHub repository/image. Never publish to the original `ghcr.io/dougalbob/simple-finance` package.
+- **Identity:** Cloudflare Access + Google remains the perimeter and identity provider. The app verifies JWTs and
+  looks up a pre-assigned email-to-household membership in an admin-managed registry. Provision before first
+  login; no self-sign-up; an unassigned identity is denied.
+- **Data:** one SQLite finance database and one documents directory per household under
+  `/data/households/<opaque-id>/`; a separate `/data/system/registry.sqlite` contains operational membership and
+  consent metadata only. All requests select tenant context server-side, never from browser input; never use a
+  process-wide mutable current-household pointer.
+- **Support:** platform admin has no standing in-app access to other households' finance data. A household member
+  may grant/revoke a visible, audited, time-limited support session, read-only by default. Host-admin access to
+  raw Unraid files is an accepted limitation.
+- **Unraid:** separate root `/mnt/user/appdata/simple-finance-multi-household` → `/data`; bridge networking;
+  host `3009` → container `3000`. Original production remains at `/mnt/user/appdata/simple-finance`, host port
+  `3007`, and its existing route; never mount or alter it.
+- **Backups/migration:** per-household encrypted backup/restore contains only that household's SQLite data and
+  documents, never the registry or another household. The existing two-person household is copied into its own
+  tenant; link the existing Cloudflare emails to the existing people records. Rehearse from the current encrypted
+  backup on an isolated copy, verify database integrity and document hashes, and take a fresh source backup before
+  any later cutover if production data changed.
+- **Release line:** first candidate `v1.0.0-rc.1`; RCs publish the exact version and SHA tag only, never `latest`;
+  stable production is a separate `v1.0.0` release and only stable releases move `latest`. Never publish inherited
+  v0.x tags to this package.
 
-## Session map (adopted by the product owner 2026-09-20 — decision 29; do not re-open phasing)
+## Approved implementation order
+
+1. Lock documentation, Unraid template, GHCR repository/image guard, RC behavior and first-release upgrade-smoke
+   filtering (the current foundation PR; no image/tag publication).
+2. Implement the control-plane registry, safe request-scoped household resolution and separate database handles.
+3. Add the admin onboarding/assignment screen and first-login behavior; enforce one or two members.
+4. Scope all pages, actions, APIs, document operations, caches, backup and restore to the resolved household;
+   implement explicit support grants and audit.
+5. Import and rehearse the existing household backup in an isolated tenant directory; verify its records, SQLite
+   integrity, attachments and per-household backup/restore.
+6. Test concurrent households, denial of cross-household access, Cloudflare sign-in and a separate Unraid route
+   on port 3009 before migrating current production data. With the test account holder's consent, use a separately
+   signed-in mobile Google account and test household/route to verify first login; confirm an unassigned identity
+   is denied.
+7. When the implementation and notes are ready, publish `v1.0.0-rc.1` only to the new package. After acceptance,
+   publish a distinct stable `v1.0.0`.
+
+> **Versioning rule:** the current source version is not changed to `1.0.0-rc.1` by the foundation PR. Set the
+> package, lockfile, version module, template and release notes to that version together in the actual RC release
+> PR. See [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
+
+---
+
+## Historical single-household source-project record
+
+> The material below records how the original `dougalbob/simple-finance` v0.x product was built. References to
+> its original image, `/mnt/user/appdata/simple-finance`, exactly two global sign-ins, shared single database,
+> phase map and release digests are historical context only. They are not active requirements for this repo.
+> New work follows the current decisions above and `docs/MULTI_HOUSEHOLD_PLAN.md`.
+
+> All names, amounts and dates in the historical examples below are fictional placeholders. Real values belong
+> only in private installation data; see the privacy notice in `docs/SPEC.md`.
+
+## Historical upstream session map (the original v0.x product only)
 
 | Session | Scope | Status |
 |---|---|---|
@@ -42,31 +88,39 @@ This plan follows `AGENT_APP_BLUEPRINT.md` (the build contract) and `docs/SPEC.m
 > version display in the nav. **4b** = Suppliers page, Contracts & Renewals page + its Overview panel,
 > receipt/invoice attachments (SPEC §23), scenario E9.
 
-## Project profile (blueprint §2)
+## Historical upstream project profile (superseded)
 
-| Field | Decision |
-| --- | --- |
-| Product | **Simple Finance** (`dougalbob/simple-finance`). Shared household spending tracker for two users, focused on available money, upcoming commitments and avoiding overdraft charges. Primary workflows: mobile quick entry (purchase/fuel/checkpoint), desktop review (purchases, schedules, pots, insights). |
-| Scope | MVP = SPEC.md §2 "In scope (v1)". Non-goals: bank integration/reconciliation, credit cards, investments/valuations, offline mode, notifications, drag-drop calendar, fractional splits. Sensitive data: real household finances — fictional-only in repo. |
-| Access | Cloudflare Tunnel + Access + Google sign-in; `jose` server-side JWT verification; allowlist of exactly two configured identities; full mutual visibility/editing with audit trail; no in-app roles. |
-| Scheduling | Recurring DD/SO/income schedules with auto-conversion on due date; read-only month calendar view of instances; no drag-and-drop; business timezone **Europe/London**; date-only facts date-only; instants UTC. |
-| Storage | SQLite via `better-sqlite3` + Drizzle ORM, checked-in migrations. Single instance, two users, low concurrency; optimistic concurrency on shared edits. **Attachment files** (receipt/invoice PNG/JPEG/PDF, SPEC §23) stored under the appdata `documents/` directory — expected volume modest (a few MB/month), included in backups. |
-| Deployment | Repo `dougalbob/simple-finance` (public) → GitHub Actions → GHCR image → Unraid XML template. Internal port 3000; **choose a free host port at install time — do not copy the reference app's 3005**. Host data root **fixed by the product owner: `/mnt/user/appdata/simple-finance`** → container `/data`, containing the SQLite database (+WAL/SHM), `.env`, `documents/` and `logging/` (SPEC §18.1). Health endpoint with no records/diagnostics. |
-| Recovery | Encrypted downloadable backup (AES-256-GCM, scrypt-derived key, versioned filename per blueprint §6 contract) **including `documents/` attachments with sha256 manifest verification**; excludes `.env` and `logging/` (separate recovery checklist for configuration). Tested restore into a clean isolated installation before real data is trusted. Recovery password never persisted. Restore staging on same filesystem (EXDEV lesson). Full contract: SPEC §18. |
-| Delivery | Session branch per platform instructions (this discovery session: `arena/01a0c00b-simple-finance`). **Release authority: full delivery loop** — gates → PR → merge → annotated `vX.Y.Z` tag → GHCR publish verification → user Force Updates in Unraid + runs listed acceptance checks. Granted by the user 2026-09-20 for coding sessions following this handoff; recorded once, not re-asked per release. |
-| Verification | Gates: `npm ci`, `npm run format:check`, `npm run typecheck`, `npm test`, `NEXT_TELEMETRY_DISABLED=1 npm run build`, `npm audit --omit=dev`; Playwright `npm run test:e2e` where browser tooling exists. Manual acceptance still required: real Cloudflare hostname sign-in, phone entry at a real till moment, Unraid install/Force Update, restore rehearsal. |
+The single-household profile that originally occupied this section is superseded by the active multi-household
+profile at the top of this document and `docs/MULTI_HOUSEHOLD_PLAN.md`. The legacy finance-domain model below
+remains useful as the starting point **inside one household database**, but its singleton database, exactly-two
+global allowlist, old repo/package and old appdata path are not current deployment or tenancy decisions.
 
 ## Architecture summary
 
-Blueprint defaults stand: TypeScript strict, Next.js App Router, React, Zod at server boundaries, semantic
-HTML + Tailwind, Lucide/Radix as needed, Node test runner via `tsx`, Prettier, multi-stage Dockerfile,
-tag-triggered publish workflow, Unraid template.
+Keep the proven stack defaults: TypeScript strict, Next.js App Router, React, Zod at server boundaries, semantic
+HTML + Tailwind, Node test runner via `tsx`, Prettier, multi-stage Dockerfile, Unraid template. The old
+single-household auth, storage, database-connection and publication assumptions do not carry forward.
 
 Domain rules live in small pure modules (estimate engine, projection engine, schedule lifecycle, split
 validation, category tree), shared by UI hints, server validation, insights and tests. Money is integer pence
 everywhere; per-period rounding, half-up, once (SPEC §7.3).
 
-### Data model sketch (entities — v1)
+### Tenant/control-plane architecture (approved target)
+
+Use one small control-plane registry at `/data/system/registry.sqlite` for household identity/status, normalized
+email-to-household membership, the platform administrator bootstrap/role and explicit support grants. It stores no
+finance records or documents. Household finance data remains in separate SQLite files at
+`/data/households/<opaque-id>/simple-finance.sqlite`, with that tenant's own `documents/` and optional `logging/`
+siblings. This physical separation is why existing finance tables do not need a `household_id` column in every
+row; migrations apply independently to each tenant database.
+
+Resolve identity and membership before selecting a tenant database. Pass an immutable household context through
+each request/action/route and cache handles by safe database path or stable tenant ID. Never use a mutable global
+"current household" handle; the inherited singleton `getDbHandle()` is a refactor point, not a safe tenant router.
+Only registry assignments—not browser-provided IDs or paths—may select data. Registry recovery is separate from
+member backups. See `docs/MULTI_HOUSEHOLD_PLAN.md` for the binding details and consent policy.
+
+### Data model sketch (entities — v1, inside each household database)
 
 - `pots` — id, label, kind (bank|cash), sort, overdraft_limit_pence?, warning_threshold_pence?, archived.
 - `checkpoints` — id, pot_id, amount_pence, effective_at (UTC instant), entered_by, created_at. Immutable.
@@ -76,7 +130,7 @@ everywhere; per-period rounding, half-up, once (SPEC §7.3).
 - `supplier_interactions` — id, supplier_id, occurred_at, channel (call|email|letter|in_person|other),
   summary, outcome?, follow_up_date?, related_purchase_id?, related_renewal_id?, created_by.
 - `categories` — id, parent_id (null = parent; exactly two levels enforced), name, retired_at?, sort.
-- `targets` — household (singleton), `people` (id, label), `vehicles` (id, label, owner_person_id).
+- `targets` — exactly one household per database, `people` (one or two: id, label, verified email link), `vehicles` (id, label, owner_person_id).
 - `purchases` — id, supplier_id?, pot_id, total_pence, occurred_at (timestamp), occurred_date (backdatable),
   paid_by_person_id, entered_by, note?, **schedule_instance_id? (non-null = the "from schedule" tag — the
   converted form of a schedule instance; also the self-heal back-reference)**, voided_at?, version
@@ -305,7 +359,7 @@ covering attachments).
     desktop file picker + mobile camera capture, retroactive attachment; purchase save never blocks on
     upload; stored under `documents/` with server-generated keys, content-sniffed MIME, sha256,
     authenticated private serving; included in backups with manifest verification (SPEC §18.2, §23).
-27. **Data root fixed:** `/mnt/user/appdata/simple-finance` on the Unraid host → container `/data`,
+27. **Historical upstream data root (superseded 2026-10-10):** `/mnt/user/appdata/simple-finance` on the original host → container `/data`,
     containing the SQLite files (+WAL/SHM), `.env`, `documents/`, `logging/`. `.env` and logs are excluded
     from backups; a separate recovery checklist covers configuration (SPEC §18.1).
 28. Backup/restore contract made explicit in **SPEC §18** (previously only referenced via blueprint §6 in
@@ -319,7 +373,7 @@ covering attachments).
 30. **Stack versions** (current, supported, mutually compatible; lockfile committed): Next.js 16.3.5, React 19.3.0, TypeScript **5.9.3** (deliberately not 7.x — the native-compiler line is newest but 5.9 is the known-Next-compatible choice; revisit later with a dedicated upgrade gate), Tailwind 4.3.3, drizzle-orm 0.45.2 + drizzle-kit 0.31.10, better-sqlite3 13.0.3, zod 4.6.5, jose 6.2.12, tar 7.5.22, Node 22 LTS.
 31. **Drizzle sync-mode conventions** (discovered the hard way in Session 1; future sessions must follow): every query needs a terminal method — inserts use `.returning().get()` (single row) or `.run()` (no return); a bare `.values()`/`.returning()` is a no-op builder, not a query. Counts via `select({ value: count() }).from(t).all()`, not `$count()`. Recorded so Phase 2+ doesn't re-trip.
 32. **Container strategy:** regular `next build` + `next start` (not standalone output) with the pruned production `node_modules` copied from the builder stage — robustness (native modules) over image size; optimisation candidate for Phase 5. Container runs as root for now (documented trade-off matching the reference app); Phase 5 security review to decide least-privilege execution.
-33. **Auth configuration** (names in `.env.example`): `AUTH_ISSUER`, `AUTH_AUDIENCE`, `AUTH_ALLOWED_EMAILS` (exactly two), optional `AUTH_CERTS_URL` (default `${issuer}/cdn-cgi/access/certs`), `AUTH_DEV_BYPASS` + `AUTH_DEV_IDENTITY_EMAIL`. The bypass is computed false whenever `NODE_ENV=production` — impossible to enable by flags alone. Verification restricts to RS256 and enforces issuer/audience/expiry/allowlist.
+33. **Historical upstream auth configuration (superseded 2026-10-10):** the original single-household app used `AUTH_ISSUER`, `AUTH_AUDIENCE`, and an `AUTH_ALLOWED_EMAILS` list of exactly two, optional `AUTH_CERTS_URL` (default `${issuer}/cdn-cgi/access/certs`), `AUTH_DEV_BYPASS` + `AUTH_DEV_IDENTITY_EMAIL`. The bypass is computed false whenever `NODE_ENV=production` — impossible to enable by flags alone. Verification restricts to RS256 and enforces issuer/audience/expiry/allowlist.
 34. **Backup skeleton scope (Phase 1):** archive = tar.gz{db snapshot via `better-sqlite3 .backup()`, manifest.json} → AES-256-GCM (scrypt N=16384/r=8/p=1, fresh salt+nonce) with frame magic `SFBA` v1. Restore targets isolated directories only; live in-place restore (connection close, WAL/SHM, rollback, UI refresh) is Phase 5. Filename contract implemented and DST/midnight-tested; client blob-download tests land with the Phase 5 UI.
 35. **Prettier excludes `*.md`** (`.prettierignore`): documentation is hand-authored, including the product owner's spec documents; markdown reformatting adds diff noise without value. (A `prettier --write .` reformatted the spec docs once in Session 1; reverted before commit — no spec content was lost.)
 36. **Sandbox constraint (environmental, not a repo decision):** this sandbox blocks `nodejs.org`, so plain `npm ci` fails when npm's gypfile auto-build tries to compile `better-sqlite3` from source. `npm ci --ignore-scripts` works (the package bundles prebuilt binaries incl. linux-x64/node-22) and the suite verifies the native module — the blueprint §9 caveat is satisfied and recorded. Plain `npm ci` is proven in the CI `gates` job on GitHub Actions. Do not "fix" the repo for this; do not assume the constraint still holds in a future session — re-verify.
@@ -570,14 +624,7 @@ src/lib/records/supplier-details.ts` owns them: trimmed and length-capped text, 
     the CI `browser` job, and no local browser run is claimed (decision 54 stands, now with a harness behind
     it). The calendar grid exposes `data-date` per cell so the acceptance run can assert that the month view
     and the instance list agree after a real due-day edit.
-88. **Unraid template and publication.** `simple-finance.xml` (repo root, so Unraid's TemplateURL can point
-    at `main`) maps `/data` → `/mnt/user/appdata/simple-finance`, defaults PUID/PGID to 99/100, documents a
-    free host port (never inheriting 3005) and exposes `AUTH_*` as optional advanced variables that
-    `/data/.env` overrides. The publish workflow is tag-triggered (`v*.*.*`, or a manual dispatch with the
-    tag): it refuses non-semver refs, asserts `package.json` and `src/lib/version.ts` match the tag, builds
-    and **smoke-tests before pushing** (health, uid 99, database created, database survives container
-    recreation), then pushes `vX.Y.Z`, `latest` and `sha-<short>`, and finally verifies the registry manifest
-    digest matches the built image. Merging a PR publishes nothing.
+88. **Historical upstream template and publication (superseded 2026-10-10).** This entry describes the original single-household repo, old `/mnt/user/appdata/simple-finance` root and old package. The active new template/package/host port and RC publication policy are recorded at the top of this plan, `docs/MULTI_HOUSEHOLD_PLAN.md`, `docs/RELEASE_PROCESS.md` and `.github/workflows/publish.yml`. Merging a PR still publishes nothing.
 
 *Session 8 (2026-09-22) — post-release, remove an attached receipt (v0.1.3):*
 

@@ -1,12 +1,12 @@
 # Simple Finance — Product Specification
 
-**Status:** agreed with the product owner in discovery, 2026-09-20. This is the authoritative product spec.
-**Companion documents:** `docs/HANDOFF.md` (session continuation point — read this first for ongoing work), `docs/IMPLEMENTATION_PLAN.md` (profile, data model, phases, decision log, open questions). `AGENT_APP_BLUEPRINT.md` is the engineering contract from the initial build through the first release; it is historical context, not required reading for later changes.
+**Status:** original single-household requirements were agreed 2026-09-20; the multi-household direction and decisions below were approved 2026-10-10. This is the authoritative product spec for the independent multi-household edition. The target is not yet implemented in the inherited source.
+**Companion documents:** [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md) (active isolation, storage and release contract), `docs/HANDOFF.md` (session continuation point), and `docs/IMPLEMENTATION_PLAN.md` (phases and dated decisions). `AGENT_APP_BLUEPRINT.md` is historical and its original product-specific defaults are superseded here.
 
 > **Privacy notice — applies to this entire repository.**
 > Every name, person, amount, date, account and threshold in this document is a **fictional placeholder**.
-> The real household's names, balances, income figures, overdraft limit and warning thresholds exist only in the
-> private installation's runtime configuration and database, which `.gitignore` keeps out of version control.
+> Real households' names, balances, income figures, overdraft limits and warning thresholds exist only in the
+> private installation's runtime configuration and that household's database, which `.gitignore` keeps out of version control.
 > No real personal financial data may ever appear in commits, PRs, issues, screenshots, logs, fixtures, seed
 > files, demo data or release artefacts. Demo/seed data lives in tracked source paths and is fictional by rule.
 
@@ -14,8 +14,9 @@
 
 ## 1. Product purpose
 
-Simple Finance is a private, shared household spending tool for **two people who need to watch money carefully
-to avoid overdraft charges**. It answers four questions:
+Simple Finance Multi-household is a private finance application for multiple independent households. Each
+household contains **one or two people** and needs to watch money carefully to avoid overdraft charges. It answers
+four questions separately for each household:
 
 1. What have we spent, and on what?
 2. What money do we have available now?
@@ -36,9 +37,9 @@ with its inputs inspectable.
 
 ### In scope (v1)
 
-- Four money pots: two joint bank accounts and two personal cash pots (one each), each
-  with user-reported balance checkpoints. (The original shared jar was retired: one pot each
-  makes a cash handover a visible transfer instead of an unexplained move.)
+- Each household configures its own money pots and user-reported balance checkpoints. The original two-person
+  example uses joint bank accounts and personal cash pots; those labels and counts are household data, not global
+  defaults imposed on every household.
 - Fast mobile purchase entry with splits, supplier memory, category tree, attribution defaults and overrides.
 - Recurring payment schedules (direct debits, standing orders) and expected income (salary) that
   auto-convert to actual records on their due dates, plus **one-off income** recorded by hand — a
@@ -57,9 +58,10 @@ with its inputs inspectable.
   configurable ahead-of-time warnings, default 21 days (§22).
 - **Receipt/invoice attachments** on purchases: .png/.jpg/.pdf uploads from desktop, camera capture on
   mobile, retroactive attachment (§23).
-- A single fixed data root on the Unraid host — `/mnt/user/appdata/simple-finance` (database, `.env`,
-  `documents/`, `logging/`) — with encrypted, user-managed, restore-rehearsed backups (§18).
-- Encrypted backup/restore, Cloudflare Access auth, Unraid deployment — per `AGENT_APP_BLUEPRINT.md`.
+- One fixed Unraid data root — `/mnt/user/appdata/simple-finance-multi-household` — with a small system
+  registry and a separate directory, SQLite database and `documents/` folder for each household (§18). Each
+  household's encrypted backup contains only its own finance database and attachments.
+- Encrypted per-household backup/restore, Cloudflare Access auth and isolated Unraid deployment — per §§18–19 and `docs/MULTI_HOUSEHOLD_PLAN.md`.
 
 ### Explicit non-goals (v1)
 
@@ -74,24 +76,35 @@ with its inputs inspectable.
 - Notifications, reminders, emails (see §14; deferred, not forgotten).
 - Drag-and-drop calendar scheduling; the calendar is a read-only view (§13).
 - Fractional/percentage splits of one allocation between the two people (§9.4).
-- Budget enforcement, multi-household, multi-currency, public/sharing features.
+- Multi-currency, public sign-up, or ordinary member sharing between separate households. Multi-household
+  operation and tenant isolation are in scope (§3, §18–§19); support viewing another household is a narrow,
+  explicit-consent exception, not general sharing.
 - Formal lending: interest, repayment schedules and credit agreements. Debts are informal
   IOUs only — who, which way round, and what is still owed.
-- Privacy walls between the two users (§4).
+- A privacy wall between members of the same household: members share that household's records. Strong
+  application-level isolation between different households is mandatory (§3, §19).
 
 ## 3. People, personas and privacy
 
-- Exactly **two allowed users**, enforced by a Cloudflare Access allowlist configured privately at install time.
-- Full mutual visibility and editing: both users see and may correct **everything**, including each other's
-  personal purchases. "Personal" is a reporting dimension, not a secret.
+- Each household has **one or two members**. One-person households are valid and complete; no household may
+  have more than two people or more than two assigned sign-in identities.
+- Cloudflare Access + Google sign-in is the outer identity gate; the app independently verifies the Access JWT.
+  The administrator pre-creates the household and assigns each allowed email to exactly one household before
+  first login. There is no self-sign-up. A verified but unassigned identity is denied by the app. The Cloudflare
+  email policy and the app's household assignment are separate checks (§19).
+- All members of one household have mutual visibility and editing of that household's records, including one
+  another's personal purchases. There is no default administrator access to another household's financial data.
+  A member may grant and revoke an explicit, visible, time-limited support session; it is read-only by default,
+  audited, and expires or stops immediately when revoked. The product owner and households accept that the
+  Unraid host administrator can inspect files outside the app.
 - Every record carries an audit trail: who created it, who changed it, what changed, when. Corrections are
   edits or voids with retained history — never silent deletion (blueprint §3).
-- In this document and all demo data, the fictional personas are **Alex** and **Sam**. Sam is employed with a
-  monthly salary; Alex is not currently working. Real identities are configured in the private installation.
+- In this document and all demo data, the fictional personas are **Alex** and **Sam**. Real identities are
+  configured only in the private installation; they must never appear in tracked source or tests.
 
 ## 4. Pots (tracked money containers)
 
-The household's shape (names are user-configurable labels):
+A fictional two-person example household's shape (names are user-configurable labels; actual households configure their own pots):
 
 | Pot | Type | Role |
 |---|---|---|
@@ -214,8 +227,7 @@ same date-stamped records.
 ```
 days = payday − today   (whole days, local date arithmetic)
 the payday liquidity projection starts from liquid_available_now (bank and cash pots only) and applies,
-day by day until payday inclusive:
-  + expected receipts due that day        (income schedules not yet converted, and a debt's expected support, §10.2)
+day by day until pa       (income schedules not yet converted, and a debt's expected support, §10.2)
   − expected commitments due that day     (DD/SO schedule instances not yet converted)
   − projected day-to-day events due that day (see 7.3)
 projected_low = the minimum running value within the window
@@ -406,7 +418,7 @@ where_we'd_land = liquid_available_now (selected bank and cash pots)
 - **Search-params persistence:** the through date, pot selection and day-to-day toggle ride in the URL
   (`?through=…&pots=…&daytoday=…`), so a look-ahead can be shared and survives a refresh. The chosen date is
   clamped to the window on load, exactly as the transaction window clamps its dates. An empty pot selection
-  means *every* pot, so unticking every pot and applying counts every pot again (the page says so under the
+  means *every* pot, so unticking every pot and applying counts every pot again (the page says sod applying counts every pot again (the page says so under the
   checkboxes).
 - **Detail blocks** (commitments, expected money in with the `expected` flag, day-by-day table) stay
   `<details open>` for windows of 60 days or less and start collapsed beyond that, so the honest inputs are
@@ -958,7 +970,7 @@ Menu pages:
 | **Contracts & Renewals** | Key dates: renewal records with per-item warning leads and annual advance; schedules' contract end dates; everything inside its warning window first, sorted by date; history of past renewals (§22). |
 | **Accounts, Pots & Checkpoints** (was **Accounts & Pots**; renamed v0.28.0) | Leads with the **Record a balance checkpoint** card, then **Add a pot** (both v0.28.0, decision 178 — recording is the page's most frequent job), then a card per pot: reported figure, estimate, owner (decision 178), checkpoint timeline, edit form; **cash pot cards show no overdraft or warning threshold** (decision 178); transfer records; staleness of every pot; overdraft context (limit, threshold) for the Main account; informal debts with derived balances and an optional expected-support plan (amount, day-of-month, until date — editable forward-looking, v0.7.0); borrow/repay/swap/other entry and history; archiving for empty pots. |
 | **Insights** | §16 panels. |
-| **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; default warning lead for renewals/contract ends; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **"Signs in as"** per person (v0.11.0 — which allowlisted `AUTH_ALLOWED_EMAILS` sign-in is that person; drives the till's Paid by and Fuel vehicle defaults; audited, unique, stored only in the private database); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
+| **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; default warning lead for renewals/contract ends; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **"Signs in as"** per person (the verified identity assigned to that household in the app registry; drives the till's Paid by and Fuel vehicle defaults; audited and unique across household membership); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
 
 **Calendar (agreed: read-only month view).** A month grid on Recurring Payments showing due DD/SO instances and
 expected receipts — another view of the same schedule data, never a second database. Clicking a day shows that
@@ -1449,38 +1461,51 @@ no migration.
 
 ## 18. Backup, restore and data locations
 
-Backup/restore has been in scope since day one (§2, README, plan Phase 5) under the `AGENT_APP_BLUEPRINT.md`
-§6 contract. This section pins it to Simple Finance specifically, including the documents directory
-introduced by attachments (§23).
+Encrypted backup and verified restore remain first-class requirements. The archive integrity, encryption and
+crash-recovery lessons from the original implementation carry forward only where they do not conflict with this
+edition's tenant boundary. Every backup and restore in this edition is scoped to exactly one household; this
+section defines the target contract, including its own documents directory (§23).
 
 ### 18.1 Data locations (fixed by the product owner)
 
-Host path on Unraid: **`/mnt/user/appdata/simple-finance`**, mapped to container **`/data`**:
+Host path on Unraid: **`/mnt/user/appdata/simple-finance-multi-household`**, mapped to container **`/data`**:
 
 ```text
-/mnt/user/appdata/simple-finance/        →  /data/
-  simple-finance.sqlite (+ -wal / -shm)       database (SQLite, WAL mode)
-  .env                                        runtime configuration/secrets (root-owned, 0600)
-  documents/                                  receipt/invoice attachments (§23)
-  logging/                                    application logs
+/mnt/user/appdata/simple-finance-multi-household/  →  /data/
+  .env                                           Cloudflare/bootstrap secrets (root-owned, 0600)
+  system/registry.sqlite                        household roster, assignments, roles and support grants only
+  households/<opaque-household-id>/
+    simple-finance.sqlite (+ -wal / -shm)         this household's SQLite data, WAL mode
+    documents/                                    this household's receipt/invoice attachments (§23)
+    logging/                                      this household's logs, if retained
 ```
+
+`system/registry.sqlite` is control-plane metadata only; it must never contain finance rows, balances or receipt
+content. Each household's path is derived from a verified identity's trusted registry assignment and a stable,
+opaque household ID. Do not accept a filesystem path or household ID from the browser. The original production
+installation remains at `/mnt/user/appdata/simple-finance` and must never be mounted by this container.
 
 - The entrypoint prepares any missing directories with sane permissions, applies pending migrations, then
   `exec`s the server (blueprint §7). Migration failure prevents normal startup.
 - `.env` semantics per blueprint §7: shell-sourcing an env file executes shell code — it is a trusted,
   admin-only file, never editable by untrusted users, never committed to Git, never copied into the image
-  build context, and **never included in backup archives**. A separate recovery checklist in the README
-  covers recreating configuration; a data-only archive does not recreate the host (blueprint §6).
-- The database and `documents/` are the durable user data; nothing durable lives only in the container layer.
-- `.gitignore` mirrors these runtime paths so a stray development copy can never reach this public repo.
+  build context, and **never included in a household backup archive**. A separate recovery checklist covers
+  recreating secrets and the system registry.
+- Every household database and its `documents/` directory are durable user data; no household's durable data
+  lives only in the container layer. Runtime paths must remain within that household's directory.
+- `.gitignore` mirrors the new runtime paths so a stray development copy can never reach this public repo.
 
 ### 18.2 Backup contents and exclusions
 
+A backup is created for one authenticated household at a time. It can never enumerate or include another
+household's database, documents or registry data. The administrator/system registry has a separate recovery
+procedure and is not bundled with member-downloadable household backups.
+
 - A consistent SQLite snapshot via the supported backup mechanism (WAL-safe, not a raw file copy), **plus**
-  every `documents/` file referenced by the database, **plus** a versioned manifest: archive format,
+  every `documents/` file referenced by the selected household database, **plus** a versioned manifest: archive format,
   producing app version, creation instant (Europe/London, generated from the same instant as the filename),
   file counts/sizes, per-document sha256 hashes, and the metadata needed to validate restoration.
-- **Excluded:** `.env` and any secrets; `logging/`.
+- **Excluded:** all other households, `system/registry.sqlite`, `.env` and any secrets; `logging/`.
 - Consistency boundary: an attachment is referenceable only in `stored` state after its file is fully written
   (§23.3); backup coordinates the database snapshot with document enumeration so a valid archive can never
   reference a missing file. Orphan files (present but unreferenced) are reported, never silently included or
@@ -1514,14 +1539,15 @@ Host path on Unraid: **`/mnt/user/appdata/simple-finance`**, mapped to container
 
 ### 18.4 Restore
 
-Authenticate and authorise; explicit destructive-replacement confirmation; bounded upload limits;
-authenticate the encrypted archive before trusting contents; reject unsafe paths, traversal and unsupported
-formats; validate manifest, document hashes and schema compatibility **before** touching live data; stage
-replacements **on the same filesystem as each destination** (EXDEV lesson — `/tmp` and `/data` may differ on
-Unraid); preserve recoverable old data until the replacement fully succeeds; the database-and-documents swap
-is not one atomic transaction, so rollback and crash recovery are implemented and tested; reopen the
-application against restored data, refresh the UI, and never delete the only recoverable copy on an error
-path.
+Authenticate and authorise; resolve the selected household from the verified identity and trusted
+registry, never from a browser-supplied path; require explicit destructive-replacement confirmation; enforce
+bounded upload limits; authenticate the encrypted archive before trusting contents; reject unsafe paths,
+traversal and unsupported formats; validate manifest, document hashes and schema compatibility **before**
+touching live data; stage replacements **on the same filesystem as that household's destination** (EXDEV
+lesson — `/tmp` and `/data` may differ on Unraid); preserve recoverable old data until the replacement fully
+succeeds; the database-and-documents swap is not one atomic transaction, so rollback and crash recovery are
+implemented and tested; reopen the app against that household's data, refresh the UI, and never overwrite or
+delete another household's recoverable copy on an error path.
 
 **Schema compatibility, as built (v0.10.0).** The live app is migrated by the container at start-up and a
 live restore does not restart it, so the restore settles the schema itself, on the staged copy, before the
@@ -1538,9 +1564,18 @@ live household installation.
 
 ## 19. Security and repository privacy (binding rules)
 
-- Cloudflare Tunnel + Access + Google sign-in, server-side JWT verification via `jose`, allowlist of exactly
-  two identities configured privately; every route (pages, APIs, backup/restore) independently guarded; fail
-  closed; demo identity only behind dev flag **and** dev-environment check (blueprint §4).
+- Cloudflare Tunnel + Access + Google sign-in, server-side JWT verification via `jose`; Cloudflare's email
+  policy is the outer gate and the app's pre-provisioned roster assigns verified identities to one household.
+  Every page, server action, API, document operation, backup and restore resolves household context from trusted
+  server-side identity/membership and fails closed if it is missing or inactive. A user-controlled household ID
+  is never authority. The dev identity remains available only behind the dev flag **and** dev-environment check.
+- A household's own members have shared visibility. The platform administrator has no standing in-app access to
+  other households' finance data; support viewing requires a household member's explicit, visible, time-limited,
+  revocable and audited grant, read-only by default. Host administrator access to raw Unraid files is an accepted
+  limitation and is not represented as cryptographic secrecy from the host owner.
+- Database handles, attachments, cache keys, errors, exports and backup/restore staging are tenant-scoped. A
+  single mutable process-wide "current household" or database pointer is forbidden; concurrent requests for two
+  households must not share context or data.
 - Public repository: fictional data only, everywhere (§ privacy notice). Real databases, backups, receipts,
   uploads, exports and `.env` files are ignored by `.gitignore` and stored only under the installation's
   appdata. Demo/seed data lives in tracked source paths, is fictional, and resolves to isolated paths.
@@ -1549,6 +1584,12 @@ live household installation.
 - Destructive tests and restore rehearsals run against isolated installations, never the live household data.
 
 ## 20. Agreed decisions vs open questions
+
+The multi-household decisions recorded 2026-10-10 supersede conflicting single-household assumptions earlier
+in this inherited specification: one or two members per household; a pre-provisioned email-to-household roster;
+per-household SQLite and documents; per-household backups; app-level consent-based support access; the new
+appdata root and host port. See [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md). Earlier examples and
+historical release references remain domain examples, not permission to share records across households.
 
 The complete dated decision log lives in `docs/IMPLEMENTATION_PLAN.md` (§ Decision log). Open questions
 (e.g. income-schedule working-day shift toggle, dedupe window length, checkpoint effective-date granularity,
@@ -1694,7 +1735,7 @@ enforces the same rule as the upload action.
 
 ### 23.2 Storage and serving
 
-Files live under `/data/documents/` (§18.1) with server-generated storage keys — never user-controlled paths.
+Files live under `/data/households/<opaque-household-id>/documents/` (§18.1) with server-generated storage keys — never user-controlled paths. The selected directory comes from the authenticated household context, never a request path.
 The database stores the original filename (for display/download naming only), MIME type, size, sha256,
 uploader and timestamp. Viewing/downloading an attachment requires authentication; responses are private and
 uncached, with `Content-Disposition` using a sanitized display name.
