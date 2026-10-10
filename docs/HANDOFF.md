@@ -47,12 +47,22 @@ No version bump, image/tag publication, deployment, live-data operation, or Unra
 `/mnt/user/appdata/simple-finance`; the new app remains a future, separate installation at host `3009` and
 `/mnt/user/appdata/simple-finance-multi-household` → `/data`.
 
+## Pull request and checks
+
+PR #3 is open from `arena/f5b6a64a-simple-finance-multi-household` to `main`:
+https://github.com/dougalbob/simple-finance-multi-household/pull/3. On its first CI run, the gates and Playwright
+jobs passed; the Docker job exposed a stale smoke-test assumption that every install creates
+`/data/simple-finance.sqlite` and `/data/documents`. The workflow has since been updated to seed a fictional
+registry household, verify migration/persistence at the tenant path, repair only the tenant subtree on a bind
+mount, and assert that legacy root-level fixtures remain unchanged. The updated CI run must be checked after
+pushing this workflow correction; do not treat the earlier Docker failure as a product-code failure.
+
 ## Next work
 
-Review the final diff, restore `next-env.d.ts` if another build changes it, remove the throwaway local Playwright
-config, then commit and push only to `arena/f5b6a64a-simple-finance-multi-household` and open a PR from that
-branch. Do not merge, publish, deploy, touch live data, or bump the version. Any future work on support consent,
-tenant backup/restore or live-data import requires its own approval and isolated-copy rehearsal.
+Finish review of the CI workflow change, run the final local format/diff checks, commit and push only to
+`arena/f5b6a64a-simple-finance-multi-household`, then check PR #3's latest GitHub gates. Do not merge, publish,
+deploy, touch live data, or bump the version. Any future work on support consent, tenant backup/restore or
+live-data import requires its own approval and isolated-copy rehearsal.
 
 ---
 
