@@ -84,7 +84,19 @@ jobs:
           fi
           IMAGE="ghcr.io/dougalbob/simple-finance-multi-household"
           PR_VERSION="v$(sed -n 's/^  "version": "\(.*\)",$/\1/p' package.json)"
-          BASE_TAG="$(git tag --sort=-v:refname | grep -E '^v[1-9][0-9]*\.' | grep -v "^${PR_VERSION}$" | head -1 || true)"
+          # A tag only counts as an upgrade base when its image actually exists
+          # in GHCR. A tag whose publish failed before pushing (v1.0.0-rc.1 and
+          # v1.0.0-rc.2 both did) has no image, and selecting one makes this job
+          # fail on `docker pull` instead of testing an upgrade. Same rule as
+          # the Publish workflow.
+          BASE_TAG=""
+          for CANDIDATE in $(git tag --sort=-v:refname | grep -E '^v[1-9][0-9]*\.' | grep -v "^${PR_VERSION}$" || true); do
+            if docker buildx imagetools inspect "$IMAGE:$CANDIDATE" >/dev/null 2>&1; then
+              BASE_TAG="$CANDIDATE"
+              break
+            fi
+            echo "skipping $CANDIDATE: no image published in $IMAGE"
+          done
           if [ -z "$BASE_TAG" ]; then
             echo "no previously published v1+ tag found - skipping upgrade smoke"
             exit 0
