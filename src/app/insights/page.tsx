@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
+import { NeedsFirst } from '@/components/needs-first';
 import {
   getHonestyLoopView,
   getMonthComparisonView,
@@ -9,6 +10,7 @@ import {
   getVehicleCostsView,
 } from '@/lib/records/insights-view';
 import { addDaysLocal } from '@/lib/records/dates';
+import { getPageNeeds } from '@/lib/records/page-needs';
 import { getFuelEconomyView, type VehicleFuelEconomyView } from '@/lib/records/fuel';
 import { describeClosure, formatLitres, formatMiles, formatMpg } from '@/lib/records/fuel-economy';
 import { formatShortLocalDate, toLocalDateString } from '@/lib/time';
@@ -72,6 +74,14 @@ export default async function InsightsPage({
   const params = await searchParams;
 
   const thisMonth = { year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) };
+  // “What this page needs first” (Slice 2): with nothing recorded, the month
+  // comparison and the honesty loop are zero-figure scaffolding — “October
+  // £0.00 vs September £0.00”, “no complete week recorded yet” — so the needs
+  // block replaces exactly those two panels. The people, vehicle and mpg
+  // panels keep their own honest empty sentences: no vehicle is a complete
+  // household, never a missing record.
+  const insightsNeeds = getPageNeeds(db, 'insights', now);
+  const needsPurchases = insightsNeeds.some((need) => need.id === 'purchases');
   const comparison = getMonthComparisonView(db, now);
   const personal = getPersonalMonthView(db, parseMonthParam(params.month, thisMonth), now);
   const vehicles = getVehicleCostsView(db, now);
@@ -86,83 +96,97 @@ export default async function InsightsPage({
           Where the money actually went
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          Recorded spending only — transfers never appear here (they move money between your own
-          pots), and income is not spending. Figures reconcile with the purchase history exactly,
-          except that running costs show an annual vehicle payment as ÷ 12 a month (decision 190).
+          Recorded spending only —{' '}
+          <Link href="/guide#transfers" className="hover:underline">
+            transfers never appear here
+          </Link>{' '}
+          (they move money between your own pots), and{' '}
+          <Link href="/guide#income" className="hover:underline">
+            income is not spending
+          </Link>
+          . Figures reconcile with the purchase history exactly, except that running costs show an
+          annual vehicle payment as ÷ 12 a month (decision 190).
         </p>
       </header>
 
       <div className="space-y-6">
-        <section
-          aria-labelledby="panel-month-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="panel-month-heading" className="text-xl font-semibold">
-              {comparison.current.label}
-              {comparison.currentInProgress ? ' (in progress)' : ''} vs {comparison.previous.label}
-            </h2>
-            <span className="text-xs text-ink-muted">
-              {comparison.previous.summary.from} → {comparison.current.summary.to}
-            </span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-canvas px-4 py-3">
-              <p className="text-xs text-ink-muted">{comparison.current.label}</p>
-              <p className="text-2xl font-semibold tabular-nums">
-                {formatPence(comparison.current.summary.totalPence)}
-              </p>
+        {needsPurchases ? (
+          <NeedsFirst needs={insightsNeeds} headingId="insights-needs-heading" />
+        ) : (
+          <section
+            aria-labelledby="panel-month-heading"
+            className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+          >
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="panel-month-heading" className="text-xl font-semibold">
+                {comparison.current.label}
+                {comparison.currentInProgress ? ' (in progress)' : ''} vs{' '}
+                {comparison.previous.label}
+              </h2>
+              <span className="text-xs text-ink-muted">
+                {comparison.previous.summary.from} → {comparison.current.summary.to}
+              </span>
             </div>
-            <div className="rounded-lg bg-canvas px-4 py-3">
-              <p className="text-xs text-ink-muted">{comparison.previous.label} (complete)</p>
-              <p className="text-2xl font-semibold tabular-nums">
-                {formatPence(comparison.previous.summary.totalPence)}
-              </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-canvas px-4 py-3">
+                <p className="text-xs text-ink-muted">{comparison.current.label}</p>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatPence(comparison.current.summary.totalPence)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-canvas px-4 py-3">
+                <p className="text-xs text-ink-muted">{comparison.previous.label} (complete)</p>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatPence(comparison.previous.summary.totalPence)}
+                </p>
+              </div>
             </div>
-          </div>
-          {comparison.byParent.length > 0 ? (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[480px] text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-ink-muted">
-                  <tr>
-                    <th className="py-1.5 pr-4">Category</th>
-                    <th className="py-1.5 pr-4 text-right">{comparison.current.label}</th>
-                    <th className="py-1.5 pr-4 text-right">{comparison.previous.label}</th>
-                    <th className="py-1.5 text-right">Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparison.byParent.map((row) => (
-                    <tr key={row.parent} className="border-t border-border-hairline">
-                      <td className="py-1.5 pr-4 font-medium">{row.parent}</td>
-                      <td className="py-1.5 pr-4 text-right tabular-nums">
-                        {formatPence(row.currentPence)}
-                      </td>
-                      <td className="py-1.5 pr-4 text-right tabular-nums">
-                        {formatPence(row.previousPence)}
-                      </td>
-                      <td
-                        className={`py-1.5 text-right font-medium tabular-nums ${
-                          row.deltaPence > 0
-                            ? 'text-danger'
-                            : row.deltaPence < 0
-                              ? 'text-positive'
-                              : 'text-ink-muted'
-                        }`}
-                      >
-                        {row.deltaPence === 0
-                          ? '±0'
-                          : `${row.deltaPence > 0 ? '+' : '−'}${formatPence(Math.abs(row.deltaPence))}`}
-                      </td>
+            {comparison.byParent.length > 0 ? (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[480px] text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-ink-muted">
+                    <tr>
+                      <th className="py-1.5 pr-4">Category</th>
+                      <th className="py-1.5 pr-4 text-right">{comparison.current.label}</th>
+                      <th className="py-1.5 pr-4 text-right">{comparison.previous.label}</th>
+                      <th className="py-1.5 text-right">Change</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-ink-muted">No spending recorded in either month yet.</p>
-          )}
-        </section>
+                  </thead>
+                  <tbody>
+                    {comparison.byParent.map((row) => (
+                      <tr key={row.parent} className="border-t border-border-hairline">
+                        <td className="py-1.5 pr-4 font-medium">{row.parent}</td>
+                        <td className="py-1.5 pr-4 text-right tabular-nums">
+                          {formatPence(row.currentPence)}
+                        </td>
+                        <td className="py-1.5 pr-4 text-right tabular-nums">
+                          {formatPence(row.previousPence)}
+                        </td>
+                        <td
+                          className={`py-1.5 text-right font-medium tabular-nums ${
+                            row.deltaPence > 0
+                              ? 'text-danger'
+                              : row.deltaPence < 0
+                                ? 'text-positive'
+                                : 'text-ink-muted'
+                          }`}
+                        >
+                          {row.deltaPence === 0
+                            ? '±0'
+                            : `${row.deltaPence > 0 ? '+' : '−'}${formatPence(Math.abs(row.deltaPence))}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-ink-muted">
+                No spending recorded in either month yet.
+              </p>
+            )}
+          </section>
+        )}
 
         <section
           aria-labelledby="panel-persons-heading"
@@ -192,7 +216,13 @@ export default async function InsightsPage({
             are attributed. Household spending is never attributed to whoever happened to pay.
           </p>
           {personal.people.length === 0 ? (
-            <p className="text-sm text-ink-muted">No people in the household yet.</p>
+            <p className="text-sm text-ink-muted">
+              No people in the household yet —{' '}
+              <Link href="/start#setup-people" className="font-medium text-accent hover:underline">
+                name them on Getting started
+              </Link>
+              .
+            </p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {personal.people.map((person) => (
@@ -327,117 +357,119 @@ export default async function InsightsPage({
           )}
         </section>
 
-        <section
-          aria-labelledby="panel-honesty-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <div className="mb-3 flex items-baseline justify-between gap-2">
-            <h2 id="panel-honesty-heading" className="text-xl font-semibold">
-              Are your configured figures honest?
-            </h2>
-            <Link href="/settings" className="text-sm font-medium text-accent hover:underline">
-              Adjust in Settings →
-            </Link>
-          </div>
-          <p className="mb-4 text-xs text-ink-muted">
-            Complete weeks and months only — the in-progress period never skews the average. If the
-            configured figure is far from what actually happens, the projection will be too.
-          </p>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-border p-3">
-              <h3 className="text-sm font-semibold">Groceries — {loop.groceries.parent}</h3>
-              <p className="text-xs text-ink-muted">
-                {loop.groceries.weeks.length === 0
-                  ? 'no complete week recorded yet'
-                  : `last ${loop.groceries.weeks.length} complete ${
-                      loop.groceries.weeks.length === 1 ? 'week' : 'weeks'
-                    } (Mon–Sun)`}
-                {loop.groceries.weeks.length > 0 && loop.groceries.weeks.length < 8
-                  ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier weeks are not counted`
-                  : ''}
-              </p>
-              {loop.groceries.weeks.length === 0 ? (
-                <p className="mt-2 text-sm text-ink-soft">
-                  No complete week of shopping is recorded yet, so there is no average to compare
-                  with the configured figure.
-                </p>
-              ) : (
-                <HonestyComparison
-                  configuredLabel="weekly"
-                  period="week"
-                  configuredPence={loop.groceries.configuredPence}
-                  averagePence={loop.groceries.averageWeeklyPence}
-                  driftPence={loop.groceries.driftPence}
-                />
-              )}
-              <ul className="mt-3 space-y-1">
-                {loop.groceries.weeks.map((week) => (
-                  <li
-                    key={week.weekStart}
-                    className="flex items-baseline justify-between gap-2 text-xs"
-                  >
-                    <span className="text-ink-soft">week of {week.weekStart}</span>
-                    <span className="tabular-nums">{formatPence(week.actualPence)}</span>
-                  </li>
-                ))}
-              </ul>
+        {needsPurchases ? null : (
+          <section
+            aria-labelledby="panel-honesty-heading"
+            className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+          >
+            <div className="mb-3 flex items-baseline justify-between gap-2">
+              <h2 id="panel-honesty-heading" className="text-xl font-semibold">
+                Are your configured figures honest?
+              </h2>
+              <Link href="/settings" className="text-sm font-medium text-accent hover:underline">
+                Adjust in Settings →
+              </Link>
             </div>
-            <div className="rounded-lg border border-border p-3">
-              <h3 className="text-sm font-semibold">Fuel</h3>
-              <p className="text-xs text-ink-muted">
-                {loop.fuel[0] === undefined || loop.fuel[0].months.length === 0
-                  ? 'no complete month recorded yet, per vehicle'
-                  : `last ${loop.fuel[0].months.length} complete ${
-                      loop.fuel[0].months.length === 1 ? 'month' : 'months'
-                    }, per vehicle`}
-                {loop.fuel[0] !== undefined &&
-                loop.fuel[0].months.length > 0 &&
-                loop.fuel[0].months.length < 3
-                  ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier months are not counted${
-                      loop.groceries.recordedFrom.endsWith('-01')
-                        ? ''
-                        : ' — the first month is only part recorded, so its figure may read low'
-                    }`
-                  : ''}
-              </p>
-              <div className="mt-3 space-y-4">
-                {loop.fuel.map((vehicle) => (
-                  <div key={vehicle.vehicleId}>
-                    <p className="text-sm font-medium">{vehicle.label}</p>
-                    {vehicle.months.length === 0 ? (
-                      <p className="mt-2 text-sm text-ink-soft">
-                        No complete month of fuel is recorded yet, so there is no average to compare
-                        with the configured figure.
-                      </p>
-                    ) : (
-                      <HonestyComparison
-                        configuredLabel="monthly"
-                        period="month"
-                        configuredPence={vehicle.configuredPence}
-                        averagePence={vehicle.averageMonthlyPence}
-                        driftPence={vehicle.driftPence}
-                      />
-                    )}
-                    <ul className="mt-2 space-y-1">
-                      {vehicle.months.map((month) => (
-                        <li
-                          key={month.month}
-                          className="flex items-baseline justify-between gap-2 text-xs"
-                        >
-                          <span className="text-ink-soft">{month.month}</span>
-                          <span className="tabular-nums">{formatPence(month.actualPence)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-                {loop.fuel.length === 0 ? (
-                  <p className="text-sm text-ink-muted">No vehicles to compare yet.</p>
-                ) : null}
+            <p className="mb-4 text-xs text-ink-muted">
+              Complete weeks and months only — the in-progress period never skews the average. If
+              the configured figure is far from what actually happens, the projection will be too.
+            </p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border border-border p-3">
+                <h3 className="text-sm font-semibold">Groceries — {loop.groceries.parent}</h3>
+                <p className="text-xs text-ink-muted">
+                  {loop.groceries.weeks.length === 0
+                    ? 'no complete week recorded yet'
+                    : `last ${loop.groceries.weeks.length} complete ${
+                        loop.groceries.weeks.length === 1 ? 'week' : 'weeks'
+                      } (Mon–Sun)`}
+                  {loop.groceries.weeks.length > 0 && loop.groceries.weeks.length < 8
+                    ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier weeks are not counted`
+                    : ''}
+                </p>
+                {loop.groceries.weeks.length === 0 ? (
+                  <p className="mt-2 text-sm text-ink-soft">
+                    No complete week of shopping is recorded yet, so there is no average to compare
+                    with the configured figure.
+                  </p>
+                ) : (
+                  <HonestyComparison
+                    configuredLabel="weekly"
+                    period="week"
+                    configuredPence={loop.groceries.configuredPence}
+                    averagePence={loop.groceries.averageWeeklyPence}
+                    driftPence={loop.groceries.driftPence}
+                  />
+                )}
+                <ul className="mt-3 space-y-1">
+                  {loop.groceries.weeks.map((week) => (
+                    <li
+                      key={week.weekStart}
+                      className="flex items-baseline justify-between gap-2 text-xs"
+                    >
+                      <span className="text-ink-soft">week of {week.weekStart}</span>
+                      <span className="tabular-nums">{formatPence(week.actualPence)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <h3 className="text-sm font-semibold">Fuel</h3>
+                <p className="text-xs text-ink-muted">
+                  {loop.fuel[0] === undefined || loop.fuel[0].months.length === 0
+                    ? 'no complete month recorded yet, per vehicle'
+                    : `last ${loop.fuel[0].months.length} complete ${
+                        loop.fuel[0].months.length === 1 ? 'month' : 'months'
+                      }, per vehicle`}
+                  {loop.fuel[0] !== undefined &&
+                  loop.fuel[0].months.length > 0 &&
+                  loop.fuel[0].months.length < 3
+                    ? ` · recording began ${formatShortLocalDate(loop.groceries.recordedFrom)}, so earlier months are not counted${
+                        loop.groceries.recordedFrom.endsWith('-01')
+                          ? ''
+                          : ' — the first month is only part recorded, so its figure may read low'
+                      }`
+                    : ''}
+                </p>
+                <div className="mt-3 space-y-4">
+                  {loop.fuel.map((vehicle) => (
+                    <div key={vehicle.vehicleId}>
+                      <p className="text-sm font-medium">{vehicle.label}</p>
+                      {vehicle.months.length === 0 ? (
+                        <p className="mt-2 text-sm text-ink-soft">
+                          No complete month of fuel is recorded yet, so there is no average to
+                          compare with the configured figure.
+                        </p>
+                      ) : (
+                        <HonestyComparison
+                          configuredLabel="monthly"
+                          period="month"
+                          configuredPence={vehicle.configuredPence}
+                          averagePence={vehicle.averageMonthlyPence}
+                          driftPence={vehicle.driftPence}
+                        />
+                      )}
+                      <ul className="mt-2 space-y-1">
+                        {vehicle.months.map((month) => (
+                          <li
+                            key={month.month}
+                            className="flex items-baseline justify-between gap-2 text-xs"
+                          >
+                            <span className="text-ink-soft">{month.month}</span>
+                            <span className="tabular-nums">{formatPence(month.actualPence)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                  {loop.fuel.length === 0 ? (
+                    <p className="text-sm text-ink-muted">No vehicles to compare yet.</p>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
     </main>
   );

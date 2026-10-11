@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { GettingStartedCard } from '@/components/getting-started';
+import { NeedsFirst } from '@/components/needs-first';
 import { QuickEntry } from '@/components/quick-entry';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { APP_RELEASE_STAGE, APP_VERSION } from '@/lib/version';
@@ -13,6 +14,7 @@ import {
   getUpcomingCommitments,
   type MoneySnapshot,
 } from '@/lib/records/money-view';
+import { getPageNeeds } from '@/lib/records/page-needs';
 import { creditCardOwedPence, potEstimateLabel } from '@/lib/records/pots';
 import { getSetupFormData, getSetupPath } from '@/lib/records/setup-path';
 import { toLocalDateString } from '@/lib/time';
@@ -45,6 +47,10 @@ export default async function HomePage() {
   // The first-run path (docs/ONBOARDING_PLAN.md): derived from the records, so
   // it closes itself as the household records things and leaves no state.
   const setup = getSetupPath(db, now);
+  // “What this page needs first” (Slice 2): the locked projection card names
+  // the missing records and links the steps that supply them, instead of
+  // prose the reader has to turn into actions themselves.
+  const projectionNeeds = getPageNeeds(db, 'projection', now);
   // Shared builder (mobile home + Overview, decision: one code path).
   const entryData = buildEntryData(db, now, user.email);
 
@@ -97,14 +103,9 @@ export default async function HomePage() {
               Payday projection
             </h2>
             <p className="mt-1 text-sm text-ink-soft">
-              The liquidity projection appears once a bank or cash pot has a balance checkpoint and
-              an expected income schedule (for example a monthly salary). Record a checkpoint in
-              Quick Entry → Checkpoint or on{' '}
-              <Link href="/pots" className="font-medium text-accent hover:underline">
-                Accounts, Pots &amp; Checkpoints
-              </Link>
-              , then add the income schedule in Recurring.
+              The liquidity projection appears once the records it reads exist:
             </p>
+            <NeedsFirst variant="inline" needs={projectionNeeds} />
           </section>
         )}
 
@@ -149,7 +150,10 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
           ) : null}
         </div>
         <span className="text-xs text-ink-muted">
-          Your reported figures plus recorded activity — not a bank balance
+          Your reported figures plus recorded activity —{' '}
+          <Link href="/guide#checkpoint" className="hover:underline">
+            not a bank balance
+          </Link>
         </span>
       </div>
       {money.householdAvailablePence === null ? (

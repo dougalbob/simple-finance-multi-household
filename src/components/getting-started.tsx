@@ -182,6 +182,13 @@ export function GettingStartedPath({
             </div>
           ))}
         </dl>
+        <p className="mt-3 text-sm text-ink-soft">
+          The vocabulary behind all of it — checkpoints, estimates, transfers, the projection — is
+          on the guide:{' '}
+          <Link href="/guide" className="font-medium text-accent hover:underline">
+            How this app thinks →
+          </Link>
+        </p>
       </section>
     </div>
   );

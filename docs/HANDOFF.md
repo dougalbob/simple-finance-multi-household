@@ -1,6 +1,37 @@
-# Current handoff — v1.1.0 release: first-run onboarding (Slice 1) and the v1.0.2 post-merge facts (2026-10-11)
+# Current handoff — v1.2.0 release: the guide and "what this page needs first" (Slice 2) (2026-10-11)
 
-**Session branch:** `arena/0f421a06-simple-finance-multi-household`.
+**Session branch:** `arena/90c66748-simple-finance-multi-household`.
+
+## v1.1.0 — verified post-merge facts (recorded per `docs/RELEASE_PROCESS.md` §7)
+
+- Release PR **#13** (`Release v1.1.0: first-run onboarding`), merged to `main` with a merge commit: **`9ea4900cf65160dfa0e568a7899e334bc87f91ba`** at 2026-10-11T15:20:40Z.
+- CI on the merge commit, all success: `Gates (format, types, tests, build, audit)` check run `114503911982`; `Browser acceptance (Playwright)` `114503911817`; `Docker image build + entrypoint smoke` `114503911978`.
+- Annotated lower-case tag **`v1.1.0`** (tag object `1109662ec01198395498de61691f0267a3842a53`) on `9ea4900`.
+- Publish run **`38151241573`** succeeded: check run `114504976895` (`Build, smoke test and push the release image`). The GitHub release `v1.1.0` was published 2026-10-11T15:28:53Z, is **Latest** and is not a pre-release.
+- Digest **`sha256:fc5a269289ac4095c72b770809a8d516c0e0fe8fe9b52fabbaaa64390788e2f5`**, shared by `v1.1.0`, `latest` and `sha-9ea4900`, as printed by the Publish run's own registry check.
+
+## What this release is (v1.2.0)
+
+Slice 2 of `docs/ONBOARDING_PLAN.md`, per the household's decisions on 2026-10-11:
+
+- **`/guide` — "How this app thinks"** (`src/app/guide/page.tsx`, copy in `src/lib/guide.ts`): eight anchored sections (`#checkpoint`, `#income`, `#transfers`, `#borrowing`, `#schedules`, `#projection`, `#noticed`, `#never`). Reached from the footer and from the review rhythm on `/start`, and from the in-page links. It is **not** a navigation entry (the household chose the footer and contextual links). Every section keeps its rule; `tests/guide.test.ts` pins the load-bearing phrases.
+- **"What this page needs first"** (`src/lib/records/page-needs.ts`, `src/components/needs-first.tsx`) on the four payoff pages. Each need is a setup-path step that is not `done`, so it cannot disagree with the records and closes everywhere when the record exists. Home's locked projection card, Horizon's no-checkpoint block and the Charts forecast show the needs inline; the four reported Charts, and the month comparison and honesty loop on Insights, are replaced by one block while nothing is recorded. Optional steps (cards, renewals) and Phase B bills are never needs. A checkpoint need is hidden while the pots need is open.
+- **Inline links to the guide** on the payoff pages and in the Insights, home and Horizon prose.
+- **Navigation decision (plan §7 item 5), recorded:** `/start` keeps its navigation entry permanently ("Keep it always"). The home card is still the only element that unmounts.
+- **Two-month seed (docs change only, as the household asked):** the Slice 3 worked example is to span two calendar months, so the month-on-month comparison is visible to new users. No seed code changed in this release.
+
+### Gates run locally before the PR
+
+- `npm run typecheck` clean; `npm run format:check` clean.
+- `npm test`: **857 passed, 0 failed** (842 before; 15 new in `tests/guide.test.ts` and `tests/page-needs.test.ts`).
+- Browser, via the SANDBOX entry 8 recipe (`@sparticuz/chromium`, throwaway overlay deleted before commit): the first-run suite (`E2E_FRESH=1`) **3 of 3**, including the new needs and guide assertion; the seeded projects that render the changed pages (`mobile`, `desktop`, `charts`, `horizon`, `insights`, `bell`, `payday-summary`) **64 of 64**. The full seeded suite was not re-run here; CI's `browser` job is the gate.
+
+## What a future session should know (v1.2.0)
+
+1. **Slice 3 is the last onboarding slice**: the worked example (`/example`) rendered from `src/lib/demo/household.ts` through the real engines, with the isolated-root seeding script and the E2E seed moved onto the shared module. Per the household's decision it covers **two calendar months** (so the Insights month-on-month comparison and the Charts month views have real history). It must never write into a household database.
+2. A need is derived from the setup path. If you add a payoff figure that reads a new record, add its prerequisite to `PAGE_PREREQUISITES` and copy to `NEED_COPY` in `page-needs.ts`; the unit tests walk every page.
+3. The guide's copy describes built behaviour. If a rule changes (for example the BAC, transfer or borrowing rules), change the section and its pinned phrase in `tests/guide.test.ts` in the same PR.
+4. The guide and the needs blocks were proven in headless Chromium only; the household's own phone is still the test.
 
 ## Why this session exists
 
@@ -82,9 +113,9 @@ not written as prose that drifts. Slices 2 and 3 are approved in direction and n
 
 ## What a future session should know
 
-1. **Record v1.1.0's post-merge facts at the top of this file** (PR merge SHA, CI run IDs on the merge
-   commit, annotated tag, Publish run, and the digest shared by `v1.1.0` / `latest` / `sha-<short>`),
-   per `docs/RELEASE_PROCESS.md` §7 — v1.0.2's are above as the pattern.
+1. **Record v1.2.0's post-merge facts at the top of this file** (PR merge SHA, CI run IDs on the merge
+   commit, annotated tag, Publish run, and the digest shared by `v1.2.0` / `latest` / `sha-<short>`),
+   per `docs/RELEASE_PROCESS.md` §7 — the v1.1.0 block above is the pattern.
 2. **Slice 1 shipped; Slices 2 and 3 did not.** They stay approved in direction: `/guide` plus the
    "what this page needs first" pattern for the payoff pages, then the worked example built from
    `src/lib/demo/household.ts` and the real engines (`/example`, isolated-root seeding, the E2E seed
