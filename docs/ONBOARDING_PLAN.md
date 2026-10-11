@@ -3,9 +3,9 @@
 **Status:** approved by the household on 2026-10-11. **Slice 1 is built and released in `v1.1.0`** (the
 derived `/start` setup path, the home card, the repaired empty states and the one-person/car-free fix).
 **Slice 2 is built and released in `v1.2.0`** (`/guide`, the "What this page needs first" blocks on the
-four payoff pages). **Slice 3** (a worked example rendered from a fictional household through the real
-engines, covering **two months** of data) remains approved in direction and **not built** — start a new
-implementation PR for it. The chosen shapes are recorded in §5:
+four payoff pages). **Slice 3 is built** (the `/example` worked example, two months of fictional data
+rendered through the real engines, and the isolated-root seeding script `scripts/seed-example-household.mts`).
+The chosen shapes are recorded in §5:
 `/start` is a hub with inline short fields, never a full-screen wizard, and the worked example is
 generated from the real engines rather than written as prose.
 
@@ -163,12 +163,19 @@ something the app cannot produce.
    that changes the first ten minutes; it needs no new dependency and no schema change.
 2. **Slice 2 — the vocabulary.** `/guide`, the "what this page needs first" component on the four
    payoff pages, and the inline links.
-3. **Slice 3 — the worked example** (two months of fictional history, see §4). The `src/lib/demo/household.ts` refactor, `/example`, the
-   isolated-root seeding script, and the E2E seed switched to the shared module.
+3. **Slice 3 — the worked example** (two months of fictional history, see §4). The `src/lib/demo/household.ts` module, `/example` page,
+   the isolated-root seeding script `scripts/seed-example-household.mts`, and the footer link.
 
 Each slice is a normal pull request with domain tests for the derivation rules, browser acceptance
 for the first-run flow (fresh household → complete Phase A → projection visible), and a check that
 `/example` never touches a household database. Slices can ship independently and in this order.
+
+## 10. What Slice 3 shipped — the worked example
+
+- `src/lib/demo/household.ts` — the in-memory seed module: `seedDemoHousehold(databasePath, now)` creates the fictional household (Alex & Sam, two bank accounts, two cash pots, vehicles, salary, bills, two months of weekly shops and personal spending, a loan from Mum with expected support, the "Back Garden Fence Replacement" project demo) in an in-memory SQLite database or a file path. Unit-testable, used by both `/example` and the E2E harness.
+- `src/app/example/page.tsx` — `/example`, "A household that has been using this for two months", rendered from the app's real engines (`money-view`, `charts-view`, `insights-view`) against the in-memory seed. Shows: home projection + till, all five Charts (Forecast, Groceries, Personal, Commitments, Spending mix), all four Insights (Month comparison, Personal, Vehicle costs, Honesty loop), and Horizon. Every section captioned with the records that produced it and linked to the real page. Behind the sign-in gate, reads no household records, writes nowhere.
+- `scripts/seed-example-household.mts` — CLI rehearsal tool: seeds the same fictional two months into an isolated `DATA_DIR` (default `.preview-data`), refusing a production-shaped root or any root that already contains records. Creates a minimal registry with `alex@example.com` (platform_admin) and `sam@example.com`. For a household that wants to *touch* the example rather than look at it.
+- Footer link: `/example` added to the global footer alongside "Getting started" and "Guide".
 
 ## 7. Decisions taken
 
