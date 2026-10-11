@@ -52,6 +52,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           ·{' '}
           <Link href="/guide" className="text-accent hover:underline">
             Guide
+          </Link>{' '}
+          ·{' '}
+          <Link href="/example" className="text-accent hover:underline">
+            Worked example
           </Link>
         </footer>
       </body>
