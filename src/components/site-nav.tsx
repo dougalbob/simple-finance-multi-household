@@ -21,6 +21,9 @@ const NAV_ITEMS = [
   { href: '/contracts', label: 'Contracts & Renewals' },
   { href: '/tasks', label: 'Tasks' },
   { href: '/projects', label: 'Projects' },
+  // The first-run path (docs/ONBOARDING_PLAN.md). Always reachable, never a
+  // gate: the page itself says when everything is done.
+  { href: '/start', label: 'Getting started' },
 ];
 
 const NAV_GROUPS = [
@@ -49,6 +52,7 @@ const NAV_GROUPS = [
       { href: '/contracts', label: 'Contracts & Renewals' },
       { href: '/tasks', label: 'Tasks' },
       { href: '/projects', label: 'Projects' },
+      { href: '/start', label: 'Getting started' },
     ],
   },
 ];

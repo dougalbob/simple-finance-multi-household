@@ -48,10 +48,15 @@ logging/
 # scripts/e2e-server.mts seeds a fictional household here; it is never the real
 # appdata directory, and the reports/traces below are run artefacts.
 .e2e-data/
+# The first-run browser suite's own empty household (docs/ONBOARDING_PLAN.md);
+# scripts/e2e-server.mts seeds it, never the real appdata directory.
+.e2e-data-fresh/
 .preview-data/
 playwright-report/
 test-results/
 blob-report/
+# Sandbox-only local browser config (points at /tmp/chromium, not for CI).
+playwright.local.config.ts
 
 # --- Logs ---
 *.log

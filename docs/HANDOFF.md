@@ -1,4 +1,108 @@
-# Current handoff — v1.0.2 release: /admin registry restore fixed, hardened and tested (2026-10-11)
+# Current handoff — v1.1.0 release: first-run onboarding (Slice 1) and the v1.0.2 post-merge facts (2026-10-11)
+
+**Session branch:** `arena/0f421a06-simple-finance-multi-household`.
+
+## Why this session exists
+
+The household asked for something that works on a **brand-new household**: a tour is impossible
+because there is nothing to point at, yet the app has a lot of surface for a first-time user. The
+session measured the actual first-run state on an empty data root, wrote
+[`docs/ONBOARDING_PLAN.md`](ONBOARDING_PLAN.md), and asked for decisions rather than assuming them.
+
+**Decisions taken by the household (2026-10-11):** build **Slice 1 only** for now; Phase A is a
+**`/start` hub with short inline fields**, not a full-screen wizard that duplicates forms; the later
+worked example (Slice 3) is to be **rendered from the real engines off a shared fictional household**,
+not written as prose that drifts. Slices 2 and 3 are approved in direction and not built.
+
+## What this session did
+
+1. **Measured the empty household, then wrote the proposal**: `docs/ONBOARDING_PLAN.md` (three layers,
+   Phase A/B steps, delivery slices, the wrong `/transactions` signpost, the seven unlinked
+   "Create a pot first…" messages, the unlinked `/horizon` prose, and the no-pots till).
+2. **Built Slice 1** (the whole change set is in this release PR):
+   - `src/lib/records/setup-path.ts` — the derivation. Eight steps
+     (`people, pots, checkpoints, income, bills, figures, cards, purchases`) read from the household's
+     own records; Phase A is "your first projection", Phase B follows at your pace; `cards` is
+     optional and never counted; nothing is stored, nothing is ticked by hand, nothing is gated.
+     `getSetupFormData` supplies the inline fields. Unit-tested in `tests/setup-path.test.ts`.
+   - `src/app/start/page.tsx` + `src/components/setup-forms.tsx` — the hub: "N of 4 done" / "N left",
+     inline Phase A forms (person; pot; checkpoint; salary schedule), the review rhythm, and a
+     `readOnly` passthrough that hides every form during a support session.
+   - `src/components/getting-started.tsx` — `GettingStartedCard` (next Phase A step, then one line
+     until Phase B is done, then nothing) and `GettingStartedPath`. It owns no writes.
+   - Repairs: `/transactions` now points at `/pots`; the seven "Create a pot first…" messages, the
+     `/horizon` checkpoint prose and the till's no-pots state all link `/pots`; the old
+     `src/components/household-setup.tsx` "two people and a vehicle" card is deleted, so a one-person,
+     car-free household is complete and never nagged.
+   - `PAGE_PATHS` in `src/app/actions.ts` gained `/start`, so any action taken anywhere refreshes the
+     derived path; `/start` is in both navigation lists and the footer.
+3. **Added the first-run browser suite** — `e2e/fresh-household.spec.ts` runs against a **genuinely
+   empty** household: its own data root (`.e2e-data-fresh`), its own port (3200), its own actor
+   (`new@example.com`), seeded by `scripts/e2e-server.mts` with a registry assignment and no finance
+   database. It is run as `npm run test:e2e:fresh` (which sets `E2E_FRESH=1`; the config then exposes
+   only the `fresh-household` project) and is wired into the CI `browser` job beside the seeded suite.
+4. **Updated the two specs that count navigation links** (`e2e/bell.spec.ts` 15 → 16,
+   `e2e/desktop.spec.ts` gains "Getting started"): the only pre-existing tests this change touched.
+5. **Cut stable minor `v1.1.0`** in this release PR (version files, Unraid template, release notes,
+   the four agent entry points). No candidate: Slice 1 is additive, has no schema change, and a
+   genuinely empty household is the acceptance case the new browser suite automates.
+6. **Merge, tag and publish:** the release PR merges to `main` with a merge commit, CI on the merge
+   commit goes green, then annotated lower-case tag `v1.1.0` on that exact merge commit is pushed, and
+   the Publish workflow publishes `v1.1.0`, `latest` and `sha-<short>` to one digest.
+
+## Gates run locally before the PR
+
+- `npm run format:check` pass; `npm run typecheck` pass; `npm test` **842 passed, 0 failed**
+  (11 new setup-path tests); `npm run build` pass (`/start` in the route table); `npm audit --omit=dev`
+  **0 vulnerabilities**.
+- Browser suites via the SANDBOX entry 8 recipe (`@sparticuz/chromium`, `playwright.local.config.ts`):
+  the fresh suite (`E2E_FRESH=1`, port 3200) green repeatedly, and the seeded suite (port 3100, 124
+  tests) run in full: **114 passed, 10 failed**, all ten with a single environmental cause. The sandbox
+  has a **3.9 GB memory limit** and its OOM killer killed `next-server` (3.4 GB RSS) during the `admin`
+  registry-restore test; every later test (admin ×4, backup ×3, credit-card-pots, insights,
+  payday-summary) then failed with `net::ERR_CONNECTION_REFUSED` rather than an assertion. **Verified:
+  each of those specs passes on its own re-run**, including all four `admin` tests. Diagnose this class
+  of failure with `dmesg | tail` — look for `Out of memory: Killed process ... (next-server)`. The only
+  spec change in this release is the two navigation link counts that gained the "Getting started"
+  entry (`e2e/bell.spec.ts` 15 → 16, `e2e/desktop.spec.ts` gains the label).
+- **Two more sandbox facts worth keeping:** only one `next dev` may run in this directory at a time
+  (Next 16 refuses the second, so nothing else may hold port 3000/3100/3200 while a suite runs), and a
+  long serial `next dev` run grows to ~3.4 GB — over half the sandbox's RAM.
+
+## v1.0.2 post-merge facts (recorded here as the previous handoff asked)
+
+- Release PR **#12**, merge commit `5140fc2fbcef7eb0aa49fdc4a6c82e9bae58fc0d` (2026-10-11T13:02:29Z).
+- CI on the merge commit: `Gates` run 114476408268, `Browser acceptance` 114476408086,
+  `Docker image build + entrypoint smoke` 114476408332 — all success.
+- Annotated tag `v1.0.2` (tag object `fd6a7583f194562053e9b505f3363e82378d4ad7`) on that commit;
+  Publish run **38142109971**, success.
+- Image `ghcr.io/dougalbob/simple-finance-multi-household` `v1.0.2`, `latest` and `sha-5140fc2`, all
+  on digest `sha256:ee9c3d17844ef0debb033c3c1e9a63f5c185865857c8f2a1ce2b8c3f4b63ba7b`; GitHub release
+  marked Latest (2026-10-11T13:13:12Z).
+
+## What a future session should know
+
+1. **Record v1.1.0's post-merge facts at the top of this file** (PR merge SHA, CI run IDs on the merge
+   commit, annotated tag, Publish run, and the digest shared by `v1.1.0` / `latest` / `sha-<short>`),
+   per `docs/RELEASE_PROCESS.md` §7 — v1.0.2's are above as the pattern.
+2. **Slice 1 shipped; Slices 2 and 3 did not.** They stay approved in direction: `/guide` plus the
+   "what this page needs first" pattern for the payoff pages, then the worked example built from
+   `src/lib/demo/household.ts` and the real engines (`/example`, isolated-root seeding, the E2E seed
+   switched to the shared module). Slice 3 must never write into a real household database.
+3. **One open copy decision** in `docs/ONBOARDING_PLAN.md` §7: whether `/start` keeps its navigation
+   entry once Phase B is complete. Today the entry is always listed and the home card is what unmounts.
+4. **The live install** should update to `latest` and confirm three things on an empty household if a
+   second household is ever created: the home card names a step, `/transactions` says `/pots`, and
+   completing the four Phase A steps shows `£` figures rather than £0 scaffolding.
+5. **Still not approved:** any real-data import of the original household, and any change to the
+   original app (its GHCR package, appdata or port `3007`).
+6. **A dev-only oddity, not chased:** the mobile spec's first `/purchases` load logs a React hydration
+   warning from the dev server. It does not fail any assertion and predates this change set; if it ever
+   fails a test, start at the purchases page's date-dependent rendering.
+
+---
+
+# Historical handoff — v1.0.2 release: /admin registry restore fixed, hardened and tested (2026-10-11)
 
 **Session branch:** `arena/dc9654f7-simple-finance-multi-household`.
 

@@ -1336,6 +1336,9 @@ const PAGE_PATHS = [
   '/income',
   '/settings',
   '/tasks',
+  // The setup path (docs/ONBOARDING_PLAN.md): derived from the records, so an
+  // action taken anywhere must refresh it too.
+  '/start',
 ];
 
 function revalidatePages(): void {

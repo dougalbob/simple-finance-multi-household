@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import {
   addDebtAction,
@@ -301,7 +302,15 @@ export function LoanMovementForm({
   );
   const [debtId, setDebtId] = useState(debts[0] !== undefined ? String(debts[0].id) : '');
   if (pots.length === 0) {
-    return <p className="text-sm text-ink-soft">Create a pot first, then record borrowing.</p>;
+    return (
+      <p className="text-sm text-ink-soft">
+        Create a pot first, then record borrowing — add one on{' '}
+        <Link href="/pots" className="font-medium text-accent hover:underline">
+          Accounts, Pots &amp; Checkpoints
+        </Link>
+        .
+      </p>
+    );
   }
   if (debts.length === 0) {
     return (
@@ -436,7 +445,15 @@ export function OtherMovementForm({
     initialActionState,
   );
   if (pots.length === 0) {
-    return <p className="text-sm text-ink-soft">Create a pot first.</p>;
+    return (
+      <p className="text-sm text-ink-soft">
+        Create a pot first — add one on{' '}
+        <Link href="/pots" className="font-medium text-accent hover:underline">
+          Accounts, Pots &amp; Checkpoints
+        </Link>
+        .
+      </p>
+    );
   }
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -549,7 +566,13 @@ export function SwapForm({
   const [state, formAction, pending] = useActionState(addSwapAction, initialActionState);
   if (pots.length < 2) {
     return (
-      <p className="text-sm text-ink-soft">Create at least two pots before recording a swap.</p>
+      <p className="text-sm text-ink-soft">
+        Create at least two pots before recording a swap — add them on{' '}
+        <Link href="/pots" className="font-medium text-accent hover:underline">
+          Accounts, Pots &amp; Checkpoints
+        </Link>
+        .
+      </p>
     );
   }
   return (

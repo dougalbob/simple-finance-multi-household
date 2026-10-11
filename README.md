@@ -2,8 +2,9 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-11):** this is the independent multi-household edition and **`v1.0.2` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.0.2.md`](docs/RELEASE_NOTES_v1.0.2.md).
+> **Status (2026-10-11):** this is the independent multi-household edition and **`v1.1.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.1.0.md`](docs/RELEASE_NOTES_v1.1.0.md).
+> It adds the first-run setup path for a brand-new household ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
 > restore, and registry backup and restore in `/admin` are implemented. Importing the existing household
@@ -17,7 +18,7 @@ A private finance app for multiple independent households, self-hosted by the pr
 - **Only GHCR image:** `ghcr.io/dougalbob/simple-finance-multi-household`. This repository must never push to `ghcr.io/dougalbob/simple-finance`, including the `latest` tag. The publish workflow contains a repository/image guard.
 - **Original production app:** remains on bridge networking, host port `3007` → container port `3000`, using `/mnt/user/appdata/simple-finance`. Do not mount, alter or migrate that location.
 - **New app target:** bridge networking, host port `3009` → container port `3000`, with `/mnt/user/appdata/simple-finance-multi-household` mapped to `/data`. Use a separate Cloudflare hostname/route to the new container; leave the existing route untouched.
-- **Versioning:** `v1.0.2` is the accepted stable release and moves `latest` (`v1.0.0` was the first stable, `v1.0.1` shipped registry backup/restore). Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged. Any future stable release moves `latest` again.
+- **Versioning:** `v1.1.0` is the accepted stable release and moves `latest` (`v1.0.0` was the first stable, `v1.0.1` shipped registry backup/restore, `v1.0.2` fixed and hardened that restore). Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged. Any future stable release moves `latest` again.
 
 ## Product and tenancy model
 
@@ -33,7 +34,7 @@ Fast mobile entry, checkpoints, payday projections, recurring schedules, insight
 
 ## Unraid installation
 
-**`v1.0.2` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
+**`v1.1.0` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
 
 ```text
 /mnt/user/appdata/simple-finance-multi-household/  →  /data/
@@ -153,7 +154,7 @@ Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.e
 
 ## Version and release line
 
-**`v1.0.2` is the accepted stable release** (package/app version `1.0.2`, badge `v1.0.2 · stable`). It is published as `v1.0.2`, `latest` and `sha-<short>`, all to one digest, and its GitHub release is marked Latest. `v1.0.0` was the first stable release and `v1.0.1` shipped registry backup/restore; their own image tags stay on their own digests while `latest` has moved on.
+**`v1.1.0` is the accepted stable release** (package/app version `1.1.0`, badge `v1.1.0 · stable`). It is published as `v1.1.0`, `latest` and `sha-<short>`, all to one digest, and its GitHub release is marked Latest. `v1.0.0` was the first stable release, `v1.0.1` shipped registry backup/restore and `v1.0.2` fixed and hardened the restore; their own image tags stay on their own digests while `latest` has moved on.
 
 A candidate is a SemVer prerelease with an `-rc.N` suffix, incrementing per build (`v1.0.0-rc.1`, `-rc.2`, …). A candidate gets its exact version tag and `sha-<short>` tag, **not `latest`**, and its GitHub release is marked pre-release. Accepted candidates become a distinct stable tag; never rename or retag one. The candidates so far: `v1.0.0-rc.1` and `v1.0.0-rc.2` exist as Git tags but their Publish runs failed before pushing, so **no image exists for either**; `v1.0.0-rc.3` published, was accepted on a real installation, and is the base `v1.0.0` was promoted from.
 

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { addCheckpointAction, createPotAction } from '@/app/actions';
 import { initialActionState } from '@/lib/action-state';
@@ -103,7 +104,11 @@ export function AddCheckpointForm({
   if (pots.length === 0) {
     return (
       <p className="text-sm text-ink-soft">
-        Create a pot first, then you can record what it currently holds.
+        Create a pot first, then you can record what it currently holds — add one on{' '}
+        <Link href="/pots" className="font-medium text-accent hover:underline">
+          Accounts, Pots &amp; Checkpoints
+        </Link>
+        .
       </p>
     );
   }

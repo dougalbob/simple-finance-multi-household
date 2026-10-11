@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { HouseholdSetup } from '@/components/household-setup';
+import { GettingStartedCard } from '@/components/getting-started';
 import { QuickEntry } from '@/components/quick-entry';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { APP_RELEASE_STAGE, APP_VERSION } from '@/lib/version';
@@ -14,8 +14,7 @@ import {
   type MoneySnapshot,
 } from '@/lib/records/money-view';
 import { creditCardOwedPence, potEstimateLabel } from '@/lib/records/pots';
-import { listPeople } from '@/lib/records/people';
-import { listVehicles } from '@/lib/records/vehicles';
+import { getSetupFormData, getSetupPath } from '@/lib/records/setup-path';
 import { toLocalDateString } from '@/lib/time';
 import { PaydaySummary } from '@/components/payday-summary';
 
@@ -43,8 +42,9 @@ export default async function HomePage() {
   const projection = getProjectionView(db, now);
   const dueThisWeek = getUpcomingCommitments(db, addDaysLocal(today, 7), now);
 
-  const people = listPeople(db);
-  const vehicles = listVehicles(db);
+  // The first-run path (docs/ONBOARDING_PLAN.md): derived from the records, so
+  // it closes itself as the household records things and leaves no state.
+  const setup = getSetupPath(db, now);
   // Shared builder (mobile home + Overview, decision: one code path).
   const entryData = buildEntryData(db, now, user.email);
 
@@ -67,11 +67,11 @@ export default async function HomePage() {
       </header>
 
       <div className="flex flex-col gap-6">
-        {people.length < 2 || vehicles.length === 0 ? (
+        {setup.phaseA.complete && setup.phaseBOutstanding === 0 ? null : (
           <div className="order-0">
-            <HouseholdSetup people={people.map(({ id, label }) => ({ id, label }))} />
+            <GettingStartedCard view={setup} forms={getSetupFormData(db, now)} />
           </div>
-        ) : null}
+        )}
 
         {/* Mobile: keep the household total ahead of the till. Laptop: put the
             same till above, not in place of, the existing home content. */}

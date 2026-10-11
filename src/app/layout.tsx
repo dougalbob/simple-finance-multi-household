@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { SiteNav } from '@/components/site-nav';
@@ -44,7 +45,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         {children}
         <footer className="mx-auto mt-12 max-w-3xl px-4 pb-8 text-center text-xs text-ink-faint">
           {APP_NAME} v{APP_VERSION} ({APP_RELEASE_STAGE}) · estimates and projections, never a bank
-          balance
+          balance ·{' '}
+          <Link href="/start" className="text-accent hover:underline">
+            Getting started
+          </Link>
         </footer>
       </body>
     </html>

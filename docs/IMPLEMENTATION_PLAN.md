@@ -1983,7 +1983,9 @@ src/app/api/health/route.ts   — public health endpoint (no diagnostics)
 src/app/api/backup/route.ts   — authenticated encrypted backup download (POST)
 src/components/pot-forms.tsx  — client forms (Add pot / checkpoint)
 src/components/quick-entry.tsx — mobile Add Purchase / Add Fuel / Update Balance, split helper, chips, duplicate notice
-src/components/household-setup.tsx — authenticated initial people/vehicle labels (household data is never seeded)
+src/components/getting-started.tsx — the derived first-run card and path (v1.1.0; replaced household-setup.tsx)
+src/components/setup-forms.tsx — /start's inline Phase A forms (person; pot; checkpoint; salary schedule)
+src/lib/records/setup-path.ts — the derived setup path read from the household's own records (v1.1.0)
 src/components/recurring.tsx  — Phase 3 client forms: Add/Cancel schedule, Add renewal, projection figures
                                 (slim props, decision 73)
 src/components/record-forms.tsx — Phase 4a: line editor, PurchaseEditForm, RefundForm, generic VoidForm,

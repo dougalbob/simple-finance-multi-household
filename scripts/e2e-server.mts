@@ -40,12 +40,22 @@ import { recentMonthlyDueDay } from './e2e-seed-dates';
  * Cloudflare; `loadAppConfig` computes that bypass as impossible whenever
  * NODE_ENV is production, so this can never become a production hole.
  */
-const DATA_DIR = path.resolve(process.cwd(), '.e2e-data');
-const PORT = Number(process.env.E2E_PORT ?? 3100);
-const ACTOR = 'alex@example.com';
+const FRESH = process.env.E2E_FRESH === '1';
+const DATA_DIR = path.resolve(process.cwd(), FRESH ? '.e2e-data-fresh' : '.e2e-data');
+const PORT = Number(process.env.E2E_PORT ?? (FRESH ? 3200 : 3100));
+const ACTOR = FRESH ? 'new@example.com' : 'alex@example.com';
 
 function seed(): void {
   rmSync(DATA_DIR, { recursive: true, force: true });
+  // `E2E_FRESH=1` is the first-run server (docs/ONBOARDING_PLAN.md): a
+  // household with a registry assignment and no finance database at all, so
+  // the browser suite can walk the setup path from a genuinely empty app.
+  // Two servers run side by side, hence the separate data root — the full
+  // seed above deletes its own and must never delete this one.
+  if (FRESH) {
+    seedFreshRegistry();
+    return;
+  }
   const householdId = seedRegistry();
   const databasePath = householdDatabasePath(DATA_DIR, householdId);
   const handle = openDatabase(databasePath);
@@ -496,6 +506,24 @@ function localDate(base: Date, dayOffset: number): string {
  * the administrator would. Alex carries the platform-administrator role so
  * the `/admin` specs can run against this seed. Fictional emails only.
  */
+/** The empty household: one identity, assigned, with no finance records. */
+function seedFreshRegistry(): void {
+  const registry = openRegistry(systemRegistryPath(DATA_DIR));
+  try {
+    const household = createHousehold(registry, {
+      displayName: 'New household',
+      actor: 'system',
+    });
+    assignIdentity(registry, {
+      email: ACTOR,
+      householdId: household.id,
+      actor: 'system',
+    });
+  } finally {
+    registry.close();
+  }
+}
+
 function seedRegistry(): string {
   const registry = openRegistry(systemRegistryPath(DATA_DIR));
   try {
