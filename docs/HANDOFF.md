@@ -1,4 +1,82 @@
-# Current handoff — v1.0.1 release: PR #10 merged, registry backup/restore published (2026-10-11)
+# Current handoff — v1.0.2 release: /admin registry restore fixed, hardened and tested (2026-10-11)
+
+**Session branch:** `arena/dc9654f7-simple-finance-multi-household`.
+
+## Why this session exists
+
+User testing on the live Unraid install (v1.0.1 image) found `/admin` registry restore broken:
+pressing RESTORE navigated to `https://0.0.0.0:3000/admin` ("This site can't be reached"), because
+`src/app/admin/restore/route.ts` built its redirect from `request.url` — which under
+`next start -H 0.0.0.0 -p 3000` is the bind address, never the public URL (`Host` is ignored;
+`trustHostHeader` cannot help) — and `NextResponse.redirect` defaults to 307, which would re-POST
+the upload. Separately, one live restore appeared not to take effect; that cause stays open (the
+redirect proves the write path ran, so a stale cached view is the leading explanation), and this
+release makes it diagnosable instead of silently re-occurring.
+
+## What this session did
+
+1. **Fixed the redirect:** `POST /admin/restore` now returns **303** with the relative
+   `Location: /admin` — never derived from `request.url`, and 303 so the browser GETs the page
+   instead of re-POSTing the upload (the 307 default).
+2. **Hardened the restore** in a new module `src/lib/registry/restore.ts`, consumed by a rewritten
+   route handler (`src/app/admin/restore/route.ts`):
+   - session gate unchanged (401/403), now via the framework-free `describeSession`, plus the
+     same-origin guard the household restore already used;
+   - 64 MiB size cap (413); SQLite magic-header check; `PRAGMA integrity_check` on a throwaway
+     copy; and a `households`/`identities` table check so a valid-but-unrelated SQLite file can
+     never wipe the roster;
+   - consistent pre-restore snapshot via SQLite's backup API, kept as
+     `<dataDir>/system/registry.sqlite.pre-restore-<timestamp>`;
+   - atomic inode swap: upload written to a same-directory temp file, fsynced, renamed over the
+     live path, then the old-inode WAL/SHM sidecar names removed; if the swapped-in file fails to
+     reopen, the snapshot is swapped back automatically and the error reported;
+   - every restore logs path, byte length, sha256, households/identities before→after, and the
+     pre-restore copy path (the artifacts the open live question needs: see release notes).
+3. **Added the missing tests** v1.0.1's notes admitted to: `tests/admin-restore-route.test.ts`
+   (401/403 gates, invalid uploads with the live registry proven untouched, success path asserting
+   the exact 303 + relative Location value, byte-for-byte replacement on an isolated `DATA_DIR`,
+   pre-restore copy contents, outcome log) and a browser round trip in `e2e/admin.spec.ts`
+   (download → create household → restore → roster back, landed on `/admin`).
+4. **Cut stable patch v1.0.2** in this release PR (version files, Unraid template, release notes,
+   the five agent entry points). No RC: this is a small fix on the admin surface of an accepted
+   stable line, and the restore button is broken without it — same reasoning as v1.0.1.
+5. **Merge, tag and publish:** the release PR merges to `main` with a merge commit, CI on the merge
+   commit goes green, then annotated lower-case tag `v1.0.2` on that exact merge commit is pushed,
+   and the Publish workflow publishes `v1.0.2`, `latest` and `sha-<short>` to one digest.
+
+## Gates run locally before the PR (sandbox, `npm ci --ignore-scripts` per SANDBOX entry 1)
+
+- `npm run format:check` pass; `npm run typecheck` pass; `npm test` **831 passed**, 0 failed;
+  `npm run build` pass; `npm audit --omit=dev` **0 vulnerabilities**.
+- Full local Playwright suite via the SANDBOX entry 8 recipe (`@sparticuz/chromium`): **124
+  passed**, including the new registry round-trip test, run repeatedly to rule out a race.
+
+## A debugging lesson worth keeping
+
+The first in-place rewrite implementation (unlink WAL/SHM, `writeFileSync` over the live path —
+the v1.0.1 mechanics) failed in this sandbox's `next dev` with `SQLITE_IOERR_SHORT_READ`: Turbopack
+dev evaluates pages/server actions and route handlers as separate module graphs in one process, so
+two cached better-sqlite3 connections coexist, and rewriting the file under the other connection
+let its stale WAL state resurrect and corrupt the fresh open. The atomic rename swap fixed it and
+is strictly better in production too (no torn file if the process dies mid-restore). If registry
+access ever misbehaves only in `next dev`, suspect multiple module-graph handle caches before
+suspecting the data.
+
+## What a future session should know
+
+1. **Record v1.0.2's post-merge facts at the top of this file** (release-PR merge SHA, PR CI and
+   `main` CI run IDs, annotated tag, Publish run, digest on `v1.0.2` / `latest` / `sha-<short>` vs
+   v1.0.1's), per `docs/RELEASE_PROCESS.md` §7.
+2. **The open live question** (v1.0.1 restore that appeared not to land) is now diagnosable: fresh
+   reload of `/admin` first; then the container log's `[registry-restore]` line (path, bytes,
+   sha256, before/after row counts) and the preserved `registry.sqlite.pre-restore-*` copy for a
+   direct `sqlite3` roster check. If it recurs, those artifacts answer it.
+3. **Still not approved:** any real-data import of the original household, and any change to the
+   original app (its GHCR package, appdata or port `3007`).
+
+---
+
+# Historical handoff — v1.0.1 release: PR #10 merged, registry backup/restore published (2026-10-11)
 
 **Session branch:** `arena/0569c272-simple-finance-multi-household`.
 
