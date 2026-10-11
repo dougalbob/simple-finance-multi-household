@@ -1,4 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 /**
  * Platform administration (MULTI_HOUSEHOLD_PLAN §2, §4): the roster of
@@ -33,6 +36,55 @@ async function openStatusDisclosure(card: Locator): Promise<void> {
 }
 
 test.describe('platform administration', () => {
+  test('registry backup, then a roster change, then restore puts the roster back', async ({
+    page,
+  }) => {
+    await page.goto('/admin');
+    const section = page.locator('section[aria-labelledby="admin-backup-heading"]');
+    await expect(section.getByRole('heading', { name: 'Registry Database Backup' })).toBeVisible();
+
+    // 1. Download the registry backup.
+    const downloadPromise = page.waitForEvent('download');
+    await section.getByRole('link', { name: 'Download Backup' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^simple-finance-registry-v.+\.sqlite$/);
+    const backupPath = path.join(
+      os.tmpdir(),
+      `registry-backup-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`,
+    );
+    await download.saveAs(backupPath);
+    expect(fs.statSync(backupPath).size).toBeGreaterThan(0);
+
+    // 2. Mutate the roster: a household the backup does not know about.
+    const restoreProbe = `Restore probe ${Date.now()}`;
+    const create = page.getByRole('region', { name: 'Create a household' });
+    await create.getByLabel('Household name').fill(restoreProbe);
+    await create.getByRole('button', { name: 'Create household' }).click();
+    await expect(householdCard(page, restoreProbe)).toBeVisible();
+
+    // 3. Restore the downloaded backup. The form confirms before submitting,
+    // then POSTs the file; the response must send the browser back to /admin
+    // over the SAME origin it is already on (the v1.0.1 bug redirected to
+    // https://0.0.0.0:3000/admin and re-POSTed the upload with a 307).
+    page.once('dialog', (dialog) => dialog.accept());
+    await section.locator('input[type="file"]').setInputFiles(backupPath);
+    await Promise.all([
+      page.waitForResponse((response) => response.url().includes('/admin/restore')),
+      section.getByRole('button', { name: 'Restore' }).click(),
+    ]);
+
+    // 4. We are back on the admin page itself — reloaded, not re-POSTed —
+    // and the roster is exactly what the backup held: the probe household is
+    // gone, the seeded household remains.
+    await page.waitForURL(/\/admin$/);
+    await expect(
+      page.getByRole('heading', { name: 'Households & sign-in', level: 1 }),
+    ).toBeVisible();
+    await expect(householdCard(page, restoreProbe)).toHaveCount(0);
+    await expect(householdCard(page, 'Alex & Sam')).toBeVisible();
+    fs.rmSync(backupPath, { force: true });
+  });
+
   test('shows the roster and refuses to overfill a household', async ({ page }) => {
     await page.goto('/admin');
     await expect(
