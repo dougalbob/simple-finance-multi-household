@@ -12,9 +12,11 @@ import {
   landPenceOf,
   nextScheduledIncomeDate,
 } from '@/lib/records/money-view';
+import { getPageNeeds } from '@/lib/records/page-needs';
 import { listPots } from '@/lib/records/pots';
 import { buildHorizonDayDetails } from '@/lib/records/horizon-days';
 import { toLocalDateString } from '@/lib/time';
+import { NeedsFirst } from '@/components/needs-first';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +100,9 @@ export default async function HorizonPage({
   const pots = listPots(db).filter((pot) => pot.kind !== 'credit-card');
   const view = getHorizonProjectionView(db, throughDate, potIds, includeDayToDay, now);
   const { result } = view;
+  // “What this page needs first” (Slice 2): shown only in the no-checkpoint
+  // branch below, where the page used to explain its dependency in prose.
+  const horizonNeeds = getPageNeeds(db, 'horizon', now);
 
   const tier = result.tier;
   const tierStyles =
@@ -288,13 +293,17 @@ export default async function HorizonPage({
           </p>
         </>
       ) : (
-        <p className="mb-4 rounded-lg border border-dashed border-border-strong bg-surface p-4 text-sm text-ink-soft">
-          {lowLine} Record one on Quick Entry → Checkpoint or{' '}
-          <Link href="/pots" className="font-medium text-accent hover:underline">
-            Accounts, Pots &amp; Checkpoints
-          </Link>
-          . Card balances are excluded from this liquidity projection.
-        </p>
+        <div className="mb-4 rounded-lg border border-dashed border-border-strong bg-surface p-4 text-sm text-ink-soft">
+          <p>{lowLine}</p>
+          <NeedsFirst variant="inline" needs={horizonNeeds} />
+          <p className="mt-2 text-xs text-ink-muted">
+            Card balances are excluded from this liquidity projection —{' '}
+            <Link href="/guide#projection" className="hover:underline">
+              how the projection works
+            </Link>
+            .
+          </p>
+        </div>
       )}
 
       {result.days <= 0 ? (
@@ -434,10 +443,17 @@ export default async function HorizonPage({
       </div>
 
       <p className="mt-6 text-xs text-ink-muted">
-        A projection of the records already in the app, not a bank forecast. Expected support is an
-        expectation of borrowed money — it is owed, never income, and it lands only if it is
-        actually borrowed and recorded. Day-to-day projects the next shops and fills from when the
-        household last recorded them, at the figures configured in Settings.
+        A projection of the records already in the app,{' '}
+        <Link href="/guide#projection" className="hover:underline">
+          not a bank forecast
+        </Link>
+        . Expected support is an expectation of borrowed money —{' '}
+        <Link href="/guide#borrowing" className="hover:underline">
+          it is owed, never income
+        </Link>
+        , and it lands only if it is actually borrowed and recorded. Day-to-day projects the next
+        shops and fills from when the household last recorded them, at the figures configured in
+        Settings.
       </p>
     </main>
   );

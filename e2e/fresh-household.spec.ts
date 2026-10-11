@@ -63,6 +63,41 @@ test.describe('a brand-new household', () => {
     ).toHaveAttribute('href', '/pots');
   });
 
+  test('the payoff pages name what they need, and the guide is anchored', async ({ page }) => {
+    // Zero-figure scaffolding is replaced by the needs block (Slice 2): the
+    // forecast and the reported charts each name their own missing records.
+    await page.goto('/charts');
+    const needs = page.getByRole('heading', { name: 'What this page needs first' });
+    await expect(needs.first()).toBeVisible();
+    await expect(page.getByText('Where liquid funds go, today to a month ahead')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Add the pots you actually have →' }),
+    ).toHaveAttribute('href', '/start#setup-pots');
+
+    await page.goto('/horizon');
+    await expect(
+      page.getByRole('link', { name: 'Add the pots you actually have →' }),
+    ).toBeVisible();
+
+    await page.goto('/insights');
+    await expect(
+      page.getByRole('link', { name: 'Record your first purchase →' }).first(),
+    ).toBeVisible();
+    await expect(page.getByText('No complete week of shopping is recorded yet')).toHaveCount(0);
+
+    // The guide is one page, reachable from the footer, with every anchor a
+    // needs block can link to.
+    await page.goto('/guide');
+    await expect(
+      page.getByRole('heading', { name: 'How this app thinks', level: 1 }),
+    ).toBeVisible();
+    for (const anchor of ['checkpoint', 'income', 'transfers', 'borrowing', 'schedules']) {
+      await expect(page.locator(`#${anchor}`)).toBeVisible();
+    }
+    await page.goto('/guide#checkpoint');
+    await expect(page.locator('#checkpoint')).toBeInViewport();
+  });
+
   test('completing Phase A turns the projection on and clears the home card', async ({ page }) => {
     test.slow();
     await page.goto('/');

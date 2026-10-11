@@ -1082,6 +1082,12 @@ makes even that ambiguous.
 came due today appears. "Read-only" means no user-facing writes: no form on this page can create,
 edit or void anything.
 
+### 15.5 The guide and "what this page needs first" (v1.2.0, decision 196)
+
+`/guide` is one plain-language page with eight anchored sections (checkpoints and bank balances, income is not spending, transfers, borrowed money, schedules and history, the projection, "the app has noticed", and what the app never does). It reads no household records, is reached from the footer and from the setup path, and is not a navigation entry.
+
+The four payoff pages (the payday projection, Horizon, Charts and Insights) state what they are waiting for, in place of zero-figure scaffolding. Each missing record is a setup-path step that is not done, so it closes everywhere once recorded. Optional steps and Phase B bills are never prerequisites. A reported chart or an Insights panel gives way to the block only while nothing is recorded for it. Nothing is stored and nothing is dismissable.
+
 ### 15.4 Appearance — one token block, fourteen palettes, light and dark (v0.17.0)
 
 The household's standing requirement (decision **159**): the colour scheme must be arranged so that

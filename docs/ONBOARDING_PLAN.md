@@ -1,10 +1,11 @@
 # First-run onboarding — proposal
 
-**Status:** approved by the household on 2026-10-11, and **Slice 1 is built and released in `v1.1.0`**
-(the derived `/start` setup path, the home card, the repaired empty states and the
-one-person/car-free fix). Slice 2 (`/guide`, "what this page needs first") and Slice 3 (a worked
-example rendered from a fictional household through the real engines) remain approved in direction
-and **not built** — start a new implementation PR for either. The chosen shapes are recorded in §5:
+**Status:** approved by the household on 2026-10-11. **Slice 1 is built and released in `v1.1.0`** (the
+derived `/start` setup path, the home card, the repaired empty states and the one-person/car-free fix).
+**Slice 2 is built and released in `v1.2.0`** (`/guide`, the "What this page needs first" blocks on the
+four payoff pages). **Slice 3** (a worked example rendered from a fictional household through the real
+engines, covering **two months** of data) remains approved in direction and **not built** — start a new
+implementation PR for it. The chosen shapes are recorded in §5:
 `/start` is a hub with inline short fields, never a full-screen wizard, and the worked example is
 generated from the real engines rather than written as prose.
 
@@ -115,11 +116,16 @@ This answers the tour question directly: you cannot tour the app with no data, b
 **worked example** built from the app's own engines and components, so it can never drift into
 something the app cannot produce.
 
-- `/example` — "A household that has been using this for a month": the home page with a live
-  projection, a till mid-purchase, the forecast and groceries charts, the insights honesty loop, and
-  the recurring calendar with a converted schedule.
+- `/example` — "A household that has been using this for two months": the home page with a live
+  projection, a till mid-purchase, the forecast and groceries charts, the insights month-on-month
+  comparison and honesty loop, and the recurring calendar with a converted schedule.
+- **Two calendar months, not one (household requirement, 2026-10-11).** The fictional history must span
+  two complete calendar months, so a new user sees the month-on-month comparison ("October vs
+  September") fully populated and understands it. One month would leave Insights' comparison and the
+  Charts month views with nothing to compare against, which is the empty state this layer exists to
+  remove. The seeded data is dated relative to today so the previous month is always complete.
 - Every section is captioned with the records that produced it ("two bank accounts, a cash pot each,
-  a salary on the 28th, eleven direct debits and three weeks of shopping") and links to the real page
+  a salary on the 28th, eleven direct debits and two months of shopping") and links to the real page
   it will become.
 - It is rendered from an **in-memory database seeded with fictional data** (`src/lib/demo/`), never
   from a household database and never writing anywhere. It stays behind the sign-in gate like every
@@ -129,7 +135,7 @@ something the app cannot produce.
   `src/lib/demo/household.ts` and both the browser suite and `/example` use it. One fictional
   scenario, already asserted by tests, now also teaches the app.
 - For a household that wants to *touch* it rather than look at it, `scripts/seed-example-household.mts`
-  seeds the same fictional month into an **isolated data root** (the `.preview-data` pattern the
+  seeds the same fictional two months into an **isolated data root** (the `.preview-data` pattern the
   Projects demo script already uses), refusing a production-shaped `/data` root or any root that
   already contains records. That is a rehearsal tool, not an in-app playground: the one-household-per-
   identity rule stays intact, and no fake record ever lands in a household's own database.
@@ -157,7 +163,7 @@ something the app cannot produce.
    that changes the first ten minutes; it needs no new dependency and no schema change.
 2. **Slice 2 — the vocabulary.** `/guide`, the "what this page needs first" component on the four
    payoff pages, and the inline links.
-3. **Slice 3 — the worked example.** The `src/lib/demo/household.ts` refactor, `/example`, the
+3. **Slice 3 — the worked example** (two months of fictional history, see §4). The `src/lib/demo/household.ts` refactor, `/example`, the
    isolated-root seeding script, and the E2E seed switched to the shared module.
 
 Each slice is a normal pull request with domain tests for the derivation rules, browser acceptance
@@ -176,10 +182,11 @@ for the first-run flow (fresh household → complete Phase A → projection visi
    not a prose page that drifts.
 4. **Version → `v1.1.0`**, a stable minor release with no schema change and no candidate, published
    under [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
-5. **Still open, for whoever takes Slice 2:** whether `/start` keeps its place in the navigation once
-   Phase B is complete. Today the entry is always listed and the *home card* is what unmounts itself
-   when the derived path is done, so nothing can disagree with the records; hiding the nav entry as
-   well is a copy decision, not a state decision.
+5. **Decided for Slice 2 (2026-10-11): `/start` keeps its navigation entry.** The household chose "keep it
+   always": the nav entry stays, and only the *home card* unmounts itself when the derived path is done.
+   Nothing can disagree with the records either way.
+6. **Decided for Slice 2: `/guide` is reached from the footer and from links, not the navigation.** The
+   household chose the footer and contextual links, so the nav stays at fifteen entries.
 
 ## 8. What Slice 1 actually shipped (for the next session)
 
@@ -199,3 +206,26 @@ for the first-run flow (fresh household → complete Phase A → projection visi
 - `e2e/fresh-household.spec.ts` — the first-run suite, run against a genuinely empty household
   (`E2E_FRESH=1`, data root `.e2e-data-fresh`, actor `new@example.com`) as `npm run test:e2e:fresh`,
   and wired into the CI `browser` job beside the seeded suite.
+
+## 9. What Slice 2 shipped — `v1.2.0` (the vocabulary)
+
+- `src/lib/guide.ts` — the guide's copy and anchors: eight sections (`checkpoint`, `income`, `transfers`,
+  `borrowing`, `schedules`, `projection`, `noticed`, `never`). Each carries a lead, paragraphs and
+  "where to see it" links. `tests/guide.test.ts` pins the anchors, the shape and the load-bearing phrases.
+- `src/app/guide/page.tsx` — `/guide`, "How this app thinks", rendered from `GUIDE_SECTIONS`, behind the
+  sign-in gate, reading no household records. Linked from the footer and from `/start`'s review rhythm.
+- `src/lib/records/page-needs.ts` — "What this page needs first": per payoff page (`projection`,
+  `horizon`, `charts`, `insights`), the setup-path steps that are not `done`. A checkpoint need is hidden
+  while the pots need is open. Optional steps and Phase B bills are never needs. Tested in
+  `tests/page-needs.test.ts` against real records through the domain APIs.
+- `src/components/needs-first.tsx` — the pattern (section or inline), server-rendered, no state, nothing
+  dismissed. It renders nothing when the list is empty.
+- The four payoff pages: home's locked projection card lists its needs; Horizon's no-checkpoint block
+  lists its needs; Charts' forecast lists its needs and the four reported charts give way to one block
+  while nothing is recorded; Insights' month comparison and honesty loop give way to one block while
+  nothing is recorded. The people, vehicle and mpg panels keep their own honest empty sentences.
+- Inline guide links on home, Horizon, Charts and Insights prose, and a "How this app thinks" link under
+  the review rhythm on `/start`.
+- Browser: `e2e/fresh-household.spec.ts` gains the needs-and-guide assertion on the empty household.
+- Deliberately not changed: no schema, no migration, no new dependency, no navigation entry for `/guide`,
+  and the Slice 1 copy in `setup-path.ts`.

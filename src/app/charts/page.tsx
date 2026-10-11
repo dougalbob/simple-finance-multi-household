@@ -16,6 +16,7 @@ import {
 } from '@/components/charts';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
+import { NeedsFirst } from '@/components/needs-first';
 import {
   PIE_SPLIT_PARENTS,
   getCommitmentChartView,
@@ -30,6 +31,7 @@ import {
   type PersonalChartView,
   type SpendingMixView,
 } from '@/lib/records/charts-view';
+import { getPageNeeds, type PageNeed } from '@/lib/records/page-needs';
 import {
   purchasesHref,
   type GroceriesSeries,
@@ -86,6 +88,15 @@ export default async function ChartsPage({
   const params = await searchParams;
   const scheduleOnly = params.scheduleOnly === '1';
 
+  // “What this page needs first” (Slice 2), split by the two halves of the
+  // page: the forecast reads the checkpoint chain, and the four reported
+  // charts read recorded purchases. Each half replaces its own zero-figure
+  // scaffolding; a household with records never sees either block.
+  const chartNeeds = getPageNeeds(db, 'charts', now);
+  const forecastNeeds = chartNeeds.filter((need) => need.id !== 'purchases');
+  const reportedNeeds = chartNeeds.filter((need) => need.id === 'purchases');
+  const reportedDrawn = reportedNeeds.length === 0;
+
   const forecast = getForecastChartView(db, now);
   const groceries = getGroceriesChartView(db, {}, now);
   const everyone = getPersonalChartView(db, {}, now);
@@ -120,18 +131,35 @@ export default async function ChartsPage({
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ForecastSection view={forecast} />
-        <GroceriesSection view={groceries} />
-        <PersonalSection view={personal} everyone={everyone} selected={include} params={params} />
-        <CommitmentsSection view={commitments} params={params} />
-        <MixLayout view={mixView} selectedKey={sliceKey} />
+        <ForecastSection view={forecast} needs={forecastNeeds} />
+        {reportedDrawn ? (
+          <>
+            <GroceriesSection view={groceries} />
+            <PersonalSection
+              view={personal}
+              everyone={everyone}
+              selected={include}
+              params={params}
+            />
+            <CommitmentsSection view={commitments} params={params} />
+            <MixLayout view={mixView} selectedKey={sliceKey} />
+          </>
+        ) : (
+          <NeedsFirst
+            needs={reportedNeeds}
+            className="lg:col-span-2"
+            headingId="charts-needs-heading"
+          />
+        )}
       </div>
 
-      <p className="mt-6 text-xs text-ink-muted">
-        Clicking a bar opens the purchases behind it. Those filters match the <em>purchase</em>, and
-        a matched purchase comes back with all of its lines, receipt-style — so a split shop appears
-        whole, not as the single line that matched.
-      </p>
+      {reportedDrawn ? (
+        <p className="mt-6 text-xs text-ink-muted">
+          Clicking a bar opens the purchases behind it. Those filters match the <em>purchase</em>,
+          and a matched purchase comes back with all of its lines, receipt-style — so a split shop
+          appears whole, not as the single line that matched.
+        </p>
+      ) : null}
     </main>
   );
 }
@@ -140,7 +168,14 @@ export default async function ChartsPage({
 /* A. Forecast                                                         */
 /* ------------------------------------------------------------------ */
 
-function ForecastSection({ view }: { view: ForecastChartView }) {
+function ForecastSection({
+  view,
+  needs,
+}: {
+  view: ForecastChartView;
+  /** The checkpoint-chain needs — rendered only in the unavailable branch. */
+  needs: readonly PageNeed[];
+}) {
   const { series } = view;
   const points = series.days.map((day) => ({
     date: day.date,
@@ -205,10 +240,7 @@ function ForecastSection({ view }: { view: ForecastChartView }) {
         title="Where liquid funds go, today to a month ahead"
         className="lg:col-span-2"
       >
-        <p className="text-sm text-ink-soft">
-          The liquid-funds forecast needs a bank or cash balance checkpoint. Record one on the till
-          and it appears here.
-        </p>
+        <NeedsFirst variant="inline" needs={needs} />
       </ChartCard>
     );
   }

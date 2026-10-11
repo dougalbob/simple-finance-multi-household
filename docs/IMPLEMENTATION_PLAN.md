@@ -2896,3 +2896,11 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
 
     Not verified: a real phone or laptop render. The sandbox has no browser, so the layout is checked through the server HTML only.
 
+196. **The guide and "what this page needs first" (2026-10-11, v1.2.0).**
+
+    The household approved Slice 2 of `docs/ONBOARDING_PLAN.md`. Built as: `/guide` (`src/app/guide/page.tsx`, copy and anchors in `src/lib/guide.ts`), with eight anchored sections explaining ideas the app already applies. It is linked from the footer and the setup path, not the navigation (the household's choice). On the four payoff pages, the missing records are shown as "What this page needs first": the setup-path steps that are not done, mapped per page in `src/lib/records/page-needs.ts`. Optional steps and Phase B bills are never prerequisites, and a checkpoint need waits behind the pots need. The Charts reported section and the Insights comparison and honesty panels give way to the block only while nothing is recorded, so a populated household sees no change except the guide links.
+
+    Navigation decision (plan §7 item 5), recorded: `/start` keeps its navigation entry permanently. The guide's copy is pinned by `tests/guide.test.ts`, so a rule that changes must change its section in the same PR. No schema, migration or dependency change.
+
+    Tests: `tests/guide.test.ts` and `tests/page-needs.test.ts` (15 cases), and the first-run browser suite gains a needs-and-guide assertion. The two-calendar-month requirement for Slice 3's worked example is recorded in `docs/ONBOARDING_PLAN.md` §4.
+
