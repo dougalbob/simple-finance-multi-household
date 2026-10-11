@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useActionState } from 'react';
 import {
@@ -939,7 +940,15 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                   label: pot.kind === 'credit-card' ? `${pot.label} (credit card)` : pot.label,
                 }))}
               />
-              {potId === '' ? (
+              {data.pots.length === 0 ? (
+                <p className="text-xs font-semibold text-warning-700">
+                  No pots yet — a purchase needs somewhere for the money to leave.{' '}
+                  <Link href="/pots" className="underline">
+                    Add the first pot
+                  </Link>
+                  , then come back to the till.
+                </p>
+              ) : potId === '' ? (
                 <p className="text-xs font-semibold text-warning-700">
                   Choose the pot this came out of — no default is set, so nothing is preselected.
                 </p>

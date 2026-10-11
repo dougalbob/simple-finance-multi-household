@@ -53,9 +53,9 @@ export default async function TransactionsPage({
       <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
         <h1 className="text-3xl font-semibold tracking-tight">All Transactions</h1>
         <p className="mt-3 rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
-          No pots yet. Add an account or cash pot in{' '}
-          <Link href="/settings" className="text-accent underline">
-            Settings
+          No pots yet. Add an account or cash pot on{' '}
+          <Link href="/pots" className="text-accent underline">
+            Accounts, Pots &amp; Checkpoints
           </Link>{' '}
           first.
         </p>

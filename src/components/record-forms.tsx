@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import {
   addRefundAction,
@@ -543,7 +544,11 @@ export function TransferForm({ pots, today, idPrefix = 'transfer' }: TransferFor
   if (pots.length < 2) {
     return (
       <p className="text-sm text-ink-soft">
-        Create at least two pots before moving money between them.
+        Create at least two pots before moving money between them — add them on{' '}
+        <Link href="/pots" className="font-medium text-accent hover:underline">
+          Accounts, Pots &amp; Checkpoints
+        </Link>
+        .
       </p>
     );
   }

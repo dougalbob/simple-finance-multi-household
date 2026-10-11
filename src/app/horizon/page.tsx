@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
@@ -288,8 +289,11 @@ export default async function HorizonPage({
         </>
       ) : (
         <p className="mb-4 rounded-lg border border-dashed border-border-strong bg-surface p-4 text-sm text-ink-soft">
-          {lowLine} Record one on Quick Entry → Checkpoint or Accounts, Pots &amp; Checkpoints. Card
-          balances are excluded from this liquidity projection.
+          {lowLine} Record one on Quick Entry → Checkpoint or{' '}
+          <Link href="/pots" className="font-medium text-accent hover:underline">
+            Accounts, Pots &amp; Checkpoints
+          </Link>
+          . Card balances are excluded from this liquidity projection.
         </p>
       )}
 

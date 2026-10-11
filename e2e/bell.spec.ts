@@ -214,7 +214,7 @@ test.describe('bell', () => {
 test.describe('bell — phone layout', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('bell sits in the top bar and drawer link list is unchanged', async ({ page }) => {
+  test('bell sits in the top bar and the drawer still lists every page', async ({ page }) => {
     await page.goto('/overview');
 
     // Bell should be visible in top bar
@@ -225,12 +225,12 @@ test.describe('bell — phone layout', () => {
     const drawerNav = page.locator('nav[aria-label="Pages"]');
     await expect(drawerNav.getByRole('button', { name: /Needs attention|Nothing/ })).toHaveCount(0);
 
-    // Open drawer and check link list order unchanged (9 links in More + 6 in Daily = 15)
+    // Open drawer and check the link list (10 links in More + 6 in Daily = 16)
     await page.getByRole('button', { name: 'Open navigation menu' }).click();
     await expect(drawerNav).toBeVisible();
     const links = drawerNav.getByRole('link');
-    // There should be 15 links (6 Daily + 9 More) — same as before bell
-    await expect(links).toHaveCount(15);
+    // There should be 16 links (6 Daily + 10 More)
+    await expect(links).toHaveCount(16);
     // Bell should still be visible in top bar even when drawer open
     await expect(button).toBeVisible();
   });

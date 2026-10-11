@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { ScheduleMonths } from './schedule-months';
 
 import { useState } from 'react';
@@ -73,7 +74,15 @@ export function IncomeEntryForm({
 }) {
   const [state, formAction, pending] = useActionState(addReceiptAction, initialActionState);
   if (pots.length === 0) {
-    return <p className="text-sm text-ink-soft">Create a pot first, then record income.</p>;
+    return (
+      <p className="text-sm text-ink-soft">
+        Create a pot first, then record income — add one on{' '}
+        <Link href="/pots" className="font-medium text-accent hover:underline">
+          Accounts, Pots &amp; Checkpoints
+        </Link>
+        .
+      </p>
+    );
   }
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -277,7 +286,15 @@ export function IncomeScheduleForm({
   const [state, formAction, pending] = useActionState(addScheduleAction, initialActionState);
   const [frequency, setFrequency] = useState<'monthly' | 'annual'>('monthly');
   if (pots.length === 0) {
-    return <p className="text-sm text-ink-soft">Create a pot first, then schedule income.</p>;
+    return (
+      <p className="text-sm text-ink-soft">
+        Create a pot first, then schedule income — add one on{' '}
+        <Link href="/pots" className="font-medium text-accent hover:underline">
+          Accounts, Pots &amp; Checkpoints
+        </Link>
+        .
+      </p>
+    );
   }
   return (
     <form action={formAction} className="flex flex-col gap-3">

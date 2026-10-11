@@ -22,6 +22,7 @@
     "rehearse:import": "node --import tsx scripts/rehearse-import.mts",
     "acceptance": "node --import tsx scripts/acceptance.mts",
     "test:e2e": "playwright test",
+    "test:e2e:fresh": "E2E_FRESH=1 playwright test",
     "test:e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {

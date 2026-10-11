@@ -37,6 +37,10 @@ jobs:
         run: npm run test:e2e
         env:
           CI: 'true'
+      - name: Run the first-run suite (empty household)
+        run: npm run test:e2e:fresh
+        env:
+          CI: 'true'
       - name: Upload the HTML report and traces on failure
         if: failure()
         uses: actions/upload-artifact@v4
