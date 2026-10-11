@@ -1,9 +1,15 @@
 # First-run onboarding — proposal
 
-**Status:** proposal for the household to approve (2026-10-11). **Nothing in this document is built.**
-It is a design conversation, not a delivery commitment: decide the shape here, then it becomes an
-implementation PR under the normal release process. It does not change storage, auth, tenancy or the
-release line, and it must not be read as a change to [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md).
+**Status:** approved by the household on 2026-10-11, and **Slice 1 is built and released in `v1.1.0`**
+(the derived `/start` setup path, the home card, the repaired empty states and the
+one-person/car-free fix). Slice 2 (`/guide`, "what this page needs first") and Slice 3 (a worked
+example rendered from a fictional household through the real engines) remain approved in direction
+and **not built** — start a new implementation PR for either. The chosen shapes are recorded in §5:
+`/start` is a hub with inline short fields, never a full-screen wizard, and the worked example is
+generated from the real engines rather than written as prose.
+
+This document does not change storage, auth, tenancy or the release line, and it must not be read as
+a change to [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md).
 
 ## 1. The problem, measured rather than remembered
 
@@ -158,15 +164,38 @@ Each slice is a normal pull request with domain tests for the derivation rules, 
 for the first-run flow (fresh household → complete Phase A → projection visible), and a check that
 `/example` never touches a household database. Slices can ship independently and in this order.
 
-## 7. Open decisions (with the agent's proposed default)
+## 7. Decisions taken
 
-1. **First slice scope.** Proposed: Slice 1, reviewed on a preview installation before Slice 2.
-2. **Phase A shape.** Proposed: `/start` as the hub with short inline fields, long forms linked —
-   rather than a full-screen wizard that creates records in sequence. The wizard is more guided but
-   duplicates forms, and this app has been consistently one-page-per-job.
-3. **The worked example.** Proposed: built from the real engines with the shared fictional household
-   (Slice 3). A cheaper alternative is a prose-and-figures page, at the cost of going stale.
-4. **When `/start` leaves the nav.** Proposed: when Phase B is complete; nothing is tracked beyond
-   the derived state, so it can never disagree with the records.
-5. **Version.** A new feature line — proposed `v1.1.0` (RC only if the household wants one), released
-   under [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) when the slices are accepted.
+1. **First slice scope → Slice 1, alone.** Decided 2026-10-11: build the path and the repairs first,
+   review them on a preview installation, then start a new PR for Slice 2 and later Slice 3.
+2. **Phase A shape → `/start` as a hub with short inline fields.** Decided: people, pots, first
+   checkpoint amounts and the salary schedule are filled in where they are described; the long forms
+   (schedules, purchases) stay on their own pages and are linked. No full-screen wizard — it would
+   duplicate forms the app already has, and this app is one page per job.
+3. **The worked example → built from the real engines with the shared fictional household** (Slice 3),
+   not a prose page that drifts.
+4. **Version → `v1.1.0`**, a stable minor release with no schema change and no candidate, published
+   under [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
+5. **Still open, for whoever takes Slice 2:** whether `/start` keeps its place in the navigation once
+   Phase B is complete. Today the entry is always listed and the *home card* is what unmounts itself
+   when the derived path is done, so nothing can disagree with the records; hiding the nav entry as
+   well is a copy decision, not a state decision.
+
+## 8. What Slice 1 actually shipped (for the next session)
+
+- `src/lib/records/setup-path.ts` — the derivation: eight steps
+  (`people, pots, checkpoints, income, bills, figures, cards, purchases`) read from the household's own
+  records, `SETUP_PHASE_TITLES`, and `getSetupFormData` for the inline fields. Steps are derived,
+  never ticked, and nothing is gated. Unit-tested in `tests/setup-path.test.ts`.
+- `src/app/start/page.tsx` — the hub: "N of 4 done" (Phase A) and "N left" (Phase B), the inline
+  Phase A forms (`src/components/setup-forms.tsx`), the review rhythm, and the `readOnly` passthrough
+  that hides every form for a support session.
+- `src/components/getting-started.tsx` — `GettingStartedCard` (next Phase A step, then one line until
+  Phase B is done, then nothing) and `GettingStartedPath`. It owns no writes; every form posts to an
+  existing action, and `PAGE_PATHS` in `src/app/actions.ts` revalidates `/start`.
+- The repairs: `/transactions` now points at `/pots`; the seven "Create a pot first…" messages, the
+  `/horizon` checkpoint prose and the till's no-pots state all link `/pots`; the old
+  "two people and a vehicle" card (`src/components/household-setup.tsx`) is deleted.
+- `e2e/fresh-household.spec.ts` — the first-run suite, run against a genuinely empty household
+  (`E2E_FRESH=1`, data root `.e2e-data-fresh`, actor `new@example.com`) as `npm run test:e2e:fresh`,
+  and wired into the CI `browser` job beside the seeded suite.

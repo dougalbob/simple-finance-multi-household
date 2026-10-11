@@ -9,7 +9,7 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.0.2 is accepted for production, so this template defaults to :latest,
+  v1.1.0 is accepted for production, so this template defaults to :latest,
   which only stable releases move. Release candidates never move :latest — to
   test one, pin Repository to its exact tag instead, e.g.
   ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.3.
