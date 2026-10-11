@@ -6,6 +6,20 @@
 
 **Why rc.3:** `v1.0.0-rc.1` (commit `ef02e95`) failed its Publish run at the container smoke test, and `v1.0.0-rc.2` failed at the upgrade smoke test, which tried to use the unpublished `rc.1` tag as an upgrade base. Neither run pushed anything to GHCR, so no `rc.1` or `rc.2` image exists. This candidate has the same application code, plus the publish workflow fix that skips version tags without a published image. Use `v1.0.0-rc.3` everywhere in the install steps below.
 
+**Publication facts (verified by Publish run `38088956509`, 2026-10-10):** built from source commit
+`a9e32f1fd6a550cfd1841948dd010f5c49f1b30a`; pushed as `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.3`
+and `:sha-a9e32f1`; digest `sha256:ded0257383b5c64a8a980a41b17f3d86b775a48a1ea5ebb76170d44867f7c238`, shared by
+both tags; `latest` untouched; GitHub release marked pre-release. Recorded here as well as in the release body
+because the sandbox cannot reach `ghcr.io` to re-check it (`docs/SANDBOX.md` entry 6).
+
+**Superseded.** This candidate was accepted and promoted to the stable release **`v1.0.0`** with no
+application-code change. See [`RELEASE_NOTES_v1.0.0.md`](RELEASE_NOTES_v1.0.0.md).
+
+> **Note on `main`:** `rc.3` was committed and tagged on the session branch
+> `arena/f011a008-simple-finance-multi-household` and never merged through a pull request, so `main` kept
+> describing `v1.0.0-rc.1` until the `v1.0.0` release pull request brought these commits across. The published
+> image was always correct — the Publish workflow builds from the tag — but the repository was not.
+
 ## What this release is
 
 This is the first build of the multi-household edition, a separate product from the original single-household `simple-finance` app.

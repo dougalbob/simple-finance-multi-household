@@ -5,6 +5,9 @@ import { describe, it } from 'node:test';
 const repoFile = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
+/** The version this tree says it is, which is the tag the next release will carry. */
+const currentReleaseTag = `v${JSON.parse(repoFile('package.json')).version as string}`;
+
 describe('multi-household isolation contract', () => {
   it('hard-pins publishing to the independent GitHub repository and GHCR image', () => {
     const workflow = repoFile('.github/workflows/publish.yml');
@@ -60,11 +63,34 @@ describe('multi-household isolation contract', () => {
     assert.match(activePlan, /one or two people/);
     assert.match(activePlan, /pre-creates a household and assigns each allowed sign-in email/);
     assert.match(activePlan, /An authenticated but unassigned identity is denied/);
-    for (const document of [agentRules, readme, handoff, releaseProcess, activePlan]) {
+    const documents: Record<string, string> = {
+      'AGENTS.md': agentRules,
+      'README.md': readme,
+      'docs/HANDOFF.md': handoff,
+      'docs/RELEASE_PROCESS.md': releaseProcess,
+      'docs/MULTI_HOUSEHOLD_PLAN.md': activePlan,
+    };
+    for (const [name, document] of Object.entries(documents)) {
       assert.match(document, /ghcr\.io\/dougalbob\/simple-finance-multi-household/);
-      assert.match(document, /v1\.0\.0-rc\.[123]/);
+      // Derived from package.json rather than hard-coded: a release that bumps
+      // the version but leaves a document naming the previous one is exactly
+      // the drift that let main describe v1.0.0-rc.1 after rc.3 shipped.
+      assert.ok(
+        document.includes(currentReleaseTag),
+        `${name} does not name the current release ${currentReleaseTag}`,
+      );
       assert.match(document, /3009/);
       assert.match(document, /simple-finance-multi-household/);
     }
+  });
+
+  it('has checked-in release notes for the current version', () => {
+    // The Publish workflow fails without docs/RELEASE_NOTES_<tag>.md, and its
+    // title must start '# Release notes — <tag> — '.
+    const notes = repoFile(`docs/RELEASE_NOTES_${currentReleaseTag}.md`);
+    assert.ok(
+      notes.startsWith(`# Release notes — ${currentReleaseTag} — `),
+      `docs/RELEASE_NOTES_${currentReleaseTag}.md must start with the exact release title`,
+    );
   });
 });

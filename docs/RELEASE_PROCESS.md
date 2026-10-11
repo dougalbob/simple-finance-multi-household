@@ -14,9 +14,11 @@ This file supersedes the original single-household release process for this repo
 
 ## 1. Version line: candidate first, stable separately
 
-The first multi-household release is planned as SemVer **`v1.0.0-rc.1`** (package/app version `1.0.0-rc.1`). Use `-rc.N`, not the ambiguous `v1.0.0rc` spelling. If acceptance requires another build, increment to `v1.0.0-rc.2`, and so on.
+Candidates use SemVer prereleases **`v1.0.0-rc.N`** (package/app version `1.0.0-rc.N`). Use `-rc.N`, not the ambiguous `v1.0.0rc` spelling. If acceptance requires another build, increment the suffix.
 
-An accepted production release is a **new stable tag `v1.0.0`**, with package/app version `1.0.0`. Do not rename, retag or rewrite the candidate tag; candidate and stable releases have different tags (and may point to different commits). The current foundation change only records this policy and implements the workflow behavior; it does not bump the current inherited `0.39.0` source version or publish an image. Set the release version in the actual RC release PR, when the implementation and notes are ready.
+An accepted production release is a **new stable tag `v1.0.0`**, with package/app version `1.0.0`. Do not rename, retag or rewrite the candidate tag; candidate and stable releases have different tags (and may point to different commits).
+
+**Where this line actually stands:** `v1.0.0-rc.1` and `v1.0.0-rc.2` exist as Git tags but their Publish runs failed before pushing, so **no image exists for either** — they must never be used as upgrade bases or described as released. `v1.0.0-rc.3` published and was accepted on a live installation. `v1.0.0` is the stable release, promoted from `rc.3` with no application-code change.
 
 For each release PR, these version-bearing files must agree exactly:
 
@@ -46,14 +48,15 @@ Never retag an image after publication. If the candidate changes, cut the next `
 ## 3. Database migrations and upgrade smoke
 
 - Keep `drizzle/meta/_journal.json` migration `when` stamps strictly increasing and never in the future. Drizzle may silently skip an out-of-order migration on upgraded databases. Prefer `npm run db:generate`; never change shipped migration SQL.
-- Test upgrades as well as fresh databases. The Publish workflow considers only previous v1+ tags from this product line. The inherited v0.x source tags must never be used as GHCR upgrade bases. With no previously published v1+ image, the first RC correctly skips upgrade smoke; later releases upgrade the two most recent published v1+ images and require every journal entry exactly once.
+- Test upgrades as well as fresh databases. The Publish workflow considers only previous v1+ tags from this product line. The inherited v0.x source tags must never be used as GHCR upgrade bases. With no previously published v1+ image, a release correctly skips upgrade smoke; later releases upgrade the two most recent published v1+ images and require every journal entry exactly once.
+- **A tag is only an upgrade base if its image exists in GHCR.** Both workflows must test each candidate tag against the registry and skip the ones with no image. This is not theoretical: `v1.0.0-rc.2` failed its Publish run precisely because the upgrade smoke took `v1.0.0-rc.1` as its base, and `rc.1` had never pushed. `rc.3` fixed that in `publish.yml` only, so `.github/workflows/ci.yml` still selected the unpublished `v1.0.0-rc.2` and would have failed every later PR on `docker pull`; both workflows now share the rule.
 - A failed/absent previous v1+ image is not a reason to pull from the original package. Stop and investigate the new package/tag state.
 - Household migrations and rehearsals run only against isolated test data or a copied backup. Never run destructive tests or restore rehearsals against `/mnt/user/appdata/simple-finance`.
 
 ## 4. Tag and publish
 
 1. Finish implementation, tests, all version files and release notes in the release PR. Confirm the new repository, new image, new appdata path, host port `3009`, and release type (RC vs stable) agree.
-2. Merge the PR after required checks. Create an **annotated, lower-case tag** on that exact merge commit: `v1.0.0-rc.N` or the approved stable version.
+2. Merge the PR after required checks. Create an **annotated, lower-case tag** on that exact merge commit **in `main`**: `v1.0.0-rc.N` or the approved stable version. Never tag a session branch that has not been merged — `v1.0.0-rc.2` and `v1.0.0-rc.3` were tagged this way, published correctly from the tag, and left `main` describing a build that was not the released one.
 3. Push only that tag to this repository. The Publish workflow verifies repository identity, exact package/version agreement, builds and smoke-tests before pushing, then publishes only the tags appropriate for RC or stable.
 4. Wait for Publish to succeed. A tag existing in Git does not mean an image was successfully published.
 
@@ -79,7 +82,7 @@ Complete `docs/RELEASE_NOTES_<tag>.md` in the release PR, before merge. Its firs
 For example:
 
 ```text
-# Release notes — v1.0.0-rc.1 — First multi-household candidate
+# Release notes — v1.0.0 — First stable multi-household release
 ```
 
 Include what changed; schema/data caveats; who is affected and what to do; validation evidence; appdata, backup and Unraid instructions; whether it is an RC or stable release; and the version badge users should see. For RCs, state that `latest` is not moved and give the exact tag to install. The Publish workflow prepends date, merge commit, actual image tags and verified digest and creates a pre-release GitHub release for an RC or a Latest GitHub release for stable.
