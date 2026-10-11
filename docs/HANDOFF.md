@@ -1,4 +1,93 @@
-# Current handoff — v1.0.0-rc.1 Publish fix: replayed locally, then merged (PR #7, 2026-10-10)
+# Current handoff — v1.0.0 released, and main brought back in step with what was published (2026-10-11)
+
+**Session branch:** `arena/e6df491e-simple-finance-multi-household`.
+
+## The problem this session fixed
+
+`main` and the published image had drifted apart. The release candidates `v1.0.0-rc.2` and `v1.0.0-rc.3` were
+committed to the session branch `arena/f011a008-simple-finance-multi-household`, tagged **there**, and
+published from those tags — but no pull request was ever opened for that branch. The Publish workflow builds
+from the tag, so the image was always correct and the owner's Unraid install was genuinely `rc.3`. The
+repository was not: `main` sat at `e2be937` still naming version `1.0.0-rc.1` in `package.json`,
+`src/lib/version.ts` and the Unraid template, and every top-level document still described `v1.0.0-rc.1` as
+the current build and support consent, the identity-to-`people` link and per-household backup/restore as
+unimplemented (they shipped in PR #4).
+
+Verified at the start of this session: `git merge-base --is-ancestor v1.0.0-rc.3^{commit} origin/main`
+returned false, and `git ls-remote --heads origin` showed `refs/heads/main` at
+`e2be93755fd1cc4578ba875cca068bfec5fa0656`.
+
+## Verified release chronology (from tags, Publish runs and the release body — not inferred)
+
+| Tag | Commit | Publish run | Result |
+| --- | --- | --- | --- |
+| `v1.0.0-rc.1` | `ef02e95` (PR #5 merge) | `38083365013` | **failed** at *Smoke test the built image* — checked for the inherited root-level `/data/simple-finance.sqlite`, which the multi-household layout never creates |
+| `v1.0.0-rc.2` | `b0f7288` (branch `arena/f011a008-…`) | `38088666376` | **failed** at *Upgrade smoke test* — selected `v1.0.0-rc.1` as its upgrade base, a tag with no image in GHCR |
+| `v1.0.0-rc.3` | `a9e32f1` (branch `arena/f011a008-…`) | `38088956509` | **succeeded** |
+
+`v1.0.0-rc.3` publication facts, as written into the GitHub release body by that run: source commit
+`a9e32f1fd6a550cfd1841948dd010f5c49f1b30a`; tags
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.3` and `:sha-a9e32f1`; digest
+`sha256:ded0257383b5c64a8a980a41b17f3d86b775a48a1ea5ebb76170d44867f7c238`; `latest` untouched; GitHub release
+created 2026-10-10T21:47:12Z and marked pre-release. `gh release list` shows `v1.0.0-rc.3` as the only
+release — **there is no `rc.1` or `rc.2` image or GitHub release.**
+
+The owner accepted `v1.0.0-rc.3` on a live installation: the container ran on host port `3009` with appdata at
+`/mnt/user/appdata/simple-finance-multi-household`, sign-in worked through the **real** Cloudflare Access
+route, the household was created and assigned on `/admin`, and the app was used with real household data. That
+retires the two limitations the candidate carried as unverified (real Cloudflare Access; a real Unraid template
+install).
+
+## What this session's pull request does
+
+1. **Brings the published candidate onto `main`.** A merge of `origin/arena/f011a008-simple-finance-multi-household`
+   puts `main` on the `rc.3` tree: version `1.0.0-rc.3`, `docs/RELEASE_NOTES_v1.0.0-rc.3.md`, and the
+   `publish.yml` fix that skips version tags with no published image. **No tag was moved** — `v1.0.0-rc.3`
+   still points at `a9e32f1`.
+2. **Fixes the same bug in CI, which `rc.3` missed.** `.github/workflows/ci.yml` still picked its upgrade base
+   as "newest v1+ tag other than the version under test", published or not. Replayed locally against the `rc.3`
+   tree it selected `v1.0.0-rc.2`, so **every PR after `rc.3` would have failed its required `docker` check on
+   `docker pull`** rather than testing an upgrade. Both workflows now probe each candidate with
+   `docker buildx imagetools inspect` and take the newest tag that really has an image. Replayed with a stubbed
+   `docker`: at version `1.0.0-rc.3` it skips `rc.2` and `rc.1` and skips the smoke cleanly; at version `1.0.0`
+   it selects `v1.0.0-rc.3`, so the `rc.3 → v1.0.0` upgrade path is genuinely exercised.
+3. **Promotes the accepted candidate to stable `v1.0.0`**, with no application-code change: `1.0.0` in
+   `package.json`, `package-lock.json` (root and `packages[""]`) and `src/lib/version.ts`;
+   `APP_RELEASE_STAGE` is `stable`, so the badges read `v1.0.0 · stable`; the Unraid template's `Repository` is
+   `:latest`; `docs/RELEASE_NOTES_v1.0.0.md` added.
+4. **Corrects the documentation drift.** `README.md` (status, versioning, Unraid install, release section,
+   version line, and the backup section that still claimed `/api/backup` and `/api/restore` return `501` —
+   they do not; verified in the route handlers), `AGENTS.md` (the "Implemented / Still deferred" list),
+   `docs/MULTI_HOUSEHOLD_PLAN.md` (status, §6, §7), `docs/RELEASE_PROCESS.md` (§1 where the line stands, §3 the
+   tag-without-an-image rule, §4 tag-on-`main`, §6 example title), and the candidate notes
+   (`rc.1` marked never-published, `rc.2` added, `rc.3` given its publication facts).
+5. **Makes the drift testable.** `tests/multi-household-isolation-contract.test.ts` now derives the current tag
+   from `package.json` and fails if any of the five agent entry points does not name it, and fails if
+   `docs/RELEASE_NOTES_<tag>.md` is missing or mis-titled. The old hard-coded `v1\.0\.0-rc\.[123]` assertion is
+   what let this drift sit unnoticed.
+
+## Loose ends the owner chose to leave
+
+- **PR #6 is open and dead.** Its single commit `3dbf042` ("Fix Publish smoke tests for the household layout")
+  is patch-equivalent to what landed in PR #7 — `git cherry origin/main
+  origin/arena/124de12d-simple-finance-multi-household` reports it with a `-`, meaning an equivalent patch is
+  already upstream. It is closed with an explanation; the branch is kept.
+- **The `arena/…` branches are kept**, including `arena/f011a008-…` (now merged) and
+  `arena/124de12d-…`. Delete them only when the owner says so.
+
+## After this release
+
+Record `v1.0.0`'s verified post-merge facts at the top of this file, per `docs/RELEASE_PROCESS.md` §7: the merge
+SHA, PR and CI run IDs, the Publish run, the image tags and the digest, and confirm `latest` now resolves to the
+same digest as `v1.0.0` and `sha-<short>`. The sandbox cannot reach `ghcr.io` (SANDBOX entry 6), so take the
+digest from the Publish run's own release body rather than re-deriving it.
+
+**Still not approved:** any real-data import of the original household, and any change to the original app
+(`dougalbob/simple-finance`, its GHCR package, its appdata or port `3007`).
+
+---
+
+# Historical handoff — v1.0.0-rc.1 Publish fix: replayed locally, then merged (PR #7, 2026-10-10)
 
 **Session branch:** `arena/50895dfb-simple-finance-multi-household`. It carries the previous session's fix
 (`3dbf042`, from branch `arena/124de12d-…`, open as PR #6) plus two accuracy corrections of its own and a sandbox
@@ -56,7 +145,7 @@ recorded by the next session, as `docs/RELEASE_PROCESS.md` §7 asks.
 
 ---
 
-# Current handoff — v1.0.0-rc.1 publish run failed; smoke-test fix awaits approval (2026-10-10)
+# Historical handoff — v1.0.0-rc.1 publish run failed; smoke-test fix awaits approval (2026-10-10)
 
 **State:** PR #5 (release PR) merged to `main` as merge commit `ef02e95db43193c7f8974fea35ff7c694f19fd63`. CI on that `main` commit passed. The annotated tag `v1.0.0-rc.1` was pushed to that commit. The **Publish run 38083365013 failed** at "Smoke test the built image". Nothing was pushed to GHCR, and no GitHub release was created.
 
@@ -73,7 +162,7 @@ recorded by the next session, as `docs/RELEASE_PROCESS.md` §7 asks.
 
 ---
 
-# Current handoff — release candidate v1.0.0-rc.1 (2026-10-10)
+# Historical handoff — release candidate v1.0.0-rc.1 (2026-10-10)
 
 **Owner approval:** the owner said "You can publish v1.0.0-rc.1" after the step 6 acceptance run. The owner will ask follow-up questions after publication.
 
@@ -96,7 +185,7 @@ recorded by the next session, as `docs/RELEASE_PROCESS.md` §7 asks.
 
 ---
 
-# Current handoff — step 6 acceptance on fictional data (2026-10-10)
+# Historical handoff — step 6 acceptance on fictional data (2026-10-10)
 
 **Owner approval:** the owner said "ok go ahead" to step 6 after the synthetic rehearsal, on fictional data only.
 
@@ -137,7 +226,7 @@ Cloudflare change.
 
 ---
 
-# Current handoff — step 5 synthetic import rehearsal and template rename (2026-10-10)
+# Historical handoff — step 5 synthetic import rehearsal and template rename (2026-10-10)
 
 **Branch:** `arena/124de12d-simple-finance-multi-household` (session branch), on top of `main` at `c2cac66` (PR #4 merged).
 
@@ -182,7 +271,7 @@ Cloudflare change.
 
 ---
 
-# Current handoff — plan step 4: support consent and household-scoped backup/restore (2026-10-10)
+# Historical handoff — plan step 4: support consent and household-scoped backup/restore (2026-10-10)
 
 **Baseline:** PR #3 (per-household finance routing) merged to `main` at `72dfb46`. This work is on the fixed Arena
 branch `arena/c8a5b27d-simple-finance-multi-household`.

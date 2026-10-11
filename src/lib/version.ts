@@ -3,11 +3,11 @@
  *
  * Blueprint §10: one client-safe version module; package.json and the
  * lockfile root metadata must stay aligned (checked by tests/version.test.ts).
- * v0.1.0 is the first planned release (end of Phase 5); until then the app
- * identifies as a pre-release build.
+ * `APP_RELEASE_STAGE` is `stable` for a production release and `pre-release`
+ * for a release candidate; it is what the header and home-page badges print.
  */
 export const APP_NAME = 'Simple Finance';
 
-export const APP_VERSION = '1.0.0-rc.1';
+export const APP_VERSION = '1.0.0';
 
-export const APP_RELEASE_STAGE = 'pre-release';
+export const APP_RELEASE_STAGE = 'stable';

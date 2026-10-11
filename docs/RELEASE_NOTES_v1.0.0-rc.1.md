@@ -1,5 +1,12 @@
 # Release notes — v1.0.0-rc.1 — First multi-household candidate
 
+> **Never published.** Publish run `38083365013` failed at *Smoke test the built image*: it checked for the
+> inherited root-level `/data/simple-finance.sqlite`, which the multi-household layout never creates. Nothing
+> was pushed to GHCR, no GitHub release was created, and **no `v1.0.0-rc.1` image exists**. The Git tag
+> `v1.0.0-rc.1` (commit `ef02e95`) still exists and must never be used as an upgrade base or installed. The
+> text below is the notes as written for that attempt; read
+> [`RELEASE_NOTES_v1.0.0.md`](RELEASE_NOTES_v1.0.0.md) for the release that shipped.
+
 **Type:** release candidate. This is a GitHub pre-release. It does **not** move `latest`, and it is not the stable `v1.0.0`.
 **Install this exact image:** `ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.1`. The Unraid template in this repository already pins it.
 **Version badge:** `v1.0.0-rc.1 (pre-release)`.

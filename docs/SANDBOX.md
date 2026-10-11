@@ -398,6 +398,35 @@ empty — the fetch was blocked.
   `/data/...` rewritten to `$DATA_DIR/...` and `/app/drizzle` rewritten to the repo's `drizzle` folder. Extracting the
   payloads from the YAML (rather than retyping them) is what makes the replay evidence rather than a paraphrase.
 
+## 19. A fresh Arena clone hides every branch but `main`, and its history is cut off (2026-10-11)
+
+- **Symptom:** `git branch -a` shows only `main` and the session branch, `git tag -l` is empty, and `git log`
+  stops abruptly with a commit marked `(grafted)`. It looks as though no other branches, tags or history
+  exist. They do — this is what let `v1.0.0-rc.2` and `v1.0.0-rc.3` sit unpublished-to-`main` and unnoticed:
+  the branch carrying them was invisible to a fresh session.
+- **Cause:** the clone is **shallow** (`.git/shallow` names the graft point) and its `remote.origin.fetch`
+  refspec is narrowed to `main` plus the current session branch:
+  ```ini
+  fetch = +refs/heads/main:refs/remotes/origin/main
+  fetch = +refs/heads/arena/<this-session>:refs/remotes/origin/arena/<this-session>*
+  ```
+  So a plain `git fetch --all` cannot see anything else, and `git fetch --tags` brings tags but not the
+  branches they point at.
+- **Fix, at the start of any session that needs real history:**
+  ```bash
+  git ls-remote --heads origin          # the truth about which branches exist — always works
+  git config --unset-all remote.origin.fetch
+  git config --add remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+  git fetch --unshallow --tags --prune origin
+  ```
+  After that, `git log --oneline --graph --all --decorate` shows every branch and tag. `--unshallow` is what
+  restores history behind the graft; without it `git merge-base --is-ancestor` between a tag and `main` can
+  answer from an incomplete graph.
+- **Checking whether a release actually reached `main`:**
+  `git merge-base --is-ancestor <tag>^{commit} origin/main && echo yes || echo no`. A tag existing proves only
+  that someone tagged a commit — not that the commit was merged, and not that an image was pushed (see
+  `docs/RELEASE_NOTES_v1.0.0-rc.1.md` and `-rc.2.md`, both of which are tags with no image).
+
 ## History
 
 - **2026-10-10 (v1.0.0-rc.1 publish fix, session `arena/50895dfb-simple-finance-multi-household`):** entry 18 added.
