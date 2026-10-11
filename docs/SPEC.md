@@ -1503,7 +1503,7 @@ installation remains at `/mnt/user/appdata/simple-finance` and must never be mou
 
 A backup is created for one authenticated household at a time. It can never enumerate or include another
 household's database, documents or registry data. The administrator/system registry has a separate recovery
-procedure and is not bundled with member-downloadable household backups.
+procedure (accessible via the admin panel, producing a `simple-finance-registry-v<app-version>-YYYY-MM-DD-HHmmss.sqlite` WAL-safe dump) and is not bundled with member-downloadable household backups.
 
 - A consistent SQLite snapshot via the supported backup mechanism (WAL-safe, not a raw file copy), **plus**
   every `documents/` file referenced by the selected household database, **plus** a versioned manifest: archive format,
