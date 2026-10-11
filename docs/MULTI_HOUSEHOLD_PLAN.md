@@ -35,7 +35,7 @@ Target host/container layout:
 ```
 
 - Each household gets its own SQLite database and documents directory. Do not put all households' financial rows into one shared finance database with a UI-only filter.
-- The registry is a control plane, not a financial database. It must not contain purchases, balances, receipts or other finance records. A household backup must not include the registry or any other household's material; the control-plane configuration needs a separate, administrator-managed backup/recovery procedure.
+- The registry is a control plane, not a financial database. It must not contain purchases, balances, receipts or other finance records. A household backup must not include the registry or any other household's material; the control-plane configuration has its own separate administrator-managed backup/recovery procedure in the admin panel.
 - The database path is selected only after verifying the request's identity and resolving its assignment from trusted registry data. Use a stable opaque household ID and safe path construction. Never trust a household ID supplied by the browser.
 - The runtime now uses immutable per-request contexts and separate tenant handles, never a mutable process-wide “current household” pointer. Preserve that design: simultaneous requests from different households must never be able to switch one another's database context.
 - Every page, server action, route handler, document read/write, background operation, cache key, export, backup and restore must be household-scoped. Fail closed if the identity, membership, household status or database cannot be resolved.

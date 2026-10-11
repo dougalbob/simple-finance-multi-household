@@ -104,3 +104,23 @@ export function backupFilename(appVersion: string, instant: Date): string {
     .replaceAll(':', '');
   return `simple-finance-backup-v${appVersion}-${date}-${time}.simple-finance-backup`;
 }
+
+export function registryBackupFilename(appVersion: string, instant: Date): string {
+  const date = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant);
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: BUSINESS_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(instant)
+    .replaceAll(':', '');
+  return `simple-finance-registry-v${appVersion}-${date}-${time}.sqlite`;
+}
+
