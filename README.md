@@ -2,13 +2,13 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-11):** this is the independent multi-household edition and **`v1.0.0` is its first
-> stable production release**, with its notes in [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md).
+> **Status (2026-10-11):** this is the independent multi-household edition and **`v1.0.1` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.0.1.md`](docs/RELEASE_NOTES_v1.0.1.md).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
-> household data. Consent-based support access, the identity-to-`people` link and per-household backup and
-> restore are implemented. Importing the existing household is a separate, approved step (see
-> [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md)). The three release candidates that
-> preceded it are history: `v1.0.0-rc.1` and `v1.0.0-rc.2` failed their Publish runs and were never
+> household data. Consent-based support access, the identity-to-`people` link, per-household backup and
+> restore, and registry backup and restore in `/admin` are implemented. Importing the existing household
+> is a separate, approved step (see [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md)). The three release candidates that
+> preceded `v1.0.0` are history: `v1.0.0-rc.1` and `v1.0.0-rc.2` failed their Publish runs and were never
 > pushed to GHCR; `v1.0.0-rc.3` published and was accepted.
 
 ## Non-negotiable separation
@@ -17,7 +17,7 @@ A private finance app for multiple independent households, self-hosted by the pr
 - **Only GHCR image:** `ghcr.io/dougalbob/simple-finance-multi-household`. This repository must never push to `ghcr.io/dougalbob/simple-finance`, including the `latest` tag. The publish workflow contains a repository/image guard.
 - **Original production app:** remains on bridge networking, host port `3007` → container port `3000`, using `/mnt/user/appdata/simple-finance`. Do not mount, alter or migrate that location.
 - **New app target:** bridge networking, host port `3009` → container port `3000`, with `/mnt/user/appdata/simple-finance-multi-household` mapped to `/data`. Use a separate Cloudflare hostname/route to the new container; leave the existing route untouched.
-- **Versioning:** `v1.0.0` is the accepted stable release and moves `latest`. Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged. Any future stable release moves `latest` again.
+- **Versioning:** `v1.0.1` is the accepted stable release and moves `latest` (`v1.0.0` was the first stable). Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged. Any future stable release moves `latest` again.
 
 ## Product and tenancy model
 
@@ -33,7 +33,7 @@ Fast mobile entry, checkpoints, payday projections, recurring schedules, insight
 
 ## Unraid installation
 
-**`v1.0.0` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
+**`v1.0.1` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
 
 ```text
 /mnt/user/appdata/simple-finance-multi-household/  →  /data/
@@ -117,7 +117,7 @@ Merging a pull request does not publish an image. A lower-case annotated tag on 
 - `POST /api/restore` takes the archive, its passphrase and the typed word `RESTORE`. It refuses **before changing anything**: an archive belonging to another household, a legacy format 1 or 2 archive (which includes anything made by the original single-household app), an archive over 512 MiB, a wrong passphrase, or a tampered archive. A valid archive replaces only the caller's own household under a maintenance lock, keeps the previous copy under a `.pre-restore` name, and clears any sign-in links the registry no longer assigns to that household (reported back as `personLinksCleared`).
 - Settings shows the household's own backup and restore controls. The inherited app-wide backup controls are gone. An open support view sees a message instead, because a support session is read-only.
 
-The system registry (`system/registry.sqlite`) and `.env` are deliberately **not** in a household backup; they need the host's own backup routine. Never restore or rehearse against `/mnt/user/appdata/simple-finance` or the original production container.
+The system registry (`system/registry.sqlite`) and `.env` are deliberately **not** in a household backup. Since `v1.0.1` the registry has its own download/restore controls in the admin panel; `.env` still needs the host's own backup routine. Never restore or rehearse against `/mnt/user/appdata/simple-finance` or the original production container.
 
 ## Stack (as built)
 
@@ -153,7 +153,7 @@ Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.e
 
 ## Version and release line
 
-**`v1.0.0` is the accepted stable release** (package/app version `1.0.0`, badge `v1.0.0 · stable`). It is published as `v1.0.0`, `latest` and `sha-<short>`, all to one digest, and its GitHub release is marked Latest.
+**`v1.0.1` is the accepted stable release** (package/app version `1.0.1`, badge `v1.0.1 · stable`). It is published as `v1.0.1`, `latest` and `sha-<short>`, all to one digest, and its GitHub release is marked Latest. `v1.0.0` was the first stable release; its `v1.0.0` and `sha-<short>` image tags stay on its own digest while `latest` has moved on.
 
 A candidate is a SemVer prerelease with an `-rc.N` suffix, incrementing per build (`v1.0.0-rc.1`, `-rc.2`, …). A candidate gets its exact version tag and `sha-<short>` tag, **not `latest`**, and its GitHub release is marked pre-release. Accepted candidates become a distinct stable tag; never rename or retag one. The candidates so far: `v1.0.0-rc.1` and `v1.0.0-rc.2` exist as Git tags but their Publish runs failed before pushing, so **no image exists for either**; `v1.0.0-rc.3` published, was accepted on a real installation, and is the base `v1.0.0` was promoted from.
 

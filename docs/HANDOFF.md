@@ -1,4 +1,73 @@
-# Current handoff — v1.0.0 released, and main brought back in step with what was published (2026-10-11)
+# Current handoff — v1.0.1 release: PR #10 merged, registry backup/restore published (2026-10-11)
+
+**Session branch:** `arena/0569c272-simple-finance-multi-household`.
+
+## Why this session exists
+
+The previous session's GitHub loop stopped after CI went green on PR #10: the PR was never merged to
+`main`, and nothing was built, pushed or published to GHCR. The owner asked this session to complete
+the remainder: merge PR #10, then build, push and publish a new image.
+
+## What this session did
+
+1. **Merged PR #10** (`fix(admin): extract registry backup UI into client component and fix CI gates`,
+   from `arena/bdeae08a-…`) with a merge commit: **`5ec36c6`**, merged 2026-10-11T10:45:19Z. PR CI run
+   `38131054839` was green on all three jobs. CI on the `main` merge commit, run `38133082098`, is
+   green on all three jobs too — `main` is healthy again after PR #9's merge left it red
+   (`format:check` and browser acceptance, run `38128894553`).
+2. **Cut stable patch `v1.0.1` in this release PR.** `main` after the merge is `v1.0.0` plus the
+   registry backup/restore admin feature (PR #9) and its repair (PR #10), while the version files
+   still said `1.0.0` — already released and never to be retagged — so a new patch version is what
+   makes a new image publishable. `v1.0.1` goes directly stable with no RC: it is a small
+   admin-surface change on top of the accepted `v1.0.0`, `/admin` is broken without it, and the v0.x
+   line always released patches directly (e.g. `v0.22.1`, `v0.23.1`).
+3. **Tag `v1.0.1` on the release-PR merge commit, push only that tag, and publish.** Post-publish
+   facts (Publish run, digest, tag verification) are verified in-session and reported at close; the
+   next session records them at the top of this file per §7 (item 1 below).
+
+On the one-merge-per-session limit (`docs/RELEASE_PROCESS.md` §2): this session merges PR #10, which
+is the *previous* session's already-reviewed, CI-green PR, closed out here only because the owner
+explicitly asked this session to complete that loop — plus this session's own single release PR.
+
+## This release PR's contents
+
+- Version `1.0.1` in `package.json`, `package-lock.json` (root and `packages[""]`),
+  `src/lib/version.ts` (`APP_RELEASE_STAGE` stays `stable`, badge `v1.0.1 · stable`), the Unraid
+  template description, and `docs/RELEASE_NOTES_v1.0.1.md` (new; title
+  `# Release notes — v1.0.1 — Registry backup and restore in the admin panel`).
+- The five agent entry points name `v1.0.1` (`AGENTS.md`, `README.md`, this file,
+  `docs/RELEASE_PROCESS.md` §1 standing line, `docs/MULTI_HOUSEHOLD_PLAN.md` status + §6 + §7 item
+  8); the "registry has no in-app backup" statements are updated to the admin-panel download/restore.
+- No application-code change: the tree is the PR #10 merge plus release mechanics.
+
+## Gates run locally before the PR (sandbox, `npm ci --ignore-scripts` per SANDBOX entry 1)
+
+- `npm run format:check` pass; `npm run typecheck` pass; `npm test` **826 passed**, 0 failed (the only
+  red run during preparation was the isolation-contract test failing with
+  `docs/HANDOFF.md does not name the current release v1.0.1` before this block was written — the
+  test doing exactly its job); `npm run build` pass (`next-env.d.ts` restored); `npm audit
+  --omit=dev` **0 vulnerabilities**. Local Playwright was not run (no browser here); the PR's
+  `browser` check is the gate.
+
+## What a future session should know
+
+1. **Record `v1.0.1`'s post-merge facts at the top of this file** (release-PR merge SHA, PR CI and
+   `main` CI run IDs, annotated tag, Publish run, digest on `v1.0.1` / `latest` / `sha-<short>` vs
+   `v1.0.0`'s), per `docs/RELEASE_PROCESS.md` §7. This session's closing report has the verified
+   Publish run id and digest.
+2. **The `/admin/backup` and `/admin/restore` routes have no dedicated tests** (no route, unit or
+   browser coverage; `e2e/admin.spec.ts` does not touch them). Add filename/route-gating/e2e coverage
+   before the next admin change. The release notes state this gap honestly.
+3. **The restore route writes the uploaded bytes over the live registry without validating them
+   first** (`src/app/admin/restore/route.ts`): a corrupt upload breaks the registry until a good file
+   is restored. Consider checking the SQLite header, enforcing a size cap, and keeping a pre-restore
+   copy. Registry downloads are **unencrypted** — document retention/deletion, and never commit one.
+4. **Still not approved:** any real-data import of the original household, and any change to the
+   original app (its GHCR package, appdata or port `3007`).
+
+---
+
+# Historical handoff — v1.0.0 released, and main brought back in step with what was published (2026-10-11)
 
 **Session branch:** `arena/e6df491e-simple-finance-multi-household`.
 
