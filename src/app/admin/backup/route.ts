@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
   const db = getRegistry();
   const backupPath = path.join(os.tmpdir(), `registry_backup_${Date.now()}.sqlite`);
-  
+
   try {
     await db.backup(backupPath);
     const fileBuffer = fs.readFileSync(backupPath);
