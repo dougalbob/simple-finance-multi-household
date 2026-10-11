@@ -123,4 +123,3 @@ export function registryBackupFilename(appVersion: string, instant: Date): strin
     .replaceAll(':', '');
   return `simple-finance-registry-v${appVersion}-${date}-${time}.sqlite`;
 }
-
