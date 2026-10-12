@@ -9,19 +9,19 @@
 
 ## In this release
 
-- **Insights compares three months side by side** (PR #TBD): the month comparison shows the three
+- **Insights compares three months side by side** (PR #16): the month comparison shows the three
   most recent calendar months, oldest first, each month after the first paired with its **change
   against the month before it**. Two complete months always compare, even at the start of a month;
   a household that began recording mid-window simply sees the earlier months blank, and the gap
   self-cures as history fills in. The month still running is labelled "(in progress)" as before.
-- **Every Insights figure opens its line items** (PR #TBD): clicking a monthly total, a parent
+- **Every Insights figure opens its line items** (PR #16): clicking a monthly total, a parent
   category's cell, a person's figure, or a vehicle running-cost figure opens the purchases behind it
   inline — date, where, category, who it was for, and amount — with **Open these purchases →**
   opening the same rows in the purchases list. The drill is a real link (`?show=…`), so it works
   with JavaScript switched off and can be copied to the other person; pressing the figure again
   closes the table. Vehicle rows add up to the figure being opened: an annual premium shows its
   ÷ 12 share with the full payment footnoted on the row (decision 190's spread).
-- **A new chart: three months by category** (PR #TBD): grouped bars per parent category — one bar
+- **A new chart: three months by category** (PR #16): grouped bars per parent category — one bar
   per month, the same three months as the Insights table — on `/charts`. An **Exclude Housing**
   toggle removes Housing alone from the drawing so the other bars can breathe (Housing is about
   35% of this household's spending); the month still running is hatched and labelled "(so far)",
