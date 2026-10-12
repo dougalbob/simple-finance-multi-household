@@ -1098,7 +1098,7 @@ Phase 1 (v0.16.0) built the precondition — every colour became a custom proper
 picker in Settings. Not one page, component or chart changed to make that possible.
 
 - **One block per theme.** `src/app/themes.generated.css` holds 28 plain `[data-theme='…']` blocks,
-  each re-declaring the same 73 `--color-*` names. Plain CSS, not more `@theme`: Tailwind puts
+  each re-declaring the same 74 `--color-*` names (73 + `--color-link`, decision 203). Plain CSS, not more `@theme`: Tailwind puts
   `@theme` inside `@layer theme`, and an unlayered rule beats a layered one whatever the order.
   Attribute selectors rather than `:root[…]`, so a Settings card can paint a live preview of one
   theme inside a page wearing another.
@@ -1132,6 +1132,18 @@ picker in Settings. Not one page, component or chart changed to make that possib
   what the server last knew.
 - **Colour is never the only signal** (§16.7) holds inside the picker too: each card names its mode
   in words and the chosen one says **In use**, so the selection does not rest on a coloured ring.
+- **Links are blue and underlined, in every theme** (decision 203). The household found links by
+  accident — the same weight and almost the same colour as the sentence around them, with an
+  underline that appeared only on hover and never on a phone — so a link is now the familiar blue
+  **and** permanently underlined: two signals that survive a theme, a colour-blind reader and a
+  printed page. One token (`--color-link`) and two utilities (`sf-link` for ordinary links,
+  `sf-link-arrow` for a link that is its own call to action, where the arrow is the shape and the
+  underline appears on hover) carry the whole treatment, so a link is one thing on every page.
+  The hue is fixed rather than read from the palette — "that is a link" is the same signal in
+  Classic, Damson and Beacon — and the theme generator re-lights that one value per theme
+  (light and dark) so it still clears the §15.4 legibility floors: 4.5:1 on a card, on the page,
+  inside a grey strip and inside a tinted panel. A link drawn on the till keeps the till's own ink
+  and its underline, because `--color-link` is a mid-tone and would not read on a dark surface.
 - **The PWA exception, resolved.** `theme_color` and the manifest are read before any stylesheet
   exists, so they cannot be variables (§14). `generateViewport()` now emits the *chosen* theme's
   chrome colour — its till on a light theme, its canvas on a dark one — generated into the theme
@@ -1306,6 +1318,15 @@ come from the same read as the Insights table, so the two views cannot drift.
 - **Reported vs projected is always stated**, as a badge and in words.
 - **Colour is never the only signal**: every series is named in a legend and in the table twin, and an
   in-progress period is hatched as well as labelled.
+- **Two figures, two sets of SVG ids** (decision 202). Every chart is drawn twice — a phone figure and
+  a laptop figure, one of them hidden by CSS — and an `id` is document-global, so figures that share
+  one borrow each other's paint servers: `url(#…)` resolves to the first copy in the DOM, and when
+  that copy sits inside the hidden figure the fill paints **nothing at all**. Each drawing therefore
+  namespaces every pattern it defines with its own variant, and an in-progress bar is drawn as
+  **two rects** — a solid muted bar with the hatch over it — so the period is still readable if a
+  paint server ever fails again. A browser spec reads the drawing's own pixels back (an in-progress
+  bar has to have paint in it) and checks that no id inside one figure is shared with, or resolves
+  into, another.
 - **Drill-down is a real link.** A bar wraps an `<a>` at `/purchases?from=…&to=…&categoryId=…` (the same
   link is repeated in the table twin, which is the keyboard path), so it can be opened in a new tab or sent
   to the other person. Those filters match the **purchase**, and a matched purchase comes back with all of
@@ -1783,6 +1804,15 @@ enforces the same rule as the upload action.
   `capture="environment"`; the saved file is classified by content sniffing, so a photo that arrives as
   HEIC is offered as a PNG-extension target only if the bytes really are PNG — the plan's OQ9 default
   applies: the UI asks for JPEG and the household's phone normalises, with HEIC conversion out of scope.)
+- **One control, not two** (decision 204). The visible control *is* the file picker: a label reading
+  "Attach receipt" (or "Attach payslip" / "Attach document" for the other owner kinds) opens the
+  picker, and choosing a file starts the upload by itself. There is no second button to press first,
+  and no way to press an attach button with nothing to attach; while the upload runs the control
+  reads "Attaching…". The input itself is visually hidden but present and focusable, so the control
+  is keyboard-reachable and its focus ring is the label's. A submit button is still served for a
+  browser with JavaScript off, where the same label is only a label; React hides it on mount. The
+  input's value is cleared once each upload reports back, so the same file can be chosen a second
+  time after a failure.
 - **The till moment stays fast:** the purchase save never waits on an attachment upload. Attachment lifecycle
   is independent (`pending → stored | failed`), retryable, and a receipt can be attached days later. The
   online-only stance is unchanged (§14).

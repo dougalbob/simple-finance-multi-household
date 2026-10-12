@@ -427,6 +427,45 @@ empty — the fetch was blocked.
   that someone tagged a commit — not that the commit was merged, and not that an image was pushed (see
   `docs/RELEASE_NOTES_v1.0.0-rc.1.md` and `-rc.2.md`, both of which are tags with no image).
 
+## 20. `element.screenshot()` returns an unpainted image here — take the **full page** and read the box out of it (2026-10-12)
+
+- **Symptom:** proving the chart fix (decision 202) by pixels nearly failed for the wrong reason. A
+  `locator.screenshot()` of the laptop `figure` came back **entirely blank** — and so did
+  `locator.evaluate((el) => el.getBoundingClientRect())`-based crops of a *viewport* screenshot taken after
+  scrolling — while the same chart was plainly painted on screen. Chromium here renders element and clipped
+  screenshots through a different path (`CDPScreenshotNewSurface` is forced in this build) and the SVG paint
+  servers are not composited into it.
+- **What paints correctly:** `page.screenshot({ fullPage: true })`, taken with the page scrolled to the top.
+  Measure the bar's box with `getBoundingClientRect()` plus `window.scrollX/scrollY` (page coordinates, which
+  is what a full-page shot is in), and scale by `raster.width / window.innerWidth` — **`innerWidth`, not
+  `document.documentElement.clientWidth`**: the full-page shot is the viewport's width and a 15px scrollbar
+  makes the two disagree by 1%, which is enough to sample the wrong pixels in a 10px-wide bar.
+- **Also:** `page.screenshot({ clip })` for a region below the fold fails with *"Clipped area is either empty
+  or outside the resulting image"* rather than scrolling to it, so a clipped region must be inside the
+  current viewport.
+- **Two more traps found on the way.** (1) An element screenshot of a hidden-by-CSS figure is not the only
+  blank-image case: while debugging this, a hand-rolled PNG reader was silently wrong and turned every pixel
+  grey, which looked exactly like "Chromium painted nothing" — when the pixels say the paint is missing,
+  cross-check the decoder against Playwright's own `lib/utilsBundle.js` `PNG.sync.read` (reached with
+  `require(require.resolve('playwright-core').replace(/index\.js$/, 'lib/utilsBundle.js'))`, entry 8's
+  trick) before believing it. (2) In a Playwright `filter({ has })`, the inner locator is resolved
+  **relative to each candidate**: `row.locator('form').filter({ has: row.locator('input[type="file"]') })`
+  matches nothing, because the row is not inside its own form. Use `row.locator('form:has(input[type="file"])')`.
+- **Rule for specs that need pixels:** take one full-page screenshot, keep the element boxes in page
+  coordinates, and probe the raster with a threshold that page furniture cannot reach (the chart's gridlines
+  and paper are grey; a painted bar is not). `e2e/pixels.ts` holds the decoder (`node:zlib`, no dependency).
+
+---
+
+- **2026-10-12 (v1.5.0, session `arena/b3e92c4d-simple-finance-multi-household`):** entry 20 added while
+  proving the chart hatch fix by pixels. `@sparticuz/chromium` behaved exactly as entry 8 records
+  (`npm i` in `/tmp/pwbrowsers`, `lambdafs.inflate(bin/al2023.tar.br)` → `/tmp/al2023`,
+  `LD_LIBRARY_PATH=/tmp/al2023/lib`, throwaway `playwright.local.config.ts` overlay): the `charts` project
+  (9 tests, including the new pixel case) and the `attachments` project (3 tests) were green locally, and the
+  defective variant of the fix was proved to fail. The e2e server must be started by hand
+  (`node --import tsx scripts/e2e-server.mts`) when the spec runs use `E2E_BASE_URL` against an existing
+  server, and `.e2e-data` must be removed between manual runs that repeat a writing spec. `npm test` 878/201,
+  typecheck, format, themes, build and `npm audit --omit=dev` all clean locally.
 ## History
 
 - **2026-10-10 (v1.0.0-rc.1 publish fix, session `arena/50895dfb-simple-finance-multi-household`):** entry 18 added.
