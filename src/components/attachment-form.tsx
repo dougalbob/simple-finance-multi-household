@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { deleteAttachmentAction, uploadAttachmentAction } from '@/app/actions';
 import { AttachmentViewer } from './attachment-viewer';
 import { initialActionState } from '@/lib/action-state';
@@ -78,6 +78,26 @@ export function AttachmentForm({
     trigger: HTMLAnchorElement;
   } | null>(null);
   const [state, formAction, pending] = useActionState(uploadAttachmentAction, initialActionState);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  // False in the served HTML (so the no-JavaScript submit button is visible),
+  // true from the first client render: with React on the page the upload is
+  // started by the file choice itself (decision 204).
+  const [jsReady, setJsReady] = useState(false);
+  useEffect(() => setJsReady(true), []);
+  // Choosing the file is the whole gesture now: the form submits itself. The
+  // browser's own `required` check still runs, and a cancelled picker fires
+  // nothing at all.
+  const submitOnChoose = (event: ChangeEvent<HTMLInputElement>): void => {
+    const form = event.currentTarget.form;
+    if (form === null) return;
+    form.requestSubmit();
+  };
+  // A file input keeps its value, and re-choosing the *same* file fires no
+  // change event — so clear it once each upload has reported back.
+  useEffect(() => {
+    if (state.message === null || fileRef.current === null) return;
+    fileRef.current.value = '';
+  }, [state]);
   const kind =
     supplierId !== undefined ? 'supplier' : receiptId !== undefined ? 'receipt' : 'purchase';
   const words = OWNER_WORDS[kind];
@@ -103,7 +123,7 @@ export function AttachmentForm({
                     event.preventDefault();
                     setViewing({ attachment, trigger: event.currentTarget });
                   }}
-                  className="inline-flex items-center gap-1 hover:underline"
+                  className="inline-flex items-center gap-1 underline underline-offset-2"
                 >
                   <span aria-hidden="true">📎</span>
                   <span className="max-w-[160px] truncate">{attachment.originalName}</span>
@@ -122,11 +142,9 @@ export function AttachmentForm({
       {allowUpload ? (
         <form action={formAction} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name={words.field} value={ownerId} />
-          <label className="sr-only" htmlFor={inputId}>
-            {words.fileLabel}
-          </label>
           <input
             id={inputId}
+            ref={fileRef}
             name="file"
             type="file"
             accept="image/png,image/jpeg,application/pdf"
@@ -136,14 +154,31 @@ export function AttachmentForm({
             // own choice (files, photos or camera) alone.
             capture={kind === 'purchase' ? 'environment' : undefined}
             required
-            className="max-w-[190px] text-xs"
+            onChange={submitOnChoose}
+            // Visually hidden but very much present: the label below is the
+            // button, and this is what the browser opens when it is tapped.
+            className="peer sr-only"
           />
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded bg-till-inset px-2 py-1 text-till-ink disabled:opacity-60"
+          <label
+            htmlFor={inputId}
+            className="cursor-pointer rounded bg-till-inset px-2 py-1 text-till-ink hover:bg-till-hover peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent"
           >
             {pending ? 'Attaching…' : words.attach}
+          </label>
+          {/*
+            Decision 204: one control, not two. The label above is the button —
+            it opens the picker — and choosing a file uploads it on the spot,
+            so "Attach receipt" never sits there inviting a press before there
+            is anything to attach. This second control is the no-JavaScript
+            path only: it is in the served HTML, and the moment React is on the
+            page it is hidden, because the upload has already started by then.
+          */}
+          <button
+            type="submit"
+            hidden={jsReady}
+            className="rounded bg-till-inset px-2 py-1 text-till-ink"
+          >
+            {words.attach}
           </button>
           {state.message !== null ? (
             <span

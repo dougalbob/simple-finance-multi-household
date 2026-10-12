@@ -76,12 +76,29 @@ test.describe('removing a receipt', () => {
     await page.goto('/purchases');
     const row = page.locator('tbody tr', { hasText: 'Playwright Receipt Shop' });
     await expect(row).toHaveCount(1);
-    await row.locator('input[type="file"]').setInputFiles({
-      name: RECEIPT_NAME,
-      mimeType: 'image/png',
-      buffer: PNG_BYTES,
+    // Decision 204: one control. "Attach receipt" is the label that opens the
+    // picker — there is no second button to press first — and choosing the file
+    // starts the upload by itself. The no-JavaScript submit button is in the
+    // served HTML and is hidden the moment React is on the page.
+    // `form:has(...)`, not `filter({ has: row.locator(...) })`: a `has` inner
+    // locator is resolved *relative to* each candidate, so one already anchored
+    // on the row matches nothing (the row is not inside its own form).
+    const attachForm = row.locator('form:has(input[type="file"])');
+    const attachControl = attachForm.locator('label[for^="attachment-file-"]', {
+      hasText: 'Attach receipt',
     });
-    await row.getByRole('button', { name: 'Attach receipt' }).click();
+    await expect(attachControl).toBeVisible();
+    // The row has other forms of its own (its follow-up note, for one), so the
+    // no-JavaScript submit button is looked for inside the attachment form.
+    await expect(attachForm.locator('button[type="submit"]')).toBeHidden();
+    // Pressing "Attach receipt" is what opens the picker — it is a label for the
+    // file input beneath it — and choosing a file starts the upload by itself.
+    // Nothing else is pressed: there is no second button and no attach step.
+    const choosing = page.waitForEvent('filechooser');
+    await attachControl.click();
+    const chooser = await choosing;
+    expect(chooser.isMultiple()).toBe(false);
+    await chooser.setFiles({ name: RECEIPT_NAME, mimeType: 'image/png', buffer: PNG_BYTES });
     const viewLink = row.getByRole('link', { name: new RegExp(RECEIPT_NAME) });
     await expect(viewLink).toBeVisible({ timeout: 30_000 });
     const href = await viewLink.getAttribute('href');
@@ -127,7 +144,6 @@ test.describe('removing a receipt', () => {
       mimeType: 'application/pdf',
       buffer: fictionalPdf(3),
     });
-    await row.getByRole('button', { name: 'Attach receipt' }).click();
     const pdfLink = row.getByRole('link', { name: /fictional.pdf/ });
     await expect(pdfLink).toBeVisible();
     for (const width of [393, 1400]) {
@@ -193,7 +209,6 @@ test.describe('removing a receipt', () => {
       mimeType: 'application/pdf',
       buffer: Buffer.from('%PDF-1.4\nnot a PDF body\n'),
     });
-    await row.getByRole('button', { name: 'Attach receipt' }).click();
     await row.getByRole('link', { name: /broken.pdf/ }).click();
     const broken = page.getByRole('dialog');
     await expect(broken.getByRole('alert')).toContainText('could not be shown here', {
