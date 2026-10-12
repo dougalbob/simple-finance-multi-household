@@ -943,7 +943,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
               {data.pots.length === 0 ? (
                 <p className="text-xs font-semibold text-warning-700">
                   No pots yet — a purchase needs somewhere for the money to leave.{' '}
-                  <Link href="/pots" className="underline">
+                  <Link href="/pots" className="sf-link">
                     Add the first pot
                   </Link>
                   , then come back to the till.
@@ -2001,7 +2001,7 @@ function DuplicateNotice({ notice }: { notice: DuplicateNoticeState }) {
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <a
           href={`#purchase-${notice.purchaseId}`}
-          className="inline-flex min-h-[44px] items-center font-semibold underline"
+          className="sf-link inline-flex min-h-[44px] items-center"
         >
           Review entry #{notice.purchaseId}
         </a>

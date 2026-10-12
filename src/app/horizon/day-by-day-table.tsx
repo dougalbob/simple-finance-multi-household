@@ -157,7 +157,11 @@ function AmountCell({
         aria-expanded={expanded}
         aria-controls={controls}
         aria-label={`${label}: ${negative ? '−' : '+'}${formatPence(pence)}. ${expanded ? 'Hide' : 'Show'} details`}
-        className="-my-1 min-h-9 whitespace-nowrap rounded px-1 py-1 text-right tabular-nums underline decoration-dotted underline-offset-4 hover:text-accent focus-visible:outline-2 focus-visible:outline-accent aria-expanded:font-semibold aria-expanded:text-accent"
+        // Decision 203: the amount is the way in, so it is drawn like a link —
+        // the familiar blue and a permanent underline — with the dotted line
+        // kept to say "this opens here, under the row" rather than "this
+        // navigates away".
+        className="sf-link -my-1 min-h-9 whitespace-nowrap rounded px-1 py-1 text-right tabular-nums decoration-dotted focus-visible:outline-2 focus-visible:outline-accent aria-expanded:font-semibold"
       >
         {negative ? `−${formatPence(pence)}` : `+${formatPence(pence)}`}
       </button>

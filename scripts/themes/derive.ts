@@ -192,10 +192,14 @@ export const CONTRAST_RULES: ContrastRule[] = [
   { fg: 'till-ink', bg: 'till', min: 7, why: 'everything written on the till' },
   { fg: 'till-ink', bg: 'till-inset', min: 6, why: 'the till tab strip' },
   { fg: 'till-ink', bg: 'till-hover', min: 4.5, why: 'a hovered primary button' },
-  { fg: 'accent', bg: 'surface', min: 4.5, why: 'links on a card' },
-  { fg: 'accent', bg: 'canvas', min: 4.5, why: 'links on the page' },
-  { fg: 'accent', bg: 'surface-muted', min: 4.5, why: 'links inside a grey strip' },
-  { fg: 'accent', bg: 'accent-50', min: 4.5, why: 'a link inside its own tinted panel' },
+  { fg: 'link', bg: 'surface', min: 4.5, why: 'a link on a card (decision 203)' },
+  { fg: 'link', bg: 'canvas', min: 4.5, why: 'a link on the page' },
+  { fg: 'link', bg: 'surface-muted', min: 4.5, why: 'a link inside a grey strip' },
+  { fg: 'link', bg: 'accent-50', min: 4.5, why: 'a link inside a tinted panel' },
+  { fg: 'accent', bg: 'surface', min: 4.5, why: 'accent text on a card' },
+  { fg: 'accent', bg: 'canvas', min: 4.5, why: 'accent text on the page' },
+  { fg: 'accent', bg: 'surface-muted', min: 4.5, why: 'accent text inside a grey strip' },
+  { fg: 'accent', bg: 'accent-50', min: 4.5, why: 'accent text inside its own tinted panel' },
   { fg: 'accent-900', bg: 'accent-50', min: 4.5, why: 'the loudest text on an accent panel' },
   { fg: 'accent-900', bg: 'accent-100', min: 4.5, why: 'a selected chip in the till' },
   { fg: 'accent-800', bg: 'surface', min: 4.5, why: 'emphasised accent text' },
@@ -379,7 +383,16 @@ function lightBuild(roles: PaletteRoles, base: Map<string, Oklch>): Build {
     deepTone(Math.max(ramp(INK_STEPS['ink-soft'] ?? 0.3005), insetL + 0.11)),
   );
 
-  // Accent: the palette's chromatic stop, on Classic's sky ladder.
+  // Link: one familiar blue, in every palette (decision 203). Hue and chroma
+  // are fixed (blue-700's own) and only lightness moves, so the link is the
+  // same signal in a plum theme and a brass one; `enforce` below deepens or
+  // lifts it per theme until it clears every floor it is read against.
+  const classicLink = base.get('link');
+  if (classicLink === undefined) throw new Error('the base block has no --color-link');
+  tokens.set('link', { l: classicLink.l, c: clamp(classicLink.c, 0.004, 0.2), h: classicLink.h });
+
+  // Accent: the palette's chromatic stop, on Classic's sky ladder. It is the
+  // "you are here" colour and the chart bar now, not the link colour.
   const accentScale = clamp(roles.accent.c / 0.169, 0.5, 1.2);
   for (const [name, role] of Object.entries(SHADE_ROLES)) {
     if (!name.startsWith('accent')) continue;
@@ -451,6 +464,13 @@ function darkBuild(roles: PaletteRoles, base: Map<string, Oklch>): Build {
   // so the writing goes almost black. One token, decided here, is why no page
   // needed editing for that flip (decision 160).
   tokens.set('fill-ink', { l: 0.17, c: 0.012, h: roles.ink.h });
+
+  // Link: the same fixed blue as the light build, re-lit for a dark page so it
+  // reads on the cards and on the page (decision 203). Its hue is not the
+  // theme's: a link says "link" first and "this palette" second.
+  const classicLink = base.get('link');
+  if (classicLink === undefined) throw new Error('the base block has no --color-link');
+  tokens.set('link', { l: 0.76, c: clamp(classicLink.c * 0.62, 0.09, 0.16), h: classicLink.h });
 
   for (const [name, role] of Object.entries(SHADE_ROLES)) {
     const classic = base.get(name);

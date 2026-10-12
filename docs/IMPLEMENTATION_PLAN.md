@@ -2938,3 +2938,104 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     The axis now shows every label (they are short enough for the thinnest band). The charts browser spec gains a months test (the drawing overflows its scroll frame on a 320px phone, the hover hint is present, the arrows move the scroll) and its width assertion checks the scroll frame rather than the drawing for scrollable figures.
 
     Tests: `tests/chart-labels.test.ts` (the three abbreviation shapes and the apostrophe rule), `e2e/charts.spec.ts` months case. Not verified: a real touch device's feel of the swipe — the sandbox's Chromium emulates touch but cannot attest momentum or haptics; the implementation deliberately leaves touch to the platform, which is the only web answer to that ask.
+
+202. **The in-progress bars were invisible on a laptop, and nothing but a pixel noticed (2026-10-12, v1.5.0).**
+
+    The household's charts had a painting bug that survived eleven releases. On any screen 1024px or
+    wider the hatched "in progress" bars — the Groceries "(so far)" week since v0.14.0 and the months
+    chart's running month since v1.4.0 — were **in the DOM, at the right size, with the right
+    computed `fill`, and completely unpainted**. Phones were never affected, and every existing
+    assertion passed: geometry, links, the table twin and the accessible label were all correct.
+
+    **Root cause.** Each chart is drawn twice — a phone figure (`lg:hidden`) and a laptop figure
+    (`hidden lg:block`) — and an SVG `id` is document-global. Both copies defined the same hatch
+    `<pattern>` (`chart-hatch` in `bar-chart.tsx`, `chart-grouped-hatch-<month>` in
+    `grouped-bar-chart.tsx`), so `url(#…)` resolved to the **first** copy in DOM order; at laptop
+    widths that copy lives inside the `display: none` phone figure, and a paint server that resolves
+    into a hidden subtree paints nothing at all (SVG 1.1, every browser). Reproduced here in the
+    sandbox's Chromium in both directions: with the shared id restored, a grey gap where the bar
+    should be; with the fix, exactly the bar.
+
+    **As built (SPEC §16.7, "Rules every chart keeps").** `BarChart` and `GroupedBarChart` take an
+    `idPrefix` and namespace every pattern they define (`chart-hatch-groceries-laptop-hatch`,
+    `chart-hatch-months-laptop-hatch-2026-10-01`, …), threaded from the four call sites on
+    `/charts` — so a drawing's paint servers are its own, and the page can be extended with a third
+    variant without touching the components. And the muted bar **degrades honestly**: it is now two
+    rects, a solid `CHART_COLOURS.barMuted` base with the hatch drawn over it, so an in-progress
+    period reads as a muted bar even if a paint server ever fails again (SPEC §16.7's "colour is
+    never the only signal" was already claiming the hatch was a second signal; now the shape is a
+    third).
+
+    **The test that would have caught it.** `e2e/charts.spec.ts` gains a **pixel** case: it
+    scrolls nothing, takes one full-page screenshot, reads it back through a small PNG decoder
+    (`e2e/pixels.ts`, `node:zlib` only — no new dependency and no browser API), and requires every
+    in-progress bar's own bounding box to contain paint. It first checks the structure that failed —
+    no id inside one figure may be shared with, or resolve into, another — then samples the figure's
+    pixels. Turning the fix off in a throwaway edit makes the new test fail with the exact bars
+    named, so the check is known to bite.
+
+    **Known history, for the release notes:** the Groceries "(so far)" bar was invisible on
+    laptop/desktop in every release from **v0.14.0 to v1.4.0**, and the months chart's in-progress
+    month was invisible there for all of **v1.4.0**. The phone figures were correct throughout; no
+    figure was ever wrong, only unpainted on a wide screen.
+
+203. **A link is blue and underlined (2026-10-12, v1.5.0).**
+
+    The household reported that links were found by accident: on `/recurring` the Schedules card's
+    "Supplier card", the "… →" links and the Horizon day-by-day amounts that open the inline
+    transaction list all read as plain text until the pointer happened to cross them (`text-accent`
+    with `hover:underline` — the same weight, and an underline that never appears on a phone).
+    Asked to choose, the household picked the **familiar blue, always underlined** over keeping the
+    theme's accent hue and over a hover-only underline.
+
+    As built: one token, `--color-link`, and two Tailwind v4 utilities in `src/app/globals.css`.
+    `sf-link` is an ordinary link — the blue, underlined, underline offset 2px, and hover thickens
+    the line (feedback on top of the signal, never the signal). `sf-link-arrow` is a link that is
+    its own call to action ("See all 18 →", a bar's axis label): the same blue and permanent
+    underline, retaining its arrow and weight. Hover only thickens the line for both utilities.
+    `e2e/desktop.spec.ts` checks the Supplier card, arrow links and Horizon amount controls before
+    hover at phone and laptop widths. The sweep converted **119** link sites across ~31 files, including
+    the four the household named; text that is a button or a toggle keeps its underline and does not
+    become blue (`attachment-form.tsx`'s receipt chip, the quick-entry toggles, `record-forms.tsx`,
+    the day-by-day mention chips). Links drawn on the till keep the till's own ink and their
+    underline, because the link blue is a mid-tone and would not read on a dark surface.
+
+    **The theme rule was kept, not bent.** A link cannot be blue and legible by assumption: the hue
+    (`#1d4ed8`, blue-700's own) and chroma are fixed, and `scripts/themes/derive.ts` re-lights only
+    lightness per theme — deepened in a light build, lifted in a dark one — until it clears every
+    floor it is read against. `CONTRAST_RULES` now measures the link separately from `accent` (4.5:1
+    on a card, on the page, inside a grey strip, inside a tinted panel), and the existing accent
+    rules stay, because accent is still chip, focus ring and chart colour. `npm run themes:build`
+    produced `--color-link: #2352cf` (light) and `#8aafff` (dark) for the generated themes; all 28
+    themes carry the token, and `tests/themes.test.ts` re-measures the shipped stylesheet, including
+    a new distinctness group `'link vs ink'`. The generated files stay byte-fresh:
+    `npm run themes:check` is green.
+
+204. **One attach control, not two (2026-10-12, v1.5.0).**
+
+    On `/purchases` the household saw two controls and pressed the wrong one first: a submit button
+    reading "Attach receipt" sat above the file input, so the natural gesture was to press it, and
+    nothing happened. The same component serves all three owner kinds (purchase, income record,
+    supplier card), so the fix is one change in `src/components/attachment-form.tsx`.
+
+    As built (SPEC §23.1): the **styled label is the button**. It reads "Attach receipt" (or "Attach
+    payslip" / "Attach document"), opens the picker, and the chosen file submits the form on the
+    spot via `requestSubmit()`; while the upload runs it reads "Attaching…". The file input is
+    `peer sr-only` — visually hidden, still focusable, still the labelled control — so the focus
+    ring is drawn on the label (`peer-focus-visible:`), and there is never a button to press with
+    nothing to attach. A `<button type="submit" hidden={jsReady}>` remains in the served HTML for a
+    browser with JavaScript off, hidden by React on mount (the no-JS path still works end to end:
+    the label is a label, the button submits). An effect keyed on the action's `state` clears the
+    input's value after each attempt, because a file input keeps its value and re-choosing the same
+    file fires no change event — which is what retrying a rejected file needs. The accessible name
+    includes the visible action plus the original file-kind hint (for example, "Attach payslip
+    (payslip or document file)"); the payslip browser spec also checks auto-upload without a second
+    click. CI caught its old two-step expectation before release.
+
+    `e2e/attachments.spec.ts` now drives the real gesture: it clicks the label, takes the file
+    chooser the browser opens, sets the file on it, and waits for the attachment to appear — no
+    "press Attach receipt" step exists to write. It also asserts the no-JavaScript button is present
+    but hidden, and (found on the way) scopes that assertion to the attachment form with a
+    `form:has(input[type="file"])` locator, because a purchase row has other forms of its own and a
+    `filter({ has })` inner locator is resolved relative to each candidate — so an inner locator
+    already anchored on the row matches nothing.

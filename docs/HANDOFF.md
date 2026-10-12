@@ -1,4 +1,138 @@
-# Current handoff — v1.4.0 release: three months, line-item drill-downs and the months chart (2026-10-12)
+# Current handoff — v1.5.0 release: links that look like links, one attach control, and the chart bars that were never drawn (2026-10-12)
+
+## v1.5.0 delivery status (before merge)
+
+- Release PR **#17**: <https://github.com/dougalbob/simple-finance-multi-household/pull/17>.
+- Initial PR CI run `38294560184`: Gates and Docker passed; Browser acceptance reported **125 passed,
+  1 failed**. Decision 204 had dropped the file-kind accessible name and the payslip spec still pressed
+  the old second button. Both were fixed before release: the input keeps the visible action **and** its
+  file-kind hint, and the payslip spec checks auto-upload and the hidden no-JavaScript button.
+- Final review also caught `sf-link-arrow`'s hover-only underline; it is now permanently underlined,
+  just like `sf-link`. New browser checks cover all three reported sites before hover at 393px and
+  1400px (**2/2 passed**).
+- Focused final browser run: **17/17 passed** (attachments 3, income 5, charts 9). A wider sandbox run
+  completed 116 tests before losing the dev server during registry-restore compilation (the existing
+  limit in `docs/SANDBOX.md` entry 17); all ten affected tests passed when rerun against a managed server.
+  Do not call that interrupted run a full green suite; the complete seeded and empty-household suites
+  must pass in CI before merge and again on the merge commit before tagging.
+- The final correction repeated types, all **878 unit tests / 201 suites**, format, theme freshness,
+  production build and production audit (0 vulnerabilities) successfully.
+- At this point no `v1.5.0` tag or image has been published. After delivery, record the final PR/main
+  checks, merge SHA, annotated tag object, Publish run and verified release digest here (§7).
+
+## v1.4.0 post-merge facts (recorded per `docs/RELEASE_PROCESS.md` §7)
+
+- **v1.4.0 — Three months, line items and the months chart** released 2026-10-12; release PR **#16**,
+  merged to `main` with a merge commit: **`94e27beb89e300ca13e91d8de6bdadaf2abf97c7`** (short `94e27be`).
+- Annotated lower-case tag **`v1.4.0`** (object `3f2d8f31866f06de2ed7f0c9ffdb8f704a9306bb`) on `94e27be`.
+- Publish run **`38281961050`** succeeded (job `114921115034`, "Build, smoke test and push the release
+  image"). The GitHub release `v1.4.0` was published 2026-10-12T17:08:52Z, is **Latest** and is not a
+  pre-release.
+- Digest **`sha256:05b8c33f65e07a4f096aff952692189ec054f8c31de66d3c58d81e60ca5db57c`**, shared by `v1.4.0`,
+  `latest` and `sha-94e27be`, as printed by the Publish run's own registry check.
+- Known redness at that tree: none — `main` was green when this session started.
+
+## What this release is (v1.5.0)
+
+The three changes the household asked for in one session:
+
+1. **Links look like links** — the familiar blue and permanently underlined, everywhere, in every theme
+   (SPEC §15.4, decision 203). The trigger was the household finding links by accident: the Schedules
+   card's "Supplier card", the "… →" links and Horizon's day-by-day amounts.
+2. **One control on attachments, not two** — "Attach receipt" opens the picker and choosing a file uploads
+   it; no button to press first, for all three owner kinds (SPEC §23.1, decision 204).
+3. **The chart hatch fix** — in-progress bars were unpainted on any screen ≥1024px (Groceries since
+   v0.14.0, the months chart since v1.4.0) because two figures shared one SVG pattern id; each drawing now
+   namespaces its ids and a muted bar is two rects, with a pixel test to keep it true (SPEC §16.7,
+   decision 202).
+
+## What a future session should know (v1.5.0)
+
+- **A link is one token and two utilities.** `--color-link` in `src/app/globals.css` (base block
+  `#1d4ed8`) is re-lit per theme by `scripts/themes/derive.ts` — hue and chroma fixed, lightness moved
+  until `CONTRAST_RULES` are met — giving `#2352cf` light and `#8aafff` dark in the generated file. Use
+  `className="sf-link"` for an ordinary link and `sf-link-arrow` for a link that is its own call to action
+  (retaining the arrow and weight; always underlined too). **Do not** reintroduce `text-accent hover:underline` for a
+  link: the theme generator now measures the link separately from `accent`, and a new link style would
+  bypass those floors. Text that is a button or a toggle keeps its own underline and does not become blue.
+- **The attachment form has one control by construction.** `src/components/attachment-form.tsx`: the file
+  input is `peer sr-only` with `onChange` → `requestSubmit()`, the visible control is the `<label
+  htmlFor>` styled as the button, and a `<button type="submit" hidden={jsReady}>` is the no-JS path only.
+  Do not add a second visible submit control — the household's whole complaint was the button with nothing
+  behind it. The effect keyed on `state` clearing the input is what lets a rejected file be re-chosen.
+- **Chart ids are per drawing.** `BarChart` and `GroupedBarChart` take a required `idPrefix`, and
+  `/charts` passes the variant (`chart-hatch-groceries-${variant}`, …). A new chart figure **must** do the
+  same: an SVG `id` is document-global, and `url(#…)` resolving into the hidden figure paints nothing at
+  all. An in-progress (muted) bar is deliberately two rects (muted base + hatch overlay) so it degrades to
+  a solid bar rather than vanishing.
+- **Pixel assertions exist now.** `e2e/pixels.ts` is a small PNG decoder (`node:zlib`, no dependency) and
+  `e2e/charts.spec.ts` uses it to require paint inside every in-progress bar's box, after first asserting
+  no pattern id is shared across figures. Read `docs/SANDBOX.md` **entry 20** before writing another pixel
+  test: element and clipped screenshots come back unpainted in this sandbox, so take a **full-page**
+  screenshot, keep boxes in page coordinates, and scale by `window.innerWidth`.
+- **`filter({ has })` resolves its inner locator relative to each candidate.** Use
+  `row.locator('form:has(input[type="file"])')` when the anchor (the row) is the ancestor of the form.
+- **The version-doc coupling is still real**: `tests/multi-household-isolation-contract.test.ts` requires
+  AGENTS.md, README.md, docs/HANDOFF.md, docs/RELEASE_PROCESS.md and docs/MULTI_HOUSEHOLD_PLAN.md to name
+  the current tag literally, plus `docs/RELEASE_NOTES_<tag>.md` to exist with its exact title. Bump the
+  five docs in the same commit as the version, or `npm test` goes red.
+- **Preserve the registry on upgrades.** This release's notes correct the inherited pre-v1
+  "delete `system/`" paragraph in older notes: it is not a multi-household upgrade path. Back up the
+  household, registry and `.env` separately; leave all existing data intact. Original single-household
+  data needs its own approved import and must never be mounted here.
+- **Release mechanics unchanged** (`docs/RELEASE_PROCESS.md` §7): one PR/merge, one release per session;
+  lowercase annotated tag on the merge commit; never squash; never touch
+  `ghcr.io/dougalbob/simple-finance`; the README's pinned digest is refreshed after publish.
+
+## Why this session exists
+
+Three things the household reported, with a fourth handed over:
+
+- Links were not obviously links. The household chose **blue + always underlined** over keeping the theme
+  accent hue and over a hover-only underline.
+- On `/purchases` the "Attach receipt" button appeared before a file was chosen, and the natural gesture
+  was to press it — nothing happened. The household wanted one control, not two. (An earlier sketch — a
+  label that said "Choose file" and then named the file — was superseded before implementation; the built
+  answer is the label-as-button.)
+- A diagnosis note from the v1.4.0 session: the hatched in-progress bars were invisible on laptop/desktop
+  because both figures of each chart defined the same pattern id. Fix it, degrade honestly, and add the
+  pixel proof.
+- Cut the release (v1.5.0, minor) as usual: the agent owns the PR, merge, tag and publish.
+
+## What this session did
+
+- **Link treatment** (decision 203): `--color-link` added to the base token block and to
+  `scripts/themes/derive.ts` (light + dark builds, `CONTRAST_RULES` split from `accent`); `themes.generated.css`
+  regenerated (all 28 themes); `sf-link` / `sf-link-arrow` `@utility` rules in `globals.css`; **119 link
+  sites** converted across ~31 files (the audit swept `<Link`/`<a>` with context, including the four the
+  household named); `tests/themes.test.ts` gained the `'link vs ink'` distinctness group and re-measures
+  the shipped stylesheet.
+- **Attachment single control** (decision 204): `src/components/attachment-form.tsx` restructured as above;
+  `e2e/attachments.spec.ts` now drives the real gesture (click the label → take the browser's file chooser
+  → set the file), asserts the no-JS button is present but hidden, and scopes that to the attachment form.
+- **Chart hatch fix** (decision 202): `idPrefix` threaded through `bar-chart.tsx` and
+  `grouped-bar-chart.tsx` into every pattern id, with the four `/charts` call sites passing the variant;
+  muted bars drawn as muted base + hatch overlay; `e2e/charts.spec.ts` gained the structural + pixel case;
+  new `e2e/pixels.ts`.
+- **Docs/version**: SPEC §15.4 (link treatment, token count 74), §16.7 (two figures, two id sets), §23.1
+  (one control); plan decisions 202–204; `docs/SANDBOX.md` entry 20 (element screenshots unpainted);
+  version 1.5.0 across `package.json`, `package-lock.json`, `src/lib/version.ts` and the Unraid template;
+  `docs/RELEASE_NOTES_v1.5.0.md`; and every agent entry point naming `v1.5.0`.
+
+## Gates run locally before the PR
+
+- `npx tsc --noEmit` — clean.
+- `npm test` — **878 tests / 201 suites, 0 failures** (the multi-household isolation contract included).
+- `npm run format:check` — clean (the sweep's files were reformatted with `npm run format`).
+- `npm run themes:check` — "themes are up to date".
+- `next build` — clean (replayed per `docs/SANDBOX.md` entry 18; `next-env.d.ts` reverted).
+- Browser suite via the `@sparticuz/chromium` recipe (entry 8, overlay `playwright.local.config.ts`):
+  the **charts** project 9/9 (including the new paint case) and the **attachments** project 3/3, against a
+  hand-started `node --import tsx scripts/e2e-server.mts` on port 3100. The pixel case was also proved to
+  bite: with the fix temporarily un-namespaced, it named all four unpainted bars.
+- `npm audit --omit=dev` — 0 vulnerabilities.
+
+# Historical handoff — v1.4.0 release: three months, line-item drill-downs and the months chart (2026-10-12)
 
 ## v1.3.0 post-merge facts (recorded per `docs/RELEASE_PROCESS.md` §7)
 

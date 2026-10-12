@@ -54,10 +54,7 @@ export function PaydaySummary({ projection }: { projection: ProjectionView }) {
 
       <p className="mt-3 text-sm text-ink-body">
         See full projection detail in the{' '}
-        <Link
-          href={`/horizon?through=${summary.horizonThroughDate}`}
-          className="font-medium text-accent hover:underline"
-        >
+        <Link href={`/horizon?through=${summary.horizonThroughDate}`} className="sf-link">
           Horizon
         </Link>{' '}
         page.

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { countChromaticPixels, decodePng } from './pixels';
 
 /**
  * Charts (v0.14.0 — plan decisions 152–157, SPEC §16.7).
@@ -182,6 +183,104 @@ test.describe('charts', () => {
       .toBeGreaterThan(before);
     await expect(left).toBeVisible();
     await noOverflow(page, '320px: months after the arrows');
+  });
+
+  test('the in-progress bars are painted, not merely present (decision 202)', async ({ page }) => {
+    test.slow();
+    // A laptop viewport is the case that failed from v0.14.0 to v1.4.0: at
+    // 1024px and wider the phone figures are hidden, and the hatched bars
+    // pointed at a `<pattern>` that lived inside one of them. A `url(#…)`
+    // that resolves into a `display: none` subtree paints nothing at all, so
+    // the bars were in the DOM, at the right size, and invisible. Nothing but
+    // a pixel can tell that story.
+    await page.setViewportSize({ width: 1400, height: 950 });
+    await page.goto('/charts');
+    await expect(page.getByRole('heading', { name: 'The money, drawn' })).toBeVisible();
+
+    // First the shape of the mistake: an id is document-global, so two figures
+    // that share one borrow each other's paint server — and the borrowed copy
+    // is the one CSS hides at this width.
+    const borrowed = await page.evaluate(() => {
+      const problems: string[] = [];
+      const users = new Map<string, Set<string>>();
+      for (const figure of document.querySelectorAll('figure[data-chart]')) {
+        const name = `${figure.getAttribute('data-chart') ?? '?'}/${figure.getAttribute('data-variant') ?? '?'}`;
+        for (const rect of figure.querySelectorAll('svg rect')) {
+          const fill = getComputedStyle(rect).fill;
+          const id = /^url\(["']?#([^"')]+)/.exec(fill)?.[1];
+          if (id === undefined) continue;
+          const server = document.getElementById(id);
+          if (server === null) problems.push(`${name}: url(#${id}) resolves to nothing`);
+          else if (!figure.contains(server))
+            problems.push(`${name}: url(#${id}) resolves to a pattern outside this figure`);
+          const set = users.get(id) ?? new Set<string>();
+          set.add(name);
+          users.set(id, set);
+        }
+      }
+      for (const [id, figures] of users) {
+        if (figures.size > 1) problems.push(`url(#${id}) is shared by ${[...figures].join(', ')}`);
+      }
+      return problems;
+    });
+    expect(borrowed, 'paint servers borrowed across figures').toEqual([]);
+
+    // Then the paint itself. The frame is the whole page rather than the
+    // element: element screenshots come back unpainted in some headless
+    // builds, so the drawing is measured in page coordinates and the bar's own
+    // box is read out of a full-page shot (docs/SANDBOX.md).
+    await page.evaluate(() => window.scrollTo(0, 0));
+    // `innerWidth`, not the document's client width: a full-page screenshot is
+    // the viewport wide, and the scrollbar is not part of it.
+    const frame = await page.evaluate(() => ({
+      width: window.innerWidth,
+      height: window.innerHeight,
+    }));
+    const raster = decodePng(await page.screenshot({ fullPage: true }));
+    const scale = raster.width / frame.width;
+    let probed = 0;
+    const unpainted: string[] = [];
+    for (const chart of ['months', 'groceries'] as const) {
+      const laptop = figure(page, chart, 'laptop');
+      await expect(laptop, `${chart}: the laptop figure`).toBeVisible();
+      const bars = await laptop.evaluate((element) =>
+        Array.from(element.querySelectorAll('svg rect'))
+          .filter((rect) => getComputedStyle(rect).fill.startsWith('url('))
+          .map((rect) => {
+            const box = rect.getBoundingClientRect();
+            return {
+              x: box.x + window.scrollX,
+              y: box.y + window.scrollY,
+              width: box.width,
+              height: box.height,
+            };
+          }),
+      );
+      expect(bars.length, `${chart}: no hatched bar is drawn`).toBeGreaterThan(0);
+
+      for (const bar of bars) {
+        // A bar with no height is an honest zero — there is nothing to paint.
+        if (bar.width < 1 || bar.height < 1) continue;
+        probed += 1;
+        // Probe inside the bar, so the series colour's own edge cannot answer
+        // for the paint.
+        const painted = countChromaticPixels(raster, {
+          x: (bar.x + 1) * scale,
+          y: (bar.y + 1) * scale,
+          width: Math.max(1, (bar.width - 2) * scale),
+          height: Math.max(1, (bar.height - 2) * scale),
+        });
+        if (painted < 2) {
+          unpainted.push(
+            `${chart}: the bar at ${Math.round(bar.x)},${Math.round(bar.y)} (${Math.round(
+              bar.width,
+            )}×${Math.round(bar.height)}) painted ${painted} coloured pixels`,
+          );
+        }
+      }
+    }
+    expect(probed, 'no in-progress bar is drawn to check').toBeGreaterThan(0);
+    expect(unpainted, 'in-progress bars with no pixels').toEqual([]);
   });
 
   test('a grocery week opens the purchases it was made of', async ({ page }) => {

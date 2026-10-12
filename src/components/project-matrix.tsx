@@ -145,7 +145,7 @@ function CellToolbar({
           target="_blank"
           rel="noreferrer"
           aria-label={`Open the product page for ${itemName} at ${supplierName}`}
-          className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+          className="inline-flex items-center gap-1 text-xs sf-link-arrow"
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
             <path d="M12.5 3h4.5v4.5h-1.5V5.56L11.03 10.03l-1.06-1.06 4.47-4.47H12.5V3zM4 5h5v1.5H5.5v8h8V11H15v5H4V5z" />

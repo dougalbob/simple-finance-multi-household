@@ -37,16 +37,13 @@ export function NeedsFirst({
         <li key={need.id} className="text-sm">
           <p className="text-ink-soft">
             {need.sentence}{' '}
-            <Link href={need.actionHref} className="font-medium text-accent hover:underline">
+            <Link href={need.actionHref} className="sf-link-arrow">
               {need.actionLabel} →
             </Link>
           </p>
           {need.guideAnchor !== null ? (
             <p className="mt-0.5 text-xs">
-              <Link
-                href={`/guide#${need.guideAnchor}`}
-                className="text-ink-muted hover:text-ink hover:underline"
-              >
+              <Link href={`/guide#${need.guideAnchor}`} className="sf-link-arrow">
                 How this app thinks: {guideSection(need.guideAnchor).title} →
               </Link>
             </p>
@@ -74,7 +71,7 @@ export function NeedsFirst({
       </p>
       {list}
       <p className="mt-3 text-sm">
-        <Link href="/start" className="font-medium text-accent hover:underline">
+        <Link href="/start" className="sf-link-arrow">
           See the whole setup path →
         </Link>
       </p>

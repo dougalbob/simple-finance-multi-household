@@ -186,10 +186,7 @@ export function SupplierCard({
             <dt className="font-medium text-ink-muted">Phone</dt>
             <dd>
               {supplier.contactPhone !== null ? (
-                <a
-                  className="text-accent hover:underline"
-                  href={`tel:${supplier.contactPhone.replace(/\s+/g, '')}`}
-                >
+                <a className="sf-link" href={`tel:${supplier.contactPhone.replace(/\s+/g, '')}`}>
                   {supplier.contactPhone}
                 </a>
               ) : (
@@ -199,7 +196,7 @@ export function SupplierCard({
             <dt className="font-medium text-ink-muted">Email</dt>
             <dd>
               {supplier.contactEmail !== null ? (
-                <a className="text-accent hover:underline" href={`mailto:${supplier.contactEmail}`}>
+                <a className="sf-link" href={`mailto:${supplier.contactEmail}`}>
                   {supplier.contactEmail}
                 </a>
               ) : (

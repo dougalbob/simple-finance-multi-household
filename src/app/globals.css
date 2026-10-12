@@ -107,7 +107,16 @@
   --color-till-hover: oklch(37.2% 0.044 257.287); /* was slate-700 */
   --color-till-muted: oklch(44.6% 0.043 257.281); /* was slate-600: an unselected dot on the till */
 
-  /* --- Accent: links, focus, "here is where you are" (was sky) ----------- */
+  /* --- Link: every text link, on every theme (decision 203) --------------
+   * A link is blue and underlined wherever it sits on a themed surface. The
+   * hue is fixed — a familiar link blue — rather than read from the palette,
+   * so "that is a link" is the same signal in Classic, Damson and Beacon
+   * alike; the theme generator re-lights this one value per theme so it still
+   * clears every legibility floor. Links drawn on the till itself (always a
+   * dark surface) keep the till's own ink and their underline. */
+  --color-link: #1d4ed8; /* was blue-700: the familiar link blue */
+
+  /* --- Accent: chips, "here is where you are", focus (was sky) ----------- */
   --color-accent-50: oklch(97.7% 0.013 236.62);
   --color-accent-100: oklch(95.1% 0.026 236.824);
   --color-accent-200: oklch(90.1% 0.058 230.902);
@@ -191,6 +200,51 @@
     0 2px 5px -1px color-mix(in srgb, var(--color-till) 12%, transparent),
     0 14px 28px -6px color-mix(in srgb, var(--color-till) 10%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--color-till-ink) 14%, transparent);
+}
+
+/*
+ * ============================================================================
+ * The link treatment (decision 203). Shared utilities, so a link is one thing on
+ * every page: the familiar blue, and an underline that is always there.
+ *
+ * The household's report was that links were found by accident — the same
+ * weight and nearly the same colour as the sentence around them, with an
+ * underline that only appeared on hover (and never on a phone). So the two
+ * signals are permanent now: the colour, and the line under the words. That
+ * also satisfies the app's own rule that colour is never the only signal
+ * (SPEC §16.7) — a link stays a link with a theme's colour ignored, in a
+ * colour-blind reader's eyes, and in a printed page.
+ *
+ * Hover thickens the line: feedback on top, never the signal itself.
+ * Links drawn on the till (always a dark surface) keep their own ink and are
+ * underlined in place — `--color-link` is a mid-tone and would not read there.
+ * ========================================================================== */
+@utility sf-link {
+  color: var(--color-link);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+/*
+ * A link that is its own call to action keeps its arrow and weight, but the
+ * blue and underline are permanent here too — an arrow is not an exception
+ * to the household's chosen treatment (decision 203).
+ */
+@utility sf-link-arrow {
+  color: var(--color-link);
+  font-weight: 500;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
 }
 
 /*

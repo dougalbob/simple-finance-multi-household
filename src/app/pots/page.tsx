@@ -246,10 +246,7 @@ export default async function PotsPage({
                 )}
 
                 {swapsInvolving(pot.id) > 0 ? (
-                  <a
-                    href="#swaps"
-                    className="mt-2 inline-block text-xs font-medium text-accent underline-offset-2 hover:underline"
-                  >
+                  <a href="#swaps" className="mt-2 inline-block text-xs sf-link-arrow">
                     Recent swaps involving {pot.label} ↓
                   </a>
                 ) : null}

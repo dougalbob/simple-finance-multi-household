@@ -151,7 +151,7 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
         </div>
         <span className="text-xs text-ink-muted">
           Your reported figures plus recorded activity —{' '}
-          <Link href="/guide#checkpoint" className="hover:underline">
+          <Link href="/guide#checkpoint" className="sf-link">
             not a bank balance
           </Link>
         </span>
@@ -159,7 +159,7 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
       {money.householdAvailablePence === null ? (
         <p className="text-sm text-ink-soft">
           Record a balance checkpoint in Quick Entry → Checkpoint or on{' '}
-          <Link href="/pots" className="font-medium text-accent hover:underline">
+          <Link href="/pots" className="sf-link">
             Accounts, Pots &amp; Checkpoints
           </Link>{' '}
           and the household estimate appears here. Unreported pots never get an estimate — the app
@@ -203,7 +203,7 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
               </span>
             </>
           ) : null}{' '}
-          <a href="/pots" className="font-medium text-accent hover:underline">
+          <a href="/pots" className="sf-link-arrow">
             Details →
           </a>
         </p>
@@ -233,7 +233,7 @@ function DueThisWeekSection({
         <h2 id="due-week-heading" className="text-lg font-semibold">
           Due this week
         </h2>
-        <Link href="/recurring" className="text-xs font-medium text-accent hover:underline">
+        <Link href="/recurring" className="text-xs sf-link-arrow">
           Recurring →
         </Link>
       </div>

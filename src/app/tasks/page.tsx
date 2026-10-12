@@ -66,7 +66,7 @@ export default async function TasksPage() {
             <p className="mt-2 text-xs text-ink-muted">
               A follow-up promised on a call is added from the supplier card&apos;s interaction log,
               and a task about a purchase (“Chase the refund”) from its row on{' '}
-              <Link className="text-accent hover:underline" href="/purchases">
+              <Link className="sf-link" href="/purchases">
                 Purchases
               </Link>
               .
@@ -76,7 +76,7 @@ export default async function TasksPage() {
           {view.openCount === 0 ? (
             <p className="mt-4 text-sm text-ink-muted">
               No open tasks. Add one above, or log a follow-up date on a{' '}
-              <Link className="text-accent hover:underline" href="/suppliers">
+              <Link className="sf-link" href="/suppliers">
                 supplier card
               </Link>
               .
@@ -148,7 +148,7 @@ function NoticedRow({ item }: { item: NoticedItem }) {
         {item.stateWords}
       </span>
       <span className="text-ink-body">{item.message}</span>{' '}
-      <Link href={item.href} className="whitespace-nowrap text-accent hover:underline">
+      <Link href={item.href} className="whitespace-nowrap sf-link-arrow">
         {item.linkLabel} →
       </Link>
     </li>

@@ -105,7 +105,7 @@ export function AddCheckpointForm({
     return (
       <p className="text-sm text-ink-soft">
         Create a pot first, then you can record what it currently holds — add one on{' '}
-        <Link href="/pots" className="font-medium text-accent hover:underline">
+        <Link href="/pots" className="sf-link">
           Accounts, Pots &amp; Checkpoints
         </Link>
         .

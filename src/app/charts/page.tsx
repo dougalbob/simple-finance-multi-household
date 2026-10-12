@@ -136,7 +136,7 @@ export default async function ChartsPage({
           goes, whether the shopping is creeping up, whose discretionary spending is moving, whether
           the fixed bills are coming down, and how the last three months compare. Every chart
           carries its numbers underneath —{' '}
-          <Link href="/insights" className="font-medium text-accent hover:underline">
+          <Link href="/insights" className="sf-link">
             Insights
           </Link>{' '}
           holds the same figures as tables, and the two always agree.
@@ -491,7 +491,7 @@ function renderGroceries(
         key: week.weekStart,
         muted: !week.complete || !week.recorded,
         cells: [
-          <a key="link" href={href(week)} className="text-accent hover:underline">
+          <a key="link" href={href(week)} className="sf-link">
             {week.weekStart}
             {week.complete ? '' : ' (so far)'}
             {week.recorded ? '' : ' (not counted)'}
@@ -531,6 +531,7 @@ function renderGroceries(
       <BarChart
         bars={bars}
         domain={domain}
+        idPrefix={`chart-hatch-groceries-${variant}`}
         width={width}
         height={height}
         ariaLabel={`Grocery spending by week. ${series.headline}`}
@@ -686,11 +687,7 @@ function renderPersonal(
             cell.amountPence === 0 ? (
               <span key={cell.key}>{formatPence(cell.amountPence)}</span>
             ) : (
-              <a
-                key={cell.key}
-                href={hrefFor(month.from, month.to, cell.key)}
-                className="text-accent hover:underline"
-              >
+              <a key={cell.key} href={hrefFor(month.from, month.to, cell.key)} className="sf-link">
                 {formatPence(cell.amountPence)}
               </a>
             ),
@@ -765,10 +762,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
       >
         {view.scheduleOnly ? '✓ ' : ''}Schedule-converted only
       </Link>
-      <Link
-        href="/settings#commitment-categories"
-        className="text-xs font-medium text-accent hover:underline"
-      >
+      <Link href="/settings#commitment-categories" className="text-xs sf-link-arrow">
         Choose categories →
       </Link>
     </div>
@@ -785,10 +779,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
         <p className="text-sm text-ink-soft">
           No categories are tracked as fixed commitments yet. Tick the ones that are bills —
           Insurance and Road Tax but not Fuel, for instance — in{' '}
-          <Link
-            href="/settings#commitment-categories"
-            className="font-medium text-accent hover:underline"
-          >
+          <Link href="/settings#commitment-categories" className="sf-link">
             Settings
           </Link>
           , and this chart fills in.
@@ -825,7 +816,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
     key: month.from,
     muted: !month.complete,
     cells: [
-      <a key="link" href={href(month.from, month.to)} className="text-accent hover:underline">
+      <a key="link" href={href(month.from, month.to)} className="sf-link">
         {month.label}
         {month.complete ? '' : ' (so far)'}
       </a>,
@@ -858,6 +849,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
           <BarChart
             bars={bars}
             domain={domain}
+            idPrefix="chart-hatch-commitments-phone"
             width={PHONE_WIDTH}
             height={200}
             ariaLabel={`Tracked fixed commitments by month. ${series.headline}`}
@@ -920,6 +912,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
           <BarChart
             bars={bars}
             domain={domain}
+            idPrefix="chart-hatch-commitments-laptop"
             width={LAPTOP_WIDTH}
             height={260}
             ariaLabel={`Tracked fixed commitments by month. ${series.headline}`}
@@ -1105,7 +1098,7 @@ function MixSelector({ view }: { view: SpendingMixView }) {
           {allParentsIncluded ? null : (
             <Link
               href={mixHref(window, { cats: null })}
-              className="mt-2 inline-block text-xs font-medium text-accent hover:underline"
+              className="mt-2 inline-block text-xs sf-link"
             >
               Count every category
             </Link>
@@ -1195,7 +1188,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
     key: slice.key,
     muted: !slice.drawn,
     cells: [
-      <a key="link" href={sliceHref(slice)} className="text-accent hover:underline">
+      <a key="link" href={sliceHref(slice)} className="sf-link">
         {slice.label}
       </a>,
       formatPence(slice.amountPence),
@@ -1351,10 +1344,10 @@ function MixLineItems({
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <Link href={openHref} className="font-medium text-accent hover:underline">
+        <Link href={openHref} className="sf-link-arrow">
           Open these purchases →
         </Link>
-        <Link href={closeHref} className="font-medium text-ink-soft hover:underline">
+        <Link href={closeHref} className="sf-link">
           Close line items
         </Link>
         <span className="text-ink-muted">
@@ -1447,11 +1440,7 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
     cells: [
       category.name,
       ...months.map((month, index) => (
-        <a
-          key={month.from}
-          href={hrefOf(category.parentId, index)}
-          className="text-accent hover:underline"
-        >
+        <a key={month.from} href={hrefOf(category.parentId, index)} className="sf-link">
           {formatPence(category.amountsPence[index] ?? 0)}
         </a>
       )),
@@ -1505,6 +1494,7 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
           bands={bands}
           series={series}
           domain={domain}
+          idPrefix={`chart-hatch-months-${variant}`}
           width={width}
           height={height}
           ariaLabel={`Net spending by parent category over three months. ${headline}`}

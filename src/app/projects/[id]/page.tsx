@@ -42,7 +42,7 @@ export default async function ProjectWorkspacePage({
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
       <nav aria-label="Breadcrumb" className="text-sm">
-        <Link href="/projects" className="font-medium text-accent hover:underline">
+        <Link href="/projects" className="sf-link">
           ← All projects
         </Link>
       </nav>
@@ -105,10 +105,7 @@ export default async function ProjectWorkspacePage({
               </p>
               {supplier.phone === null ? null : (
                 <p className="text-sm">
-                  <a
-                    href={`tel:${supplier.phone.replace(/\s+/g, '')}`}
-                    className="font-medium text-accent hover:underline"
-                  >
+                  <a href={`tel:${supplier.phone.replace(/\s+/g, '')}`} className="sf-link">
                     {supplier.phone}
                   </a>
                 </p>
@@ -119,7 +116,7 @@ export default async function ProjectWorkspacePage({
                     href={supplier.websiteUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-medium text-accent hover:underline"
+                    className="sf-link"
                   >
                     {supplier.websiteUrl}
                   </a>

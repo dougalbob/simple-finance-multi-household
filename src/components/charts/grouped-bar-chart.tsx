@@ -48,8 +48,17 @@ export interface GroupedBarChartProps {
   series: readonly GroupedSeries[];
   domain: ChartDomain;
   ariaLabel: string;
-  /** Nominal column width; the drawing grows past it when bands would crowd. */
+  /**
+   * Nominal column width; the drawing grows past it when bands would crowd.
+   */
   width?: number;
+  /**
+   * A document-unique prefix for this drawing's hatch patterns (decision 202).
+   * The months chart is drawn twice — a phone figure and a laptop figure, one
+   * hidden by CSS — and two figures sharing an id meant `url(#…)` resolved to
+   * the hidden one, which paints nothing at all (SVG 1.1). See `BarChart`.
+   */
+  idPrefix: string;
   height?: number;
   xTicks?: ReadonlyArray<{ index: number; label: string }>;
 }
@@ -65,6 +74,7 @@ export function GroupedBarChart({
   series,
   domain,
   ariaLabel,
+  idPrefix,
   width = 720,
   height = 280,
   xTicks = [],
@@ -103,7 +113,7 @@ export function GroupedBarChart({
           .map((entry) => (
             <pattern
               key={entry.key}
-              id={`chart-grouped-hatch-${entry.key}`}
+              id={`${idPrefix}-hatch-${entry.key}`}
               width="5"
               height="5"
               patternTransform="rotate(45)"
@@ -129,15 +139,35 @@ export function GroupedBarChart({
               const y = Math.min(valueY, zeroY);
               const barHeight = Math.max(bar.valuePence === 0 ? 0 : 1, Math.abs(valueY - zeroY));
               const x = bandLeft + seriesIndex * (barWidth + gap);
-              const rect = (
+              // Two rects for the in-progress month, as `BarChart` does
+              // (decision 202): a solid muted base under the hatch, so the bar
+              // can never vanish even if a paint server fails again.
+              const rect = entry.muted ? (
+                <>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={barWidth}
+                    height={barHeight}
+                    style={{ fill: CHART_COLOURS.barMuted }}
+                    rx={1}
+                  />
+                  <rect
+                    x={x}
+                    y={y}
+                    width={barWidth}
+                    height={barHeight}
+                    style={{ fill: `url(#${idPrefix}-hatch-${entry.key})` }}
+                    rx={1}
+                  />
+                </>
+              ) : (
                 <rect
                   x={x}
                   y={y}
                   width={barWidth}
                   height={barHeight}
-                  style={{
-                    fill: entry.muted ? `url(#chart-grouped-hatch-${entry.key})` : entry.fill,
-                  }}
+                  style={{ fill: entry.fill }}
                   rx={1}
                 />
               );

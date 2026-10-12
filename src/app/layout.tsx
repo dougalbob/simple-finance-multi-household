@@ -46,15 +46,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <footer className="mx-auto mt-12 max-w-3xl px-4 pb-8 text-center text-xs text-ink-faint">
           {APP_NAME} v{APP_VERSION} ({APP_RELEASE_STAGE}) · estimates and projections, never a bank
           balance ·{' '}
-          <Link href="/start" className="text-accent hover:underline">
+          <Link href="/start" className="sf-link">
             Getting started
           </Link>{' '}
           ·{' '}
-          <Link href="/guide" className="text-accent hover:underline">
+          <Link href="/guide" className="sf-link">
             Guide
           </Link>{' '}
           ·{' '}
-          <Link href="/example" className="text-accent hover:underline">
+          <Link href="/example" className="sf-link">
             Worked example
           </Link>
         </footer>

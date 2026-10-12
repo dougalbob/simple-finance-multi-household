@@ -44,6 +44,7 @@
   --color-till-inset: oklch(27.9% 0.041 260.031);
   --color-till-hover: oklch(37.2% 0.044 257.287);
   --color-till-muted: oklch(44.6% 0.043 257.281);
+  --color-link: #1d4ed8;
   --color-accent-50: oklch(97.7% 0.013 236.62);
   --color-accent-100: oklch(95.1% 0.026 236.824);
   --color-accent-200: oklch(90.1% 0.058 230.902);
@@ -122,6 +123,7 @@
   --color-till-inset: #101d2e;
   --color-till-hover: #192639;
   --color-till-muted: #2a384c;
+  --color-link: #8aafff;
   --color-accent-50: #162530;
   --color-accent-100: #1c3040;
   --color-accent-200: #325168;
@@ -200,6 +202,7 @@
   --color-till-inset: #1b3a5c;
   --color-till-hover: #2e4966;
   --color-till-muted: #415d7b;
+  --color-link: #2352cf;
   --color-accent-50: #f1f5f9;
   --color-accent-100: #e6eef7;
   --color-accent-200: #cfe0f3;
@@ -278,6 +281,7 @@
   --color-till-inset: #001e3d;
   --color-till-hover: #082848;
   --color-till-muted: #1b3a5c;
+  --color-link: #8aafff;
   --color-accent-50: #1b242e;
   --color-accent-100: #232f3c;
   --color-accent-200: #3c4f63;
@@ -356,6 +360,7 @@
   --color-till-inset: #255f4a;
   --color-till-hover: #3d6b59;
   --color-till-muted: #4e7d6a;
+  --color-link: #2352cf;
   --color-accent-50: #f3f9f5;
   --color-accent-100: #e6f3eb;
   --color-accent-200: #cae7d5;
@@ -434,6 +439,7 @@
   --color-till-inset: #002f20;
   --color-till-hover: #003d2b;
   --color-till-muted: #15503c;
+  --color-link: #8aafff;
   --color-accent-50: #1e2e25;
   --color-accent-100: #1e3327;
   --color-accent-200: #345643;
@@ -512,6 +518,7 @@
   --color-till-inset: #5f4f42;
   --color-till-hover: #6e5d50;
   --color-till-muted: #7f6e60;
+  --color-link: #2352cf;
   --color-accent-50: #f9f3ee;
   --color-accent-100: #f7ebe1;
   --color-accent-200: #f3d9c4;
@@ -590,6 +597,7 @@
   --color-till-inset: #312216;
   --color-till-hover: #3e2e22;
   --color-till-muted: #504034;
+  --color-link: #8aafff;
   --color-accent-50: #35271b;
   --color-accent-100: #3d2b1b;
   --color-accent-200: #62462f;
@@ -668,6 +676,7 @@
   --color-till-inset: #1b2a41;
   --color-till-hover: #2a3951;
   --color-till-muted: #3e4e67;
+  --color-link: #2352cf;
   --color-accent-50: #eaf0f9;
   --color-accent-100: #dde9fc;
   --color-accent-200: #cce0ff;
@@ -746,6 +755,7 @@
   --color-till-inset: #09182d;
   --color-till-hover: #0e1c32;
   --color-till-muted: #1e2e45;
+  --color-link: #8aafff;
   --color-accent-50: #152339;
   --color-accent-100: #1b2e4c;
   --color-accent-200: #314d7b;
@@ -824,6 +834,7 @@
   --color-till-inset: #155f59;
   --color-till-hover: #346c66;
   --color-till-muted: #457d77;
+  --color-link: #2352cf;
   --color-accent-50: #f1faf5;
   --color-accent-100: #e1f4ea;
   --color-accent-200: #c0ead5;
@@ -902,6 +913,7 @@
   --color-till-inset: #00302d;
   --color-till-hover: #003f3a;
   --color-till-muted: #00544e;
+  --color-link: #8aafff;
   --color-accent-50: #152f23;
   --color-accent-100: #123527;
   --color-accent-200: #235942;
@@ -980,6 +992,7 @@
   --color-till-inset: #5a5147;
   --color-till-hover: #685f55;
   --color-till-muted: #797066;
+  --color-link: #2352cf;
   --color-accent-50: #faf7f2;
   --color-accent-100: #f3eee5;
   --color-accent-200: #e8ddc8;
@@ -1058,6 +1071,7 @@
   --color-till-inset: #2e261e;
   --color-till-hover: #3b332a;
   --color-till-muted: #4d453b;
+  --color-link: #8aafff;
   --color-accent-50: #30291e;
   --color-accent-100: #362e1e;
   --color-accent-200: #584b34;
@@ -1136,6 +1150,7 @@
   --color-till-inset: #1c5b6f;
   --color-till-hover: #376879;
   --color-till-muted: #487a8b;
+  --color-link: #2352cf;
   --color-accent-50: #f1faf2;
   --color-accent-100: #e2f5e4;
   --color-accent-200: #c0ebc7;
@@ -1214,6 +1229,7 @@
   --color-till-inset: #002f3d;
   --color-till-hover: #003d4e;
   --color-till-muted: #0e5164;
+  --color-link: #8aafff;
   --color-accent-50: #162f1c;
   --color-accent-100: #14361c;
   --color-accent-200: #265a33;
@@ -1292,6 +1308,7 @@
   --color-till-inset: #304167;
   --color-till-hover: #404f71;
   --color-till-muted: #506083;
+  --color-link: #2352cf;
   --color-accent-50: #f3f8ff;
   --color-accent-100: #e5f0fe;
   --color-accent-200: #c9e1ff;
@@ -1370,6 +1387,7 @@
   --color-till-inset: #0d1a3d;
   --color-till-hover: #162448;
   --color-till-muted: #26365c;
+  --color-link: #8aafff;
   --color-accent-50: #172434;
   --color-accent-100: #1d2f44;
   --color-accent-200: #344f70;
@@ -1448,6 +1466,7 @@
   --color-till-inset: #3e5a3c;
   --color-till-hover: #4c6849;
   --color-till-muted: #5c7a5a;
+  --color-link: #2352cf;
   --color-accent-50: #f5f9f3;
   --color-accent-100: #ebf1e7;
   --color-accent-200: #d6e3cd;
@@ -1526,6 +1545,7 @@
   --color-till-inset: #0d280c;
   --color-till-hover: #1a3418;
   --color-till-muted: #2c472a;
+  --color-link: #8aafff;
   --color-accent-50: #242c1f;
   --color-accent-100: #283121;
   --color-accent-200: #445239;
@@ -1604,6 +1624,7 @@
   --color-till-inset: #71434f;
   --color-till-hover: #7e525d;
   --color-till-muted: #90636e;
+  --color-link: #2352cf;
   --color-accent-50: #fcf6f7;
   --color-accent-100: #f7ebed;
   --color-accent-200: #f0d7dc;
@@ -1682,6 +1703,7 @@
   --color-till-inset: #3d1421;
   --color-till-hover: #4b212d;
   --color-till-muted: #60333f;
+  --color-link: #8aafff;
   --color-accent-50: #302225;
   --color-accent-100: #3a282c;
   --color-accent-200: #60454a;
@@ -1760,6 +1782,7 @@
   --color-till-inset: #3a3a3a;
   --color-till-hover: #474747;
   --color-till-muted: #575757;
+  --color-link: #2352cf;
   --color-accent-50: #f6f2e9;
   --color-accent-100: #f3ebd9;
   --color-accent-200: #f0dcb4;
@@ -1838,6 +1861,7 @@
   --color-till-inset: #1b1b1b;
   --color-till-hover: #232323;
   --color-till-muted: #343434;
+  --color-link: #8aafff;
   --color-accent-50: #2c2109;
   --color-accent-100: #3a2b09;
   --color-accent-200: #604915;
@@ -1916,6 +1940,7 @@
   --color-till-inset: #0b3a53;
   --color-till-hover: #20475f;
   --color-till-muted: #325971;
+  --color-link: #2352cf;
   --color-accent-50: #f1f9fa;
   --color-accent-100: #e3f2f4;
   --color-accent-200: #c2e6eb;
@@ -1994,6 +2019,7 @@
   --color-till-inset: #001c2c;
   --color-till-hover: #002538;
   --color-till-muted: #073750;
+  --color-link: #8aafff;
   --color-accent-50: #122729;
   --color-accent-100: #163336;
   --color-accent-200: #29555a;
@@ -2072,6 +2098,7 @@
   --color-till-inset: #2c3e50;
   --color-till-hover: #394b5e;
   --color-till-muted: #495c6f;
+  --color-link: #2352cf;
   --color-accent-50: #f8f5f1;
   --color-accent-100: #f4eee5;
   --color-accent-200: #e9dcca;
@@ -2150,6 +2177,7 @@
   --color-till-inset: #0b1c2c;
   --color-till-hover: #142636;
   --color-till-muted: #253749;
+  --color-link: #8aafff;
   --color-accent-50: #282218;
   --color-accent-100: #352c1f;
   --color-accent-200: #594b36;

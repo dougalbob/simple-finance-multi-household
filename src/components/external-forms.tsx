@@ -305,7 +305,7 @@ export function LoanMovementForm({
     return (
       <p className="text-sm text-ink-soft">
         Create a pot first, then record borrowing — add one on{' '}
-        <Link href="/pots" className="font-medium text-accent hover:underline">
+        <Link href="/pots" className="sf-link">
           Accounts, Pots &amp; Checkpoints
         </Link>
         .
@@ -448,7 +448,7 @@ export function OtherMovementForm({
     return (
       <p className="text-sm text-ink-soft">
         Create a pot first — add one on{' '}
-        <Link href="/pots" className="font-medium text-accent hover:underline">
+        <Link href="/pots" className="sf-link">
           Accounts, Pots &amp; Checkpoints
         </Link>
         .
@@ -568,7 +568,7 @@ export function SwapForm({
     return (
       <p className="text-sm text-ink-soft">
         Create at least two pots before recording a swap — add them on{' '}
-        <Link href="/pots" className="font-medium text-accent hover:underline">
+        <Link href="/pots" className="sf-link">
           Accounts, Pots &amp; Checkpoints
         </Link>
         .

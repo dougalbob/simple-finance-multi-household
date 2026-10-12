@@ -296,10 +296,7 @@ export function Bell() {
                               <p className="mt-0.5 text-xs text-ink-soft">
                                 About:{' '}
                                 {task.subjectHref ? (
-                                  <Link
-                                    href={task.subjectHref}
-                                    className="text-accent hover:underline"
-                                  >
+                                  <Link href={task.subjectHref} className="sf-link">
                                     {task.subjectLabel}
                                   </Link>
                                 ) : (
@@ -321,10 +318,7 @@ export function Bell() {
                             {kd.stateWords}
                           </span>
                           <span className="text-ink-body">{kd.message}</span>{' '}
-                          <Link
-                            href={kd.href}
-                            className="whitespace-nowrap text-accent hover:underline"
-                          >
+                          <Link href={kd.href} className="whitespace-nowrap sf-link-arrow">
                             Open →
                           </Link>
                         </li>
@@ -358,7 +352,7 @@ export function Bell() {
                           <TaskDueBadge task={task} />
                           <span className="text-xs text-ink-soft">
                             {task.subjectHref ? (
-                              <Link href={task.subjectHref} className="text-accent hover:underline">
+                              <Link href={task.subjectHref} className="sf-link">
                                 {task.subjectLabel}
                               </Link>
                             ) : (
@@ -377,10 +371,7 @@ export function Bell() {
                             {kd.stateWords}
                           </span>
                           <span className="text-ink-body">{kd.message}</span>{' '}
-                          <Link
-                            href={kd.href}
-                            className="whitespace-nowrap text-accent hover:underline"
-                          >
+                          <Link href={kd.href} className="whitespace-nowrap sf-link-arrow">
                             Open →
                           </Link>
                         </li>
@@ -394,17 +385,13 @@ export function Bell() {
             <section className="mt-5 border-t border-border-hairline pt-3 text-sm">
               <Link
                 href="/tasks#noticed-heading"
-                className="text-accent hover:underline"
+                className="sf-link-arrow"
                 onClick={() => setIsOpen(false)}
               >
                 {data?.noticedCount ?? 0} things the app has noticed →
               </Link>
               <span className="mx-2 text-ink-faint">·</span>
-              <Link
-                href="/tasks"
-                className="text-accent hover:underline"
-                onClick={() => setIsOpen(false)}
-              >
+              <Link href="/tasks" className="sf-link-arrow" onClick={() => setIsOpen(false)}>
                 All tasks →
               </Link>
             </section>

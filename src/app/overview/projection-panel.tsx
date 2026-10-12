@@ -95,10 +95,7 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
       {summary !== null ? (
         <p className="mt-4 text-sm text-ink-body">
           Full dated forecast and day-by-day detail on{' '}
-          <Link
-            href={`/horizon?through=${summary.horizonThroughDate}`}
-            className="font-medium text-accent hover:underline"
-          >
+          <Link href={`/horizon?through=${summary.horizonThroughDate}`} className="sf-link-arrow">
             Horizon →
           </Link>
         </p>

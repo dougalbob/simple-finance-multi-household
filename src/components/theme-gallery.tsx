@@ -168,7 +168,7 @@ function ThemePreview({ theme }: { theme: ThemeEntry }) {
             </span>
           </span>
         </span>
-        <span className="mt-1 block text-[9px] font-medium text-accent underline">Horizon →</span>
+        <span className="sf-link mt-1 block text-[9px] font-medium">Horizon →</span>
       </span>
     </span>
   );

@@ -33,7 +33,7 @@ export async function SupportBanner() {
             {formatInstantLocal(new Date(state.viewing.expiresAt))}.
           </p>
           <div className="flex items-center gap-3">
-            <Link href="/support" className="underline">
+            <Link href="/support" className="sf-link">
               Support sessions
             </Link>
             <LeaveSupportViewForm />
@@ -52,7 +52,7 @@ export async function SupportBanner() {
             can view {state.shared.householdName} read-only until{' '}
             {formatInstantLocal(new Date(state.shared.expiresAt))}.
           </p>
-          <Link href="/settings#support-access" className="text-ink-soft underline">
+          <Link href="/settings#support-access" className="sf-link">
             Manage in Settings
           </Link>
         </div>

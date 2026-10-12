@@ -260,7 +260,7 @@ export function PurchaseFilterForm({
             >
               Apply filters
             </button>
-            <a href="/purchases" className="text-sm font-medium text-ink-soft hover:text-ink">
+            <a href="/purchases" className="text-sm sf-link">
               Clear
             </a>
           </div>
