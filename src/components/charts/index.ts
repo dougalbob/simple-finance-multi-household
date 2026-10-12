@@ -13,6 +13,13 @@ export { PieChart } from './pie-chart';
 export type { PieChartProps, PieSlice } from './pie-chart';
 export { BarChart } from './bar-chart';
 export type { BarChartProps, BarDatum } from './bar-chart';
+export { GroupedBarChart } from './grouped-bar-chart';
+export type {
+  GroupedBand,
+  GroupedBar,
+  GroupedBarChartProps,
+  GroupedSeries,
+} from './grouped-bar-chart';
 export { StackedBarChart } from './stacked-bar-chart';
 export type {
   StackedBarChartProps,

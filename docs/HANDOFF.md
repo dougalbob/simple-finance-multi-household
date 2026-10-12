@@ -1,4 +1,101 @@
-# Current handoff — v1.2.0 release: the guide and "what this page needs first" (Slice 2) (2026-10-11)
+# Current handoff — v1.4.0 release: three months, line-item drill-downs and the months chart (2026-10-12)
+
+## v1.3.0 post-merge facts (recorded per `docs/RELEASE_PROCESS.md` §7)
+
+- **v1.3.0 — The worked example** released 2026-10-11; annotated tag `v1.3.0` on merge commit
+  `c22c721`; it moved `latest` and is GitHub's Latest release (this handoff's release follows it).
+- Known redness at that tree: `npm run format:check` fails on three files the release changed without
+  running `npm run format` — `scripts/seed-example-household.mts`, `src/app/example/page.tsx`,
+  `src/lib/demo/household.ts`. This release fixes them; the test suite was never affected.
+- The preview seed script v1.3.0 advertised (`scripts/seed-example-household.mts`) could not run at
+  all (`require` in an ESM module, plus a placeholder household-id call that threw before its own
+  override). Repaired here (decision 200) and used to seed this release's preview.
+
+## What this release is (v1.4.0)
+
+Four Insights features the household asked for, plus keeping CI green:
+
+1. **The month comparison shows three months side by side** — oldest first, each month after the
+   first with its change against the month before (SPEC §16.1, decision 197).
+2. **Every Insights figure opens its line items inline** — on the comparison card, the by-person
+   card and the vehicle running costs; the open state is a real `?show=…` link (decision 198).
+3. **A new `/charts` figure: three months by category** — grouped bars per parent, one per month,
+   with an **Exclude Housing** toggle (SPEC §16.7 F, decision 199).
+4. **Process fixes** — the prettier failures above, the version-doc drift that red-lined the
+   isolation contract after v1.3.0, and the seed script (decision 200).
+
+## What a future session should know (v1.4.0)
+
+- **One read feeds the three-month views.** `getMonthComparisonView` (insights-view.ts) is the
+  source of truth; `getCategoryMonthsView` (charts-view.ts) derives the chart from it, so the
+  drawing and the tables cannot drift. `compareCalendarMonths` takes `{ months: n }` (default 3).
+  Don't extend either view independently — extend the engine.
+- **Drill keys are a closed grammar** (`src/lib/records/insights-drill.ts`): `m:<YYYY-MM>[:parent]`,
+  `p:<personId>:<YYYY-MM>[:parent]`, `v:<vehicleId>:<month|previous|rolling>[:child]`; anything
+  malformed is rejected whole (never partially parsed). A card drills only the months it displays.
+- **Vehicle drill rows are spread-aware**: an annual premium contributes its ÷ 12 share to a month
+  and each in-window ÷ 12 share to the rolling window, with the full payment footnoted on the row,
+  so rows add up to the figure being opened. Window bounds are asserted in
+  `tests/insights-drill.test.ts` (month = the full local month; rolling = from the 1st, 11 months
+  back, through today).
+- **`e2e/charts.spec.ts`'s generic loop now includes the `months` figure** (bar links must equal
+  table links in order — keep the table twin's cells in months order when touching it).
+- **The version-doc coupling is real**: `tests/multi-household-isolation-contract.test.ts` requires
+  every one of AGENTS.md, README.md, docs/HANDOFF.md, docs/RELEASE_PROCESS.md and
+  docs/MULTI_HOUSEHOLD_PLAN.md to literally name the current release tag, plus
+  `docs/RELEASE_NOTES_<tag>.md` to exist with its exact title. The v1.3.0 release missed this and
+  main sat red until this release. Bump the five docs in the same PR as the version.
+- **Sandbox constraints** (see `docs/SANDBOX.md`, append-only): `npm ci --ignore-scripts`;
+  Playwright runs via the `@sparticuz/chromium` recipe in entry 8; one `next dev` per directory
+  (entry 12); unpushed commits die with the sandbox (entry 10) — push after every step; the fuzzy
+  edit tool can mangle large files (entry 11) — diff after every edit.
+- **Release mechanics unchanged** (`docs/RELEASE_PROCESS.md` §7): one PR/merge, one release per
+  session; lowercase annotated tag on the merge commit; never squash; never touch
+  `ghcr.io/dougalbob/simple-finance`; refresh the README's pinned image digest after publish.
+
+## Why this session exists
+
+The household sketched the month comparison as `Category | August 2026 | September 2026 Change |
+October 2026 Change` and asked for: the purchases behind any monthly total to open inline ("click on
+£197.66 and see the three October purchases"), the same drill on the by-person and vehicle cards, a
+grouped bar chart of the same three months per parent category with a button to exclude Housing
+(about 35% of their spend), and CI kept green — including the prettier failures and the docs
+coupling that the previous release left behind.
+
+## What this session did
+
+- **Engine** (`src/lib/records/insights.ts`): `compareCalendarMonths` generalized to N months
+  (`months?`, default 3), returning `months: MonthColumn[]` with per-row `amountsPence[]` and
+  `deltasPence[]` (the oldest column's delta is null). Spread/vehicle math unchanged.
+- **New `src/lib/records/insights-drill.ts`**: the key grammar above plus `drillMonth`,
+  `drillPerson`, `drillVehicle` and `vehicleDrillWindow` (pure; assemble tables from the `lines`
+  the views already carried).
+- **`src/app/insights/page.tsx`**: the comparison card is a three-month table (month, change —
+  change columns for months 2 and 3 only) with every figure a `?show=…#…-drill` link; person and
+  vehicle figures likewise; drill tables render inline as the pie's line items do (decision 195)
+  and close via the same link. `/example`'s reflection follows the new shape.
+- **New `src/components/charts/grouped-bar-chart.tsx`** and `getCategoryMonthsView` (charts-view.ts
+  F): the `/charts` months figure with the `?noHousing=1#months` toggle, hatched "(so far)" month,
+  per-bar purchases links, table twin and totals row.
+- **Tests**: `tests/insights.test.ts` (three-month shape), new `tests/insights-drill.test.ts`
+  (10 cases), `tests/insights-view.test.ts` (drill reconciliation), `tests/charts-view.test.ts`
+  (chart equals the Insights comparison; exclusion removes Housing alone).
+- **Docs/version**: SPEC §16.1/§16.7, plan decisions 197–200, version 1.4.0 across the
+  version-bearing files, `docs/RELEASE_NOTES_v1.4.0.md`, and every agent entry point naming the
+  release (the coupling the isolation contract enforces).
+
+## Gates run locally before the PR
+
+- `npx tsc --noEmit` — clean.
+- `npm test` — the full suite green (see the PR for the final counts; the baseline was 874 with
+  only the docs-coupling failure).
+- `npm run format:check` — clean (the three v1.3.0 files are reformatted).
+- `next build` and the container smoke — replayed per `docs/SANDBOX.md` entry 18.
+- Browser suite via the `@sparticuz/chromium` recipe (SANDBOX entry 8): the charts (now including
+  the months figure), insights and desktop specs.
+- `npm audit --omit=dev` — 0 vulnerabilities.
+
+# Historical handoff — v1.2.0 release: the guide and "what this page needs first" (Slice 2) (2026-10-11)
 
 **Session branch:** `arena/90c66748-simple-finance-multi-household`.
 

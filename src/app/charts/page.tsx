@@ -5,12 +5,15 @@ import {
   CHART_COLOURS,
   ChartFigure,
   ChartLegend,
+  GroupedBarChart,
   PieChart,
   StackedBarChart,
   StepAreaChart,
   chartDomain,
   type BarDatum,
   type ChartTableRow,
+  type GroupedBand,
+  type GroupedSeries,
   type PieSlice,
   type StackedGroup,
 } from '@/components/charts';
@@ -20,10 +23,12 @@ import { NeedsFirst } from '@/components/needs-first';
 import {
   PIE_SPLIT_PARENTS,
   getCommitmentChartView,
+  getCategoryMonthsView,
   getForecastChartView,
   getGroceriesChartView,
   getPersonalChartView,
   getSpendingMixView,
+  type CategoryMonthsView,
   type CommitmentChartView,
   type ForecastChartView,
   type GroceriesChartView,
@@ -70,6 +75,8 @@ interface SearchParams {
   cat?: string | string[];
   catset?: string;
   slice?: string;
+  /** Three months by category (F): exclude the Housing parent. */
+  noHousing?: string;
 }
 
 const PHONE_WIDTH = 320;
@@ -113,6 +120,7 @@ export default async function ChartsPage({
     now,
   );
   const sliceKey = typeof params.slice === 'string' ? params.slice : null;
+  const monthsView = getCategoryMonthsView(db, { excludeHeavy: params.noHousing === '1' }, now);
 
   return (
     <main className="mx-auto max-w-7xl overflow-x-clip px-4 py-6 sm:py-8">
@@ -120,9 +128,10 @@ export default async function ChartsPage({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Charts</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">The money, drawn</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          Five questions: where the balance goes next month, where this payday cycle&apos;s money
-          goes, whether the shopping is creeping up, whose discretionary spending is moving, and
-          whether the fixed bills are coming down. Every chart carries its numbers underneath —{' '}
+          Six questions: where the balance goes next month, where this payday cycle&apos;s money
+          goes, whether the shopping is creeping up, whose discretionary spending is moving, whether
+          the fixed bills are coming down, and how the last three months compare. Every chart
+          carries its numbers underneath —{' '}
           <Link href="/insights" className="font-medium text-accent hover:underline">
             Insights
           </Link>{' '}
@@ -143,6 +152,7 @@ export default async function ChartsPage({
             />
             <CommitmentsSection view={commitments} params={params} />
             <MixLayout view={mixView} selectedKey={sliceKey} />
+            <MonthsSection view={monthsView} params={params} />
           </>
         ) : (
           <NeedsFirst
@@ -1368,6 +1378,158 @@ function MixLineRow({ line, labels }: { line: MixLine; labels: Map<string, strin
 }
 
 /* ------------------------------------------------------------------ */
+/* F. Three months by category                                         */
+/* ------------------------------------------------------------------ */
+
+/** "Entertainment & Eating…" — an axis label that fits a band. */
+function shortCategory(name: string): string {
+  return name.length <= 12 ? name : `${name.slice(0, 11)}…`;
+}
+
+function MonthsSection({ view, params }: { view: CategoryMonthsView; params: SearchParams }) {
+  const { months, categories, heavyParentId, excludeHeavy } = view;
+  const canExclude = heavyParentId !== null;
+  const toggleHref = `${hrefWith(params, { noHousing: excludeHeavy ? undefined : '1' })}#months`;
+  const newest = months[months.length - 1];
+  const largest = categories[0];
+  const headline =
+    categories.length === 0
+      ? `Nothing was recorded from ${months[0]?.label ?? ''} to ${newest?.label ?? ''}.`
+      : `${formatPence(view.totalPence)} net spending across ${categories.length} ${
+          categories.length === 1 ? 'category' : 'categories'
+        } from ${months[0]?.label ?? ''} to ${newest?.label ?? ''}. ${
+          largest?.name ?? ''
+        } is the biggest, at ${formatPence(largest?.totalPence ?? 0)}.${excludeHeavy ? ' Housing is excluded.' : ''}`;
+  const caption = `One band per parent category, one bar per month — the same figures as the month comparison on Insights. Refunds net off their category. The month still running is drawn hatched and labelled “so far”. ${
+    canExclude
+      ? 'Housing can be excluded: it alone is big enough to flatten every other bar in the drawing.'
+      : ''
+  }`;
+
+  const series: GroupedSeries[] = months.map((month, index) => ({
+    key: month.from,
+    label: month.label,
+    fill: CHART_COLOURS.series[index % CHART_COLOURS.series.length] ?? CHART_COLOURS.bar,
+    muted: !month.complete,
+  }));
+
+  const hrefOf = (parentId: number, monthIndex: number): string => {
+    const month = months[monthIndex];
+    if (month === undefined) return '/purchases';
+    return purchasesHref({ from: month.from, to: month.to, categoryIds: [parentId] });
+  };
+
+  const bands: GroupedBand[] = categories.map((category) => ({
+    key: String(category.parentId),
+    label: shortCategory(category.name),
+    bars: months.map((month, index) => ({
+      key: `${category.parentId}-${month.from}`,
+      valuePence: category.amountsPence[index] ?? 0,
+      href: hrefOf(category.parentId, index),
+      hint: `${category.name}, ${month.label}: ${formatPence(
+        category.amountsPence[index] ?? 0,
+      )} — open these purchases`,
+    })),
+  }));
+
+  const domain = chartDomain(
+    bands.flatMap((band) => band.bars.map((bar) => bar.valuePence)),
+    { targetTicks: 4 },
+  );
+
+  const columns = [
+    { key: 'category', label: 'Category' },
+    ...months.map((month) => ({ key: month.from, label: month.label, align: 'right' as const })),
+  ];
+  const rows: ChartTableRow[] = categories.map((category) => ({
+    key: String(category.parentId),
+    muted: category.totalPence <= 0,
+    cells: [
+      category.name,
+      ...months.map((month, index) => (
+        <a
+          key={month.from}
+          href={hrefOf(category.parentId, index)}
+          className="text-accent hover:underline"
+        >
+          {formatPence(category.amountsPence[index] ?? 0)}
+        </a>
+      )),
+    ],
+  }));
+  const totals = [
+    'Total',
+    ...months.map((month, index) =>
+      formatPence(
+        categories.reduce((sum, category) => sum + (category.amountsPence[index] ?? 0), 0),
+      ),
+    ),
+  ];
+
+  const action = canExclude ? (
+    <Link
+      href={toggleHref}
+      aria-current={excludeHeavy ? 'true' : undefined}
+      className={`rounded-full border px-3 py-1 text-xs font-medium ${
+        excludeHeavy
+          ? 'border-till bg-till text-till-ink'
+          : 'border-border-strong bg-surface text-ink-soft hover:bg-canvas'
+      }`}
+    >
+      {excludeHeavy ? '✓ ' : ''}Exclude Housing
+    </Link>
+  ) : undefined;
+
+  const drawing = (variant: 'phone' | 'laptop', width: number, height: number) => (
+    <ChartFigure
+      chart="months"
+      variant={variant}
+      headline={headline}
+      basis="Reported"
+      caption={caption}
+      columns={columns}
+      rows={rows}
+      totals={totals}
+      footer={
+        <ChartLegend
+          items={series.map((entry) => ({
+            key: entry.key,
+            label: entry.label, // the in-progress month's label already says “(so far)”
+            fill: entry.fill,
+          }))}
+        />
+      }
+    >
+      <GroupedBarChart
+        bands={bands}
+        series={series}
+        domain={domain}
+        width={width}
+        height={height}
+        ariaLabel={`Net spending by parent category over three months. ${headline}`}
+        xTicks={everyNth(
+          bands.map((band) => band.label),
+          variant === 'phone' ? 2 : 1,
+        )}
+      />
+    </ChartFigure>
+  );
+
+  return (
+    <ChartCard
+      id="months"
+      eyebrow="F · Three months by category"
+      title="How the last three months compare"
+      className="lg:col-span-2"
+      action={action}
+    >
+      <div className="lg:hidden">{drawing('phone', PHONE_WIDTH, 240)}</div>
+      <div className="hidden lg:block">{drawing('laptop', LAPTOP_WIDTH, 300)}</div>
+    </ChartCard>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Page furniture                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -1463,6 +1625,7 @@ function hrefWith(params: SearchParams, changes: Partial<SearchParams>): string 
   const query = new URLSearchParams();
   if (merged.who !== undefined && merged.who !== '') query.set('who', merged.who);
   if (merged.scheduleOnly === '1') query.set('scheduleOnly', '1');
+  if (merged.noHousing === '1') query.set('noHousing', '1');
   const text = query.toString();
   return text === '' ? '/charts' : `/charts?${text}`;
 }

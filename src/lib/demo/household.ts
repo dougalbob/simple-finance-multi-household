@@ -93,7 +93,10 @@ export function seedDemoHousehold(
   let actualPath = databasePath;
   let tempFile = false;
   if (databasePath === ':memory:') {
-    actualPath = path.join('/tmp', `demo-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`);
+    actualPath = path.join(
+      '/tmp',
+      `demo-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`,
+    );
     tempFile = true;
   }
   const handle = openDatabase(actualPath);

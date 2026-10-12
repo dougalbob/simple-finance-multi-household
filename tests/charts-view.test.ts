@@ -16,11 +16,13 @@ import {
   effectiveCommitmentCategoryIds,
   getCommitmentCategoryPicker,
   getCommitmentChartView,
+  getCategoryMonthsView,
   getForecastChartView,
   getGroceriesChartView,
   getPersonalChartView,
   scheduleCommitmentCategoryIds,
 } from '../src/lib/records/charts-view';
+import { getMonthComparisonView } from '../src/lib/records/insights-view';
 import { getHorizonProjectionView } from '../src/lib/records/money-view';
 import {
   InvalidSettingValueError,
@@ -513,5 +515,89 @@ describe('charts-view: reconciliation with the purchase history', () => {
     assert.equal(personal.laptop.months.at(-1)?.label, 'September 2026');
     const commitments = getCommitmentChartView(db(), {}, NOW);
     assert.equal(commitments.series.months.at(-1)?.label, 'September 2026');
+  });
+});
+
+describe('charts-view: three months by category (§16.7 F)', () => {
+  it('draws exactly the Insights month comparison, oldest first', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, people } = fixture;
+      const council = fixture.categoryId('Housing', 'Council Tax');
+      const groceries = fixture.categoryId('Groceries', 'Weekly Shop');
+      const buy = (occurredDate: string, amountPence: number, categoryId: number) =>
+        createPurchase(db, {
+          potId: pots.main.id,
+          totalPence: amountPence,
+          paidByPersonId: people.alex.id,
+          occurredDate,
+          lines: [{ amountPence, categoryId, targetKind: 'household' }],
+          actor: ACTOR,
+          now: NOW,
+        });
+      buy('2026-07-10', 4000, groceries); // the oldest month
+      buy('2026-08-01', 100000, council); // housing, August
+      buy('2026-08-05', 5000, groceries);
+      buy('2026-09-10', 7000, groceries);
+
+      const view = getCategoryMonthsView(db, {}, NOW);
+      assert.deepEqual(
+        view.months.map((month) => month.label),
+        ['July 2026', 'August 2026', 'September 2026 (so far)'],
+      );
+      assert.equal(view.months[2]?.complete, false);
+      assert.equal(view.months[2]?.to, TODAY, 'the in-progress month never runs past today');
+
+      // The same arithmetic as the tables on /insights — one source, two views.
+      const comparison = getMonthComparisonView(db, NOW);
+      for (const row of comparison.byParent) {
+        const category = view.categories.find((entry) => entry.name === row.parent);
+        assert.deepEqual(category?.amountsPence, row.amountsPence, row.parent);
+      }
+      assert.equal(
+        view.totalPence,
+        comparison.months.reduce((sum, m) => sum + m.summary.totalPence, 0),
+      );
+
+      // Largest first: Housing (100000) leads the drawing.
+      assert.equal(view.categories[0]?.name, 'Housing');
+      assert.ok(view.categories[0] !== undefined && view.categories[0].parentId > 0);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('the exclude toggle takes out Housing alone, and nothing else', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, people } = fixture;
+      const council = fixture.categoryId('Housing', 'Council Tax');
+      const groceries = fixture.categoryId('Groceries', 'Weekly Shop');
+      const buy = (occurredDate: string, amountPence: number, categoryId: number) =>
+        createPurchase(db, {
+          potId: pots.main.id,
+          totalPence: amountPence,
+          paidByPersonId: people.alex.id,
+          occurredDate,
+          lines: [{ amountPence, categoryId, targetKind: 'household' }],
+          actor: ACTOR,
+          now: NOW,
+        });
+      buy('2026-08-01', 100000, council);
+      buy('2026-08-05', 5000, groceries);
+      buy('2026-09-10', 7000, groceries);
+
+      const withHousing = getCategoryMonthsView(db, {}, NOW);
+      const withoutHousing = getCategoryMonthsView(db, { excludeHeavy: true }, NOW);
+      assert.equal(withHousing.heavyParentId, withHousing.categories[0]?.parentId);
+      assert.ok(withHousing.categories.some((entry) => entry.name === 'Housing'));
+      assert.equal(withHousing.excludeHeavy, false);
+      assert.equal(withoutHousing.excludeHeavy, true);
+      assert.ok(!withoutHousing.categories.some((entry) => entry.name === 'Housing'));
+      assert.ok(withoutHousing.categories.some((entry) => entry.name === 'Groceries'));
+      assert.equal(withoutHousing.totalPence, 5000 + 7000);
+    } finally {
+      fixture.close();
+    }
   });
 });

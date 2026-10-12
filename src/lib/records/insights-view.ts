@@ -1,10 +1,18 @@
 import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { allocations, categories, purchases, scheduleInstances, schedules } from '../db/schema';
+import {
+  allocations,
+  categories,
+  purchases,
+  scheduleInstances,
+  schedules,
+  suppliers,
+} from '../db/schema';
 import { toLocalDateString } from '../time';
 import { addMonthsClamped } from './dates';
 import {
   ANNUAL_COVER_MONTHS,
+  COMPARED_MONTHS,
   compareCalendarMonths,
   computeHonestyLoop,
   firstOfLocalMonth,
@@ -23,6 +31,7 @@ import {
   type VehicleCosts,
   type HonestyLoop,
 } from './insights';
+import type { InsightLine } from './insights-drill';
 import { listPeople } from './people';
 import { listVehicles } from './vehicles';
 import { firstRecordedPurchaseDate } from './recording';
@@ -44,24 +53,33 @@ import { ensureScheduleState } from './money-view';
 export interface MonthComparisonView extends MonthComparison {
   /** This month, first day through today (Overview "month-to-date" bars). */
   monthToDate: SpendingSummary;
+  /**
+   * Every line in the compared months, for the inline line-item drill-down
+   * (the totals above are sums of exactly these).
+   */
+  lines: InsightLine[];
 }
 
 export function getMonthComparisonView(db: Db, nowArg?: Date): MonthComparisonView {
   const now = nowArg ?? new Date();
   ensureScheduleState(db, now);
   const today = toLocalDateString(now);
-  // Window: previous month's first day through today (both months + MTD).
-  const windowFrom = monthRange(previousLocalMonth(today)).from;
+  // Window: the oldest compared month's first day through today.
+  const windowFrom = monthRange(
+    monthOfLocalDate(addMonthsClamped(firstOfLocalMonth(today), -(COMPARED_MONTHS - 1))),
+  ).from;
   const lines = spendingLinesBetween(db, windowFrom, today);
   const comparison = compareCalendarMonths(lines, today);
   const monthToDate = summarizeSpending(lines, firstOfLocalMonth(today), today);
-  return { ...comparison, monthToDate };
+  return { ...comparison, monthToDate, lines };
 }
 
 export interface PersonalMonthView {
   month: MonthRef;
   label: string;
   people: PersonSpend[];
+  /** The month's lines, for the inline line-item drill-down. */
+  lines: InsightLine[];
 }
 
 export function getPersonalMonthView(db: Db, ref: MonthRef, nowArg?: Date): PersonalMonthView {
@@ -74,10 +92,16 @@ export function getPersonalMonthView(db: Db, ref: MonthRef, nowArg?: Date): Pers
     month: ref,
     label: formatMonthLabel(ref),
     people: personalSpending(lines, people, from, to),
+    lines,
   };
 }
 
-export function getVehicleCostsView(db: Db, nowArg?: Date): VehicleCosts[] {
+/** Per-vehicle costs plus the lines behind them (the drill-down reads these). */
+export interface VehicleCostsView extends VehicleCosts {
+  lines: InsightLine[];
+}
+
+export function getVehicleCostsView(db: Db, nowArg?: Date): VehicleCostsView[] {
   const now = nowArg ?? new Date();
   ensureScheduleState(db, now);
   const today = toLocalDateString(now);
@@ -89,7 +113,12 @@ export function getVehicleCostsView(db: Db, nowArg?: Date): VehicleCosts[] {
   const windowFrom = addMonthsClamped(firstOfLocalMonth(today), -22);
   const lines = spendingLinesBetween(db, windowFrom, today);
   const vehicles = listVehicles(db);
-  return vehicleRunningCosts(lines, vehicles, today);
+  return vehicleRunningCosts(lines, vehicles, today).map((costs) => ({
+    ...costs,
+    lines: lines.filter(
+      (line) => line.targetKind === 'vehicle' && line.targetId === costs.vehicleId,
+    ),
+  }));
 }
 
 export function getHonestyLoopView(db: Db, nowArg?: Date): HonestyLoop {
@@ -123,14 +152,19 @@ export function getHonestyLoopView(db: Db, nowArg?: Date): HonestyLoop {
 /**
  * Non-void allocation lines whose purchase's local date falls inside
  * [from, to] (inclusive), flattened to the engine's input shape with the
- * category parent/child names joined in. Allocations always point at leaf
- * categories, so the parent join is total.
+ * category parent/child names and the purchase it came from joined in — so
+ * the same rows feed both the figures and the line-item drill-down. Allocations
+ * always point at leaf categories, so the parent join is total.
  */
-function spendingLinesBetween(db: Db, from: string, to: string): SpendingLineInput[] {
+function spendingLinesBetween(db: Db, from: string, to: string): InsightLine[] {
   const rows = db
     .select({
       occurredDate: purchases.occurredDate,
+      purchaseId: purchases.id,
+      supplierName: suppliers.name,
+      note: purchases.note,
       categoryId: allocations.categoryId,
+      parentId: categories.parentId,
       childName: categories.name,
       // Parent name via correlated subquery (allocations always point at a
       // leaf, so the parent row always exists).
@@ -144,6 +178,7 @@ function spendingLinesBetween(db: Db, from: string, to: string): SpendingLineInp
     .from(allocations)
     .innerJoin(purchases, eq(purchases.id, allocations.purchaseId))
     .innerJoin(categories, eq(categories.id, allocations.categoryId))
+    .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
     .leftJoin(scheduleInstances, eq(scheduleInstances.id, purchases.scheduleInstanceId))
     .leftJoin(schedules, eq(schedules.id, scheduleInstances.scheduleId))
     .where(
@@ -154,14 +189,24 @@ function spendingLinesBetween(db: Db, from: string, to: string): SpendingLineInp
       ),
     )
     .all();
-  return rows.map((row) => ({
-    occurredDate: row.occurredDate,
-    categoryId: row.categoryId,
-    parentName: row.parentName,
-    childName: row.childName,
-    targetKind: row.targetKind as 'household' | 'person' | 'vehicle',
-    targetId: row.targetId,
-    amountPence: row.amountPence,
-    coversMonths: row.scheduleFrequency === 'annual' ? ANNUAL_COVER_MONTHS : 1,
-  }));
+  const lines: InsightLine[] = [];
+  for (const row of rows) {
+    // Allocations always point at a leaf, so the parent always exists.
+    if (row.parentId === null) continue;
+    lines.push({
+      occurredDate: row.occurredDate,
+      purchaseId: row.purchaseId,
+      supplierName: row.supplierName ?? null,
+      note: row.note ?? null,
+      categoryId: row.categoryId,
+      parentId: row.parentId,
+      parentName: row.parentName,
+      childName: row.childName,
+      targetKind: row.targetKind as 'household' | 'person' | 'vehicle',
+      targetId: row.targetId,
+      amountPence: row.amountPence,
+      coversMonths: row.scheduleFrequency === 'annual' ? ANNUAL_COVER_MONTHS : 1,
+    });
+  }
+  return lines;
 }

@@ -1141,15 +1141,31 @@ picker in Settings. Not one page, component or chart changed to make that possib
 
 ## 16. Insights (initial scope — small and useful)
 
-1. **Month vs previous month** — total spending and by parent category (calendar months), with child
-   drill-down. On Overview, each month-to-date parent name links to Purchases filtered to that live
-   parent category (including its children) from the first of the month through today (decision 179); the
-   comparison figures and their counting rules are unchanged.
+1. **Three months side by side (v1.4.0, decision 197)** — total spending and by parent category over the
+   three most recent calendar months, oldest first, each middle/newest month's figure paired with its
+   **Change** against the month before it (blank for the oldest column — there is nothing before it to
+   compare). The month being lived is labelled "(in progress)" and is never read as a finished figure.
+   Keeping three columns at all times means two complete months always compare, even at the start of a
+   month; a household that began recording mid-window simply sees earlier months as blank, and the gap
+   self-cures. (This was "month vs previous month" until v1.4.0: the counting rules — calendar months,
+   refunds netted, voided and transferred money excluded — are unchanged.) On Overview, each
+   month-to-date parent name links to Purchases filtered to that live parent category (including its
+   children) from the first of the month through today (decision 179).
+   **Every figure opens its line items (v1.4.0, decision 198).** Clicking a monthly total or a
+   parent cell in this table opens the recorded purchases behind it — date, where, category, who it was
+   for, and amount — inline beneath the table, with "Open these purchases" linking to the same rows in
+   the purchases list. The open state is a real link (`?show=m:2026-09:3#month-drill`), so it works with
+   JavaScript switched off and can be sent to the other person; pressing the figure again closes it. A
+   row is a purchase line; a purchase with several lines shows each row whole (its note, its supplier)
+   with the matching line's amount, exactly like the pie's line items (§16.7 E).
 2. **Personal comparison** — each person's for-person allocations (e.g. Clothing, Hobbies), side by side,
-   per month. Household allocations are **never** attributed to whoever happened to pay.
+   per month. Household allocations are **never** attributed to whoever happened to pay. Each figure opens
+   its own line items in the same way (`?show=p:2:2026-10:3#person-drill`, v1.4.0, decision 198).
 3. **Vehicle running costs** — per vehicle: monthly totals and rolling 12-month, by child category
    (fuel/insurance/maintenance/road tax/parking). On Overview, each vehicle name links to Purchases
-   filtered to that vehicle from `rolling12From` through today (decision 179).
+   filtered to that vehicle from `rolling12From` through today (decision 179). Each figure opens its line
+   items (`?show=v:1:rolling#vehicle-drill`, v1.4.0, decision 198); a spread row shows its month's ÷ 12
+   share as the amount and the full payment as a footnote, so the rows add up to the figure being opened.
    **Annual payments (decision 190).** In running costs only, a converted annual schedule payment against a
    vehicle counts as one twelfth in each of the twelve months it covers, starting in the month it is paid, so a
    yearly premium can be compared with a monthly direct debit. The rolling 12-month total therefore counts one
@@ -1167,8 +1183,8 @@ picker in Settings. Not one page, component or chart changed to make that possib
 6. **Fuel economy (v0.10.0, §16.6)** — per vehicle mpg and fuel cost per mile from the litres and odometer
    readings recorded with fuel purchases.
 7. **Charts (v0.14.0, §16.7)** — the same figures drawn, on their own page at `/charts`: the month ahead,
-   the weekly shop, personal spending and the fixed commitments. Insights keeps the tables; the two always
-   agree, because they read the same records.
+   the weekly shop, personal spending, the fixed commitments, and (v1.4.0) three months by category.
+   Insights keeps the tables; the two always agree, because they read the same records.
 
 ### 16.6 Fuel economy — how mpg is worked out (v0.10.0)
 
@@ -1190,9 +1206,10 @@ picker in Settings. Not one page, component or chart changed to make that possib
   recent fills missing litres (or, on a full tank, the odometer), each linked to its Purchases row; and the
   recent fills.
 
-### 16.7 Charts — the four drawings, and the rules they all keep (v0.14.0)
+### 16.7 Charts — the drawings, and the rules they all keep (v0.14.0)
 
-`/charts` answers four questions with four pictures. Every figure on it is the same arithmetic the tables
+`/charts` answers one question per picture: the month ahead, the weekly shop, personal spending, the fixed
+commitments, where the money goes (E), and how the last three months compare (F). Every figure on it is the same arithmetic the tables
 on `/insights` use, over the same records, so the two can never disagree.
 
 **A. Where the balance goes, today to a month ahead.** A step area of the **household total** (every pot,
@@ -1251,6 +1268,21 @@ form, so the window and the category ticks live in the URL and work with JavaScr
 - Hand-rolled SVG, server-rendered, with the same verdict sentence, table twin, and phone and laptop figures as
   every other chart. Colour is never the only signal: the legend names each slice and gives its figure and share.
 
+**F. Three months by category (v1.4.0, decision 199).** Grouped bars: parent categories along the x-axis,
+one bar per category for each of the same three calendar months the Insights comparison table shows (§16.1),
+oldest first. The month being lived is hatched and labelled "(so far)", never read as finished. The figures
+come from the same read as the Insights table, so the two views cannot drift.
+
+- **An "Exclude Housing" toggle** removes one parent — the default *Housing* name match, the same
+  tree-resolution rule as the pie split — from the drawing and its total, so a category around a third of
+  the spending stops flattening the rest. It is a real link (`?noHousing=1#months`), like every other
+  control here, and the verdict says "Housing is excluded." while it is on. The category excluded is never
+  deleted: the toggle puts it back with one press.
+- **Each bar is a drill-down link** to its own month and category in the purchases list, repeated per cell
+  in the table twin (a row per category, a column per month, a totals row), which is the keyboard path.
+- **Categories the household never recorded are left out**, but a category with a zero month still gets an
+  honest zero bar; rows are ordered by the three-month total, biggest first.
+
 **Rules every chart keeps.**
 
 - **Hand-rolled SVG, server-rendered** (`src/components/charts/`), no chart library and no client
@@ -1270,8 +1302,8 @@ form, so the window and the category ticks live in the URL and work with JavaScr
 - **Responsive by `viewBox` and two variants**: a 320px-wide drawing for a phone, a 720px one for a laptop,
   chosen by CSS. Neither pans the page sideways at 320px, or at 360px with 130% text.
 
-Later candidates (explicitly **not** v1): supplier top-N, category trends over many months, cash-vs-card
-mix, seasonal comparisons.
+Later candidates (explicitly **not** v1): supplier top-N, category trends beyond the three months of F,
+cash-vs-card mix, seasonal comparisons.
 
 ## 17. Worked examples (all figures fictional)
 

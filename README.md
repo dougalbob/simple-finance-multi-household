@@ -2,8 +2,8 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-11):** this is the independent multi-household edition and **`v1.2.0` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.2.0.md`](docs/RELEASE_NOTES_v1.2.0.md).
+> **Status (2026-10-12):** this is the independent multi-household edition and **`v1.4.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.4.0.md`](docs/RELEASE_NOTES_v1.4.0.md).
 > It adds the first-run setup path for a brand-new household ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
@@ -18,7 +18,7 @@ A private finance app for multiple independent households, self-hosted by the pr
 - **Only GHCR image:** `ghcr.io/dougalbob/simple-finance-multi-household`. This repository must never push to `ghcr.io/dougalbob/simple-finance`, including the `latest` tag. The publish workflow contains a repository/image guard.
 - **Original production app:** remains on bridge networking, host port `3007` → container port `3000`, using `/mnt/user/appdata/simple-finance`. Do not mount, alter or migrate that location.
 - **New app target:** bridge networking, host port `3009` → container port `3000`, with `/mnt/user/appdata/simple-finance-multi-household` mapped to `/data`. Use a separate Cloudflare hostname/route to the new container; leave the existing route untouched.
-- **Versioning:** `v1.2.0` is the accepted stable release and moves `latest` (`v1.0.0` was the first stable, `v1.0.1` shipped registry backup/restore, `v1.0.2` fixed and hardened that restore, `v1.1.0` shipped first-run onboarding). Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged. Any future stable release moves `latest` again.
+- **Versioning:** `v1.4.0` is the accepted stable release and moves `latest` (`v1.0.0` was the first stable, `v1.0.1` shipped registry backup/restore, `v1.0.2` fixed and hardened that restore, `v1.1.0` shipped first-run onboarding, `v1.2.0` shipped the guide, `v1.3.0` shipped the worked example, `v1.4.0` shipped the three-month comparison, line-item drill-downs and the months chart). Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged. Any future stable release moves `latest` again.
 
 ## Product and tenancy model
 
@@ -34,7 +34,7 @@ Fast mobile entry, checkpoints, payday projections, recurring schedules, insight
 
 ## Unraid installation
 
-**`v1.2.0` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
+**`v1.4.0` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
 
 ```text
 /mnt/user/appdata/simple-finance-multi-household/  →  /data/
@@ -96,12 +96,15 @@ Merging a pull request does not publish an image. A lower-case annotated tag on 
   borrowing and repayments, swaps and other money, and **income** (`BAC`), in one amount column (green
   in, red out relative to that pot), with the original note, checkpoint dividers and a link from every
   row to the page that can still edit or void it. Nothing on that page writes anything.
-- **Insights:** `/insights` — month comparison, per-person attribution, vehicle running costs, and the
-  honesty loop that compares configured figures with recent complete periods.
+- **Insights:** `/insights` — a three-month comparison (each month with its change against the month
+  before it), per-person attribution, vehicle running costs, and the honesty loop that compares
+  configured figures with recent complete periods. Every figure opens its line items inline — the
+  purchases behind the number — with a link to the same rows in the purchase history.
 - **Charts:** `/charts` — the same figures drawn: the month ahead (household total, with zero always on the
   axis and the overdraft limit marked), the weekly shop against the configured figure and the trailing
   8-week average, personal spending per person per month with the household's shared spending kept
-  separate, and the fixed commitments over the child categories ticked in Settings. Hand-rolled SVG, no
+  separate, the fixed commitments over the child categories ticked in Settings, where the money goes
+  (a spending-mix pie), and three months by category (with an Exclude Housing toggle). Hand-rolled SVG, no
   client JavaScript, a table of the exact numbers under every chart, and a link from every bar to the
   purchases behind it.
 - **Projects:** `/projects` — cost a future purchase or a whole project against real quotes before
@@ -154,7 +157,7 @@ Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.e
 
 ## Version and release line
 
-**`v1.2.0` is the accepted stable release** (package/app version `1.2.0`, badge `v1.2.0 · stable`). It is published as `v1.2.0`, `latest` and `sha-<short>`, all to one digest, and its GitHub release is marked Latest. `v1.0.0` was the first stable release, `v1.0.1` shipped registry backup/restore and `v1.0.2` fixed and hardened the restore; their own image tags stay on their own digests while `latest` has moved on.
+**`v1.4.0` is the accepted stable release** (package/app version `1.4.0`, badge `v1.4.0 · stable`). It is published as `v1.4.0`, `latest` and `sha-<short>`, all to one digest, and its GitHub release is marked Latest. `v1.0.0` was the first stable release, `v1.0.1` shipped registry backup/restore, `v1.0.2` fixed and hardened the restore, `v1.1.0` shipped first-run onboarding, `v1.2.0` shipped the guide, and `v1.3.0` shipped the worked example; their own image tags stay on their own digests while `latest` has moved on.
 
 A candidate is a SemVer prerelease with an `-rc.N` suffix, incrementing per build (`v1.0.0-rc.1`, `-rc.2`, …). A candidate gets its exact version tag and `sha-<short>` tag, **not `latest`**, and its GitHub release is marked pre-release. Accepted candidates become a distinct stable tag; never rename or retag one. The candidates so far: `v1.0.0-rc.1` and `v1.0.0-rc.2` exist as Git tags but their Publish runs failed before pushing, so **no image exists for either**; `v1.0.0-rc.3` published, was accepted on a real installation, and is the base `v1.0.0` was promoted from.
 

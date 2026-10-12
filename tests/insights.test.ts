@@ -23,13 +23,30 @@ import {
 /** Unit fixtures that predate any recording rule: recording has always been on. */
 const RECORDING_ALWAYS_ON = '2000-01-01';
 
+/**
+ * A fixture line. Category ids are assigned per parent/child pair — like the
+ * real tree, where every leaf has its own id — so roll-ups keyed by category
+ * cannot merge two different children.
+ */
+const fixtureCategoryIds = new Map<string, number>();
+let nextFixtureCategoryId = 1;
+
 function line(
   partial: Partial<SpendingLineInput> & Pick<SpendingLineInput, 'occurredDate' | 'amountPence'>,
 ): SpendingLineInput {
+  const parentName = partial.parentName ?? 'Other';
+  const childName = partial.childName ?? 'Other';
+  const key = `${parentName}/${childName}`;
+  let categoryId = fixtureCategoryIds.get(key);
+  if (categoryId === undefined) {
+    categoryId = nextFixtureCategoryId;
+    nextFixtureCategoryId += 1;
+    fixtureCategoryIds.set(key, categoryId);
+  }
   return {
-    categoryId: 1,
-    parentName: 'Other',
-    childName: 'Other',
+    categoryId,
+    parentName,
+    childName,
     targetKind: 'household',
     targetId: null,
     ...partial,
@@ -82,22 +99,46 @@ describe('insights: month comparison (panel 1)', () => {
     const view = compareCalendarMonths(lines, '2026-09-20');
     assert.equal(view.previous.summary.totalPence, 10500); // 1st + 31st August
     assert.equal(view.current.summary.totalPence, 10649); // 9000 + 2149 − 500
-    assert.equal(view.totalDeltaPence, 10649 - 10500);
+    assert.equal(view.current.deltaPence, 10649 - 10500);
     const groceries = view.current.summary.byParent.find((entry) => entry.parent === 'Groceries');
     assert.equal(groceries?.amountPence, 8500); // refund netted
   });
 
+  it('shows three months oldest-first, each change against the month before', () => {
+    const view = compareCalendarMonths(lines, '2026-09-20');
+    // September looks back over July, August, September — so two complete
+    // months compare even on the 20th (the whole point of the third column).
+    assert.deepEqual(
+      view.months.map((month) => month.label),
+      ['July 2026', 'August 2026', 'September 2026'],
+    );
+    // The July fixture line now lands in the oldest column, not "outside".
+    assert.equal(view.months[0]?.summary.totalPence, 77777);
+    assert.equal(view.months[0]?.deltaPence, null); // nothing to compare against
+    assert.equal(view.months[1]?.deltaPence, 10500 - 77777);
+    assert.equal(view.months[2]?.deltaPence, 10649 - 10500);
+  });
+
+  it('honours an explicit month count', () => {
+    const view = compareCalendarMonths(lines, '2026-09-20', { months: 2 });
+    assert.deepEqual(
+      view.months.map((month) => month.label),
+      ['August 2026', 'September 2026'],
+    );
+    assert.equal(view.months[0]?.summary.totalPence, 10500);
+    assert.equal(view.months[0]?.deltaPence, null);
+  });
+
   it('flags the in-progress current month and reports deltas per parent', () => {
     const midMonth = compareCalendarMonths(lines, '2026-09-20');
-    assert.equal(midMonth.currentInProgress, true);
-    const delta = midMonth.byParent.find((row) => row.parent === 'Housing');
-    assert.deepEqual(
-      { current: delta?.currentPence, previous: delta?.previousPence, delta: delta?.deltaPence },
-      { current: 0, previous: 10000, delta: -10000 },
-    );
+    assert.equal(midMonth.current.inProgress, true);
+    const housing = midMonth.byParent.find((row) => row.parent === 'Housing');
+    // July, August, September — aligned with the month columns.
+    assert.deepEqual(housing?.amountsPence, [0, 10000, 0]);
+    assert.deepEqual(housing?.deltasPence, [null, 10000, -10000]);
     // On the last day of the month the current month is complete.
     const monthEnd = compareCalendarMonths(lines, '2026-09-30');
-    assert.equal(monthEnd.currentInProgress, false);
+    assert.equal(monthEnd.current.inProgress, false);
   });
 
   it('keeps month ranges inclusive and DST-adjacent (UK spring-forward boundary)', () => {
@@ -131,7 +172,7 @@ describe('insights: month comparison (panel 1)', () => {
     // March is previous (complete), April is current (in progress, 1 day in).
     assert.equal(view.previous.summary.totalPence, 111 + 222 + 333);
     assert.equal(view.current.summary.totalPence, 444);
-    assert.equal(view.currentInProgress, true);
+    assert.equal(view.current.inProgress, true);
   });
 });
 

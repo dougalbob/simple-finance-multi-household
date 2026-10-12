@@ -2904,3 +2904,28 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
 
     Tests: `tests/guide.test.ts` and `tests/page-needs.test.ts` (15 cases), and the first-run browser suite gains a needs-and-guide assertion. The two-calendar-month requirement for Slice 3's worked example is recorded in `docs/ONBOARDING_PLAN.md` §4.
 
+197. **Three months side by side on the Insights comparison (2026-10-12, v1.4.0).**
+
+    The household asked for the month-comparison card to show three months, drawn in their sketch as `Category | August 2026 | September 2026 Change | October 2026 Change` — chronological, oldest first, each month after the first paired with its change against the month before. Built as SPEC §16.1: `compareCalendarMonths` now returns one column per month (three by default, `{ months: n }` for any count), each row carries `amountsPence[]` and `deltasPence[]` in the same order, and the oldest column's change is blank because there is nothing before it to compare. The month being lived stays labelled "(in progress)". The household has no August data (recording began in September) and accepts the honest blank columns; they self-cure. The `/example` reflection renders the same shape.
+
+    Tests: `tests/insights.test.ts` (the three-month shape, the blank first change, the explicit month count), `tests/insights-view.test.ts` (reconciliation with an independent sum over `listPurchases`, including the empty month).
+
+198. **Every Insights figure opens its line items (2026-10-12, v1.4.0).**
+
+    The household asked for the purchases behind a monthly total to appear inline — "click on £197.66 and see the three October purchases" — on the comparison card, the by-person card and the vehicle running costs. Built as SPEC §16.1: every figure in those cards is now a real link carrying a drill key (`m:<YYYY-MM>[:parent]`, `p:<personId>:<YYYY-MM>[:parent]`, `v:<vehicleId>:<month|previous|rolling>[:child]`, parsed strictly and rejected whole if malformed) into `?show=…#month-drill|person-drill|vehicle-drill`. The drill opens beneath the card as the pie's line-items table already does (decision 195): date, where, category, who it was for, amount; a matched purchase comes back whole with the matching line's amount; "Open these purchases" repeats the row set in the purchases list. Pressing the selected figure closes the table, so the link is honest with JavaScript off and toggles with it on. A card drills only the months it displays. Vehicle rows add up to the spread figure being opened: an annual premium contributes its ÷ 12 share to a month and its ÷ 12 shares to the rolling window, with the full payment footnoted on the row.
+
+    The pure assembly is `src/lib/records/insights-drill.ts`; the views already carried `lines` (decision 196's reconciliation aid), so no read path changed.
+
+    Tests: `tests/insights-drill.test.ts` (key round-trips and strict rejections, cash-basis month and person tables, spread-aware vehicle tables that add up to `vehicleRunningCosts` figures, and the exact month/previous/rolling windows), `tests/insights-view.test.ts` (every cell of the comparison, every person figure and every vehicle figure equals the drill table behind it).
+
+199. **Three months by category on /charts, with an Exclude Housing toggle (2026-10-12, v1.4.0).**
+
+    The household asked for a grouped bar chart — parent categories along the x-axis, three adjacent bars per category for the same three months the comparison table shows — plus a button to exclude Housing alone (about 35% of their spending) so the other bars can breathe. Built as SPEC §16.7 F. The figures come from the same `getMonthComparisonView` read as the Insights table (`getCategoryMonthsView` derives from it), so the drawing and the tables cannot drift. The month being lived is hatched and labelled "(so far)". The toggle is a real link (`?noHousing=1#months`) like every other control on the page, matches the default *Housing* parent by name (the pie-split rule, decision 195), and says "Housing is excluded." while it is on. Every bar drills to its own month and category in the purchases list; the table twin repeats each link per cell with a totals row.
+
+    Tests: `tests/charts-view.test.ts` (the drawing's figures equal the Insights comparison; the exclusion removes Housing and nothing else), and the generic charts browser loop covers the new figure alongside the original four.
+
+200. **The preview seed script runs end-to-end (2026-10-12, v1.4.0).**
+
+    v1.3.0 shipped `scripts/seed-example-household.mts` with two latent bugs the format check could not see: `require('node:fs')` inside an ESM module (it died at the first safety check), and a placeholder `householdDatabasePath(…, 'worked-example')` call that threw before its own "we'll override the path" line. The script is advertised in the release notes, so it is repaired rather than removed: plain ESM imports, and the household id is taken from the registry the script itself just wrote. It now seeds the worked example into a preview root in one command, and the v1.4.0 preview used it.
+
+    Tests: none automated (it is a rehearsal tool); proven by running it against a clean `DATA_DIR` and loading `/example`, `/insights` and `/charts` against the seeded household.

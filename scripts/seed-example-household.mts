@@ -1,6 +1,5 @@
-import { rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { loadAppConfig } from '../src/lib/config';
 import { householdDatabasePath } from '../src/lib/registry/paths';
 import { seedDemoHousehold } from '../src/lib/demo/household';
 
@@ -27,8 +26,10 @@ async function main(): Promise<void> {
 
   // Safety: refuse production-shaped roots
   const registryPath = path.join(dataDir, 'system', 'registry.sqlite');
-  if (require('node:fs').existsSync(registryPath)) {
-    console.error('[seed-example-household] REFUSED: DATA_DIR contains a system registry — this looks like a production install.');
+  if (existsSync(registryPath)) {
+    console.error(
+      '[seed-example-household] REFUSED: DATA_DIR contains a system registry — this looks like a production install.',
+    );
     console.error('  Use an isolated preview root (e.g. DATA_DIR=./.preview-data) instead.');
     process.exitCode = 1;
     return;
@@ -36,13 +37,17 @@ async function main(): Promise<void> {
 
   // Safety: refuse if any household databases already exist
   const householdsDir = path.join(dataDir, 'households');
-  if (require('node:fs').existsSync(householdsDir)) {
-    const entries = require('node:fs').readdirSync(householdsDir, { withFileTypes: true });
-    const hasDatabases = entries.some((entry: { isDirectory: () => boolean; name: string }) =>
-      entry.isDirectory() && require('node:fs').existsSync(path.join(householdsDir, entry.name, 'simple-finance.sqlite')),
+  if (existsSync(householdsDir)) {
+    const entries = readdirSync(householdsDir, { withFileTypes: true });
+    const hasDatabases = entries.some(
+      (entry: { isDirectory: () => boolean; name: string }) =>
+        entry.isDirectory() &&
+        existsSync(path.join(householdsDir, entry.name, 'simple-finance.sqlite')),
     );
     if (hasDatabases) {
-      console.error('[seed-example-household] REFUSED: DATA_DIR/households already contains household databases.');
+      console.error(
+        '[seed-example-household] REFUSED: DATA_DIR/households already contains household databases.',
+      );
       console.error('  This script only seeds into a completely empty preview root.');
       process.exitCode = 1;
       return;
@@ -54,7 +59,7 @@ async function main(): Promise<void> {
   const { openRegistry } = await import('../src/lib/registry/db');
   const { systemRegistryPath } = await import('../src/lib/registry/paths');
 
-  require('node:fs').mkdirSync(dataDir, { recursive: true });
+  mkdirSync(dataDir, { recursive: true });
   const registry = openRegistry(systemRegistryPath(dataDir));
   try {
     const household = createHousehold(registry, {
@@ -77,14 +82,13 @@ async function main(): Promise<void> {
     registry.close();
   }
 
-  // Seed the fictional household data
-  const config = loadAppConfig();
-  const dbPath = householdDatabasePath(config.dataDir, 'worked-example'); // We'll override the path
-
-  // Actually, let's use the household ID from the registry
+  // Seed the fictional household data, under the household id the registry
+  // just minted.
   const { getRegistry } = await import('../src/lib/registry/db');
   const registry2 = getRegistry();
-  const identities = registry2.prepare('SELECT household_id FROM identities WHERE email = ?').get('alex@example.com');
+  const identities = registry2
+    .prepare('SELECT household_id FROM identities WHERE email = ?')
+    .get('alex@example.com') as { household_id?: string } | undefined;
   const householdId = identities?.household_id;
   registry2.close();
 
@@ -110,7 +114,9 @@ async function main(): Promise<void> {
   console.log('  4. Visit /projects/[id] for the "Back Garden Fence Replacement" project');
   console.log('');
   console.log('Example dev command:');
-  console.log(`  DATA_DIR=${dataDir} AUTH_DEV_BYPASS=true AUTH_DEV_IDENTITY_EMAIL=alex@example.com npm run dev`);
+  console.log(
+    `  DATA_DIR=${dataDir} AUTH_DEV_BYPASS=true AUTH_DEV_IDENTITY_EMAIL=alex@example.com npm run dev`,
+  );
 }
 
 main().catch((error: unknown) => {

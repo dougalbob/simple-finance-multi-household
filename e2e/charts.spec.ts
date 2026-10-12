@@ -15,7 +15,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
  * Settings, keeping all changes inside the isolated E2E seed.
  */
 
-const CHARTS = ['forecast', 'groceries', 'personal', 'commitments'] as const;
+const CHARTS = ['forecast', 'groceries', 'personal', 'commitments', 'months'] as const;
 
 /** The figure CSS is actually showing at this width. */
 function figure(page: Page, chart: string, variant: 'phone' | 'laptop'): Locator {
