@@ -38,6 +38,19 @@ export interface BarChartProps {
   bars: readonly BarDatum[];
   domain: ChartDomain;
   ariaLabel: string;
+  /**
+   * A document-unique prefix for this drawing's hatch pattern (decision 202).
+   *
+   * Every chart is rendered **twice** — a phone figure and a laptop figure, one
+   * of them hidden by CSS at any width — and an id is document-global. When the
+   * two figures shared `chart-hatch`, `url(#chart-hatch)` resolved to whichever
+   * copy came first in the DOM: at laptop widths that is the phone figure, whose
+   * pattern sits inside a `display: none` subtree, and a paint server that
+   * cannot be resolved paints **nothing at all** (SVG 1.1). The bars were in the
+   * DOM, at the right size, and invisible. Passing the figure in keeps each
+   * drawing's pattern in its own `<defs>`.
+   */
+  idPrefix: string;
   width?: number;
   height?: number;
   xTicks?: ReadonlyArray<{ index: number; label: string }>;
@@ -49,6 +62,7 @@ export function BarChart({
   bars,
   domain,
   ariaLabel,
+  idPrefix,
   width = 720,
   height = 260,
   xTicks = [],
@@ -64,6 +78,7 @@ export function BarChart({
   const count = bars.length;
   const band = bandWidth(count, plot);
   const gap = Math.min(4, band * 0.22);
+  const hatchId = `${idPrefix}-hatch`;
   const barWidth = Math.max(1.5, band - gap);
   const zeroY = yFor(0, domain, plot);
 
@@ -78,7 +93,7 @@ export function BarChart({
     >
       <defs>
         <pattern
-          id="chart-hatch"
+          id={hatchId}
           width="5"
           height="5"
           patternTransform="rotate(45)"
@@ -95,15 +110,31 @@ export function BarChart({
         const y = Math.min(valueY, zeroY);
         const barHeight = Math.max(bar.valuePence === 0 ? 0 : 1, Math.abs(valueY - zeroY));
         const x = bandX(index, count, plot) + gap / 2;
-        const rect = (
-          <rect
-            x={x}
-            y={y}
-            width={barWidth}
-            height={barHeight}
-            style={{ fill: bar.muted ? 'url(#chart-hatch)' : colour }}
-            rx={1}
-          />
+        // An in-progress bar is **two** rects, deliberately (decision 202): a
+        // solid muted base and the hatch over it. The hatch is what says "this
+        // period is still being lived", but if a paint server ever fails again
+        // the bar falls back to a flat muted bar instead of disappearing.
+        const rect = bar.muted ? (
+          <>
+            <rect
+              x={x}
+              y={y}
+              width={barWidth}
+              height={barHeight}
+              style={{ fill: CHART_COLOURS.barMuted }}
+              rx={1}
+            />
+            <rect
+              x={x}
+              y={y}
+              width={barWidth}
+              height={barHeight}
+              style={{ fill: `url(#${hatchId})` }}
+              rx={1}
+            />
+          </>
+        ) : (
+          <rect x={x} y={y} width={barWidth} height={barHeight} style={{ fill: colour }} rx={1} />
         );
         const title = bar.hint === undefined ? null : <title>{bar.hint}</title>;
         return bar.href === undefined ? (
