@@ -5,7 +5,9 @@ import {
   CHART_COLOURS,
   ChartFigure,
   ChartLegend,
+  ChartScroller,
   GroupedBarChart,
+  abbrevCategory,
   PieChart,
   StackedBarChart,
   StepAreaChart,
@@ -55,15 +57,17 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Charts (SPEC §16.7, v0.14.0) — the visual layer over the same numbers
- * `/insights` prints. Four charts, one under another on a phone, a
+ * `/insights` prints. Six charts, one under another on a phone, a
  * two-column grid on a laptop with the forecast across the top.
  *
- * Every chart on this page is server-rendered SVG with no client
- * JavaScript, so it is on the screen in the first paint; every chart states
- * whether its figures are reported or projected; and every chart ships with
- * a table twin holding the exact numbers. The filter chips and the
- * schedule-converted toggle are plain links, so they work with JavaScript
- * switched off and can be sent to the other person.
+ * Every drawing on this page is server-rendered SVG and is on the screen in
+ * the first paint; every chart states whether its figures are reported or
+ * projected; and every chart ships with a table twin holding the exact
+ * numbers. The filter chips and the schedule-converted toggle are plain
+ * links, so they work with JavaScript switched off and can be sent to the
+ * other person. The one hydrated piece is the months chart's scroll arrows
+ * (decision 201): the sideways swipe itself is native overflow scrolling and
+ * works with JavaScript off, and the arrows are pure enhancement on top.
  */
 
 interface SearchParams {
@@ -1381,11 +1385,6 @@ function MixLineRow({ line, labels }: { line: MixLine; labels: Map<string, strin
 /* F. Three months by category                                         */
 /* ------------------------------------------------------------------ */
 
-/** "Entertainment & Eating…" — an axis label that fits a band. */
-function shortCategory(name: string): string {
-  return name.length <= 12 ? name : `${name.slice(0, 11)}…`;
-}
-
 function MonthsSection({ view, params }: { view: CategoryMonthsView; params: SearchParams }) {
   const { months, categories, heavyParentId, excludeHeavy } = view;
   const canExclude = heavyParentId !== null;
@@ -1400,7 +1399,7 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
         } from ${months[0]?.label ?? ''} to ${newest?.label ?? ''}. ${
           largest?.name ?? ''
         } is the biggest, at ${formatPence(largest?.totalPence ?? 0)}.${excludeHeavy ? ' Housing is excluded.' : ''}`;
-  const caption = `One band per parent category, one bar per month — the same figures as the month comparison on Insights. Refunds net off their category. The month still running is drawn hatched and labelled “so far”. ${
+  const caption = `One band per parent category, one bar per month — the same figures as the month comparison on Insights. Refunds net off their category. The month still running is drawn hatched and labelled “so far”. Axis names are shortened (hover one for the full name); when the categories outgrow the drawing it scrolls sideways — swipe it, drag it, or use the arrows. ${
     canExclude
       ? 'Housing can be excluded: it alone is big enough to flatten every other bar in the drawing.'
       : ''
@@ -1421,7 +1420,8 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
 
   const bands: GroupedBand[] = categories.map((category) => ({
     key: String(category.parentId),
-    label: shortCategory(category.name),
+    label: abbrevCategory(category.name),
+    labelHint: category.name,
     bars: months.map((month, index) => ({
       key: `${category.parentId}-${month.from}`,
       valuePence: category.amountsPence[index] ?? 0,
@@ -1500,18 +1500,17 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
         />
       }
     >
-      <GroupedBarChart
-        bands={bands}
-        series={series}
-        domain={domain}
-        width={width}
-        height={height}
-        ariaLabel={`Net spending by parent category over three months. ${headline}`}
-        xTicks={everyNth(
-          bands.map((band) => band.label),
-          variant === 'phone' ? 2 : 1,
-        )}
-      />
+      <ChartScroller label="the three months chart">
+        <GroupedBarChart
+          bands={bands}
+          series={series}
+          domain={domain}
+          width={width}
+          height={height}
+          ariaLabel={`Net spending by parent category over three months. ${headline}`}
+          xTicks={bands.map((band, index) => ({ index, label: band.label }))}
+        />
+      </ChartScroller>
     </ChartFigure>
   );
 

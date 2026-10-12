@@ -20,6 +20,8 @@ export type {
   GroupedBarChartProps,
   GroupedSeries,
 } from './grouped-bar-chart';
+export { ChartScroller } from './chart-scroller';
+export { abbrevCategory } from './abbrev';
 export { StackedBarChart } from './stacked-bar-chart';
 export type {
   StackedBarChartProps,

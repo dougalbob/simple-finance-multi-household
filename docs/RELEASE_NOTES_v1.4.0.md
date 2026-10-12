@@ -26,7 +26,10 @@
   toggle removes Housing alone from the drawing so the other bars can breathe (Housing is about
   35% of this household's spending); the month still running is hatched and labelled "(so far)",
   and every bar opens its own purchases. The chart reads the same figures as the Insights table, so
-  the two views cannot disagree.
+  the two views cannot disagree. Category names on the axis are shortened ("Grocer'", "Person'",
+  "Vehicle'") with the full name on hover, the bars are kept thin so more categories fit at once,
+  and when the categories outgrow the screen the drawing scrolls sideways — swipe it with a finger,
+  drag it with a mouse, or tap the small ◀ ▶ arrows.
 - **Process fixes:** `prettier --check .` is clean again — v1.3.0 changed three files without
   running `npm run format`, which failed the release's format gate; the release docs name the
   current release, so the multi-household isolation contract stays green (it caught the drift
@@ -65,7 +68,9 @@ about the ones the app accepts.
    the link, so it can be texted to the other person.
 3. **Charts → “Three months by category”** draws the same table: three bars per category. If one
    category (Housing) flattens everything else, press **Exclude Housing** to see the rest — it
-   comes back with one press.
+   comes back with one press. On a phone the drawing scrolls sideways when there are many
+   categories — swipe it, or use the small arrows; short names like "Grocer'" show the full
+   category name when you hover them.
 4. **A payment spread over a year still shows its share.** Opening a vehicle figure that includes
    an annual premium shows the ÷ 12 share in the month, with the full payment in the row's
    footnote — the rows always add up to the figure you clicked.

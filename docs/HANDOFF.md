@@ -39,7 +39,12 @@ Four Insights features the household asked for, plus keeping CI green:
   `tests/insights-drill.test.ts` (month = the full local month; rolling = from the 1st, 11 months
   back, through today).
 - **`e2e/charts.spec.ts`'s generic loop now includes the `months` figure** (bar links must equal
-  table links in order — keep the table twin's cells in months order when touching it).
+  table links in order — keep the table twin's cells in months order when touching it), plus a
+  months case for the sideways scroll, the hover hints and the arrows. For a scrollable figure the
+  loop's width assertion checks the `[data-chart-scroll]` frame, not the SVG (decision 201).
+- **`ChartScroller` is the pages' one hydrated client component** (decision 201): arrows + desktop
+  drag over native `overflow-x` scrolling; touch is never handled in JS. The `abbrevCategory` rule
+  ("Grocer'", "Person'", "Vehicle'") lives in `src/components/charts/abbrev.ts` with its own tests.
 - **The version-doc coupling is real**: `tests/multi-household-isolation-contract.test.ts` requires
   every one of AGENTS.md, README.md, docs/HANDOFF.md, docs/RELEASE_PROCESS.md and
   docs/MULTI_HOUSEHOLD_PLAN.md to literally name the current release tag, plus

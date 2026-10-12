@@ -1282,11 +1282,23 @@ come from the same read as the Insights table, so the two views cannot drift.
   in the table twin (a row per category, a column per month, a totals row), which is the keyboard path.
 - **Categories the household never recorded are left out**, but a category with a zero month still gets an
   honest zero bar; rows are ordered by the three-month total, biggest first.
+- **The axis carries abbreviated names** (decision 201) — "Grocer'", "Person'", "Vehicle'" — each with its
+  full name as the hover hint, so a crowded category list still reads; the apostrophe is the honest signal
+  that a name was shortened, and the table twin always spells every name out.
+- **The drawing scrolls sideways rather than crushing its bands** (decision 201): bars stay thin and a band
+  never falls below a minimum width, so a long category list simply makes the drawing wider than its column.
+  The sideways swipe is the browser's own overflow scrolling — finger drag with the platform's momentum,
+  no scroll-snap and no scripted touch handling to fight the finger — and small ◀ ▶ arrows (plus a desktop
+  pointer drag) nudge it in steps. The arrows are the one hydrated client-side control on the page (the
+  enhancement documented as decision 201): the drawing and its scroll still work with JavaScript off, and
+  the scroll frame keeps the page itself from panning at any width.
 
 **Rules every chart keeps.**
 
 - **Hand-rolled SVG, server-rendered** (`src/components/charts/`), no chart library and no client
-  JavaScript: the drawing is in the first paint on a phone, with nothing to hydrate.
+  JavaScript: the drawing is in the first paint on a phone, with nothing to hydrate. The one documented
+  exception (decision 201) is the months chart's scroll arrows — pure enhancement over native scrolling;
+  no drawing depends on hydration.
 - **A verdict sentence above the drawing**, and the same sentence as the SVG's `aria-label`; the SVG is one
   `role="img"` to a screen reader.
 - **A table twin under `<details>`** for every chart — the same numbers, exact, copyable, keyboard

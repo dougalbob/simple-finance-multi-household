@@ -8,7 +8,12 @@ import { BandLabels, CHART_COLOURS, Gridlines, SubZeroBand } from './chart-primi
  * The rules are `BarChart`'s (decision 155): every bar can be a real
  * `<a>` link to the purchases behind it, pointer-only (the table twin is the
  * keyboard path); an in-progress period is drawn hatched as well as labelled;
- * and the SVG is one `role="img"` with the verdict as its `aria-label`.
+ * and the SVG is one `role=\"img\"` with the verdict as its `aria-label`.
+ *
+ * Decision 201: bars stay thin and bands have a minimum width, so a crowded
+ * category list makes the drawing wider than its column — the wrapper scrolls
+ * it sideways (`ChartScroller`) instead of crushing the labels. Axis labels
+ * are abbreviated (`abbrevCategory`) and carry the full name as a hover hint.
  */
 
 export interface GroupedSeries {
@@ -30,7 +35,10 @@ export interface GroupedBar {
 
 export interface GroupedBand {
   key: string;
+  /** Abbreviated axis label. */
   label: string;
+  /** Full name: the hover hint for the abbreviated label. */
+  labelHint?: string;
   /** One bar per series, in series order. */
   bars: readonly GroupedBar[];
 }
@@ -40,9 +48,16 @@ export interface GroupedBarChartProps {
   series: readonly GroupedSeries[];
   domain: ChartDomain;
   ariaLabel: string;
+  /** Nominal column width; the drawing grows past it when bands would crowd. */
   width?: number;
   height?: number;
   xTicks?: ReadonlyArray<{ index: number; label: string }>;
+}
+
+/** Narrowest band before the drawing starts growing sideways, per variant. */
+function minBand(width: number, count: number): number {
+  const wanted = width < 400 ? 46 : 54;
+  return count * wanted > 3000 ? 3000 / count : wanted;
 }
 
 export function GroupedBarChart({
@@ -54,27 +69,33 @@ export function GroupedBarChart({
   height = 280,
   xTicks = [],
 }: GroupedBarChartProps) {
+  const count = bands.length;
+  const plotLeft = 46;
+  const plotRight = 12;
+  const floor = minBand(width, Math.max(1, count));
+  const drawingWidth = Math.max(width, plotLeft + count * floor + plotRight);
   const plot: Plot = {
-    left: 46,
+    left: plotLeft,
     top: 14,
-    width: Math.max(10, width - 56),
+    width: Math.max(10, drawingWidth - plotLeft - plotRight),
     height: Math.max(10, height - 42),
   };
-  const count = bands.length;
   const band = bandWidth(count, plot);
-  const gap = Math.min(6, band * 0.25);
+  const gap = Math.min(4, band * 0.1);
   const subWidth = series.length === 0 ? band : (band - gap) / series.length;
-  const barWidth = Math.max(1.5, subWidth - 1);
+  // Thin bars (decision 201): more categories fit per screenful, and a wide
+  // band never inflates one bar into a slab.
+  const barWidth = Math.min(10, Math.max(2, subWidth - 3));
   const zeroY = yFor(0, domain, plot);
 
   return (
     <svg
       role="img"
       aria-label={ariaLabel}
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`0 0 ${drawingWidth} ${height}`}
       preserveAspectRatio="xMidYMid meet"
-      className="h-auto w-full"
-      style={{ maxWidth: '100%' }}
+      className="h-auto"
+      style={{ width: `${drawingWidth}px`, maxWidth: 'none', height: 'auto' }}
     >
       <defs>
         {series
@@ -96,7 +117,9 @@ export function GroupedBarChart({
       <SubZeroBand domain={domain} plot={plot} />
       <Gridlines domain={domain} plot={plot} />
       {bands.map((bandEntry, bandIndex) => {
-        const bandLeft = bandX(bandIndex, count, plot) + gap / 2;
+        const bandLeft =
+          bandX(bandIndex, count, plot) +
+          (band - series.length * barWidth - (series.length - 1) * gap) / 2;
         return (
           <g key={bandEntry.key}>
             {bandEntry.bars.map((bar, seriesIndex) => {
@@ -105,7 +128,7 @@ export function GroupedBarChart({
               const valueY = yFor(bar.valuePence, domain, plot);
               const y = Math.min(valueY, zeroY);
               const barHeight = Math.max(bar.valuePence === 0 ? 0 : 1, Math.abs(valueY - zeroY));
-              const x = bandLeft + seriesIndex * subWidth;
+              const x = bandLeft + seriesIndex * (barWidth + gap);
               const rect = (
                 <rect
                   x={x}
@@ -134,7 +157,12 @@ export function GroupedBarChart({
           </g>
         );
       })}
-      <BandLabels labels={xTicks} plot={plot} count={count} />
+      <BandLabels
+        labels={xTicks}
+        plot={plot}
+        count={count}
+        hints={xTicks.map((tick) => bands[tick.index]?.labelHint)}
+      />
     </svg>
   );
 }

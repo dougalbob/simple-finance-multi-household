@@ -150,26 +150,33 @@ export function BandLabels({
   labels,
   plot,
   count,
+  hints,
 }: {
   labels: ReadonlyArray<{ index: number; label: string }>;
   plot: Plot;
   count: number;
+  /** Full names, one per entry in `labels`: the hover hint for an abbreviated label. */
+  hints?: ReadonlyArray<string | undefined>;
 }) {
   const width = count <= 0 ? plot.width : plot.width / count;
   return (
     <g aria-hidden="true">
-      {labels.map(({ index, label }) => (
-        <text
-          key={`${index}-${label}`}
-          x={plot.left + index * width + width / 2}
-          y={plot.top + plot.height + 13}
-          textAnchor="middle"
-          fontSize={AXIS_FONT}
-          style={{ fill: CHART_COLOURS.text }}
-        >
-          {label}
-        </text>
-      ))}
+      {labels.map(({ index, label }, position) => {
+        const hint = hints?.[position];
+        return (
+          <text
+            key={`${index}-${label}`}
+            x={plot.left + index * width + width / 2}
+            y={plot.top + plot.height + 13}
+            textAnchor="middle"
+            fontSize={AXIS_FONT}
+            style={{ fill: CHART_COLOURS.text }}
+          >
+            {hint === undefined ? null : <title>{hint}</title>}
+            {label}
+          </text>
+        );
+      })}
     </g>
   );
 }
