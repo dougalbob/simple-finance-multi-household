@@ -54,7 +54,7 @@ export default async function TransactionsPage({
         <h1 className="text-3xl font-semibold tracking-tight">All Transactions</h1>
         <p className="mt-3 rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
           No pots yet. Add an account or cash pot on{' '}
-          <Link href="/pots" className="text-accent underline">
+          <Link href="/pots" className="sf-link">
             Accounts, Pots &amp; Checkpoints
           </Link>{' '}
           first.
@@ -339,7 +339,7 @@ function ActivityTableRow({ row }: { row: ActivityRow }) {
           {row.code}
         </span>
         {row.secondaryLink !== null ? (
-          <Link href={row.secondaryLink.href} className="ml-2 text-xs text-accent hover:underline">
+          <Link href={row.secondaryLink.href} className="ml-2 text-xs sf-link">
             {row.secondaryLink.label}
           </Link>
         ) : null}
@@ -348,7 +348,7 @@ function ActivityTableRow({ row }: { row: ActivityRow }) {
         ) : null}
       </td>
       <td className="px-3 py-2.5">
-        <Link href={row.link.href} className="font-medium text-ink-emphasis hover:text-accent">
+        <Link href={row.link.href} className="sf-link">
           {row.source}
           <span className="sr-only"> — {row.link.label}</span>
         </Link>

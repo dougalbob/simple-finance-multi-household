@@ -298,7 +298,7 @@ export default async function HorizonPage({
           <NeedsFirst variant="inline" needs={horizonNeeds} />
           <p className="mt-2 text-xs text-ink-muted">
             Card balances are excluded from this liquidity projection —{' '}
-            <Link href="/guide#projection" className="hover:underline">
+            <Link href="/guide#projection" className="sf-link">
               how the projection works
             </Link>
             .
@@ -444,11 +444,11 @@ export default async function HorizonPage({
 
       <p className="mt-6 text-xs text-ink-muted">
         A projection of the records already in the app,{' '}
-        <Link href="/guide#projection" className="hover:underline">
+        <Link href="/guide#projection" className="sf-link">
           not a bank forecast
         </Link>
         . Expected support is an expectation of borrowed money —{' '}
-        <Link href="/guide#borrowing" className="hover:underline">
+        <Link href="/guide#borrowing" className="sf-link">
           it is owed, never income
         </Link>
         , and it lands only if it is actually borrowed and recorded. Day-to-day projects the next

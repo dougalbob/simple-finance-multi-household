@@ -136,12 +136,12 @@ export default async function ExamplePage() {
         <p className="mt-3 text-sm">
           <span className="font-medium text-ink">Your household starts empty.</span> The setup path
           on{' '}
-          <a href="/start" className="font-medium text-accent hover:underline">
+          <a href="/start" className="sf-link">
             /start
           </a>{' '}
           walks you through the same dependency chain (people → pots → checkpoints → income → bills
           → figures → purchases). The vocabulary is on{' '}
-          <a href="/guide" className="font-medium text-accent hover:underline">
+          <a href="/guide" className="sf-link">
             /guide
           </a>
           .
@@ -184,7 +184,7 @@ export default async function ExamplePage() {
               </div>
               <span className="text-xs text-ink-muted">
                 Your reported figures plus recorded activity —{' '}
-                <a href="/guide#checkpoint" className="hover:underline">
+                <a href="/guide#checkpoint" className="sf-link">
                   not a bank balance
                 </a>
               </span>
@@ -403,11 +403,11 @@ export default async function ExamplePage() {
       <footer className="mt-8 text-xs text-ink-muted">
         <p>
           This worked example is rendered from the app's real engines against an in-memory seed.
-          <a href="/guide" className="font-medium text-accent hover:underline">
+          <a href="/guide" className="sf-link">
             How this app thinks
           </a>{' '}
           ·{' '}
-          <a href="/start" className="font-medium text-accent hover:underline">
+          <a href="/start" className="sf-link">
             Set up your household
           </a>
         </p>
@@ -608,10 +608,7 @@ function CommitmentsChartInline({ view }: { view: ReturnType<typeof getCommitmen
     return (
       <p className="text-sm text-ink-soft">
         No categories are tracked as fixed commitments yet. Tick the ones that are bills in{' '}
-        <a
-          href="/settings#commitment-categories"
-          className="font-medium text-accent hover:underline"
-        >
+        <a href="/settings#commitment-categories" className="sf-link">
           Settings
         </a>
         , and this chart fills in.

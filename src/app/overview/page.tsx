@@ -65,7 +65,7 @@ export default async function OverviewPage() {
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Everything in one place</h1>
         <p className="mt-1 text-sm text-ink-soft">
           Estimates are your reported figures plus recorded activity — never a bank balance.{' '}
-          <Link href="/purchases" className="font-medium text-accent hover:underline">
+          <Link href="/purchases" className="sf-link-arrow">
             All purchases →
           </Link>
         </p>
@@ -123,10 +123,7 @@ export default async function OverviewPage() {
                 return (
                   <li key={vehicle.vehicleId} className="text-sm">
                     <div className="flex items-baseline justify-between gap-2">
-                      <Link
-                        href={`/purchases?${params.toString()}`}
-                        className="font-medium text-accent hover:underline"
-                      >
+                      <Link href={`/purchases?${params.toString()}`} className="sf-link">
                         {vehicle.label}
                       </Link>
                       <span className="tabular-nums">{formatPence(vehicle.rolling12Pence)}</span>
@@ -186,7 +183,7 @@ function MoneyRow({
             </p>
           ) : null}
         </div>
-        <Link href="/pots" className="text-sm font-medium text-accent hover:underline">
+        <Link href="/pots" className="text-sm sf-link-arrow">
           Accounts, Pots &amp; Checkpoints →
         </Link>
       </div>
@@ -331,10 +328,7 @@ function MonthBars({
                   {parentId === undefined ? (
                     <span className="text-ink-soft">{entry.parent}</span>
                   ) : (
-                    <Link
-                      href={`/purchases?${params.toString()}`}
-                      className="text-accent hover:underline"
-                    >
+                    <Link href={`/purchases?${params.toString()}`} className="sf-link">
                       {entry.parent}
                     </Link>
                   )}
@@ -378,7 +372,7 @@ function DueThisWeekSection({
     <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold">Due this week</h2>
-        <Link href="/recurring" className="text-xs font-medium text-accent hover:underline">
+        <Link href="/recurring" className="text-xs sf-link-arrow">
           Recurring →
         </Link>
       </div>
@@ -430,7 +424,7 @@ function KeyDatesSection({
               {item.href === null ? (
                 item.message
               ) : (
-                <Link href={item.href} className="text-accent hover:underline">
+                <Link href={item.href} className="sf-link">
                   {item.message}
                 </Link>
               )}

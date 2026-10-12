@@ -283,7 +283,7 @@ export function OpenTaskList({
                   {task.subjectHref === null ? (
                     task.subjectLabel
                   ) : (
-                    <Link href={task.subjectHref} className="text-accent hover:underline">
+                    <Link href={task.subjectHref} className="sf-link">
                       {task.subjectLabel}
                     </Link>
                   )}
@@ -334,7 +334,7 @@ export function DoneTaskList({
                 {task.subjectHref === null ? (
                   task.subjectLabel
                 ) : (
-                  <Link href={task.subjectHref} className="text-accent hover:underline">
+                  <Link href={task.subjectHref} className="sf-link">
                     {task.subjectLabel}
                   </Link>
                 )}

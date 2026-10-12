@@ -93,7 +93,7 @@ export default async function AdminPage() {
           only; household financial records stay in each household and are never visible here.
         </p>
         <p className="mt-2 text-sm">
-          <Link href="/support" className="font-medium text-accent underline">
+          <Link href="/support" className="font-medium sf-link">
             Support access granted to you
           </Link>{' '}
           <span className="text-ink-muted">— read-only views a household has opened to you.</span>

@@ -269,7 +269,7 @@ export default async function SettingsPage() {
           </h2>
           <p className="mb-3 text-xs text-ink-muted">
             Which child categories count as a fixed commitment on{' '}
-            <Link href="/charts#commitments" className="font-medium text-accent hover:underline">
+            <Link href="/charts#commitments" className="sf-link">
               Charts
             </Link>
             . “Direct debit” is not a field on a purchase, so this list is the definition — tick
@@ -380,7 +380,7 @@ export default async function SettingsPage() {
               Planning to <span className="font-semibold">the next expected support payment</span> —
               a debt&rsquo;s expected inflow won this cycle (it is owed money that is expected,
               never received income). Add an income schedule in{' '}
-              <Link href="/recurring" className="font-medium text-accent hover:underline">
+              <Link href="/recurring" className="sf-link-arrow">
                 Recurring →
               </Link>{' '}
               to plan to income instead.
@@ -391,7 +391,7 @@ export default async function SettingsPage() {
               Planning to <span className="font-semibold">{projection.paydayScheduleName}</span> —{' '}
               <Link
                 href={`/recurring#schedule-edit-${projection.paydayScheduleId}`}
-                className="font-medium text-accent hover:underline"
+                className="sf-link-arrow"
               >
                 edit the schedule in Recurring →
               </Link>
@@ -399,7 +399,7 @@ export default async function SettingsPage() {
           ) : (
             <p className="text-sm text-ink-soft">
               No income schedule yet. Add one in{' '}
-              <Link href="/recurring" className="font-medium text-accent hover:underline">
+              <Link href="/recurring" className="sf-link">
                 Recurring
               </Link>{' '}
               (kind: receipt) and the projection will plan to it.

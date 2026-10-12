@@ -141,11 +141,11 @@ export default async function IncomePage({
           </p>
           <p className="mt-1 text-sm text-ink-soft">
             Every income record raises its pot&apos;s estimate and appears in{' '}
-            <Link href="/transactions" className="text-accent underline">
+            <Link href="/transactions" className="sf-link">
               All Transactions
             </Link>{' '}
             as <span className="font-semibold">BAC</span>. Scheduled income also feeds the{' '}
-            <Link href="/overview" className="text-accent underline">
+            <Link href="/overview" className="sf-link">
               to-payday projection
             </Link>
             .

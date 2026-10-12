@@ -170,6 +170,10 @@ const GROUPS: Record<string, readonly string[]> = {
     'marker-muted',
   ],
   inks: ['ink', 'ink-emphasis', 'ink-body', 'ink-soft', 'ink-muted', 'ink-faint', 'ink-ghost'],
+  // A link is text too, and the whole point of decision 203 is that it must
+  // never read as the sentence around it: the link colour has to stay its own
+  // colour next to every ink in every theme, not only in Classic.
+  'link vs ink': ['link', 'ink-body', 'ink-soft', 'ink-muted', 'ink-faint'],
   till: ['till', 'till-ink', 'fill-ink', 'till-inset', 'till-hover', 'till-muted'],
   accent: [
     'accent-50',

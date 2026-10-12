@@ -115,11 +115,11 @@ export default async function InsightsPage({
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
           Recorded spending only —{' '}
-          <Link href="/guide#transfers" className="hover:underline">
+          <Link href="/guide#transfers" className="sf-link">
             transfers never appear here
           </Link>{' '}
           (they move money between your own pots), and{' '}
-          <Link href="/guide#income" className="hover:underline">
+          <Link href="/guide#income" className="sf-link">
             income is not spending
           </Link>
           . Figures reconcile with the purchase history exactly, except that running costs show an
@@ -171,7 +171,7 @@ export default async function InsightsPage({
           {personal.people.length === 0 ? (
             <p className="text-sm text-ink-muted">
               No people in the household yet —{' '}
-              <Link href="/start#setup-people" className="font-medium text-accent hover:underline">
+              <Link href="/start#setup-people" className="sf-link">
                 name them on Getting started
               </Link>
               .
@@ -205,7 +205,7 @@ export default async function InsightsPage({
                             },
                             'person-drill',
                           )}
-                          className="hover:underline"
+                          className="sf-link"
                           aria-current={open !== null ? 'true' : undefined}
                         >
                           {formatPence(person.totalPence)}
@@ -247,7 +247,7 @@ export default async function InsightsPage({
                                       },
                                       'person-drill',
                                     )}
-                                    className="hover:underline"
+                                    className="sf-link"
                                     aria-current={
                                       open !== null && open.parentId === parentId
                                         ? 'true'
@@ -333,7 +333,7 @@ export default async function InsightsPage({
                             },
                             'vehicle-drill',
                           )}
-                          className="hover:underline"
+                          className="sf-link"
                           aria-current={isShown(
                             drillKey({
                               kind: 'vehicle',
@@ -362,7 +362,7 @@ export default async function InsightsPage({
                           },
                           'vehicle-drill',
                         )}
-                        className="tabular-nums text-ink-body hover:underline"
+                        className="tabular-nums sf-link"
                         aria-current={isShown(
                           drillKey({
                             kind: 'vehicle',
@@ -385,7 +385,7 @@ export default async function InsightsPage({
                           },
                           'vehicle-drill',
                         )}
-                        className="tabular-nums text-ink-body hover:underline"
+                        className="tabular-nums sf-link"
                         aria-current={isShown(
                           drillKey({
                             kind: 'vehicle',
@@ -427,7 +427,7 @@ export default async function InsightsPage({
                                   },
                                   'vehicle-drill',
                                 )}
-                                className="hover:underline"
+                                className="sf-link"
                                 aria-current={isShown(
                                   drillKey({
                                     kind: 'vehicle',
@@ -518,7 +518,7 @@ export default async function InsightsPage({
               <h2 id="panel-honesty-heading" className="text-xl font-semibold">
                 Are your configured figures honest?
               </h2>
-              <Link href="/settings" className="text-sm font-medium text-accent hover:underline">
+              <Link href="/settings" className="text-sm sf-link-arrow">
                 Adjust in Settings →
               </Link>
             </div>
@@ -700,7 +700,7 @@ function MonthPanel({
               <p className="text-2xl font-semibold tabular-nums">
                 <a
                   href={toggleShow(selection, 'month-drill')}
-                  className="hover:underline"
+                  className="sf-link"
                   aria-current={selectionIsShown(state.show, selection)}
                 >
                   {formatPence(month.summary.totalPence)}
@@ -751,7 +751,7 @@ function MonthPanel({
                           ) : (
                             <a
                               href={toggleShow(selection, 'month-drill')}
-                              className="hover:underline"
+                              className="sf-link"
                               aria-current={selectionIsShown(state.show, selection)}
                             >
                               {formatPence(amount)}
@@ -940,10 +940,10 @@ function LineItemsCard({
         </p>
       ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <Link href={openHref} className="font-medium text-accent hover:underline">
+        <Link href={openHref} className="sf-link-arrow">
           Open these purchases →
         </Link>
-        <Link href={closeHref} className="font-medium text-ink-soft hover:underline">
+        <Link href={closeHref} className="sf-link">
           Close line items
         </Link>
         <span className="text-ink-muted">
@@ -1146,7 +1146,7 @@ function FuelEconomyCard({ vehicle }: { vehicle: VehicleFuelEconomyView }) {
           <ul className="mt-1 space-y-0.5">
             {vehicle.missing.slice(0, 5).map((entry) => (
               <li key={entry.purchaseId}>
-                <Link href={`/purchases#purchase-${entry.purchaseId}`} className="underline">
+                <Link href={`/purchases#purchase-${entry.purchaseId}`} className="sf-link">
                   {entry.occurredDate} · {formatPence(entry.fuelPence)}
                 </Link>{' '}
                 — add {entry.missing.join(' & ')}

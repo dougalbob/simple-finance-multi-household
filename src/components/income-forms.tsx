@@ -77,7 +77,7 @@ export function IncomeEntryForm({
     return (
       <p className="text-sm text-ink-soft">
         Create a pot first, then record income — add one on{' '}
-        <Link href="/pots" className="font-medium text-accent hover:underline">
+        <Link href="/pots" className="sf-link">
           Accounts, Pots &amp; Checkpoints
         </Link>
         .
@@ -289,7 +289,7 @@ export function IncomeScheduleForm({
     return (
       <p className="text-sm text-ink-soft">
         Create a pot first, then schedule income — add one on{' '}
-        <Link href="/pots" className="font-medium text-accent hover:underline">
+        <Link href="/pots" className="sf-link">
           Accounts, Pots &amp; Checkpoints
         </Link>
         .

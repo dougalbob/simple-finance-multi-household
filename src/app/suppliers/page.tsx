@@ -194,7 +194,7 @@ export default async function SuppliersPage({
             {followUps.map(({ supplier, task }) => (
               <li key={task.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <TaskDueBadge task={task} />
-                <Link className="font-medium hover:underline" href={supplierCardHref(supplier.id)}>
+                <Link className="sf-link" href={supplierCardHref(supplier.id)}>
                   {supplier.name}
                 </Link>
                 <span>— {task.title}</span>
@@ -203,7 +203,7 @@ export default async function SuppliersPage({
           </ul>
           <p className="mt-2 text-xs text-warning-900">
             Tick them off on each card, or see everything on{' '}
-            <Link className="font-medium underline" href="/tasks">
+            <Link className="font-medium sf-link" href="/tasks">
               Tasks
             </Link>
             .

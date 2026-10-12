@@ -545,7 +545,7 @@ export function TransferForm({ pots, today, idPrefix = 'transfer' }: TransferFor
     return (
       <p className="text-sm text-ink-soft">
         Create at least two pots before moving money between them — add them on{' '}
-        <Link href="/pots" className="font-medium text-accent hover:underline">
+        <Link href="/pots" className="sf-link">
           Accounts, Pots &amp; Checkpoints
         </Link>
         .

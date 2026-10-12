@@ -43,7 +43,7 @@ export default async function GuidePage() {
         <ol className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
           {GUIDE_SECTIONS.map((section, index) => (
             <li key={section.anchor}>
-              <Link href={`#${section.anchor}`} className="text-accent hover:underline">
+              <Link href={`#${section.anchor}`} className="sf-link">
                 {index + 1}. {section.title}
               </Link>
             </li>
@@ -76,7 +76,7 @@ export default async function GuidePage() {
               {section.seeAlso.map((link, index) => (
                 <span key={link.href}>
                   {index > 0 ? ' · ' : ''}
-                  <Link href={link.href} className="font-medium text-accent hover:underline">
+                  <Link href={link.href} className="sf-link">
                     {link.label}
                   </Link>
                 </span>

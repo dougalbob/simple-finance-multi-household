@@ -49,7 +49,7 @@ export function GettingStartedCard({ view, forms }: { view: SetupPathView; forms
             — your bills, the projection figures and the first purchase make Insights and Charts
             complete.
           </p>
-          <Link href="/start" className="text-sm font-medium text-accent hover:underline">
+          <Link href="/start" className="text-sm sf-link-arrow">
             Finish setting up →
           </Link>
         </div>
@@ -80,7 +80,7 @@ export function GettingStartedCard({ view, forms }: { view: SetupPathView; forms
         <StepCard step={next} forms={forms} compact />
       </ol>
       <p className="mt-2 text-sm">
-        <Link href="/start" className="font-medium text-accent hover:underline">
+        <Link href="/start" className="sf-link-arrow">
           See all the steps →
         </Link>
       </p>
@@ -167,10 +167,7 @@ export function GettingStartedPath({
               <dd className="mt-1 text-sm text-ink-body">
                 {item.where !== null ? (
                   <>
-                    <Link
-                      href={item.where.href}
-                      className="font-medium text-accent hover:underline"
-                    >
+                    <Link href={item.where.href} className="sf-link">
                       {item.where.label}
                     </Link>{' '}
                     — {item.what}
@@ -185,7 +182,7 @@ export function GettingStartedPath({
         <p className="mt-3 text-sm text-ink-soft">
           The vocabulary behind all of it — checkpoints, estimates, transfers, the projection — is
           on the guide:{' '}
-          <Link href="/guide" className="font-medium text-accent hover:underline">
+          <Link href="/guide" className="sf-link-arrow">
             How this app thinks →
           </Link>
         </p>
@@ -366,7 +363,7 @@ function StepAction({ id, forms }: { id: SetupStepId; forms: SetupFormData }) {
 
 function StepLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="font-medium text-accent hover:underline">
+    <Link href={href} className="sf-link-arrow">
       {children}
     </Link>
   );

@@ -353,10 +353,7 @@ export default async function RecurringPage({
                     {schedule.supplierId !== null ? (
                       <>
                         {' · '}
-                        <Link
-                          href={supplierCardHref(schedule.supplierId)}
-                          className="text-accent hover:underline"
-                        >
+                        <Link href={supplierCardHref(schedule.supplierId)} className="sf-link">
                           Supplier card
                         </Link>
                       </>

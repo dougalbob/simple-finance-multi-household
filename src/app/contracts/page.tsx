@@ -77,7 +77,7 @@ export default async function ContractsPage() {
           {contracts.length === 0 ? (
             <p className="mt-3 text-sm text-ink-muted">
               No contract end dates recorded yet. Add one while editing a direct debit on{' '}
-              <Link className="text-accent hover:underline" href="/recurring">
+              <Link className="sf-link" href="/recurring">
                 Recurring Payments
               </Link>
               .
@@ -111,14 +111,14 @@ export default async function ContractsPage() {
                     {supplierName !== null && schedule.supplierId !== null ? (
                       <Link
                         href={supplierCardHref(schedule.supplierId)}
-                        className="text-xs font-medium text-accent hover:underline"
+                        className="text-xs sf-link-arrow"
                       >
                         {supplierName} card →
                       </Link>
                     ) : null}
                     <Link
                       href={`/recurring#schedule-edit-${schedule.id}`}
-                      className="text-xs font-medium text-accent hover:underline"
+                      className="text-xs sf-link-arrow"
                     >
                       Edit the schedule →
                     </Link>
@@ -144,7 +144,7 @@ export default async function ContractsPage() {
           {creditCards.length === 0 ? (
             <p className="mt-3 text-sm text-ink-muted">
               No credit-card pots yet. Add one on{' '}
-              <Link className="text-accent hover:underline" href="/pots">
+              <Link className="sf-link" href="/pots">
                 Accounts, Pots &amp; Checkpoints
               </Link>
               .
@@ -159,10 +159,7 @@ export default async function ContractsPage() {
                 return (
                   <li key={card.id} className="py-3">
                     <div className="flex flex-wrap items-baseline gap-x-3">
-                      <Link
-                        href={`/pots#pot-${card.id}-heading`}
-                        className="font-medium text-accent hover:underline"
-                      >
+                      <Link href={`/pots#pot-${card.id}-heading`} className="sf-link">
                         {card.label}
                       </Link>
                       <span className="text-sm text-ink-soft">
@@ -214,7 +211,7 @@ export default async function ContractsPage() {
           {renewals.length === 0 ? (
             <p className="mt-3 text-sm text-ink-muted">
               No renewals recorded. Add one on{' '}
-              <Link className="text-accent hover:underline" href="/recurring">
+              <Link className="sf-link" href="/recurring">
                 Recurring Payments
               </Link>{' '}
               and it will raise a key date before it falls due.
@@ -300,7 +297,7 @@ export default async function ContractsPage() {
             Every open task about a supplier — including the follow-up dates agreed on a call —
             overdue first, so a promise does not evaporate once its date has passed. Tick them off
             on the supplier card or on{' '}
-            <Link className="text-accent hover:underline" href="/tasks">
+            <Link className="sf-link" href="/tasks">
               Tasks
             </Link>
             . No notification is sent for these (in-app only, by design).
@@ -308,7 +305,7 @@ export default async function ContractsPage() {
           {followUps.length === 0 ? (
             <p className="mt-3 text-sm text-ink-muted">
               Nothing pending. Log a call with a follow-up date on the{' '}
-              <Link className="text-accent hover:underline" href="/suppliers">
+              <Link className="sf-link" href="/suppliers">
                 Suppliers
               </Link>{' '}
               page and it appears here as a task.
@@ -321,7 +318,7 @@ export default async function ContractsPage() {
                   {task.subjectHref === null ? (
                     <span className="font-medium">{task.subjectLabel}</span>
                   ) : (
-                    <Link className="text-accent hover:underline" href={task.subjectHref}>
+                    <Link className="sf-link" href={task.subjectHref}>
                       {task.subjectLabel}
                     </Link>
                   )}

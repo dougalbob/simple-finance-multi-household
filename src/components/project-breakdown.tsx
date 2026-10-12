@@ -17,20 +17,12 @@ function SupplierGroupCard({ group }: { group: SupplierGroupView }) {
         <h3 className="text-base font-semibold text-ink">{group.supplierName}</h3>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {group.phone === null ? null : (
-            <a
-              href={`tel:${group.phone.replace(/\s+/g, '')}`}
-              className="font-medium text-accent hover:underline"
-            >
+            <a href={`tel:${group.phone.replace(/\s+/g, '')}`} className="sf-link">
               {group.phone}
             </a>
           )}
           {group.websiteUrl === null ? null : (
-            <a
-              href={group.websiteUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-accent hover:underline"
-            >
+            <a href={group.websiteUrl} target="_blank" rel="noreferrer" className="sf-link">
               Website
             </a>
           )}
@@ -56,7 +48,7 @@ function SupplierGroupCard({ group }: { group: SupplierGroupView }) {
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`Open the product page for ${line.itemName} at ${group.supplierName}`}
-                  className="ml-2 text-xs font-medium text-accent hover:underline"
+                  className="ml-2 text-xs sf-link-arrow"
                 >
                   Product ↗
                 </a>
