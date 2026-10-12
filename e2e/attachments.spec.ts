@@ -88,6 +88,9 @@ test.describe('removing a receipt', () => {
       hasText: 'Attach receipt',
     });
     await expect(attachControl).toBeVisible();
+    // Keep the visible action and file-kind hint in the accessible name.
+    const fileInput = attachForm.locator('input[type="file"]');
+    await expect(fileInput).toHaveAccessibleName(/Attach receipt \(receipt or invoice file\)/i);
     // The row has other forms of its own (its follow-up note, for one), so the
     // no-JavaScript submit button is looked for inside the attachment form.
     await expect(attachForm.locator('button[type="submit"]')).toBeHidden();

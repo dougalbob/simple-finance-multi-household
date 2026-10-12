@@ -22,6 +22,39 @@ async function scheduleRow(page: Page, name: string): Promise<Locator> {
  */
 
 test.describe('desktop review', () => {
+  for (const width of [393, 1400]) {
+    test(`links stay blue and underlined before hover at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 950 });
+      await page.mouse.move(0, 0);
+
+      // Decision 203: the three places the household named must look clickable
+      // without a pointer ever crossing them, including the larger arrow links.
+      async function expectLinkStyle(control: Locator): Promise<void> {
+        await control.scrollIntoViewIfNeeded();
+        await expect(control).toBeVisible();
+        await expect(control).toHaveCSS('text-decoration-line', 'underline');
+        const linkBlue = await page.evaluate(() => {
+          const probe = document.createElement('span');
+          probe.style.color = 'var(--color-link)';
+          document.body.append(probe);
+          const colour = getComputedStyle(probe).color;
+          probe.remove();
+          return colour;
+        });
+        await expect(control).toHaveCSS('color', linkBlue);
+      }
+
+      await page.goto('/recurring');
+      await expectLinkStyle(page.getByRole('link', { name: 'Supplier card', exact: true }).first());
+      await page.goto('/overview');
+      await expectLinkStyle(page.getByRole('link', { name: 'All purchases →', exact: true }));
+      await page.goto(`/horizon?through=${addDaysIso(londonToday(), 35)}`);
+      await expectLinkStyle(
+        page.getByRole('button', { name: /^Projected shops and fills on / }).first(),
+      );
+    });
+  }
+
   test('overview carries money, projection, due dates and key dates', async ({ page }) => {
     await page.goto('/overview');
     await expect(

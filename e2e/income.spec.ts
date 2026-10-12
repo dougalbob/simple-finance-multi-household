@@ -114,12 +114,18 @@ test.describe('income', () => {
     const row = list.locator('li', { hasText: 'Playwright Payroll Ltd' }).first();
     // Decision 138: the pipeline sniffs the bytes, so this must be a real
     // (tiny, fictional) PDF — never a household payslip.
-    await row.getByLabel('Payslip or document file').setInputFiles({
+    // Decision 204: the label opens the picker; selecting the file uploads
+    // it automatically. The second, no-JavaScript control stays hidden.
+    const attachForm = row.locator('form:has(input[type="file"])');
+    await expect(attachForm.locator('label', { hasText: 'Attach payslip' })).toBeVisible();
+    await expect(attachForm.locator('button[type="submit"]')).toBeHidden();
+    const fileInput = row.getByLabel('Payslip or document file');
+    await expect(fileInput).toHaveAccessibleName(/Attach payslip \(payslip or document file\)/i);
+    await fileInput.setInputFiles({
       name: 'fictional-payslip.pdf',
       mimeType: 'application/pdf',
       buffer: Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'),
     });
-    await row.getByRole('button', { name: 'Attach payslip' }).click();
     const link = row.getByRole('link', { name: /fictional-payslip\.pdf/ });
     await expect(link).toBeVisible({ timeout: 30_000 });
     const href = await link.getAttribute('href');
@@ -132,7 +138,9 @@ test.describe('income', () => {
     await page.reload();
     const again = list.locator('li', { hasText: 'Playwright Payroll Ltd' }).first();
     await expect(again.getByRole('link', { name: /fictional-payslip\.pdf/ })).toBeVisible();
-    await expect(again.getByRole('button', { name: 'Attach payslip' })).toBeVisible();
+    await expect(
+      again.locator('label[for^="attachment-file-"]', { hasText: 'Attach payslip' }),
+    ).toBeVisible();
   });
 
   test('a scheduled income can be added and appears with its next payday', async ({ page }) => {

@@ -164,6 +164,11 @@ export function AttachmentForm({
             className="cursor-pointer rounded bg-till-inset px-2 py-1 text-till-ink hover:bg-till-hover peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent"
           >
             {pending ? 'Attaching…' : words.attach}
+            {/*
+              Keep the visible action in the accessible name (WCAG 2.5.3),
+              together with the file-kind hint for assistive technology.
+            */}
+            <span className="sr-only"> ({words.fileLabel.toLowerCase()})</span>
           </label>
           {/*
             Decision 204: one control, not two. The label above is the button —

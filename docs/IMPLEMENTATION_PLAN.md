@@ -2991,8 +2991,10 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     As built: one token, `--color-link`, and two Tailwind v4 utilities in `src/app/globals.css`.
     `sf-link` is an ordinary link — the blue, underlined, underline offset 2px, and hover thickens
     the line (feedback on top of the signal, never the signal). `sf-link-arrow` is a link that is
-    its own call to action ("See all 18 →", a bar's axis label): the same blue, the arrow as its
-    shape, underline on hover. The sweep converted **119** link sites across ~31 files, including
+    its own call to action ("See all 18 →", a bar's axis label): the same blue and permanent
+    underline, retaining its arrow and weight. Hover only thickens the line for both utilities.
+    `e2e/desktop.spec.ts` checks the Supplier card, arrow links and Horizon amount controls before
+    hover at phone and laptop widths. The sweep converted **119** link sites across ~31 files, including
     the four the household named; text that is a button or a toggle keeps its underline and does not
     become blue (`attachment-form.tsx`'s receipt chip, the quick-entry toggles, `record-forms.tsx`,
     the day-by-day mention chips). Links drawn on the till keep the till's own ink and their
@@ -3025,7 +3027,10 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     browser with JavaScript off, hidden by React on mount (the no-JS path still works end to end:
     the label is a label, the button submits). An effect keyed on the action's `state` clears the
     input's value after each attempt, because a file input keeps its value and re-choosing the same
-    file fires no change event — which is what retrying a rejected file needs.
+    file fires no change event — which is what retrying a rejected file needs. The accessible name
+    includes the visible action plus the original file-kind hint (for example, "Attach payslip
+    (payslip or document file)"); the payslip browser spec also checks auto-upload without a second
+    click. CI caught its old two-step expectation before release.
 
     `e2e/attachments.spec.ts` now drives the real gesture: it clicks the label, takes the file
     chooser the browser opens, sets the file on it, and waits for the attachment to appear — no

@@ -204,7 +204,7 @@
 
 /*
  * ============================================================================
- * The link treatment (decision 203). One utility, so a link is one thing on
+ * The link treatment (decision 203). Shared utilities, so a link is one thing on
  * every page: the familiar blue, and an underline that is always there.
  *
  * The household's report was that links were found by accident — the same
@@ -231,18 +231,19 @@
 }
 
 /*
- * A link that is its own call to action — "See all 18 →", a bar's axis label —
- * keeps the arrow as its shape and skips the underline until hover: the arrow
- * already says "this goes somewhere", and a line under a whole sentence of
- * link text reads as emphasis instead. Same colour as every other link.
+ * A link that is its own call to action keeps its arrow and weight, but the
+ * blue and underline are permanent here too — an arrow is not an exception
+ * to the household's chosen treatment (decision 203).
  */
 @utility sf-link-arrow {
   color: var(--color-link);
   font-weight: 500;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 
   &:hover {
-    text-decoration-line: underline;
-    text-underline-offset: 2px;
+    text-decoration-thickness: 2px;
   }
 }
 

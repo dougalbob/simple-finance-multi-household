@@ -1,5 +1,25 @@
 # Current handoff — v1.5.0 release: links that look like links, one attach control, and the chart bars that were never drawn (2026-10-12)
 
+## v1.5.0 delivery status (before merge)
+
+- Release PR **#17**: <https://github.com/dougalbob/simple-finance-multi-household/pull/17>.
+- Initial PR CI run `38294560184`: Gates and Docker passed; Browser acceptance reported **125 passed,
+  1 failed**. Decision 204 had dropped the file-kind accessible name and the payslip spec still pressed
+  the old second button. Both were fixed before release: the input keeps the visible action **and** its
+  file-kind hint, and the payslip spec checks auto-upload and the hidden no-JavaScript button.
+- Final review also caught `sf-link-arrow`'s hover-only underline; it is now permanently underlined,
+  just like `sf-link`. New browser checks cover all three reported sites before hover at 393px and
+  1400px (**2/2 passed**).
+- Focused final browser run: **17/17 passed** (attachments 3, income 5, charts 9). A wider sandbox run
+  completed 116 tests before losing the dev server during registry-restore compilation (the existing
+  limit in `docs/SANDBOX.md` entry 17); all ten affected tests passed when rerun against a managed server.
+  Do not call that interrupted run a full green suite; the complete seeded and empty-household suites
+  must pass in CI before merge and again on the merge commit before tagging.
+- The final correction repeated types, all **878 unit tests / 201 suites**, format, theme freshness,
+  production build and production audit (0 vulnerabilities) successfully.
+- At this point no `v1.5.0` tag or image has been published. After delivery, record the final PR/main
+  checks, merge SHA, annotated tag object, Publish run and verified release digest here (§7).
+
 ## v1.4.0 post-merge facts (recorded per `docs/RELEASE_PROCESS.md` §7)
 
 - **v1.4.0 — Three months, line items and the months chart** released 2026-10-12; release PR **#16**,
@@ -32,7 +52,7 @@ The three changes the household asked for in one session:
   `#1d4ed8`) is re-lit per theme by `scripts/themes/derive.ts` — hue and chroma fixed, lightness moved
   until `CONTRAST_RULES` are met — giving `#2352cf` light and `#8aafff` dark in the generated file. Use
   `className="sf-link"` for an ordinary link and `sf-link-arrow` for a link that is its own call to action
-  (the arrow is the shape; underline on hover). **Do not** reintroduce `text-accent hover:underline` for a
+  (retaining the arrow and weight; always underlined too). **Do not** reintroduce `text-accent hover:underline` for a
   link: the theme generator now measures the link separately from `accent`, and a new link style would
   bypass those floors. Text that is a button or a toggle keeps its own underline and does not become blue.
 - **The attachment form has one control by construction.** `src/components/attachment-form.tsx`: the file
@@ -56,6 +76,10 @@ The three changes the household asked for in one session:
   AGENTS.md, README.md, docs/HANDOFF.md, docs/RELEASE_PROCESS.md and docs/MULTI_HOUSEHOLD_PLAN.md to name
   the current tag literally, plus `docs/RELEASE_NOTES_<tag>.md` to exist with its exact title. Bump the
   five docs in the same commit as the version, or `npm test` goes red.
+- **Preserve the registry on upgrades.** This release's notes correct the inherited pre-v1
+  "delete `system/`" paragraph in older notes: it is not a multi-household upgrade path. Back up the
+  household, registry and `.env` separately; leave all existing data intact. Original single-household
+  data needs its own approved import and must never be mounted here.
 - **Release mechanics unchanged** (`docs/RELEASE_PROCESS.md` §7): one PR/merge, one release per session;
   lowercase annotated tag on the merge commit; never squash; never touch
   `ghcr.io/dougalbob/simple-finance`; the README's pinned digest is refreshed after publish.

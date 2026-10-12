@@ -43,19 +43,23 @@
 
 ## Upgrade
 
-From **v1.4.0 or any earlier v1.x** — pull and restart. There is no schema change and no migration.
+From **v1.4.0 or any earlier stable multi-household v1.x** — back up, pull and restart. There is no
+schema change or new migration. Before updating, keep a household backup from Settings, the separate
+registry backup from `/admin`, and the host's backup of `.env` (neither the registry nor `.env` is in a
+household backup).
 
 ```bash
 docker pull ghcr.io/dougalbob/simple-finance-multi-household:v1.5.0   # version-pinned
 docker pull ghcr.io/dougalbob/simple-finance-multi-household:latest  # Compose/Unraid template
 ```
 
-From any **pre-v1** image (rc.7 or earlier), the upgrade is still two steps: **first stop and delete the old
-`system/` registry folder inside the appdata folder**, then pull and start v1.5.0 and let the migration
-finish. That drops none of the household's money history.
-
-As before: after the container is up, visit **`/settings`** and confirm each allowed sign-in email is listed
-under Households and Identities. The upgrade rechecks every restriction automatically.
+Keep the existing multi-household data mount: `/mnt/user/appdata/simple-finance-multi-household` →
+`/data`, with host port **3009** → container port **3000**. In Unraid, update this container and confirm
+**`v1.5.0 · stable`** in the header; the administrator can check the existing identity roster in `/admin`.
+**Do not delete `system/` or any household data.** The inherited pre-v1 instructions in older notes are
+not a multi-household upgrade path. Original single-household `v0.x` images and their data require a
+separately approved import, not this update; leave their port **3007** and
+`/mnt/user/appdata/simple-finance` untouched.
 
 No new user-visible secrets or environment variables; see `docs/ENVIRONMENT.md` if you are curious about the
 ones the app accepts.
@@ -80,10 +84,11 @@ ones the app accepts.
   re-measurement of the shipped stylesheet and the multi-household isolation contract).
 - `npm run format:check`, `npm run typecheck`, `npm run themes:check`, `npm run build` and
   `npm audit --omit=dev` (0 vulnerabilities) all clean in the release session.
-- Playwright, run locally in the release session against this sandbox's Chromium (all projects): the
-  `charts` project including the new pixel case, and the `attachments` project including the new
-  file-chooser gesture — green. The `charts` pixel case was proved to bite by reverting the fix in a
-  throwaway edit, which made it name all four unpainted bars.
+- Targeted Playwright checks run locally against this sandbox's Chromium: the `charts` project,
+  including the new pixel case; the `attachments` project, including the file-chooser gesture; the
+  `income` project, including automatic payslip upload; and permanent link styling on phone and desktop.
+  The `charts` pixel case was proved to bite by reverting the fix in a throwaway edit, which made it
+  name all four unpainted bars. The full seeded and empty-household suites are required CI gates.
 - CI (`gates`, `browser`, `docker` and the container smoke) runs on this pull request against the merged
   tree; the Publish workflow builds, smoke-tests and pushes the image from the `v1.5.0` tag.
 

@@ -1137,8 +1137,8 @@ picker in Settings. Not one page, component or chart changed to make that possib
   underline that appeared only on hover and never on a phone — so a link is now the familiar blue
   **and** permanently underlined: two signals that survive a theme, a colour-blind reader and a
   printed page. One token (`--color-link`) and two utilities (`sf-link` for ordinary links,
-  `sf-link-arrow` for a link that is its own call to action, where the arrow is the shape and the
-  underline appears on hover) carry the whole treatment, so a link is one thing on every page.
+  `sf-link-arrow` for a link that is its own call to action, retaining its arrow and weight) carry
+  the whole treatment. Both are underlined at rest; hover only thickens the line.
   The hue is fixed rather than read from the palette — "that is a link" is the same signal in
   Classic, Damson and Beacon — and the theme generator re-lights that one value per theme
   (light and dark) so it still clears the §15.4 legibility floors: 4.5:1 on a card, on the page,
