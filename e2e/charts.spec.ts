@@ -15,7 +15,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
  * Settings, keeping all changes inside the isolated E2E seed.
  */
 
-const CHARTS = ['forecast', 'groceries', 'personal', 'commitments'] as const;
+const CHARTS = ['forecast', 'groceries', 'personal', 'commitments', 'months'] as const;
 
 /** The figure CSS is actually showing at this width. */
 function figure(page: Page, chart: string, variant: 'phone' | 'laptop'): Locator {
@@ -87,12 +87,16 @@ test.describe('charts', () => {
         await expect(svg).toHaveAttribute('aria-label', /\S/);
         const headline = (await phone.locator('[data-chart-headline]').innerText()).trim();
         expect(await svg.getAttribute('aria-label')).toContain(headline);
-        // …and it fits the width it was given.
-        const box = await svg.boundingBox();
+        // …and it fits the width it was given. The months drawing may grow
+        // wider than its column and scroll sideways (decision 201) — then it
+        // is the scroll frame that must fit, and the drawing is clipped to it.
+        const frame = phone.locator('[data-chart-scroll]');
+        const fitting = chart === 'months' ? frame : svg;
+        const box = await fitting.boundingBox();
         expect(box, `${setup.label}: ${chart} has no box`).not.toBeNull();
         expect(
           box?.width ?? 0,
-          `${setup.label}: ${chart} svg ${box?.width}px wide`,
+          `${setup.label}: ${chart} ${chart === 'months' ? 'scroll frame' : 'svg'} ${box?.width}px wide`,
         ).toBeLessThanOrEqual(setup.width);
         await noOverflow(page, `${setup.label}: ${chart}`);
       }
@@ -141,6 +145,43 @@ test.describe('charts', () => {
       const footer = poundsIn(await table.locator('tfoot tr').innerText())[0] ?? 0;
       expect(Math.round(sum * 100), `${chart}: rows vs total`).toBe(Math.round(footer * 100));
     }
+  });
+
+  test('the months chart scrolls sideways and hints its abbreviated names', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 780 });
+    await page.goto('/charts');
+    const months = figure(page, 'months', 'phone');
+    const frame = months.locator('[data-chart-scroll]');
+    await expect(frame).toBeVisible();
+
+    // The categories outgrow the phone column: the drawing is wider than its
+    // frame and scrolls inside it (the page itself never pans).
+    expect(
+      await frame.evaluate((el) => el.scrollWidth > el.clientWidth + 2),
+      'the months drawing overflows its scroll frame',
+    ).toBe(true);
+    await noOverflow(page, '320px: months scroll frame');
+
+    // An abbreviated axis label carries its full name as a hover hint.
+    await expect(months.locator('svg text title', { hasText: 'Groceries' })).toHaveCount(1);
+    await expect(months.locator('svg text', { hasText: "Grocer'" }).first()).toBeVisible();
+    // …and the table twin always spells the names out.
+    await months.getByText(/^Show the numbers/).click();
+    await expect(months.locator('table[data-chart-table="months"]')).toContainText('Groceries');
+
+    // The arrows nudge the drawing sideways; the left arrow only exists once
+    // there is somewhere behind it to go.
+    const right = page.getByRole('button', { name: 'Scroll the three months chart right' });
+    const left = page.getByRole('button', { name: 'Scroll the three months chart left' });
+    await expect(right).toBeVisible();
+    await expect(left).toBeHidden();
+    const before = await frame.evaluate((el) => el.scrollLeft);
+    await right.click();
+    await expect
+      .poll(async () => frame.evaluate((el) => el.scrollLeft), { timeout: 5_000 })
+      .toBeGreaterThan(before);
+    await expect(left).toBeVisible();
+    await noOverflow(page, '320px: months after the arrows');
   });
 
   test('a grocery week opens the purchases it was made of', async ({ page }) => {

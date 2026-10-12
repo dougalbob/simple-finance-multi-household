@@ -28,6 +28,7 @@ import {
   nextScheduledIncomeDate,
   recentScheduledIncomeDates,
 } from './money-view';
+import { getMonthComparisonView } from './insights-view';
 import { spendingMix, type MixLine, type SpendingMix } from './spending-mix';
 import { listVehicles } from './vehicles';
 import { firstRecordedPurchaseDate } from './recording';
@@ -702,5 +703,96 @@ export function getSpendingMixView(
     mix,
     targetLabels,
     people,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* F. Three months by category                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The parent category the exclude toggle takes out (§16.7 F). Housing is
+ * resolved from the live tree by name — the same rule as PIE_SPLIT_PARENTS —
+ * so a household that renamed or removed it simply sees no toggle.
+ */
+export const HEAVY_PARENT = 'Housing';
+
+export interface CategoryMonthsMonth {
+  label: string;
+  from: string;
+  /** Never past today: the figure counts recorded lines only. */
+  to: string;
+  /** False while the month is still running ("so far", drawn hatched). */
+  complete: boolean;
+}
+
+export interface CategoryMonthsCategory {
+  parentId: number;
+  name: string;
+  /** Net spending per month, aligned with `months` (oldest first). */
+  amountsPence: number[];
+  /** The months' total. */
+  totalPence: number;
+}
+
+export interface CategoryMonthsView {
+  today: string;
+  /** The last three calendar months, oldest first. */
+  months: CategoryMonthsMonth[];
+  /** Categories by their total, largest first (the drawn order). */
+  categories: CategoryMonthsCategory[];
+  /** Total across the drawn categories and months. */
+  totalPence: number;
+  /** The Housing parent's id when the tree has one; the exclude toggle's scope. */
+  heavyParentId: number | null;
+  excludeHeavy: boolean;
+}
+
+/**
+ * Three months by parent category (§16.7 F) — the month-comparison table
+ * from `/insights`, drawn. It reads `getMonthComparisonView`, so the chart
+ * and the table cannot disagree; the only addition is the parent ids (for
+ * the bar links) and the exclude-Housing toggle (a category that dwarfs the
+ * rest flattens every other bar).
+ */
+export function getCategoryMonthsView(
+  db: Db,
+  options: { excludeHeavy?: boolean } = {},
+  nowArg?: Date,
+): CategoryMonthsView {
+  const comparison = getMonthComparisonView(db, nowArg);
+  const parentIdByName = new Map<string, number>();
+  for (const line of comparison.lines) parentIdByName.set(line.parentName, line.parentId);
+
+  const heavyParent = findParentCategory(db, HEAVY_PARENT);
+  const excludeHeavy = options.excludeHeavy === true && heavyParent !== null;
+
+  const months: CategoryMonthsMonth[] = comparison.months.map((month) => ({
+    label: month.label + (month.inProgress ? ' (so far)' : ''),
+    from: month.summary.from,
+    to: month.summary.to > comparison.today ? comparison.today : month.summary.to,
+    complete: !month.inProgress,
+  }));
+
+  const categories: CategoryMonthsCategory[] = comparison.byParent
+    .filter((row) => {
+      if (!excludeHeavy || heavyParent === null) return true;
+      return parentIdByName.get(row.parent) !== heavyParent.id;
+    })
+    .map((row) => ({
+      parentId: parentIdByName.get(row.parent) ?? 0,
+      name: row.parent,
+      amountsPence: row.amountsPence,
+      totalPence: row.amountsPence.reduce((sum, amount) => sum + amount, 0),
+    }))
+    .sort((a, b) => b.totalPence - a.totalPence || a.name.localeCompare(b.name));
+
+  return {
+    today: comparison.today,
+    months,
+    categories,
+    totalPence: categories.reduce((sum, category) => sum + category.totalPence, 0),
+    heavyParentId: heavyParent === null ? null : heavyParent.id,
+    excludeHeavy,
   };
 }

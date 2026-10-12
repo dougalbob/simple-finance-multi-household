@@ -17,6 +17,7 @@ import {
   GROCERIES_PARENT,
   FUEL_CHILD,
 } from '../src/lib/records/insights';
+import { drillMonth, drillPerson, drillVehicle } from '../src/lib/records/insights-drill';
 import { setMonthlyFuelPence, setWeeklyGroceriesPence } from '../src/lib/records/settings';
 import { categories } from '../src/lib/db/schema';
 import type { Db } from '../src/lib/db/client';
@@ -375,7 +376,7 @@ describe('insights-view: annual vehicle payments are spread ÷ 12 in running cos
   it('after a year of payments, an annual and a monthly vehicle compare like for like', async () => {
     const fixture = await createHouseholdFixture();
     try {
-      const { db, pots, vehicles } = fixture;
+      const { db, pots, people, vehicles } = fixture;
       const insurance = fixture.categoryId('Vehicle Running', 'Insurance');
       createSchedule(db, {
         name: 'Fictional car insurance',
@@ -452,6 +453,185 @@ describe('insights-view: annual vehicle payments are spread ÷ 12 in running cos
       assert.equal(a?.rolling12From, '2025-10-01');
       assert.equal(a?.rolling12Pence, 5125 + 11 * 5125);
       assert.equal(a?.rolling12Pence, 61500, 'steady state: exactly one premium');
+    } finally {
+      fixture.close();
+    }
+  });
+});
+
+describe('insights-view: the line items behind each figure (decision 197)', () => {
+  it('the month-comparison drill rows sum to every cell they open', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, people } = fixture;
+      const groceries = fixture.categoryId('Groceries', 'Weekly Shop');
+      const clothing = fixture.categoryId('Personal', 'Clothing & Shoes');
+      createPurchase(db, {
+        potId: pots.main.id,
+        totalPence: 3000,
+        paidByPersonId: people.alex.id,
+        occurredDate: '2026-09-10',
+        supplierName: 'Greenfield Market',
+        lines: [{ amountPence: 3000, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+      createPurchase(db, {
+        potId: pots.main.id,
+        totalPence: 1500,
+        paidByPersonId: people.alex.id,
+        occurredDate: '2026-09-11',
+        lines: [{ amountPence: 1500, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+      createPurchase(db, {
+        potId: pots.main.id,
+        totalPence: 2149,
+        paidByPersonId: people.alex.id,
+        occurredDate: '2026-08-20',
+        supplierName: 'Hillside Outfitters',
+        lines: [
+          {
+            amountPence: 2149,
+            categoryId: clothing,
+            targetKind: 'person',
+            targetId: people.sam.id,
+          },
+        ],
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+
+      const view = getMonthComparisonView(db, NOW);
+      assert.ok(view.lines.length >= 3, 'the drill lines come with the view');
+      assert.ok(
+        view.lines.every((line) => line.purchaseId > 0),
+        'each line knows its purchase',
+      );
+      for (const row of view.byParent) {
+        const parentId = view.lines.find((line) => line.parentName === row.parent)?.parentId;
+        assert.ok(parentId !== undefined, row.parent);
+        view.months.forEach((month, index) => {
+          const table = drillMonth(
+            view.lines,
+            `${month.month.year}-${String(month.month.month).padStart(2, '0')}`,
+            parentId ?? null,
+          );
+          assert.equal(
+            table.totalPence,
+            row.amountsPence[index] ?? 0,
+            `${row.parent} in ${month.label}`,
+          );
+        });
+      }
+      // The whole-month drill (the summary card's link) matches the column total.
+      view.months.forEach((month) => {
+        const table = drillMonth(
+          view.lines,
+          `${month.month.year}-${String(month.month.month).padStart(2, '0')}`,
+          null,
+        );
+        assert.equal(table.totalPence, month.summary.totalPence, month.label);
+      });
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('the person drill rows sum to the person’s figure, and stay for-person', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, people } = fixture;
+      const clothing = fixture.categoryId('Personal', 'Clothing & Shoes');
+      const groceries = fixture.categoryId('Groceries', 'Weekly Shop');
+      createPurchase(db, {
+        potId: pots.main.id,
+        totalPence: 2149,
+        paidByPersonId: people.alex.id,
+        occurredDate: '2026-09-11',
+        lines: [
+          {
+            amountPence: 2149,
+            categoryId: clothing,
+            targetKind: 'person',
+            targetId: people.sam.id,
+          },
+        ],
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+      // Household spending, paid by Alex: never attributed to Alex.
+      createPurchase(db, {
+        potId: pots.main.id,
+        totalPence: 5000,
+        paidByPersonId: people.alex.id,
+        occurredDate: '2026-09-12',
+        lines: [{ amountPence: 5000, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+
+      const view = getPersonalMonthView(db, { year: 2026, month: 9 }, NOW);
+      const sam = view.people.find((row) => row.personId === people.sam.id);
+      const table = drillPerson(view.lines, '2026-09', people.sam.id, null);
+      assert.equal(table.totalPence, sam?.totalPence);
+      assert.equal(table.rows.length, 1);
+      const alex = drillPerson(view.lines, '2026-09', people.alex.id, null);
+      assert.equal(alex.rows.length, 0, 'household spending is not Alex’s line items');
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('the vehicle drill rows sum to the figures, counting annual shares ÷ 12', async () => {
+    const fixture = await createHouseholdFixture();
+    try {
+      const { db, pots, people, vehicles } = fixture;
+      const insurance = fixture.categoryId('Vehicle Running', 'Insurance');
+      createSchedule(db, {
+        name: 'Fictional car insurance',
+        kind: 'dd',
+        frequency: 'annual',
+        dueMonth: 8,
+        dueDayOfMonth: 24,
+        amountPence: 61500,
+        potId: pots.main.id,
+        categoryId: insurance,
+        supplierName: 'Fictional Insurer Ltd',
+        targetKind: 'vehicle',
+        targetId: vehicles.vehicleA.id,
+        activeFrom: '2025-08-24',
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+      createPurchase(db, {
+        potId: pots.main.id,
+        totalPence: 5820,
+        paidByPersonId: people.alex.id,
+        occurredDate: '2026-09-05',
+        lines: [
+          {
+            amountPence: 5820,
+            categoryId: fixture.categoryId('Vehicle Running', 'Fuel'),
+            targetKind: 'vehicle',
+            targetId: vehicles.vehicleA.id,
+          },
+        ],
+        actor: 'alex@example.com',
+        now: NOW,
+      });
+
+      const view = getVehicleCostsView(db, NOW);
+      const a = view.find((row) => row.vehicleId === vehicles.vehicleA.id);
+      assert.ok(a !== undefined);
+      const month = drillVehicle(a.lines, a.vehicleId, 'month', null, TODAY);
+      assert.equal(month.totalPence, a.monthPence);
+      assert.equal(month.hasSpreadRows, true, 'the premium share is labelled');
+      const rolling = drillVehicle(a.lines, a.vehicleId, 'rolling', null, TODAY);
+      assert.equal(rolling.totalPence, a.rolling12Pence);
+      const previous = drillVehicle(a.lines, a.vehicleId, 'previous', null, TODAY);
+      assert.equal(previous.totalPence, a.previousMonthPence);
     } finally {
       fixture.close();
     }

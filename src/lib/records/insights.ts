@@ -173,60 +173,110 @@ export function summarizeSpending(
   return { from, to, totalPence: total, byParent };
 }
 
+/** How many calendar months the comparison shows side by side (SPEC §16.1). */
+export const COMPARED_MONTHS = 3;
+
+/** One calendar month of the comparison, with its change against the month before. */
+export interface MonthColumn {
+  month: MonthRef;
+  label: string;
+  /** True while this calendar month is still running (label it as such). */
+  inProgress: boolean;
+  summary: SpendingSummary;
+  /**
+   * Change in the month's total against the month before it. Null in the
+   * oldest column — there is no earlier month in the table to compare with.
+   */
+  deltaPence: number | null;
+}
+
+export interface MonthParentRow {
+  parent: string;
+  /** Net spending in each month, aligned with `months` (oldest first). */
+  amountsPence: number[];
+  /** Change against the month before; null in the first column. */
+  deltasPence: Array<number | null>;
+}
+
 export interface MonthComparison {
   today: string;
-  /** True while the current calendar month is still running (label it as such). */
-  currentInProgress: boolean;
-  current: { month: MonthRef; label: string; summary: SpendingSummary };
-  previous: { month: MonthRef; label: string; summary: SpendingSummary };
-  totalDeltaPence: number;
-  byParent: Array<{
-    parent: string;
-    currentPence: number;
-    previousPence: number;
-    deltaPence: number;
-  }>;
+  /**
+   * The last `months` calendar months, oldest first. The newest is the
+   * current month, in progress until month end — and the months before it
+   * still compare complete-to-complete however early in the month the
+   * household looks (the whole point of showing three).
+   */
+  months: MonthColumn[];
+  /** Per parent category, alphabetical, aligned with `months`. */
+  byParent: MonthParentRow[];
+  /** The newest column (`months[months.length - 1]`). */
+  current: MonthColumn;
+  /** The second-newest column: `current`'s comparison partner. */
+  previous: MonthColumn;
 }
 
 /**
- * Panel 1 (SPEC §16.1): this calendar month vs the previous one, by parent
- * category with child drill-down. Pure over the window's lines; the view
- * layer decides which dates to query (from the previous month's first day
- * through today).
+ * Panel 1 (SPEC §16.1): the last few calendar months side by side, by parent
+ * category, each month with its change against the month before. Pure over
+ * the window's lines; the view layer decides which dates to query (from the
+ * oldest month's first day through today). Defaults to three months, so two
+ * complete months always compare even while the current month is days old.
  */
 export function compareCalendarMonths(
   lines: readonly SpendingLineInput[],
   today: string,
+  options: { months?: number } = {},
 ): MonthComparison {
   checkedLocalDate(today);
-  const current = monthOfLocalDate(today);
-  const previous = previousLocalMonth(today);
-  const currentRange = monthRange(current);
-  const previousRange = monthRange(previous);
-  const currentSummary = summarizeSpending(lines, currentRange.from, currentRange.to);
-  const previousSummary = summarizeSpending(lines, previousRange.from, previousRange.to);
+  const count = Math.min(Math.max(options.months ?? COMPARED_MONTHS, 2), 24);
+  const monthRefs: MonthRef[] = [];
+  for (let back = count - 1; back >= 0; back -= 1) {
+    monthRefs.push(monthOfLocalDate(addMonthsClamped(firstOfLocalMonth(today), -back)));
+  }
+  const summaries = monthRefs.map((ref) => {
+    const range = monthRange(ref);
+    return summarizeSpending(lines, range.from, range.to);
+  });
 
-  const parentNames = new Set<string>([
-    ...currentSummary.byParent.map((entry) => entry.parent),
-    ...previousSummary.byParent.map((entry) => entry.parent),
-  ]);
-  const currentByParent = new Map(currentSummary.byParent.map((entry) => [entry.parent, entry]));
-  const previousByParent = new Map(previousSummary.byParent.map((entry) => [entry.parent, entry]));
-  const byParent = [...parentNames]
+  const months: MonthColumn[] = monthRefs.map((ref, index) => {
+    const summary = summaries[index] as SpendingSummary;
+    return {
+      month: ref,
+      label: formatMonthLabel(ref),
+      inProgress: index === count - 1 && today < lastOfLocalMonth(today),
+      summary,
+      deltaPence:
+        index === 0
+          ? null
+          : summary.totalPence - (summaries[index - 1] as SpendingSummary).totalPence,
+    };
+  });
+
+  const parentNames = new Set<string>();
+  const perMonth = summaries.map((summary) => {
+    const map = new Map(summary.byParent.map((entry) => [entry.parent, entry.amountPence]));
+    for (const entry of summary.byParent) parentNames.add(entry.parent);
+    return map;
+  });
+  const byParent: MonthParentRow[] = [...parentNames]
     .sort((a, b) => a.localeCompare(b))
     .map((parent) => {
-      const currentPence = currentByParent.get(parent)?.amountPence ?? 0;
-      const previousPence = previousByParent.get(parent)?.amountPence ?? 0;
-      return { parent, currentPence, previousPence, deltaPence: currentPence - previousPence };
+      const amountsPence = perMonth.map((map) => map.get(parent) ?? 0);
+      return {
+        parent,
+        amountsPence,
+        deltasPence: amountsPence.map((amount, index) =>
+          index === 0 ? null : amount - (amountsPence[index - 1] as number),
+        ),
+      };
     });
 
   return {
     today,
-    currentInProgress: today < lastOfLocalMonth(today),
-    current: { month: current, label: formatMonthLabel(current), summary: currentSummary },
-    previous: { month: previous, label: formatMonthLabel(previous), summary: previousSummary },
-    totalDeltaPence: currentSummary.totalPence - previousSummary.totalPence,
+    months,
     byParent,
+    current: months[count - 1] as MonthColumn,
+    previous: months[count - 2] as MonthColumn,
   };
 }
 
@@ -319,6 +369,7 @@ export interface VehicleCosts {
   annualSpreadPence: number;
   /** By child category over the rolling window (fuel/insurance/…). */
   byChild: Array<{
+    categoryId: number;
     parent: string;
     child: string;
     amountPence: number;
@@ -396,12 +447,18 @@ export function vehicleRunningCosts(
       mine.filter((entry) => inRange(entry.piece, range.from, range.to));
     const rollingEntries = mine.filter((entry) => inRange(entry.piece, rolling12From, today));
     const byChild = new Map<
-      string,
-      { parent: string; child: string; amountPence: number; spreadPence: number }
+      number,
+      {
+        categoryId: number;
+        parent: string;
+        child: string;
+        amountPence: number;
+        spreadPence: number;
+      }
     >();
     for (const { piece, annual } of rollingEntries) {
-      const key = `${piece.parentName}/${piece.childName}`;
-      const entry = byChild.get(key) ?? {
+      const entry = byChild.get(piece.categoryId) ?? {
+        categoryId: piece.categoryId,
         parent: piece.parentName,
         child: piece.childName,
         amountPence: 0,
@@ -409,7 +466,7 @@ export function vehicleRunningCosts(
       };
       entry.amountPence += piece.amountPence;
       if (annual) entry.spreadPence += piece.amountPence;
-      byChild.set(key, entry);
+      byChild.set(piece.categoryId, entry);
     }
     return {
       vehicleId: vehicle.id,
