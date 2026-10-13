@@ -420,7 +420,7 @@ export function RestoreScheduleForm({ schedule }: { schedule: RecurringScheduleO
       <p className="text-xs text-ink-muted">
         Restoring resumes this schedule. Any scheduled payment dates that were missed while it was
         cancelled will be <span className="font-medium text-ink-body">back-filled by the app</span>{' '}
-        as ordinary &ldquo;from schedule&rdquo; records (converted history is never rewritten).
+        as ordinary {'"'}from schedule{'"'} records (converted history is never rewritten).
       </p>
       <label className="mt-2 flex items-start gap-2 text-xs text-ink-body">
         <input
@@ -432,7 +432,7 @@ export function RestoreScheduleForm({ schedule }: { schedule: RecurringScheduleO
           className="mt-0.5 h-4 w-4 rounded border-border-strong"
         />
         <span>
-          I understand &mdash; back-fill any missed scheduled dates and restore this schedule going
+          I understand — back-fill any missed scheduled dates and restore this schedule going
           forward.
         </span>
       </label>
