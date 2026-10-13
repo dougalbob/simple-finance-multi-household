@@ -31,6 +31,6 @@ The RC publishes only its exact version tag and `sha-<short>`; it does **not** c
 ## Validation evidence
 
 - `npm run typecheck`, `npm run format:check`, and `npx drizzle-kit check` passed.
-- Migration journal ordering and upgrade tests passed; focused agreement, money-view, renewal, task, and validation suites passed.
+- The full unit suite passed locally in nine serial batches: **856 tests across 194 suites**, including migration, upgrade, agreement, money-view, renewal, task, and validation coverage.
 - The E2E seed and HTTP checks for `/contracts` and `/recurring` passed.
 - Interactive local Playwright was not run because the sandbox lacks the Chromium executable. The release PR must still pass all required CI checks—`gates`, `browser`, and `docker`—before merge; local results do not replace those gates.

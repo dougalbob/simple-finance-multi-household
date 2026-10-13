@@ -1,3 +1,7 @@
+# v1.8.0-rc.1 candidate — Contracts & Renewals redesign (2026-10-13)
+
+The release PR is **#20** (`Release candidate v1.8.0-rc.1: Contracts & Renewals`) on the assigned Arena branch. This is an acceptance candidate, not a stable release: `v1.7.0` remains the accepted stable version and `latest` must not move. The candidate adds the explicit insurance/service/other agreement register, separate renewal and fee-free switch dates, independent provider auto-renew and app reminder settings, additive tenant migrations, and agreement-aware key-date prompts. The exact merge SHA, required check run IDs, Publish run, and verified image digest are to be appended here after successful publication; use `docs/RELEASE_NOTES_v1.8.0-rc.1.md` for candidate testing instructions.
+
 # v1.7.0 release — Recurring page session (2026-10-13)
 
 Four household requests on `/recurring`, released as **`v1.7.0`** (stable; moves `latest`):

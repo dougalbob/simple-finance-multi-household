@@ -617,9 +617,21 @@ test.describe('desktop review', () => {
     ).toHaveCount(1);
 
     await page.goto('/recurring');
+    // Recurring now has one vehicle target picker: the renewal picker moved to
+    // Contracts & Renewals with the agreement register.
     await expect(page.locator('select[name="target"] option', { hasText: newVehicle })).toHaveCount(
-      2,
+      1,
     );
+
+    await page.goto('/contracts');
+    const register = page.locator('section[aria-labelledby="agreement-register-heading"]');
+    await register.getByText('Add a contract or policy').click();
+    const agreementForm = register
+      .locator('form')
+      .filter({ has: page.getByRole('button', { name: 'Add to the register' }) });
+    await expect(
+      agreementForm.getByLabel('For', { exact: true }).locator('option', { hasText: newVehicle }),
+    ).toHaveCount(1);
 
     await page.goto('/insights');
     await expect(page.getByText(newVehicle, { exact: true }).first()).toBeVisible();
