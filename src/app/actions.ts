@@ -165,6 +165,8 @@ import {
   editPotEntrySchema,
   editPurchaseEntrySchema,
   editRenewalEntrySchema,
+  editTrackedAgreementEntrySchema,
+  trackedAgreementEntrySchema,
   editScheduleEntrySchema,
   editExternalMovementEntrySchema,
   externalMovementEntrySchema,
@@ -220,6 +222,13 @@ import {
   InvalidRenewalInputError,
   RenewalNotFoundError,
 } from '@/lib/records/renewals';
+import {
+  createAgreement,
+  editAgreement,
+  AgreementNotFoundError,
+  InvalidAgreementInputError,
+  DEFAULT_AGREEMENT_REMINDER_DAYS,
+} from '@/lib/records/agreements';
 import {
   InvalidSettingValueError,
   setContractEndWarningLeadDays,
@@ -1262,6 +1271,118 @@ export async function addRenewalAction(
       return { status: 'error', message: err.message };
     }
     return { status: 'error', message: 'The renewal could not be saved. Please try again.' };
+  }
+}
+
+function trackedAgreementFormFields(formData: FormData): Record<string, unknown> {
+  const type = textOrNull(formData.get('type')) ?? 'service';
+  const renewalReminderEnabled = formData.get('renewalReminderEnabled') === 'on';
+  const switchReminderEnabled = formData.get('switchReminderEnabled') === 'on';
+  return {
+    name: textOrNull(formData.get('name')) ?? '',
+    type,
+    supplierId: numberOrNull(formData.get('supplierId')),
+    ...parseCompositeTarget(formData.get('target')),
+    autoRenew: type === 'insurance' ? textOrNull(formData.get('autoRenew')) : null,
+    renewalDate: textOrNull(formData.get('renewalDate')),
+    switchDate: textOrNull(formData.get('switchDate')),
+    renewalReminderLeadDays: renewalReminderEnabled
+      ? (numberOrNull(formData.get('renewalReminderLeadDays')) ?? DEFAULT_AGREEMENT_REMINDER_DAYS)
+      : null,
+    switchReminderLeadDays: switchReminderEnabled
+      ? (numberOrNull(formData.get('switchReminderLeadDays')) ?? DEFAULT_AGREEMENT_REMINDER_DAYS)
+      : null,
+    renewalRepeatsAnnually: formData.get('renewalRepeatsAnnually') === 'on',
+    scheduleId: numberOrNull(formData.get('scheduleId')),
+    notes: textOrNull(formData.get('notes')),
+  };
+}
+
+export async function addTrackedAgreementAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const parsed = trackedAgreementEntrySchema.safeParse(trackedAgreementFormFields(formData));
+  if (!parsed.success) {
+    return {
+      status: 'error',
+      message: firstIssue(parsed.error, 'Check the contract or policy details.'),
+    };
+  }
+  try {
+    const agreement = createAgreement(user.db, { ...parsed.data, actor: user.email });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: `Added “${agreement.name}” to Contracts & Renewals.`,
+    };
+  } catch (err) {
+    if (err instanceof InvalidAgreementInputError || err instanceof AgreementNotFoundError) {
+      return { status: 'error', message: err.message };
+    }
+    return {
+      status: 'error',
+      message: 'The contract or policy could not be saved. Please try again.',
+    };
+  }
+}
+
+export async function editTrackedAgreementAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const parsed = editTrackedAgreementEntrySchema.safeParse({
+    agreementId: numberOrNull(formData.get('agreementId')),
+    expectedVersion: numberOrNull(formData.get('version')),
+    ...trackedAgreementFormFields(formData),
+  });
+  if (!parsed.success) {
+    return {
+      status: 'error',
+      message: firstIssue(parsed.error, 'Check the contract or policy details.'),
+    };
+  }
+  try {
+    const agreement = editAgreement(user.db, {
+      id: parsed.data.agreementId,
+      expectedVersion: parsed.data.expectedVersion,
+      actor: user.email,
+      patch: {
+        name: parsed.data.name,
+        type: parsed.data.type,
+        supplierId: parsed.data.supplierId,
+        targetKind: parsed.data.targetKind,
+        targetId: parsed.data.targetId,
+        autoRenew: parsed.data.autoRenew,
+        renewalDate: parsed.data.renewalDate,
+        switchDate: parsed.data.switchDate,
+        renewalReminderLeadDays: parsed.data.renewalReminderLeadDays,
+        switchReminderLeadDays: parsed.data.switchReminderLeadDays,
+        renewalRepeatsAnnually: parsed.data.renewalRepeatsAnnually,
+        scheduleId: parsed.data.scheduleId,
+        notes: parsed.data.notes,
+      },
+    });
+    revalidatePages();
+    return { status: 'ok', message: `“${agreement.name}” saved.` };
+  } catch (err) {
+    if (
+      err instanceof InvalidAgreementInputError ||
+      err instanceof AgreementNotFoundError ||
+      err instanceof VersionConflictError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return {
+      status: 'error',
+      message: 'The contract or policy could not be saved. Please try again.',
+    };
   }
 }
 

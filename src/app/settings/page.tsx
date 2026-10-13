@@ -291,8 +291,8 @@ export default async function SettingsPage() {
             Warning leads
           </h2>
           <p className="mb-3 text-xs text-ink-muted">
-            How many days ahead the app should warn about renewals and contract end dates on the
-            overview and in key dates.
+            These legacy defaults cover standalone renewal rows and unlinked schedule end dates.
+            Each agreement in Contracts &amp; Renewals has its own independent reminder leads.
           </p>
           <WarningLeadsForm
             renewalLeadDays={getRenewalWarningLeadDays(db)}

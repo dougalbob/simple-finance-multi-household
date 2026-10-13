@@ -34,6 +34,7 @@ import {
 } from './projection';
 import { getContractEndWarningLeadDays } from './settings';
 import { advanceDueRenewals, listRenewals } from './renewals';
+import { advanceDueAgreementRenewals, listAgreements } from './agreements';
 import { debtsSummary, type DebtsSummary } from './debts';
 import {
   listSchedules,
@@ -54,8 +55,8 @@ import { listVehicles } from './vehicles';
  * in two states").
  *
  * Everything here is a pure query + engine call — no writes except the
- * idempotent due pass (conversions + renewal advances), which is what the
- * app does instead of a cron daemon.
+ * idempotent due pass (conversions + eligible annual reminder advances),
+ * which is what the app does instead of a cron daemon.
  */
 
 export interface PotMoneyView {
@@ -77,19 +78,24 @@ export interface MoneySnapshot {
 
 export interface EnsureStateResult {
   convertedInstances: number;
+  /** Standalone legacy renewal rows advanced, if any. */
   advancedRenewals: number;
+  /** Provider-confirmed tracked policies advanced. */
+  advancedAgreements: number;
 }
 
 /**
  * Run the lazy due pass (SPEC §11.2): convert every schedule instance whose
- * local midnight has arrived and advance every due repeating renewal.
- * Idempotent — safe to call on every read.
+ * local midnight has arrived, advance standalone annual reminders, and roll
+ * only explicitly auto-renewing tracked insurance dates. Idempotent — safe to
+ * call on every read.
  */
 export function ensureScheduleState(db: Db, nowArg?: Date): EnsureStateResult {
   const now = nowArg ?? new Date();
   const convertedInstances = materializeAndConvert(db, now);
   const advancedRenewals = advanceDueRenewals(db, now);
-  return { convertedInstances, advancedRenewals };
+  const advancedAgreements = advanceDueAgreementRenewals(db, now);
+  return { convertedInstances, advancedRenewals, advancedAgreements };
 }
 
 /**
@@ -800,9 +806,9 @@ export function getUpcomingCommitments(
 }
 
 /**
- * Key-date items for the Overview panel (SPEC §22.3): renewals with their
- * per-item leads, and schedules' contract end dates with the configured
- * default lead. Runs the due pass first (renewal advances shift dates).
+ * Key-date items for the Overview panel: agreement renewal and switch dates,
+ * standalone legacy reminders, unlinked schedule end dates and card prompts.
+ * Runs the due pass first so eligible annual dates have already advanced.
  */
 export function getKeyDateAlerts(db: Db, nowArg?: Date): KeyDateAlert[] {
   const now = nowArg ?? new Date();
@@ -820,7 +826,24 @@ export function getKeyDateAlerts(db: Db, nowArg?: Date): KeyDateAlert[] {
   };
 
   const items: KeyDateItem[] = [];
+  const agreements = listAgreements(db);
+  const migratedRenewalIds = new Set(
+    agreements.flatMap((agreement) =>
+      agreement.legacyRenewalId === null ? [] : [agreement.legacyRenewalId],
+    ),
+  );
+  const linkedScheduleIds = new Set(
+    agreements.flatMap((agreement) =>
+      [agreement.scheduleId, agreement.legacyScheduleId].filter(
+        (scheduleId): scheduleId is number => scheduleId !== null,
+      ),
+    ),
+  );
+
+  // Keep the existing pure renewal engine useful for older callers/tests, but
+  // migrated rows now surface only through their agreement record.
   for (const renewal of listRenewals(db)) {
+    if (migratedRenewalIds.has(renewal.id)) continue;
     items.push({
       id: renewal.id,
       kind: 'renewal',
@@ -831,9 +854,44 @@ export function getKeyDateAlerts(db: Db, nowArg?: Date): KeyDateAlert[] {
       targetLabel: targetLabel(renewal.targetKind, renewal.targetId),
     });
   }
+
+  for (const agreement of agreements) {
+    if (agreement.renewalDate !== null && agreement.renewalReminderLeadDays !== null) {
+      items.push({
+        id: agreement.id,
+        agreementId: agreement.id,
+        kind: 'agreement-renewal',
+        label: agreement.name,
+        date: agreement.renewalDate,
+        leadDays: agreement.renewalReminderLeadDays,
+        supplierId: agreement.supplierId,
+        targetLabel: targetLabel(agreement.targetKind, agreement.targetId),
+        autoRenew: agreement.autoRenew,
+      });
+    }
+    if (agreement.switchDate !== null && agreement.switchReminderLeadDays !== null) {
+      items.push({
+        id: agreement.id,
+        agreementId: agreement.id,
+        kind: 'switch-date',
+        label: agreement.name,
+        date: agreement.switchDate,
+        leadDays: agreement.switchReminderLeadDays,
+        supplierId: agreement.supplierId,
+        targetLabel: targetLabel(agreement.targetKind, agreement.targetId),
+      });
+    }
+  }
+
   const contractLead = getContractEndWarningLeadDays(db);
   for (const { schedule } of listSchedules(db, now)) {
-    if (schedule.contractEndsOn === null) continue;
+    if (
+      schedule.cancelledAt !== null ||
+      schedule.contractEndsOn === null ||
+      linkedScheduleIds.has(schedule.id)
+    ) {
+      continue;
+    }
     items.push({
       id: schedule.id,
       kind: 'contract-end',

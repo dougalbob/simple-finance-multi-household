@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import { recordAudit, type DbTx } from '../audit';
 import type { Db } from '../db/client';
-import { people, renewals, suppliers, vehicles } from '../db/schema';
+import { people, renewals, suppliers, trackedAgreements, vehicles } from '../db/schema';
 import { isValidLocalDate, toLocalDateString } from '../time';
 import { addYearsClamped } from './dates';
 import { VersionConflictError } from './errors';
@@ -188,10 +188,10 @@ export function listRenewals(db: Db): Renewal[] {
 }
 
 /**
- * The lazy annual advance (SPEC §22.2): a repeating renewal whose date has
- * reached or passed moves a year forward — visible (audit + advancedFrom)
- * and editable. Non-repeating renewals are left in place; the key-date
- * engine shows them as past. Runs in one transaction; returns the count.
+ * The lazy annual advance for standalone legacy renewals: a repeating date
+ * moves a year forward — visible (audit + advancedFrom) and editable.
+ * Migrated rows are advanced only through their tracked agreement, under its
+ * explicit provider auto-renew rule. Runs in one transaction; returns count.
  */
 export function advanceDueRenewals(db: Db, nowArg?: Date): number {
   const now = nowArg ?? new Date();
@@ -206,11 +206,19 @@ export function advanceDueRenewals(db: Db, nowArg?: Date): number {
     for (;;) {
       if (guard >= 50) break;
       guard += 1;
+      const representedRenewalIds = new Set(
+        tx
+          .select({ id: trackedAgreements.legacyRenewalId })
+          .from(trackedAgreements)
+          .all()
+          .flatMap((agreement) => (agreement.id === null ? [] : [agreement.id])),
+      );
       const dueRows = tx
         .select()
         .from(renewals)
         .where(and(eq(renewals.repeatsAnnually, true), lte(renewals.nextRenewalDate, today)))
-        .all();
+        .all()
+        .filter((renewal) => !representedRenewalIds.has(renewal.id));
       if (dueRows.length === 0) break;
       for (const renewal of dueRows) {
         const previous = renewal.nextRenewalDate;

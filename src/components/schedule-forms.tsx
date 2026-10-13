@@ -167,6 +167,7 @@ export function ScheduleEditForm(props: ScheduleEditFormProps) {
     >
       <input type="hidden" name="scheduleId" value={props.scheduleId} />
       <input type="hidden" name="version" value={props.version} />
+      <input type="hidden" name="contractEndsOn" value={props.contractEndsOn ?? ''} />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="flex flex-col gap-1 sm:col-span-2">
           <label htmlFor={`schedule-${props.scheduleId}-name`} className={labelClass}>
@@ -365,31 +366,21 @@ export function ScheduleEditForm(props: ScheduleEditFormProps) {
           This changes the app’s expectation only — never a bank instruction.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor={`schedule-${props.scheduleId}-contract`} className={labelClass}>
-            Contract ends on (informational, blank clears)
-          </label>
-          <input
-            id={`schedule-${props.scheduleId}-contract`}
-            name="contractEndsOn"
-            type="date"
-            defaultValue={props.contractEndsOn ?? ''}
-            className={inputClass}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={`schedule-${props.scheduleId}-active`} className={labelClass}>
-            Active until (blank = indefinitely)
-          </label>
-          <input
-            id={`schedule-${props.scheduleId}-active`}
-            name="activeUntil"
-            type="date"
-            defaultValue={props.activeUntil ?? ''}
-            className={inputClass}
-          />
-        </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`schedule-${props.scheduleId}-active`} className={labelClass}>
+          App expects payments through (blank = indefinitely)
+        </label>
+        <input
+          id={`schedule-${props.scheduleId}-active`}
+          name="activeUntil"
+          type="date"
+          defaultValue={props.activeUntil ?? ''}
+          className={inputClass}
+        />
+        <span className="text-xs text-ink-muted">
+          Planning boundary only. Manage provider renewal and switch dates under Contracts &amp;
+          Renewals.
+        </span>
       </div>
       <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
         {pending ? 'Saving…' : 'Save changes'}

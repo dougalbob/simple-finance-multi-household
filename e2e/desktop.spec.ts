@@ -251,7 +251,7 @@ test.describe('desktop review', () => {
   test('the month calendar follows a real due-day edit', async ({ page }) => {
     await page.goto('/recurring');
     await expect(
-      page.getByRole('heading', { name: /Schedules, renewals & the month at a glance/i, level: 1 }),
+      page.getByRole('heading', { name: /Recurring payments & the month at a glance/i, level: 1 }),
     ).toBeVisible();
 
     // The read-only boundary is stated in plain language (SPEC §11.2).
@@ -423,24 +423,40 @@ test.describe('desktop review', () => {
     await expect(card.getByText('Quote to follow').first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test('contracts list both kinds of date and stay editable', async ({ page }) => {
+  test('contracts group insurance and service dates and stay editable', async ({ page }) => {
     await page.goto('/contracts');
     await expect(
       page.getByRole('heading', { name: 'Contracts & Renewals', level: 1 }),
     ).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Fixed-term contract ends/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Insurance policies' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Service contracts' })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Follow-ups you promised/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Credit-card payment reviews/i })).toBeVisible();
 
-    // The seeded contract end is inside its window (or honestly rolled).
-    const contracts = page.locator('section[aria-labelledby="contract-ends-heading"]');
-    const contractRow = contracts.locator('div', { hasText: 'BroadbandCo fibre' }).first();
-    await expect(contractRow.getByText(/in \d+ days|ends today|rolled/i)).toBeVisible();
-    await expect(page.getByText('Vehicle A insurance').first()).toBeVisible();
+    // Both policies share the same explicit insurance group even though one
+    // auto-renews and the other requires the household to arrange cover.
+    const insurance = page.locator('section[aria-label="Insurance policies"]');
+    const autoRenewing = insurance.locator('article').filter({ hasText: 'Vehicle A insurance' });
+    const notAutoRenewing = insurance.locator('article').filter({ hasText: 'Vehicle B insurance' });
+    await expect(autoRenewing).toContainText('Auto-renews: yes');
+    await expect(notAutoRenewing).toContainText('Auto-renews: no');
+    await expect(autoRenewing).toContainText('Renewal / cover-end date');
+    await expect(autoRenewing).toContainText('Can switch without an exit fee from');
 
-    // "BroadbandCo card →" names the supplier it came from (decision 149): the
-    // Suppliers page opens filtered to that supplier with the card already
-    // open, not as a collapsed list of everyone.
-    await contracts.getByRole('link', { name: 'BroadbandCo card →' }).click();
+    // The provider's service agreement shows its fee-free switch date and its
+    // separately linked recurring payment.
+    const services = page.locator('section[aria-label="Service contracts"]');
+    const broadband = services.locator('article').filter({ hasText: 'BroadbandCo fibre' });
+    await expect(broadband).toContainText(
+      /switch date in \d+ days|Switch today|Fee-free switch available now/,
+    );
+    await expect(broadband.getByRole('link', { name: 'Edit payment schedule' })).toHaveAttribute(
+      'href',
+      /\/recurring#schedule-edit-\d+/,
+    );
+
+    // Supplier detail still opens the known supplier's expanded card.
+    await broadband.getByRole('link', { name: 'Supplier details' }).click();
     await expect(page).toHaveURL(/\/suppliers\?supplierId=\d+/);
     await expect(page.getByLabel('Filter suppliers')).toHaveValue('BroadbandCo');
     await expect(
@@ -452,9 +468,15 @@ test.describe('desktop review', () => {
     ).toHaveAttribute('aria-expanded', 'true');
     await page.goBack();
 
-    // The renewal is editable in place.
-    await page.getByText('Edit renewal').first().click();
-    await expect(page.getByLabel('Warn days before').first()).toBeVisible();
+    // The policy's distinct provider status and annual app reminder setting
+    // remain editable in place.
+    const policy = page
+      .locator('section[aria-label="Insurance policies"] article')
+      .filter({ hasText: 'Vehicle A insurance' });
+    await policy.getByText('Edit contract or policy details').click();
+    await expect(policy.getByLabel('Does the provider auto-renew this policy?')).toHaveValue('yes');
+    await expect(policy.getByLabel('The policy date repeats annually')).toBeChecked();
+    await expect(policy.getByText('Remind me before the renewal date')).toBeVisible();
   });
 
   test('insights show the four panels with honest labels', async ({ page }) => {
@@ -470,7 +492,7 @@ test.describe('desktop review', () => {
     await expect(page.getByRole('heading', { name: /Vehicle running costs/i })).toBeVisible();
   });
 
-  test('a supplier created from Recurring is shared with Suppliers and Renewals', async ({
+  test('a recurring payment links to a service agreement and shares its supplier', async ({
     page,
   }) => {
     // Configuration + identity only: no receipts, purchases or real financial
@@ -478,6 +500,7 @@ test.describe('desktop review', () => {
     test.slow();
     const supplierName = 'Willow Energy Co';
     const scheduleName = 'Electricity bill';
+    const agreementName = 'Electricity contract';
 
     await page.goto('/recurring');
     const schedules = page.locator('section[aria-labelledby="schedules-heading"]');
@@ -525,23 +548,37 @@ test.describe('desktop review', () => {
       timeout: 30_000,
     });
 
-    // The same supplier is selectable on a renewal.
-    await page.goto('/recurring');
-    const renewals = page.locator('section[aria-labelledby="renewals-heading"]');
-    await renewals.getByText('Add a renewal').click();
-    const renewalForm = renewals
+    // Create a service agreement on Contracts & Renewals and link the payment
+    // schedule. Provider terms stay here; the payment amount stays on Recurring.
+    await page.goto('/contracts');
+    const register = page.locator('section[aria-labelledby="agreement-register-heading"]');
+    await register.getByText('Add a contract or policy').click();
+    const agreementForm = register
       .locator('form')
-      .filter({ has: page.getByRole('button', { name: 'Add renewal' }) });
-    await renewalForm.locator('input[name="label"]').fill('Electricity contract renewal');
+      .filter({ has: page.getByRole('button', { name: 'Add to the register' }) });
+    await agreementForm.locator('input[name="name"]').fill(agreementName);
+    await agreementForm.locator('select[name="type"]').selectOption('service');
+    await agreementForm.locator('select[name="supplierId"]').selectOption({ label: supplierName });
+    await agreementForm.locator('select[name="scheduleId"]').selectOption({
+      label: `${scheduleName} · monthly · ${supplierName}`,
+    });
     const nextDate = addDaysIso(londonToday(), 40);
-    await renewalForm.locator('input[name="nextRenewalDate"]').fill(nextDate);
-    await renewalForm.locator('select[name="supplierId"]').selectOption({ label: supplierName });
-    await renewalForm.getByRole('button', { name: 'Add renewal' }).click();
-    await expect(renewalForm.getByRole('status')).toContainText(/added/i, { timeout: 30_000 });
+    await agreementForm.locator('input[name="renewalDate"]').fill(nextDate);
+    await agreementForm.locator('input[name="renewalReminderEnabled"]').check();
+    await agreementForm.getByRole('button', { name: 'Add to the register' }).click();
+    await expect(agreementForm.getByRole('status')).toContainText(/added/i, { timeout: 30_000 });
 
-    const renewalItem = renewals.locator('li', { hasText: 'Electricity contract renewal' }).first();
-    await expect(renewalItem).toContainText(supplierName, { timeout: 30_000 });
-    await expect(await scheduleRow(page, scheduleName)).toContainText(supplierName);
+    const service = page.locator('section[aria-label="Service contracts"]');
+    const agreement = service.locator('article').filter({ hasText: agreementName });
+    await expect(agreement).toContainText(supplierName);
+    await expect(agreement).toContainText(scheduleName);
+    await expect(agreement.getByText(nextDate)).toBeVisible();
+
+    await page.goto('/recurring');
+    const linkedSchedule = await scheduleRow(page, scheduleName);
+    await expect(
+      linkedSchedule.getByRole('link', { name: `Agreement: ${agreementName}` }),
+    ).toHaveAttribute('href', /\/contracts#agreement-\d+/);
   });
 
   test('a vehicle added in Settings reaches every vehicle picker', async ({ page }) => {

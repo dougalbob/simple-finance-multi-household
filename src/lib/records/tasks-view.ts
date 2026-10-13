@@ -259,7 +259,9 @@ export function getNoticedItems(db: Db, now: Date): NoticedItem[] {
           ? 'Open the renewal'
           : alert.kind === 'contract-end'
             ? 'Open the schedule'
-            : 'Open the card',
+            : alert.kind === 'agreement-renewal' || alert.kind === 'switch-date'
+              ? 'Open contract or policy'
+              : 'Open the card',
     });
   }
   const fuelCategoryId = getFuelCategoryId(db);

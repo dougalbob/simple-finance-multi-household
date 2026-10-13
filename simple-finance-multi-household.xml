@@ -9,10 +9,10 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.7.0 is accepted for production, so this template defaults to :latest,
-  which only stable releases move. Release candidates never move :latest — to
-  test one, pin Repository to its exact tag instead, e.g.
-  ghcr.io/dougalbob/simple-finance-multi-household:v1.0.0-rc.3.
+  v1.7.0 remains the accepted stable production release. The v1.8.0-rc.1
+  candidate is published separately; this template still defaults to :latest,
+  which only stable releases move. To test the candidate, pin Repository to
+  ghcr.io/dougalbob/simple-finance-multi-household:v1.8.0-rc.1.
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -48,9 +48,9 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.7.0 is the accepted production release and moves :latest; release
-    candidates are published under their exact tag and never move it. Internal
-    port 3000; host port 3009. New data root:
+    v1.7.0 is the accepted stable production release and remains :latest. The
+    v1.8.0-rc.1 candidate is published under its exact tag and never moves it.
+    Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.
   </Description>

@@ -498,6 +498,79 @@ export const renewals = sqliteTable(
 );
 
 /**
+ * Tracked contracts and policies (SPEC §22, agreement register refresh).
+ * This is deliberately separate from schedules: a household can track a
+ * policy paid by card/manual payment, while a schedule remains only the
+ * expected movement of money. `schedule_id` is an optional link between the
+ * two. Legacy renewals/schedule end dates are copied here by migration 0017;
+ * their source ids keep deep links and the legacy audit trail intelligible.
+ */
+export const trackedAgreements = sqliteTable(
+  'tracked_agreements',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    type: text('type', { enum: ['insurance', 'service', 'other'] }).notNull(),
+    supplierId: integer('supplier_id').references(() => suppliers.id),
+    targetKind: text('target_kind', { enum: ['household', 'person', 'vehicle'] })
+      .notNull()
+      .default('household'),
+    targetId: integer('target_id'),
+    /** Provider behaviour, not whether this app repeats a reminder. */
+    autoRenew: text('auto_renew', { enum: ['yes', 'no', 'unknown'] }),
+    /** Next policy renewal/review date, where one exists. */
+    renewalDate: text('renewal_date'),
+    /** Earliest date the household can switch/cancel without an exit fee. */
+    switchDate: text('switch_date'),
+    /** Null means no in-app reminder; otherwise days before the event. */
+    renewalReminderLeadDays: integer('renewal_reminder_lead_days'),
+    switchReminderLeadDays: integer('switch_reminder_lead_days'),
+    /** The policy has an annual reminder cycle; only provider auto-renew=yes advances itself. */
+    renewalRepeatsAnnually: integer('renewal_repeats_annually', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    /** The date displaced by the most recent automatic annual reminder advance. */
+    renewalAdvancedFrom: text('renewal_advanced_from'),
+    notes: text('notes'),
+    /** One optional schedule may be linked to one tracked agreement. */
+    scheduleId: integer('schedule_id').references(() => schedules.id),
+    /** Original schedule source id stays even if the optional link is later removed. */
+    legacyScheduleId: integer('legacy_schedule_id').references(() => schedules.id),
+    /** Source ids for a non-destructive migration of existing rows. */
+    legacyRenewalId: integer('legacy_renewal_id').references(() => renewals.id),
+    createdBy: text('created_by').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    check(
+      'tracked_agreements_type_values',
+      sql`${table.type} IN ('insurance', 'service', 'other')`,
+    ),
+    check(
+      'tracked_agreements_auto_renew_rule',
+      sql`(${table.type} = 'insurance' AND ${table.autoRenew} IN ('yes', 'no', 'unknown')) OR (${table.type} <> 'insurance' AND ${table.autoRenew} IS NULL)`,
+    ),
+    check(
+      'tracked_agreements_reminder_leads',
+      sql`(${table.renewalReminderLeadDays} IS NULL OR ${table.renewalReminderLeadDays} BETWEEN 0 AND 365) AND (${table.switchReminderLeadDays} IS NULL OR ${table.switchReminderLeadDays} BETWEEN 0 AND 365)`,
+    ),
+    uniqueIndex('tracked_agreements_schedule_uidx')
+      .on(table.scheduleId)
+      .where(sql`${table.scheduleId} IS NOT NULL`),
+    uniqueIndex('tracked_agreements_legacy_schedule_uidx')
+      .on(table.legacyScheduleId)
+      .where(sql`${table.legacyScheduleId} IS NOT NULL`),
+    uniqueIndex('tracked_agreements_legacy_renewal_uidx')
+      .on(table.legacyRenewalId)
+      .where(sql`${table.legacyRenewalId} IS NOT NULL`),
+    index('tracked_agreements_renewal_date_idx').on(table.renewalDate),
+    index('tracked_agreements_switch_date_idx').on(table.switchDate),
+  ],
+);
+
+/**
  * Private runtime settings (plan data-model sketch): projection figures,
  * key-date lead, household labels. Values are stored as TEXT and typed by
  * the domain accessor (src/lib/records/settings.ts). Real figures live

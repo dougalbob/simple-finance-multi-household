@@ -5,7 +5,6 @@ import { ScheduleMonths } from './schedule-months';
 import { useState } from 'react';
 import { useActionState } from 'react';
 import {
-  addRenewalAction,
   addScheduleAction,
   cancelScheduleAction,
   restoreScheduleAction,
@@ -20,10 +19,8 @@ import { initialActionState, type ActionState } from '@/lib/action-state';
 const CANCEL_CONFIRM_STEPS = 2;
 
 /**
- * Phase 3 entry surfaces (SPEC §11, §22, §7.3): add/cancel schedules, add
- * renewals, and the configured projection figures. Mobile-first, visible
- * defaults, honest messages. The dense Recurring Payments page with the
- * month calendar lands in Phase 4 — this is the working mobile surface.
+ * Recurring payment schedules and the configured projection figures.
+ * Contracts and renewals are managed separately in the agreement register.
  */
 
 export interface RecurringPotOption {
@@ -62,16 +59,6 @@ export interface RecurringData {
   suppliers: Array<{ id: number; name: string }>;
   today: string;
   schedules: RecurringScheduleOption[];
-  renewals: Array<{
-    id: number;
-    label: string;
-    nextRenewalDate: string;
-    warnDaysBefore: number;
-    repeatsAnnually: boolean;
-    targetLabel: string | null;
-    supplierName: string | null;
-    advancedFrom: string | null;
-  }>;
   projectionSettings: {
     weeklyGroceriesPence: number | null;
     monthlyFuelPence: Array<{ vehicleId: number; label: string; pence: number | null }>;
@@ -264,8 +251,8 @@ export function AddScheduleForm({ data }: { data: RecurringData }) {
                   className={inputClass}
                 />
                 <span className="mt-1 block text-xs text-ink-muted">
-                  Creates the same supplier record used on Purchases, Renewals and Suppliers. Add
-                  contact details there afterwards.
+                  Creates the same supplier record used on Purchases, Contracts & Renewals, and
+                  Suppliers. Add contact details there afterwards.
                 </span>
               </div>
             ) : null}
@@ -292,13 +279,6 @@ export function AddScheduleForm({ data }: { data: RecurringData }) {
               </option>
             ))}
           </select>
-        </label>
-        <label className={labelClass}>
-          Contract end date (optional)
-          <input name="contractEndsOn" type="date" className={inputClass} />
-          <span className="mt-1 block text-xs text-ink-muted">
-            Informational — a reminder to shop around. Instances never stop automatically.
-          </span>
         </label>
         <label className={labelClass}>
           Active from
@@ -448,75 +428,6 @@ export function RestoreScheduleForm({ schedule }: { schedule: RecurringScheduleO
         </button>
         <FormMessage status={state.status} message={state.message} />
       </div>
-    </form>
-  );
-}
-
-export function AddRenewalForm({ data }: { data: RecurringData }) {
-  const [state, formAction, pending] = useActionState(addRenewalAction, initialActionState);
-  return (
-    <form action={formAction} className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className={labelClass}>
-          Label
-          <input
-            name="label"
-            required
-            maxLength={60}
-            placeholder="e.g. Vehicle A insurance — InsurerCo"
-            className={inputClass}
-          />
-        </label>
-        <label className={labelClass}>
-          Next renewal date
-          <input name="nextRenewalDate" type="date" required className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          Warn days before
-          <input
-            name="warnDaysBefore"
-            type="number"
-            min={0}
-            max={365}
-            defaultValue={21}
-            className={inputClass}
-          />
-        </label>
-        <label className={labelClass}>
-          Supplier (optional)
-          <select name="supplierId" className={inputClass}>
-            <option value="">None</option>
-            {data.suppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={labelClass}>
-          For
-          <select name="target" className={inputClass} defaultValue="household">
-            <option value="household">Household</option>
-            {data.vehicles.map((vehicle) => (
-              <option key={vehicle.id} value={`vehicle-${vehicle.id}`}>
-                Vehicle — {vehicle.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-sm text-ink-body">
-          <input name="repeatsAnnually" type="checkbox" defaultChecked />
-          Repeats annually (auto-advances, 29 Feb → 28 Feb)
-        </label>
-        <label className={labelClass}>
-          Notes (optional)
-          <input name="notes" maxLength={280} className={inputClass} />
-        </label>
-      </div>
-      <button type="submit" disabled={pending} className={buttonClass}>
-        {pending ? 'Saving…' : 'Add renewal'}
-      </button>
-      <FormMessage status={state.status} message={state.message} />
     </form>
   );
 }

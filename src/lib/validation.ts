@@ -270,7 +270,82 @@ export const restoreScheduleEntrySchema = z.object({
     .refine((v) => v === 'true', { message: 'Confirm the back-fill before restoring.' }),
 });
 
-/** Parsed shape for adding a renewal (SPEC §22.2). */
+/** Parsed shape for adding a tracked agreement (contract, policy or other renewal). */
+const trackedAgreementObjectSchema = z.object({
+  name: z.string().trim().min(1, 'Give the contract or policy a name').max(100),
+  type: z.enum(['insurance', 'service', 'other']),
+  supplierId: positiveIdSchema.nullable().default(null),
+  targetKind: z.enum(['household', 'person', 'vehicle']).default('household'),
+  targetId: positiveIdSchema.nullable().default(null),
+  autoRenew: z.enum(['yes', 'no', 'unknown']).nullable().default(null),
+  renewalDate: localDateSchema.nullable().default(null),
+  switchDate: localDateSchema.nullable().default(null),
+  renewalReminderLeadDays: z.number().int().min(0).max(365).nullable().default(null),
+  switchReminderLeadDays: z.number().int().min(0).max(365).nullable().default(null),
+  renewalRepeatsAnnually: z.boolean().default(false),
+  scheduleId: positiveIdSchema.nullable().default(null),
+  notes: nullableText(500, 'Notes'),
+});
+
+function refineTrackedAgreement(
+  value: z.infer<typeof trackedAgreementObjectSchema>,
+  context: z.RefinementCtx,
+): void {
+  if (value.type === 'insurance' && value.autoRenew === null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['autoRenew'],
+      message: 'Choose yes, no or not sure for provider auto-renewal.',
+    });
+  }
+  if (value.type !== 'insurance' && value.autoRenew !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['autoRenew'],
+      message: 'Provider auto-renewal status is only used for an insurance policy.',
+    });
+  }
+  if (value.renewalDate === null && value.renewalReminderLeadDays !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['renewalReminderLeadDays'],
+      message: 'Add a renewal date before setting its reminder.',
+    });
+  }
+  if (value.switchDate === null && value.switchReminderLeadDays !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['switchReminderLeadDays'],
+      message: 'Add a switch date before setting its reminder.',
+    });
+  }
+  if (value.targetKind === 'household' && value.targetId !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['targetId'],
+      message: 'A household agreement has no person or vehicle target.',
+    });
+  }
+  if (value.targetKind !== 'household' && value.targetId === null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['targetId'],
+      message: 'Choose the person or vehicle this agreement is for.',
+    });
+  }
+}
+
+export const trackedAgreementEntrySchema =
+  trackedAgreementObjectSchema.superRefine(refineTrackedAgreement);
+
+export const editTrackedAgreementEntrySchema = trackedAgreementObjectSchema
+  .extend({
+    agreementId: positiveIdSchema,
+    expectedVersion: positiveIdSchema,
+  })
+  .superRefine(refineTrackedAgreement);
+
+/** Parsed shape for adding a legacy renewal (SPEC §22.2 compatibility). */
 export const renewalEntrySchema = z.object({
   label: z
     .string()
