@@ -1,7 +1,6 @@
-# Unreleased — Purchases page session (2026-10-13)
+# v1.6.0 release — Purchases page session (2026-10-13)
 
-Four household requests on `/purchases`, implemented on the session branch, **not yet released**
-(current stable remains `v1.5.0` — do not bump the version for this work alone):
+Four household requests on `/purchases`, released as **`v1.6.0`** (stable; moves `latest`):
 
 1. **Show toggles, not "only" filters** (decision 205): Purchases / From schedule / Refunds / Voided,
    all on by default (voided records now show by default); unticking hides that kind. See decision 205
