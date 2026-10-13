@@ -38,8 +38,8 @@ export default async function HomePage() {
   const now = new Date();
   const today = toLocalDateString(now);
 
-  // Phase 3 money view — runs the lazy due pass (conversions + renewal
-  // advances) first, so every figure below reflects the converted state.
+  // Money view — runs the lazy due pass (conversions + eligible annual
+  // reminders) first, so every figure below reflects the current state.
   const money = getMoneySnapshot(db, now);
   const projection = getProjectionView(db, now);
   const dueThisWeek = getUpcomingCommitments(db, addDaysLocal(today, 7), now);

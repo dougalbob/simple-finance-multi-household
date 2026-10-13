@@ -5,6 +5,7 @@ A private finance app for multiple independent households, self-hosted by the pr
 > **Status (2026-10-13):** this is the independent multi-household edition and **`v1.7.0` is the current
 > stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.7.0.md`](docs/RELEASE_NOTES_v1.7.0.md).
 > It refines the Recurring page: Cancel sits inside Edit, double-confirm before cancelling, Restore a cancelled schedule with an explicit back-fill warning, the Active-from label trimmed, and alternating Schedules rows. The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
+> **Next candidate:** `v1.8.0-rc.1` carries the Contracts & Renewals redesign for acceptance. It is not stable and does not move `latest`; `v1.7.0` remains the stable default until a separate stable release is accepted.
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
 > restore, and registry backup and restore in `/admin` are implemented. Importing the existing household

@@ -4,13 +4,13 @@ import path from 'node:path';
 import { openDatabase } from '../src/lib/db/client';
 import { applyMigrations } from '../src/lib/db/migrate';
 import { findChildCategory } from '../src/lib/records/categories';
+import { createAgreement } from '../src/lib/records/agreements';
 import { createDebt, editDebt } from '../src/lib/records/debts';
 import { createExternalMovement } from '../src/lib/records/external-movements';
 import { createPerson, setPersonEmail } from '../src/lib/records/people';
 import { addCheckpoint, createPot } from '../src/lib/records/pots';
 import { createPurchase } from '../src/lib/records/purchases';
 import { createReceipt } from '../src/lib/records/receipts';
-import { createRenewal } from '../src/lib/records/renewals';
 import { createSchedule } from '../src/lib/records/schedules';
 import {
   setDefaultPurchasePotId,
@@ -352,9 +352,9 @@ function seed(): void {
     now,
   });
 
-  // Recurring commitments: a direct debit whose contract ends inside the
-  // warning window, a standing order, a monthly income schedule (the payday the
-  // projection plans to) and an annual insurance renewal.
+  // Recurring commitments: a direct debit linked to a service agreement with
+  // a fee-free switch date, a standing order, a monthly income schedule (the
+  // payday the projection plans to) and explicitly tracked insurance policies.
   //
   // The two monthly spending schedules are dated for opposite reasons, and both
   // are load-bearing for the specs:
@@ -373,7 +373,7 @@ function seed(): void {
   //   `recentMonthlyDueDay` lands it about a week behind today on every day of
   //   the year, and never on the 21st (see `tests/e2e-seed-dates.test.ts`).
   const dueDay = Math.min(Number(todayIso.slice(8, 10)) + 2, 28);
-  createSchedule(db, {
+  const broadbandSchedule = createSchedule(db, {
     name: 'BroadbandCo fibre',
     kind: 'dd',
     frequency: 'monthly',
@@ -385,6 +385,18 @@ function seed(): void {
     targetKind: 'household',
     contractEndsOn: localDate(today, 12),
     activeFrom: localDate(today, -180),
+    actor: ACTOR,
+    now,
+  });
+  createAgreement(db, {
+    name: 'BroadbandCo fibre',
+    type: 'service',
+    supplierId: broadbandCo.id,
+    targetKind: 'household',
+    switchDate: localDate(today, 12),
+    switchReminderLeadDays: 21,
+    scheduleId: broadbandSchedule.schedule.id,
+    notes: 'Compare prices before the fixed term ends.',
     actor: ACTOR,
     now,
   });
@@ -447,15 +459,34 @@ function seed(): void {
     now,
     patch: { expectedInflow: { amountPence: 100000, dayOfMonth: 12 } },
   });
-  createRenewal(db, {
-    label: 'Vehicle A insurance',
+  createAgreement(db, {
+    name: 'Vehicle A insurance',
+    type: 'insurance',
     supplierId: insurerCo.id,
     targetKind: 'vehicle',
     targetId: vehicleA.id,
-    nextRenewalDate: localDate(today, 17),
-    warnDaysBefore: 21,
-    repeatsAnnually: true,
+    autoRenew: 'yes',
+    renewalDate: localDate(today, 17),
+    renewalReminderLeadDays: 21,
+    renewalRepeatsAnnually: true,
     notes: 'Compare the comparison sites before renewing.',
+    actor: ACTOR,
+    now,
+  });
+  // Explicitly model a second policy that will not auto-renew. Insurance stays
+  // in its own group regardless of provider behaviour, and this date must not
+  // silently advance once overdue.
+  createAgreement(db, {
+    name: 'Vehicle B insurance',
+    type: 'insurance',
+    supplierId: insurerCo.id,
+    targetKind: 'vehicle',
+    targetId: vehicleB.id,
+    autoRenew: 'no',
+    renewalDate: localDate(today, 30),
+    renewalReminderLeadDays: 21,
+    renewalRepeatsAnnually: true,
+    notes: 'Arrange replacement cover before expiry.',
     actor: ACTOR,
     now,
   });

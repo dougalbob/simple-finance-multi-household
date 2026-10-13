@@ -54,8 +54,8 @@ with its inputs inspectable.
 - Dense desktop overview plus dedicated menu pages; mobile focused on quick entry.
 - Supplier contact cards (phone, email, website, label→value reference pairs such as policy numbers) and a
   per-supplier interaction log for calls/emails (§21).
-- Fixed-term **contract end dates** on DD/SO schedules and **renewal dates** (house/car insurance etc.) with
-  configurable ahead-of-time warnings, default 21 days (§22).
+- A tracked **Contracts & Renewals** register for insurance policies, service agreements and other review
+  dates, with independent renewal/switch reminders and optional links to recurring schedules (§22).
 - **Receipt/invoice attachments** on purchases: .png/.jpg/.pdf uploads from desktop, camera capture on
   mobile, retroactive attachment (§23).
 - One fixed Unraid data root — `/mnt/user/appdata/simple-finance-multi-household` — with a small system
@@ -629,8 +629,9 @@ world of §10.1 cannot represent these, so they get their own honest boxes:
 A schedule carries: name (fictional example: "Energy Co direct debit"), kind (direct debit | standing order |
 expected receipt), amount (**fixed**, user-maintained), **frequency (monthly | annual)**, due day-of-month,
 pot, category (child) + target (e.g. Vehicle Running/Insurance → Vehicle A; Utilities/Energy → household),
-an optional **contract end date** (§22.1 — informational + alert only; instances never auto-stop because of
-it), active from/until.
+active from/until. Provider terms and review dates belong to a separate tracked agreement (§22), optionally
+linked to this schedule. Legacy `contract_ends_on` values are migrated as fee-free switch dates; the source
+field remains for compatibility, but new schedules do not create agreement dates.
 
 **Monthly schedules may exclude selected calendar months each year** (decision 163). For example,
 February and March can have no payment while April through January remain ordinary monthly payments.
@@ -784,8 +785,8 @@ query instead of a duplicated tree per car.
   would sit behind Cloudflare Access. The manifest and icon paths are bypassed at the Cloudflare Access
   level (path-scoped Bypass → Everyone policy); every other URL remains behind the email-policy app.
   SPEC §14's online-only rule stands unchanged; the household confirmed they do not want offline access.
-- **No notifications/reminders** (agreed). Warnings live inside the app. An optional email alert
-  channel for renewals/contract ends is a recorded **v2 roadmap item** (§22.3) — not a v1 blocker.
+- **No external notifications** (agreed). Key-date prompts live inside the app (§22.3). An optional email
+  alert channel is a recorded **v2 roadmap item** — not a v1 blocker.
 
 ## 15. UX
 
@@ -967,14 +968,14 @@ Menu pages:
 | **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; payday projection panel retaining its date, tier, liquid funds, day-to-day total, commitments and receipts, plus the worst-pot bills-only transfer nudge (§7.5), but **no expandable forecast sections or day-by-day table** (v0.37.0 follow-up, decision 187). Horizon owns the dated shops/fills, expected-support list and day-by-day detail; the panel links there, opening on the day before payday. Quick Entry/Till stays visible beside the projection. Due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
 | **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); the four record-kind boxes — **Purchases** (anything not from a schedule), **From schedule**, **Refunds**, **Voided** — are show toggles, all on by default so the full history including voided records is shown, and unticking one hides that kind (a record with two tags is hidden if either is off; decision 205); rows alternate plain/tinted (`bg-canvas`) so neighbouring records are easy to tell apart; the supplier name links to that supplier's expanded card on Suppliers (decision 149's link); inline editing; the line editor puts **Spent for** and **Amount** on its first row and **Category** full-width on the second (plus **Which** when a person/vehicle is chosen), with slightly shorter controls; refund/void/correct with audit trail visible; split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
 | **All Transactions** | Read-only activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. No add, edit or void on the page (§15.3). |
-| **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance, state, contract end date where set); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below; renewals sit under the schedules (beside projection). On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row. |
+| **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance and state); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. Provider agreements and their review dates live on Contracts & Renewals, with an optional link from a schedule. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below and a link card to Contracts & Renewals beside projection. On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row. |
 | **Horizon** | "How far the money would go" (§7.6): pick a date up to 400 days ahead (opens on the day before the next scheduled income; a date change applies itself, v0.13.0), scope by pot (all selected by default) and toggle day-to-day; the free-to-spend headline, the always-shown lowest point with its date and tier, and detail blocks for the commitments, expected money in (debts' expected support flagged `expected`), the projected day-to-day events (dated shops/fills, v0.6.0) and the day-by-day table. Same engine as the payday projection; laptop-shaped by the household's choice. |
 | **Income** | Money coming in: the scheduled income (salary) that converts itself, editable in place from the next instance onward; one-off income recorded by hand with an optional source; and one list of everything received — scheduled and one-off together, with inline correction, void and the retained history. Income is desktop-shaped by the household's choice: it is not a till-side task, so nothing here is squeezed into the mobile quick-entry panel. |
 | **Suppliers** | Supplier list + detail: contact card (phone, email, website, address, label→value reference pairs such as policy numbers, notes), interaction log with "+ Create Interaction", linked purchases (§21), including removing a receipt from a linked purchase (§23.4). Tap-to-call on mobile. |
-| **Contracts & Renewals** | Key dates: renewal records with per-item warning leads and annual advance; schedules' contract end dates; everything inside its warning window first, sorted by date; history of past renewals (§22). |
+| **Contracts & Renewals** | The agreement register groups explicit insurance policies (regardless of provider auto-renew status), service contracts and other reminders. It owns renewal/review and separate fee-free switch dates, independent per-date in-app leads, provider auto-renew status for insurance, notes and optional recurring-schedule links. It also retains credit-card payment reviews and supplier follow-ups. |
 | **Accounts, Pots & Checkpoints** (was **Accounts & Pots**; renamed v0.28.0) | Leads with the **Record a balance checkpoint** card, then **Add a pot** (both v0.28.0, decision 178 — recording is the page's most frequent job), then a card per pot: reported figure, estimate, owner (decision 178), checkpoint timeline, edit form; **cash pot cards show no overdraft or warning threshold** (decision 178); transfer records; staleness of every pot; overdraft context (limit, threshold) for the Main account; informal debts with derived balances and an optional expected-support plan (amount, day-of-month, until date — editable forward-looking, v0.7.0); borrow/repay/swap/other entry and history; archiving for empty pots. |
 | **Insights** | §16 panels. |
-| **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; default warning lead for renewals/contract ends; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **"Signs in as"** per person (the verified identity assigned to that household in the app registry; drives the till's Paid by and Fuel vehicle defaults; audited and unique across household membership); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
+| **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; legacy default warning leads for standalone renewal rows/unlinked schedule ends; agreement reminders have per-date leads; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **"Signs in as"** per person (the verified identity assigned to that household in the app registry; drives the till's Paid by and Fuel vehicle defaults; audited and unique across household membership); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
 
 **Calendar (agreed: read-only month view).** A month grid on Recurring Payments showing due DD/SO instances and
 expected receipts — another view of the same schedule data, never a second database. Clicking a day shows that
@@ -1445,22 +1446,19 @@ Energy). If projected day-to-day spending also comes from Main account, the guid
 The household warning and the transfer nudge are separate signals with separate remedies; the pot watch remains
 bills-only.
 
-### E9 — Contract ends, renewals and key-date alerts (fictional)
+### E9 — Tracked agreements and key-date alerts (fictional)
 
-- **Renewal:** "Vehicle A insurance — InsurerCo", renewal date 12 October, warning lead 21 days (default),
-  repeats annually, target Vehicle A, supplier InsurerCo (contact card holds the policy-number reference and
-  phone number). From **21 September** the Overview panel shows: *"Vehicle A insurance renews in 21 days —
-  check quotes before it auto-renews"* — one tap to InsurerCo's contact card (tap-to-call on mobile) and one
-  more to "+ Create Interaction" to log the call while it's fresh. On 12 October the renewal advances to
-  12 October next year automatically (visible, editable; 29 February handling per plan OQ13). If the premium
-  is paid by annual lump, that is simply a schedule with `frequency = annual` converting on the day (§11.2) —
-  the alert and the money are separate, complementary things and never double-counted.
-- **Contract end:** the Broadband DD (£42.00 monthly) carries `contract_ends_on = 3 November`. From
-  13 October (21-day lead, configurable) the panel shows: *"Broadband contract ends 3 November — time to
-  shop around."* **The DD instances never auto-stop**: the schedule keeps forecasting £42.00 until the users
-  edit or cancel it after renegotiating, because UK fixed-term deals typically roll onto monthly and the app
-  never assumes a bank instruction changed. A past end date displays as "rolled / awaiting review" — a quiet,
-  honest state, not a silent deletion.
+- **Insurance policy:** "Vehicle A insurance — InsurerCo", explicit kind `insurance`, target Vehicle A,
+  provider auto-renew `yes`, renewal date 12 October, 21-day reminder lead, annual app reminder enabled.
+  From **21 September** the Overview and Tasks surfaces say the policy renews in 21 days and link directly
+  to its agreement card. On 12 October the date may advance one year (visible and audited) because provider
+  auto-renew is explicitly yes. If the provider status were `no` or `unknown`, the date would stay on 12
+  October for review until the household updated it. An annual premium is still a separate annual schedule.
+- **Service agreement:** BroadbandCo fibre has a fee-free switch date of 3 November and an optional link to
+  its £42 monthly direct-debit schedule. From 13 October its alert says it can be switched without an exit
+  fee in 21 days. The schedule keeps forecasting and the bank instruction remains untouched after that date.
+- **Grouping is explicit:** Vehicle B insurance with provider auto-renew `no` remains beside Vehicle A in
+  Insurance policies; user-defined spending categories never decide whether something is insurance.
 
 ### E10 — Cash handover between the two people (transfer acceptance scenario)
 
@@ -1735,47 +1733,59 @@ split stays one click away on Purchases. The card shows the **child** category o
 `Utilities / Mobile Phones`): the cards sit two-to-a-row on a laptop and full width on a phone, and the
 supplier already implies the parent. Voided purchases keep their struck-through styling.
 
-## 22. Contract ends, renewals and key-date alerts
+## 22. Contracts, renewals and key-date alerts
 
-Two kinds of dates the household must not miss, united in one Overview panel and one page (§15.2), but
-modelled separately because they behave differently.
+Contracts & Renewals is the authoritative register for provider terms and review dates. Recurring Payments
+remains the source of truth for expected money movement. A tracked agreement may exist without a schedule;
+a schedule may be linked to at most one agreement. The link is navigational and descriptive — it never
+changes a bank instruction or makes a payment stop automatically.
 
-### 22.1 Fixed-term contract end dates (on schedules)
+### 22.1 Tracked agreements
 
-Any DD/SO schedule may carry an optional **contract end date**. Semantics:
+Each agreement carries a name, explicit kind (`insurance`, `service` or `other`), optional supplier, household /
+person / vehicle target, notes, version and audit history. Insurance is classified explicitly by this kind,
+never inferred from household-defined category names. Insurance policies stay grouped together whether the
+provider auto-renews them or not. Insurance also records provider auto-renew as `yes`, `no` or `unknown`; the
+field is not a substitute for the app's reminder settings.
 
-- **Informational plus alert — never an auto-stop.** As the date approaches (configurable lead, default
-  21 days) the panel shows "time to shop around". Instances keep generating and forecasting past the end
-  date until the users edit or cancel the schedule, because fixed-term deals commonly roll onto monthly and
-  the app never assumes a bank instruction changed.
-- A past end date displays as **"rolled / awaiting review"** — a quiet, honest state.
+A tracked agreement may link to one active recurring direct-debit or standing-order schedule. The schedule
+continues to own amount, cadence, category and converted payment history. Both pages link to the other record.
+Legacy renewal rows and schedule `contract_ends_on` values are backfilled into the register without deleting
+the source rows. Source ids preserve compatibility and allow the alert engine to avoid duplicate legacy alerts.
+The legacy renewal APIs and standalone records remain available for older callers.
 
-### 22.2 Renewal dates (their own records)
+### 22.2 Renewal and switch dates; annual reminder behaviour
 
-A **renewal** carries: label, optional supplier link, optional target (a vehicle or household), next renewal
-date, **warning lead in days (default 21, per item)**, repeats-annually flag, notes. Intended for house/car
-insurance and anything else that auto-renews. Renewals are deliberately not supplier-level fields: one
-insurer can hold two vehicle policies with different renewal dates. When a repeating renewal date passes, it
-advances a year automatically (visible, editable; 29 February handling per plan OQ13). A renewal is an alert
-plus context; where the renewal is also a payment (annual premium), that is a schedule with
-`frequency = annual` (§11) — reminder and money stay separate and complementary.
+An agreement may carry two independent dates:
+
+- **Renewal / review date** — when to check the price, arrange replacement cover or review terms.
+- **Fee-free switch date** — the earliest date the household can switch or cancel without an exit fee. It is
+  not a payment stop date; the service and its schedule may continue beyond it.
+
+Each date has its own optional in-app reminder lead (default 21 days when enabled). The app never sends an
+external message. The annual app reminder cycle is separate from the provider's auto-renew setting. A policy
+can be marked as having an annual date, but the app advances that date only when provider auto-renew is
+explicitly `yes`. A `no` or `unknown` policy date remains due/past for review until a household member updates
+it after confirming cover; the app never silently assumes a renewal occurred. On an eligible advance the old
+date is visible in the agreement and audit history, and 29 February clamps to 28 February in non-leap years.
+
+Older standalone renewal records retain their legacy behaviour and API. Legacy schedule end dates are
+migrated as switch dates with their own 21-day in-app lead. Unlinked legacy dates can still use the old global
+warning defaults in Settings; modern agreement dates use their own leads.
 
 ### 22.3 Where alerts appear — and the delivery channel
 
-- **Overview panel "Contracts & renewals":** every item inside its warning window, soonest first, each one
-  tap from the supplier contact card and the related schedule/renewal. Credit-card payment-review and
-  promotional-end dates are also included and link to the card pot (§24).
-- **Contracts & Renewals page:** the full list, leads, history, card payment/promotion reviews (§24), and
-  **"Follow-ups you promised"** — every open task about a supplier (§25), overdue first, each naming and
-  linking its supplier card. Until v0.25.0 this list read the interaction log's follow-up dates filtered to
-  `>= today`, so a promise vanished the day after its date; an overdue one now leads the list until ticked.
-  Every alert in its window is also listed under "The app has noticed" on the Tasks page (§25.4).
-- **Channel: in-app for v1 — confirmed by the product owner 2026-09-20**, consistent with decision 19 and
-  with the users' 4–5-day checkpoint cadence (a 21-day window guarantees several sightings). The in-app
-  surface is the **bell** in the header (§26): overdue/today tasks (filtered by who they are for, §25.1)
-  and today/past/rolled key dates. An optional **email alert channel is a recorded v2 roadmap item** (SMTP
-  configuration, delivery-failure handling, tested delivery — scoped separately when reached). It is
-  deliberately not a v1 blocker.
+- **Overview key dates and Tasks / "The app has noticed":** tracked agreement renewal and switch dates,
+  standalone legacy reminders, any unlinked legacy schedule end dates, and credit-card payment/promotion
+  dates. Alerts inside their warning window are sorted by date; a past fee-free switch date reads available
+  now, while a past policy date stays a review prompt. Each item links to its agreement, legacy row, schedule
+  or card. Linked schedule end dates are not emitted a second time.
+- **Contracts & Renewals page:** the grouped agreement register has visual priority, followed by credit-card
+  payment reviews and **"Follow-ups you promised"** — every open supplier task (§25), overdue first, naming
+  and linking its supplier card. Overdue supplier follow-ups do not disappear when their date passes.
+- **Channel: in-app for v1**, consistent with decision 19 and the users' 4–5-day checkpoint cadence. An
+  optional **email alert channel is a recorded v2 roadmap item** (SMTP configuration, delivery-failure
+  handling and tested delivery — scoped separately when reached); it is deliberately not a v1 blocker.
 
 ## 23. Receipt and invoice attachments
 
@@ -1972,14 +1982,14 @@ task.
 
 Links: a supplier opens its card through `supplierCardHref()` (§21.2a — the one resolver); a purchase opens
 Purchases filtered to its day with the row in view (voided ones with "voided only"); a vehicle opens its
-running-costs card on Insights; a renewal its row on Contracts & Renewals; a contract end its schedule on
-Recurring; a card date its pot on Accounts, Pots & Checkpoints.
+running-costs card on Insights; a tracked agreement opens its card on Contracts & Renewals; an unlinked
+legacy contract end opens its schedule on Recurring; a card date opens its pot on Accounts, Pots & Checkpoints.
 
 ### 25.6 What tasks are not
 
-- **Not recurring.** Annual things are already covered: renewals repeat annually and carry their own lead
-  (§22.2), and contract ends and card dates raise key-date alerts (§22–§24). A repeating chore list is out
-  of scope.
+- **Not a chore recurrence system.** Annual policy reminders and fee-free switch dates are agreement data
+  (§22.2); only a policy whose provider auto-renews explicitly may advance itself. Card dates also raise
+  key-date alerts (§24). A repeating chore list is out of scope.
 - **Not external notifications.** Nothing is emailed, pushed or shown by the browser (decision 19; §22.3's
   channel). The bell (§26) is in-app only.
 - **Never a money movement.** A task moves no money and changes no balance, estimate or projection.
@@ -2001,8 +2011,8 @@ by both people in its default, but filtered by who a task is for (§25.1, §26.2
   disc invoice on Mercedes" only for one of us). A task assigned to the other person does **not** count
   for me, and does not appear in my bell lists; it stays visible to both on the Tasks page (SPEC §3 —
   full mutual visibility).
-- **Key-date alerts** in state **today**, **past** or **rolled-awaiting-review** (renewals, contract ends
-  and card dates — §22, §24). These are household-wide.
+- **Key-date alerts** in state **today**, **past**, **available now** or **rolled-awaiting-review** (agreement
+  dates, legacy contract ends and card dates — §22, §24). These are household-wide.
 - **Not counted:** tasks coming up (due tomorrow or later), tasks with no due date, and key dates merely
   inside their warning window (`in-window`). Otherwise the badge would stay lit for three weeks and stop
   meaning anything.

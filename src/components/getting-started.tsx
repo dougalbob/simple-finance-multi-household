@@ -208,7 +208,7 @@ const REVIEW_RHYTHM: Array<{
     id: 'recurring',
     when: 'Weekly',
     where: { href: '/recurring', label: 'Recurring' },
-    what: 'what is coming, the month calendar, and the contract ends and renewals you promised to watch.',
+    what: 'what is coming and the month calendar; review provider terms on Contracts & Renewals.',
   },
   {
     id: 'insights',
@@ -352,7 +352,9 @@ function StepAction({ id, forms }: { id: SetupStepId; forms: SetupFormData }) {
             </StepLink>
           </p>
           <p>
-            <StepLink href="/recurring">Add a renewal on Recurring →</StepLink>
+            <StepLink href="/contracts">
+              Add a policy or contract on Contracts &amp; Renewals →
+            </StepLink>
           </p>
         </div>
       );

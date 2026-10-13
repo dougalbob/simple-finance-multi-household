@@ -34,12 +34,12 @@ test.describe('tasks', () => {
     );
 
     // "The app has noticed" is separate and has nothing to tick: the seeded
-    // renewal is a link to its row on Contracts & Renewals.
+    // policy date links directly to its agreement card.
     const noticed = page.locator('section[aria-labelledby="noticed-heading"]');
     const renewal = noticed.locator('li', { hasText: /Vehicle A insurance renews in \d+ days/ });
-    await expect(renewal.getByRole('link', { name: /Open the renewal/ })).toHaveAttribute(
+    await expect(renewal.getByRole('link', { name: /Open contract or policy/ })).toHaveAttribute(
       'href',
-      /\/contracts#renewal-\d+/,
+      /\/contracts#agreement-\d+/,
     );
     await expect(noticed.getByRole('checkbox')).toHaveCount(0);
 

@@ -415,7 +415,8 @@ function KeyDatesSection({
       <h2 className="mb-2 text-lg font-semibold">Key dates</h2>
       {items.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          No renewals or contract ends inside their warning windows right now.
+          No policy renewals, fee-free switch dates or contract reviews inside their reminder
+          windows right now.
         </p>
       ) : (
         <ul className="divide-y divide-border-hairline">

@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
-  AddRenewalForm,
   AddScheduleForm,
   CancelScheduleForm,
   ProjectionSettingsForm,
@@ -9,7 +8,7 @@ import {
   type RecurringData,
 } from '@/components/recurring';
 import { ScrollHashIntoView } from '@/components/scroll-hash';
-import { RenewalEditForm, ScheduleEditForm } from '@/components/schedule-forms';
+import { ScheduleEditForm } from '@/components/schedule-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import { categoryTree } from '@/lib/records/categories';
@@ -17,7 +16,7 @@ import { addDaysLocal, daysInMonth } from '@/lib/records/dates';
 import { startOfWeekLocal } from '@/lib/records/insights';
 import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
-import { listRenewals } from '@/lib/records/renewals';
+import { listAgreements } from '@/lib/records/agreements';
 import { listInstances, listSchedules } from '@/lib/records/schedules';
 import { getMonthlyFuelByVehicle, getWeeklyGroceriesPence } from '@/lib/records/settings';
 import { supplierCardHref } from '@/lib/records/supplier-focus';
@@ -153,7 +152,12 @@ export default async function RecurringPage({
   const days = buildCalendar(ref, today, monthInstances);
 
   const schedules = listSchedules(db, now);
-  const renewals = listRenewals(db);
+  const agreements = listAgreements(db);
+  const agreementByScheduleId = new Map(
+    agreements.flatMap((agreement) =>
+      agreement.scheduleId === null ? [] : [[agreement.scheduleId, agreement] as const],
+    ),
+  );
   const pots = listPots(db);
   const people = listPeople(db);
   const vehicles = listVehicles(db);
@@ -191,22 +195,6 @@ export default async function RecurringPage({
           ? null
           : (suppliers.find((s) => s.id === schedule.supplierId)?.name ?? null),
     })),
-    renewals: renewals.map((renewal) => ({
-      id: renewal.id,
-      label: renewal.label,
-      nextRenewalDate: renewal.nextRenewalDate,
-      warnDaysBefore: renewal.warnDaysBefore,
-      repeatsAnnually: renewal.repeatsAnnually,
-      targetLabel:
-        renewal.targetKind === 'vehicle' && renewal.targetId !== null
-          ? (vehicles.find((vehicle) => vehicle.id === renewal.targetId)?.label ?? null)
-          : null,
-      supplierName:
-        renewal.supplierId === null
-          ? null
-          : (suppliers.find((s) => s.id === renewal.supplierId)?.name ?? null),
-      advancedFrom: renewal.advancedFrom,
-    })),
     projectionSettings: {
       weeklyGroceriesPence: getWeeklyGroceriesPence(db),
       monthlyFuelPence: vehicles.map((vehicle) => ({
@@ -226,14 +214,18 @@ export default async function RecurringPage({
           Recurring payments
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Schedules, renewals &amp; the month at a glance
+          Recurring payments &amp; the month at a glance
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
           Schedules convert automatically at local midnight on their due date. This calendar is
           <span className="font-semibold"> read-only planning aid</span>: moving a date here (or
           editing a schedule) changes the <em>records</em> the app makes — it never moves your bank
           instructions. Direct debits and standing orders are agreed with your bank, and the app
-          does not touch them.
+          does not touch them. Provider terms and review dates live on{' '}
+          <Link href="/contracts" className="sf-link">
+            Contracts &amp; Renewals
+          </Link>
+          .
         </p>
       </header>
 
@@ -308,100 +300,138 @@ export default async function RecurringPage({
               data-schedule-scroller
               className="mb-3 divide-y divide-border-hairline lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-y-contain"
             >
-              {schedules.map(({ schedule, nextDueDate }, rowIndex) => (
-                <li
-                  key={schedule.id}
-                  id={`schedule-${schedule.id}`}
-                  className={`py-2.5 ${rowIndex % 2 === 1 ? 'bg-canvas' : ''}`}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm">
-                      <span
-                        className={
-                          schedule.cancelledAt !== null
-                            ? 'font-medium text-ink-faint line-through'
-                            : 'font-medium text-ink-emphasis'
-                        }
-                      >
-                        {schedule.name}
-                      </span>{' '}
-                      {schedule.cancelledAt !== null ? (
-                        <span className="rounded bg-danger-50 px-1.5 py-0.5 text-xs font-medium text-danger">
-                          Cancelled
+              {schedules.map(({ schedule, nextDueDate }, rowIndex) => {
+                const linkedAgreement = agreementByScheduleId.get(schedule.id);
+                return (
+                  <li
+                    key={schedule.id}
+                    id={`schedule-${schedule.id}`}
+                    className={`py-2.5 ${rowIndex % 2 === 1 ? 'bg-canvas' : ''}`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm">
+                        <span
+                          className={
+                            schedule.cancelledAt !== null
+                              ? 'font-medium text-ink-faint line-through'
+                              : 'font-medium text-ink-emphasis'
+                          }
+                        >
+                          {schedule.name}
+                        </span>{' '}
+                        {schedule.cancelledAt !== null ? (
+                          <span className="rounded bg-danger-50 px-1.5 py-0.5 text-xs font-medium text-danger">
+                            Cancelled
+                          </span>
+                        ) : null}{' '}
+                        <span className="text-xs text-ink-muted">
+                          {schedule.kind === 'receipt'
+                            ? 'income'
+                            : schedule.kind === 'dd'
+                              ? 'direct debit'
+                              : 'standing order'}
+                          {schedule.frequency === 'annual'
+                            ? ` · every year, ${MONTH_NAMES[(schedule.dueMonth ?? 1) - 1]}`
+                            : ` · monthly`}{' '}
+                          · {potNames.get(schedule.potId) ?? 'Pot'}
+                          {schedule.supplierId !== null
+                            ? ` · ${suppliers.find((s) => s.id === schedule.supplierId)?.name ?? 'supplier'}`
+                            : ''}
                         </span>
-                      ) : null}{' '}
-                      <span className="text-xs text-ink-muted">
-                        {schedule.kind === 'receipt'
-                          ? 'income'
-                          : schedule.kind === 'dd'
-                            ? 'direct debit'
-                            : 'standing order'}
-                        {schedule.frequency === 'annual'
-                          ? ` · every year, ${MONTH_NAMES[(schedule.dueMonth ?? 1) - 1]}`
-                          : ` · monthly`}{' '}
-                        · {potNames.get(schedule.potId) ?? 'Pot'}
-                        {schedule.supplierId !== null
-                          ? ` · ${suppliers.find((s) => s.id === schedule.supplierId)?.name ?? 'supplier'}`
-                          : ''}
                       </span>
-                    </span>
-                    <span className="text-sm font-semibold tabular-nums">
-                      {schedule.kind === 'receipt' ? '+' : '−'}
-                      {formatPence(schedule.amountPence)}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-ink-muted">
-                    {schedule.cancelledAt !== null ? (
-                      <>Cancelled from {schedule.cancelledEffectiveOn} — history kept</>
-                    ) : (
-                      <>Next due: {nextDueDate ?? '—'}</>
-                    )}
-                    {` · active from ${schedule.activeFrom}`}
-                    {schedule.contractEndsOn !== null
-                      ? ` · contract ends ${schedule.contractEndsOn} (informational)`
-                      : ''}
-                    {schedule.supplierId !== null ? (
-                      <>
-                        {' · '}
-                        <Link href={supplierCardHref(schedule.supplierId)} className="sf-link">
-                          Supplier card
-                        </Link>
-                      </>
-                    ) : null}
-                  </p>
-                  <details className="mt-1.5">
-                    <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
-                      {schedule.cancelledAt !== null ? 'Schedule options' : 'Edit schedule'}
-                    </summary>
-                    <div className="mt-2 max-w-2xl">
-                      {schedule.cancelledAt === null ? (
+                      <span className="text-sm font-semibold tabular-nums">
+                        {schedule.kind === 'receipt' ? '+' : '−'}
+                        {formatPence(schedule.amountPence)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-ink-muted">
+                      {schedule.cancelledAt !== null ? (
+                        <>Cancelled from {schedule.cancelledEffectiveOn} — history kept</>
+                      ) : (
+                        <>Next due: {nextDueDate ?? '—'}</>
+                      )}
+                      {` · active from ${schedule.activeFrom}`}
+                      {linkedAgreement !== undefined ? (
                         <>
-                          <ScheduleEditForm
-                            scheduleId={schedule.id}
-                            version={schedule.version}
-                            name={schedule.name}
-                            kind={schedule.kind}
-                            frequency={schedule.frequency}
-                            dueDayOfMonth={schedule.dueDayOfMonth}
-                            dueMonth={schedule.dueMonth}
-                            excludedMonths={schedule.excludedMonths}
-                            amountPence={schedule.amountPence}
-                            contractEndsOn={schedule.contractEndsOn}
-                            activeFrom={schedule.activeFrom}
-                            activeUntil={schedule.activeUntil}
-                            potId={schedule.potId}
-                            potOptions={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-                            categoryId={schedule.categoryId}
-                            categoryOptions={categoryOptions}
-                            supplierId={schedule.supplierId}
-                            supplierOptions={suppliers.map((s) => ({ id: s.id, label: s.name }))}
-                            targetKind={schedule.targetKind}
-                            targetId={schedule.targetId}
-                            people={recurringData.people}
-                            vehicles={recurringData.vehicles}
-                          />
-                          <hr className="my-3 border-border-hairline" />
-                          <CancelScheduleForm
+                          {' · '}
+                          <Link
+                            href={`/contracts#agreement-${linkedAgreement.id}`}
+                            className="sf-link"
+                          >
+                            Agreement: {linkedAgreement.name}
+                          </Link>
+                        </>
+                      ) : null}
+                      {schedule.supplierId !== null ? (
+                        <>
+                          {' · '}
+                          <Link href={supplierCardHref(schedule.supplierId)} className="sf-link">
+                            Supplier card
+                          </Link>
+                        </>
+                      ) : null}
+                    </p>
+                    <details className="mt-1.5">
+                      <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
+                        {schedule.cancelledAt !== null ? 'Schedule options' : 'Edit schedule'}
+                      </summary>
+                      <div className="mt-2 max-w-2xl">
+                        {schedule.cancelledAt === null ? (
+                          <>
+                            <ScheduleEditForm
+                              scheduleId={schedule.id}
+                              version={schedule.version}
+                              name={schedule.name}
+                              kind={schedule.kind}
+                              frequency={schedule.frequency}
+                              dueDayOfMonth={schedule.dueDayOfMonth}
+                              dueMonth={schedule.dueMonth}
+                              excludedMonths={schedule.excludedMonths}
+                              amountPence={schedule.amountPence}
+                              contractEndsOn={schedule.contractEndsOn}
+                              activeFrom={schedule.activeFrom}
+                              activeUntil={schedule.activeUntil}
+                              potId={schedule.potId}
+                              potOptions={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
+                              categoryId={schedule.categoryId}
+                              categoryOptions={categoryOptions}
+                              supplierId={schedule.supplierId}
+                              supplierOptions={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+                              targetKind={schedule.targetKind}
+                              targetId={schedule.targetId}
+                              people={recurringData.people}
+                              vehicles={recurringData.vehicles}
+                            />
+                            <hr className="my-3 border-border-hairline" />
+                            <CancelScheduleForm
+                              schedule={
+                                recurringData.schedules.find((entry) => entry.id === schedule.id) ??
+                                ({
+                                  id: schedule.id,
+                                  name: schedule.name,
+                                  kind: schedule.kind,
+                                  frequency: schedule.frequency,
+                                  amountPence: schedule.amountPence,
+                                  dueDayOfMonth: schedule.dueDayOfMonth,
+                                  dueMonth: schedule.dueMonth,
+                                  potLabel: potNames.get(schedule.potId) ?? 'Pot',
+                                  nextDueDate,
+                                  version: schedule.version,
+                                  cancelledEffectiveOn: schedule.cancelledEffectiveOn,
+                                  contractEndsOn: schedule.contractEndsOn,
+                                  supplierId: schedule.supplierId,
+                                  supplierName:
+                                    schedule.supplierId === null
+                                      ? null
+                                      : (suppliers.find((s) => s.id === schedule.supplierId)
+                                          ?.name ?? null),
+                                } as RecurringData['schedules'][number])
+                              }
+                              today={today}
+                            />
+                          </>
+                        ) : (
+                          <RestoreScheduleForm
                             schedule={
                               recurringData.schedules.find((entry) => entry.id === schedule.id) ??
                               ({
@@ -425,40 +455,13 @@ export default async function RecurringPage({
                                       null),
                               } as RecurringData['schedules'][number])
                             }
-                            today={today}
                           />
-                        </>
-                      ) : (
-                        <RestoreScheduleForm
-                          schedule={
-                            recurringData.schedules.find((entry) => entry.id === schedule.id) ??
-                            ({
-                              id: schedule.id,
-                              name: schedule.name,
-                              kind: schedule.kind,
-                              frequency: schedule.frequency,
-                              amountPence: schedule.amountPence,
-                              dueDayOfMonth: schedule.dueDayOfMonth,
-                              dueMonth: schedule.dueMonth,
-                              potLabel: potNames.get(schedule.potId) ?? 'Pot',
-                              nextDueDate,
-                              version: schedule.version,
-                              cancelledEffectiveOn: schedule.cancelledEffectiveOn,
-                              contractEndsOn: schedule.contractEndsOn,
-                              supplierId: schedule.supplierId,
-                              supplierName:
-                                schedule.supplierId === null
-                                  ? null
-                                  : (suppliers.find((s) => s.id === schedule.supplierId)?.name ??
-                                    null),
-                            } as RecurringData['schedules'][number])
-                          }
-                        />
-                      )}
-                    </div>
-                  </details>
-                </li>
-              ))}
+                        )}
+                      </div>
+                    </details>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <details className="shrink-0 lg:max-h-[45%] lg:overflow-y-auto lg:border-t lg:border-border-hairline lg:pt-3">
@@ -472,79 +475,22 @@ export default async function RecurringPage({
         </section>
 
         <section
-          aria-labelledby="renewals-heading"
+          aria-labelledby="agreements-heading"
           className="order-3 rounded-xl border border-border bg-surface p-4 shadow-sm lg:order-4 lg:col-start-2 lg:row-start-2"
         >
-          <h2 id="renewals-heading" className="mb-2 text-lg font-semibold">
-            Renewals
+          <h2 id="agreements-heading" className="mb-2 text-lg font-semibold">
+            Contracts &amp; policies
           </h2>
-          <p className="mb-3 text-xs text-ink-muted">
-            Alerts with context — if the money also moves (an annual premium), that is a separate
-            annual schedule; the two never double-count.
+          <p className="mb-3 text-sm text-ink-soft">
+            Track suppliers, insurance policies, renewal dates and fee-free switch dates in the
+            agreement register. Payment schedules stay here and can be linked to an agreement.
           </p>
-          {renewals.length === 0 ? (
-            <p className="mb-3 text-sm text-ink-muted">No renewals tracked yet.</p>
-          ) : (
-            <ul className="mb-3 divide-y divide-border-hairline">
-              {renewals.map((renewal) => (
-                <li key={renewal.id} id={`renewal-${renewal.id}`} className="py-2.5">
-                  <div className="flex items-baseline justify-between gap-2 text-sm">
-                    <span>
-                      <span className="font-medium text-ink-emphasis">{renewal.label}</span>{' '}
-                      <span className="text-xs text-ink-muted">
-                        due {renewal.nextRenewalDate}
-                        {renewal.advancedFrom !== null
-                          ? ` (advanced from ${renewal.advancedFrom})`
-                          : ''}
-                        {renewal.supplierId !== null
-                          ? ` · ${suppliers.find((s) => s.id === renewal.supplierId)?.name ?? 'supplier'}`
-                          : ''}
-                        {renewal.targetKind === 'vehicle' && renewal.targetId !== null
-                          ? ` · ${vehicles.find((v) => v.id === renewal.targetId)?.label ?? 'vehicle'}`
-                          : ''}
-                        {renewal.warnDaysBefore > 0
-                          ? ` · warns ${renewal.warnDaysBefore} days before`
-                          : ''}
-                      </span>
-                    </span>
-                    <span className="text-xs text-ink-muted">
-                      {renewal.repeatsAnnually ? 'annual' : 'one-off'}
-                    </span>
-                  </div>
-                  <details className="mt-1.5">
-                    <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
-                      Edit renewal
-                    </summary>
-                    <div className="mt-2 max-w-2xl">
-                      <RenewalEditForm
-                        renewalId={renewal.id}
-                        version={renewal.version}
-                        label={renewal.label}
-                        nextRenewalDate={renewal.nextRenewalDate}
-                        warnDaysBefore={renewal.warnDaysBefore}
-                        repeatsAnnually={renewal.repeatsAnnually}
-                        supplierId={renewal.supplierId}
-                        supplierOptions={suppliers.map((s) => ({ id: s.id, label: s.name }))}
-                        targetKind={renewal.targetKind}
-                        targetId={renewal.targetId}
-                        people={recurringData.people}
-                        vehicles={recurringData.vehicles}
-                        notes={renewal.notes ?? ''}
-                      />
-                    </div>
-                  </details>
-                </li>
-              ))}
-            </ul>
-          )}
-          <details>
-            <summary className="cursor-pointer text-sm font-medium text-ink-body">
-              Add a renewal
-            </summary>
-            <div className="mt-3">
-              <AddRenewalForm data={recurringData} />
-            </div>
-          </details>
+          <Link
+            href="/contracts"
+            className="inline-flex rounded border border-border-strong px-3 py-2 text-sm font-medium text-ink-body hover:bg-canvas"
+          >
+            Open Contracts &amp; Renewals →
+          </Link>
         </section>
 
         <section

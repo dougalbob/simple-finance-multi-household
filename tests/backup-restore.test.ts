@@ -94,8 +94,8 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
       assert.equal(countRows(target, 'pots'), 1);
       assert.equal(countRows(target, 'checkpoints'), 2);
       assert.equal(countRows(target, 'audit_entries'), 3);
-      // One row per applied migration: 0000…0015 (sixteen files).
-      assert.equal(countRows(target, '__drizzle_migrations'), 17);
+      // One row per applied migration: 0000…0018 (nineteen files).
+      assert.equal(countRows(target, '__drizzle_migrations'), 19);
     } finally {
       handle.raw.close();
     }
@@ -155,7 +155,7 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
       password: PASSWORD,
       targetDatabasePath: target,
     });
-    assert.equal(countRows(target, '__drizzle_migrations'), 17);
+    assert.equal(countRows(target, '__drizzle_migrations'), 19);
     assert.equal(countRows(target, 'pots'), 1);
     const db = new Database(target, { readonly: true });
     try {
