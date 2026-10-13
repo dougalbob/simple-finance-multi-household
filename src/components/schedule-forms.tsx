@@ -358,15 +358,11 @@ export function ScheduleEditForm(props: ScheduleEditFormProps) {
         </div>
         <p className="text-xs text-ink-muted">
           Moving it <span className="font-medium text-ink-body">earlier</span> backfills every due
-          date between that date and today as an ordinary “from schedule” record — a real direct
-          debit / standing order / receipt entry rather than a hand-typed purchase — each taking the
-          amount saved here. Converted history is never rewritten and dates the app already holds
-          are left alone. Moving it <span className="font-medium text-ink-body">later</span> drops
-          upcoming instances before that date (their records stay). If you already typed one of
-          these payments in as a purchase,{' '}
-          <span className="font-medium text-ink-body">void that purchase first</span> — the backfill
-          adds its own record, it never merges with yours. This changes the app’s expectation only —
-          never a bank instruction.
+          date between that date and today as an ordinary “from schedule” record. Moving it{' '}
+          <span className="font-medium text-ink-body">later</span> drops upcoming instances before
+          that date (converted records stay). If you already typed one of these payments in as a
+          purchase, <span className="font-medium text-ink-body">void that purchase first</span>.
+          This changes the app’s expectation only — never a bank instruction.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2">

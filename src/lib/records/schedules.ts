@@ -109,6 +109,13 @@ export class ScheduleCancelledError extends Error {
   }
 }
 
+export class ScheduleNotCancelledError extends Error {
+  constructor(scheduleId: number) {
+    super(`Schedule ${scheduleId} is not cancelled.`);
+    this.name = 'ScheduleNotCancelledError';
+  }
+}
+
 export const MAX_SCHEDULE_NAME_LENGTH = 60;
 
 export interface CreateScheduleInput {
@@ -435,6 +442,79 @@ export function cancelSchedule(db: Db, input: CancelScheduleInput): Schedule {
 
   syncScheduleInstances(db, updated, now);
   return updated;
+}
+
+export interface RestoreScheduleInput {
+  id: number;
+  expectedVersion: number;
+  actor: string;
+  now?: Date;
+}
+
+export interface RestoreScheduleResult {
+  schedule: Schedule;
+  /** Instances materialised by the restore's resync. */
+  materializedInstances: number;
+  /** Of those, instances dated before today — missed payments the user is warned about before confirming. */
+  backfilledInstances: number;
+}
+
+/**
+ * Restore a previously cancelled schedule. Clears the cancelled marker and
+ * resyncs instances forward from the cancellation effective date (or the
+ * schedule's activeFrom, whichever is later), which back-fills any missed
+ * scheduled dates that fell while the schedule was cancelled — same mechanic
+ * as moving `activeFrom` earlier (decision 162). The user is warned about
+ * this back-fill in the UI before confirming.
+ */
+export function restoreSchedule(db: Db, input: RestoreScheduleInput): RestoreScheduleResult {
+  const now = input.now ?? new Date();
+  const actor = checkedActor(input.actor);
+
+  const updated = db.transaction((tx) => {
+    const current = tx.select().from(schedules).where(eq(schedules.id, input.id)).get();
+    if (current === undefined) throw new ScheduleNotFoundError(input.id);
+    if (current.cancelledAt === null) throw new ScheduleNotCancelledError(input.id);
+    if (current.version !== input.expectedVersion) {
+      throw new VersionConflictError('schedule', input.id, input.expectedVersion, current.version);
+    }
+    const row = tx
+      .update(schedules)
+      .set({
+        cancelledAt: null,
+        cancelledEffectiveOn: null,
+        updatedAt: now,
+        version: current.version + 1,
+      })
+      .where(eq(schedules.id, current.id))
+      .returning()
+      .get();
+    if (row === undefined) throw new Error('update schedule returned no row');
+    recordAudit(tx, {
+      actor,
+      action: 'schedule.restore',
+      entity: 'schedule',
+      entityId: current.id,
+      summary: `Restored cancelled schedule “${current.name}” (cancelled effective ${current.cancelledEffectiveOn}); upcoming and missed instances resynced`,
+      before: current,
+      after: row,
+      now,
+    });
+    return row;
+  });
+
+  // Resync with backfillBeforeToday set: regeneration from today reaches
+  // back to activeFrom, inserting upcoming rows for any missed dates between
+  // cancellation and today (they will convert like any other backfilled date).
+  const sync = syncScheduleInstances(db, updated, now, {
+    regenerateFromToday: true,
+    backfillBeforeToday: true,
+  });
+  return {
+    schedule: updated,
+    materializedInstances: sync.inserted,
+    backfilledInstances: sync.backfilled,
+  };
 }
 
 export function getSchedule(db: Db, scheduleId: number): Schedule {

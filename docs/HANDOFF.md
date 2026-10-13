@@ -1,3 +1,17 @@
+# v1.7.0 release — Recurring page session (2026-10-13)
+
+Four household requests on `/recurring`, released as **`v1.7.0`** (stable; moves `latest`):
+
+1. **Cancel moved inside the Edit disclosure** — one expand reveals edit fields and the cancel controls together, instead of a separate always-visible block outside.
+2. **Double-confirmation before cancelling** — first press reveals the warning and effective-date picker; second press (labelled "Yes, cancel it") is required to submit; a "Keep schedule" escape is always shown.
+3. **Restore a cancelled schedule** with an explicit back-fill warning: cancelled schedules stay in the list (red "Cancelled" badge, strikethrough name), disclosure label changes to "Schedule options", and Restore only submits once the user ticks the "I understand" checkbox confirming missed dates will be back-filled (same decision-162 mechanic as moving `activeFrom` earlier). Domain function `restoreSchedule` clears `cancelled_at`/`cancelled_effective_on`, bumps version, records a `schedule.restore` audit entry, and resyncs instances with back-fill; `restoreScheduleAction` wires the server action.
+4. **Trimmed "Active from" copy** — the redundant "real direct debit / standing order / receipt entry rather than a hand-typed purchase … it never merges with yours" passage removed; essentials kept.
+5. **Alternating Schedules rows** (`bg-canvas` on odd rows), matching decision 205's striped Purchases rows.
+
+Decision **206** logged for this release.
+
+Gates run locally: typecheck clean; `npm test` **879 tests / 202 suites, 0 failures**; format clean; themes check clean; production build is replayed by the CI Docker job. Browser: desktop/mobile flows verified by hand against the local dev server; CI's `browser` job is the gate.
+
 # v1.6.0 release — Purchases page session (2026-10-13)
 
 Four household requests on `/purchases`, released as **`v1.6.0`** (stable; moves `latest`):
