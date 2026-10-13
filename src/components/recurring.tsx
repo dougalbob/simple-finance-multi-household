@@ -8,9 +8,16 @@ import {
   addRenewalAction,
   addScheduleAction,
   cancelScheduleAction,
+  restoreScheduleAction,
   saveProjectionSettingsAction,
 } from '@/app/actions';
 import { initialActionState, type ActionState } from '@/lib/action-state';
+
+/**
+ * How many confirmation steps a cancel needs. The household asked for
+ * double-confirmation before a schedule is cancelled (two deliberate clicks).
+ */
+const CANCEL_CONFIRM_STEPS = 2;
 
 /**
  * Phase 3 entry surfaces (SPEC §11, §22, §7.3): add/cancel schedules, add
@@ -94,6 +101,8 @@ const inputClass = 'rounded border border-border-strong bg-surface px-3 py-2 tex
 const labelClass = 'block text-sm font-medium text-ink-body';
 const buttonClass =
   'rounded bg-till px-4 py-2 text-sm font-medium text-till-ink disabled:opacity-60';
+const submitDangerClass =
+  'rounded bg-danger px-3 py-1.5 text-sm font-medium text-fill-ink disabled:opacity-60 hover:bg-danger-800';
 
 export function AddScheduleForm({ data }: { data: RecurringData }) {
   const [state, formAction, pending] = useActionState(addScheduleAction, initialActionState);
@@ -318,32 +327,127 @@ export function CancelScheduleForm({
   today: string;
 }) {
   const [state, formAction, pending] = useActionState(cancelScheduleAction, initialActionState);
+  // Double-confirmation steps: 0 = idle, 1 = first click (show warning + date picker),
+  // 2 = confirmed (submit button live).
+  const [confirmStep, setConfirmStep] = useState(0);
+  const [effectiveOn, setEffectiveOn] = useState(today);
+  const reset = () => setConfirmStep(0);
   return (
-    <form
-      action={formAction}
-      className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-canvas p-2"
-    >
-      <div>
-        <label className="block text-xs font-medium text-ink-soft">
-          Cancel from (local date)
-          <input
-            name="effectiveOn"
-            type="date"
-            defaultValue={today}
-            required
-            className="ml-2 rounded border border-border-strong bg-surface px-2 py-1 text-sm"
-          />
-        </label>
-        <p className="mt-1 text-xs text-ink-muted">
-          Instances from that date stop; converted history is kept.
-        </p>
-      </div>
+    <div className="mt-2 rounded-lg bg-canvas p-2">
+      {confirmStep === 0 ? (
+        <button
+          type="button"
+          onClick={() => setConfirmStep(1)}
+          className="rounded border border-danger bg-surface px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger-50"
+        >
+          Cancel schedule
+        </button>
+      ) : (
+        <form
+          action={(formData) => {
+            if (confirmStep < CANCEL_CONFIRM_STEPS) {
+              setConfirmStep(confirmStep + 1);
+              return;
+            }
+            formData.set('effectiveOn', effectiveOn);
+            formAction(formData);
+          }}
+          className="flex flex-wrap items-end gap-2"
+        >
+          <div className="flex flex-col gap-1">
+            <label className="block text-xs font-medium text-ink-soft">
+              Cancel from (local date)
+              <input
+                name="effectiveOn"
+                type="date"
+                value={effectiveOn}
+                onChange={(e) => setEffectiveOn(e.target.value)}
+                required
+                className="ml-2 rounded border border-border-strong bg-surface px-2 py-1 text-sm"
+              />
+            </label>
+            <p className="text-xs text-danger">
+              Instances from that date stop; converted history is kept. This cannot be undone from
+              the edit panel — a Restore option appears after cancellation if you change your mind.
+            </p>
+            {confirmStep >= CANCEL_CONFIRM_STEPS ? (
+              <p className="text-xs font-medium text-danger">
+                Confirm again to cancel — press Cancel schedule once more.
+              </p>
+            ) : null}
+          </div>
+          <input type="hidden" name="scheduleId" value={schedule.id} />
+          <input type="hidden" name="version" value={schedule.version} />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-ink-body hover:bg-canvas"
+            >
+              Keep schedule
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className={`${submitDangerClass} ${confirmStep < CANCEL_CONFIRM_STEPS ? '' : 'ring-2 ring-danger/40'}`}
+            >
+              {pending
+                ? 'Cancelling…'
+                : confirmStep < CANCEL_CONFIRM_STEPS
+                  ? 'Cancel schedule'
+                  : 'Yes, cancel it'}
+            </button>
+          </div>
+          <FormMessage status={state.status} message={state.message} />
+        </form>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Restore a cancelled schedule (decision 206). The user is warned that any
+ * payment dates missed while the schedule was cancelled will be back-filled as
+ * upcoming instances (they convert into ordinary schedule-tagged records,
+ * just like moving a start date earlier under decision 162) and must tick an
+ * explicit confirmation before the button will submit.
+ */
+export function RestoreScheduleForm({ schedule }: { schedule: RecurringScheduleOption }) {
+  const [state, formAction, pending] = useActionState(restoreScheduleAction, initialActionState);
+  const [confirmed, setConfirmed] = useState(false);
+  return (
+    <form action={formAction} className="mt-2 rounded-lg bg-canvas p-2">
+      <p className="text-xs text-ink-muted">
+        Restoring resumes this schedule. Any scheduled payment dates that were missed while it was
+        cancelled will be <span className="font-medium text-ink-body">back-filled by the app</span>{' '}
+        as ordinary &ldquo;from schedule&rdquo; records (converted history is never rewritten).
+      </p>
+      <label className="mt-2 flex items-start gap-2 text-xs text-ink-body">
+        <input
+          type="checkbox"
+          checked={confirmed}
+          onChange={(e) => setConfirmed(e.target.checked)}
+          name="confirmBackfill"
+          value="true"
+          className="mt-0.5 h-4 w-4 rounded border-border-strong"
+        />
+        <span>
+          I understand &mdash; back-fill any missed scheduled dates and restore this schedule going
+          forward.
+        </span>
+      </label>
       <input type="hidden" name="scheduleId" value={schedule.id} />
       <input type="hidden" name="version" value={schedule.version} />
-      <button type="submit" disabled={pending} className={buttonClass}>
-        {pending ? 'Cancelling…' : 'Cancel schedule'}
-      </button>
-      <FormMessage status={state.status} message={state.message} />
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={pending || !confirmed}
+          className="rounded border border-positive bg-surface px-3 py-1.5 text-sm font-medium text-positive hover:bg-positive-50 disabled:opacity-60"
+        >
+          {pending ? 'Restoring…' : 'Restore schedule'}
+        </button>
+        <FormMessage status={state.status} message={state.message} />
+      </div>
     </form>
   );
 }

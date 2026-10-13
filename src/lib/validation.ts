@@ -261,6 +261,15 @@ export const cancelScheduleEntrySchema = z.object({
   effectiveOn: localDateSchema,
 });
 
+/** Parsed shape for restoring a cancelled schedule (decision 206). */
+export const restoreScheduleEntrySchema = z.object({
+  scheduleId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  confirmBackfill: z
+    .string()
+    .refine((v) => v === 'true', { message: 'Confirm the back-fill before restoring.' }),
+});
+
 /** Parsed shape for adding a renewal (SPEC §22.2). */
 export const renewalEntrySchema = z.object({
   label: z

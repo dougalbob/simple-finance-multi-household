@@ -156,6 +156,7 @@ import {
 import {
   archivePotEntrySchema,
   cancelScheduleEntrySchema,
+  restoreScheduleEntrySchema,
   categoryEntrySchema,
   checkpointEntrySchema,
   debtEntrySchema,
@@ -207,7 +208,9 @@ import {
   cancelSchedule,
   createSchedule,
   editSchedule,
+  restoreSchedule,
   ScheduleCancelledError,
+  ScheduleNotCancelledError,
   ScheduleNotFoundError,
   InvalidScheduleInputError,
 } from '@/lib/records/schedules';
@@ -1175,6 +1178,52 @@ export async function cancelScheduleAction(
       return { status: 'error', message: err.message };
     }
     return { status: 'error', message: 'The schedule could not be cancelled. Please try again.' };
+  }
+}
+
+export async function restoreScheduleAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const parsed = restoreScheduleEntrySchema.safeParse({
+    scheduleId: numberOrNull(formData.get('scheduleId')),
+    expectedVersion: numberOrNull(formData.get('version')),
+    confirmBackfill: textOrNull(formData.get('confirmBackfill')) ?? '',
+  });
+  if (!parsed.success) {
+    return {
+      status: 'error',
+      message: firstIssue(parsed.error, 'Tick the back-fill confirmation before restoring.'),
+    };
+  }
+  try {
+    const result = restoreSchedule(user.db, {
+      id: parsed.data.scheduleId,
+      expectedVersion: parsed.data.expectedVersion,
+      actor: user.email,
+    });
+    revalidatePages();
+    const backfillNote =
+      result.backfilledInstances > 0
+        ? `; ${result.backfilledInstances} missed due date(s) have been back-filled as upcoming instances`
+        : '';
+    return {
+      status: 'ok',
+      message: `“${result.schedule.name}” restored${backfillNote}.`,
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidScheduleInputError ||
+      err instanceof ScheduleNotFoundError ||
+      err instanceof ScheduleNotCancelledError ||
+      err instanceof VersionConflictError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The schedule could not be restored. Please try again.' };
   }
 }
 

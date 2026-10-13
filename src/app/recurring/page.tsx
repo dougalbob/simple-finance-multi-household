@@ -5,6 +5,7 @@ import {
   AddScheduleForm,
   CancelScheduleForm,
   ProjectionSettingsForm,
+  RestoreScheduleForm,
   type RecurringData,
 } from '@/components/recurring';
 import { ScrollHashIntoView } from '@/components/scroll-hash';
@@ -307,8 +308,12 @@ export default async function RecurringPage({
               data-schedule-scroller
               className="mb-3 divide-y divide-border-hairline lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-y-contain"
             >
-              {schedules.map(({ schedule, nextDueDate }) => (
-                <li key={schedule.id} id={`schedule-${schedule.id}`} className="py-2.5">
+              {schedules.map(({ schedule, nextDueDate }, rowIndex) => (
+                <li
+                  key={schedule.id}
+                  id={`schedule-${schedule.id}`}
+                  className={`py-2.5 ${rowIndex % 2 === 1 ? 'bg-canvas' : ''}`}
+                >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm">
                       <span
@@ -320,6 +325,11 @@ export default async function RecurringPage({
                       >
                         {schedule.name}
                       </span>{' '}
+                      {schedule.cancelledAt !== null ? (
+                        <span className="rounded bg-danger-50 px-1.5 py-0.5 text-xs font-medium text-danger">
+                          Cancelled
+                        </span>
+                      ) : null}{' '}
                       <span className="text-xs text-ink-muted">
                         {schedule.kind === 'receipt'
                           ? 'income'
@@ -359,66 +369,94 @@ export default async function RecurringPage({
                       </>
                     ) : null}
                   </p>
-                  {schedule.cancelledAt === null ? (
-                    <details className="mt-1.5">
-                      <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
-                        Edit schedule
-                      </summary>
-                      <div className="mt-2 max-w-2xl">
-                        <ScheduleEditForm
-                          scheduleId={schedule.id}
-                          version={schedule.version}
-                          name={schedule.name}
-                          kind={schedule.kind}
-                          frequency={schedule.frequency}
-                          dueDayOfMonth={schedule.dueDayOfMonth}
-                          dueMonth={schedule.dueMonth}
-                          excludedMonths={schedule.excludedMonths}
-                          amountPence={schedule.amountPence}
-                          contractEndsOn={schedule.contractEndsOn}
-                          activeFrom={schedule.activeFrom}
-                          activeUntil={schedule.activeUntil}
-                          potId={schedule.potId}
-                          potOptions={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-                          categoryId={schedule.categoryId}
-                          categoryOptions={categoryOptions}
-                          supplierId={schedule.supplierId}
-                          supplierOptions={suppliers.map((s) => ({ id: s.id, label: s.name }))}
-                          targetKind={schedule.targetKind}
-                          targetId={schedule.targetId}
-                          people={recurringData.people}
-                          vehicles={recurringData.vehicles}
+                  <details className="mt-1.5">
+                    <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
+                      {schedule.cancelledAt !== null ? 'Schedule options' : 'Edit schedule'}
+                    </summary>
+                    <div className="mt-2 max-w-2xl">
+                      {schedule.cancelledAt === null ? (
+                        <>
+                          <ScheduleEditForm
+                            scheduleId={schedule.id}
+                            version={schedule.version}
+                            name={schedule.name}
+                            kind={schedule.kind}
+                            frequency={schedule.frequency}
+                            dueDayOfMonth={schedule.dueDayOfMonth}
+                            dueMonth={schedule.dueMonth}
+                            excludedMonths={schedule.excludedMonths}
+                            amountPence={schedule.amountPence}
+                            contractEndsOn={schedule.contractEndsOn}
+                            activeFrom={schedule.activeFrom}
+                            activeUntil={schedule.activeUntil}
+                            potId={schedule.potId}
+                            potOptions={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
+                            categoryId={schedule.categoryId}
+                            categoryOptions={categoryOptions}
+                            supplierId={schedule.supplierId}
+                            supplierOptions={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+                            targetKind={schedule.targetKind}
+                            targetId={schedule.targetId}
+                            people={recurringData.people}
+                            vehicles={recurringData.vehicles}
+                          />
+                          <hr className="my-3 border-border-hairline" />
+                          <CancelScheduleForm
+                            schedule={
+                              recurringData.schedules.find((entry) => entry.id === schedule.id) ??
+                              ({
+                                id: schedule.id,
+                                name: schedule.name,
+                                kind: schedule.kind,
+                                frequency: schedule.frequency,
+                                amountPence: schedule.amountPence,
+                                dueDayOfMonth: schedule.dueDayOfMonth,
+                                dueMonth: schedule.dueMonth,
+                                potLabel: potNames.get(schedule.potId) ?? 'Pot',
+                                nextDueDate,
+                                version: schedule.version,
+                                cancelledEffectiveOn: schedule.cancelledEffectiveOn,
+                                contractEndsOn: schedule.contractEndsOn,
+                                supplierId: schedule.supplierId,
+                                supplierName:
+                                  schedule.supplierId === null
+                                    ? null
+                                    : (suppliers.find((s) => s.id === schedule.supplierId)?.name ??
+                                      null),
+                              } as RecurringData['schedules'][number])
+                            }
+                            today={today}
+                          />
+                        </>
+                      ) : (
+                        <RestoreScheduleForm
+                          schedule={
+                            recurringData.schedules.find((entry) => entry.id === schedule.id) ??
+                            ({
+                              id: schedule.id,
+                              name: schedule.name,
+                              kind: schedule.kind,
+                              frequency: schedule.frequency,
+                              amountPence: schedule.amountPence,
+                              dueDayOfMonth: schedule.dueDayOfMonth,
+                              dueMonth: schedule.dueMonth,
+                              potLabel: potNames.get(schedule.potId) ?? 'Pot',
+                              nextDueDate,
+                              version: schedule.version,
+                              cancelledEffectiveOn: schedule.cancelledEffectiveOn,
+                              contractEndsOn: schedule.contractEndsOn,
+                              supplierId: schedule.supplierId,
+                              supplierName:
+                                schedule.supplierId === null
+                                  ? null
+                                  : (suppliers.find((s) => s.id === schedule.supplierId)?.name ??
+                                    null),
+                            } as RecurringData['schedules'][number])
+                          }
                         />
-                      </div>
-                    </details>
-                  ) : null}
-                  {schedule.cancelledAt === null ? (
-                    <CancelScheduleForm
-                      schedule={
-                        recurringData.schedules.find((entry) => entry.id === schedule.id) ??
-                        ({
-                          id: schedule.id,
-                          name: schedule.name,
-                          kind: schedule.kind,
-                          frequency: schedule.frequency,
-                          amountPence: schedule.amountPence,
-                          dueDayOfMonth: schedule.dueDayOfMonth,
-                          dueMonth: schedule.dueMonth,
-                          potLabel: potNames.get(schedule.potId) ?? 'Pot',
-                          nextDueDate,
-                          version: schedule.version,
-                          cancelledEffectiveOn: schedule.cancelledEffectiveOn,
-                          contractEndsOn: schedule.contractEndsOn,
-                          supplierId: schedule.supplierId,
-                          supplierName:
-                            schedule.supplierId === null
-                              ? null
-                              : (suppliers.find((s) => s.id === schedule.supplierId)?.name ?? null),
-                        } as RecurringData['schedules'][number])
-                      }
-                      today={today}
-                    />
-                  ) : null}
+                      )}
+                    </div>
+                  </details>
                 </li>
               ))}
             </ul>
