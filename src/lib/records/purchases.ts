@@ -573,6 +573,17 @@ export interface PurchaseFilters {
   scheduleOnly?: boolean;
   refundsOnly?: boolean;
   voidedOnly?: boolean;
+  /**
+   * Exclusion toggles (Purchases page, decision 205): the four "show" boxes
+   * are independent. A scheduled record is hidden by `excludeScheduled`, any
+   * non-scheduled record by `excludePurchases`, a refund by
+   * `excludeRefunds`, and a voided record by leaving `includeVoided` unset.
+   * A record carrying more than one tag (e.g. a voided refund) is hidden if
+   * any of its tags is excluded.
+   */
+  excludeScheduled?: boolean;
+  excludePurchases?: boolean;
+  excludeRefunds?: boolean;
   /** Default 200, capped at 1000 — household scale, no keyset games. */
   limit?: number;
 }
@@ -641,6 +652,15 @@ export function listPurchases(db: Db | DbTx, filters: PurchaseFilters = {}): Pur
   }
   if (filters.refundsOnly === true) {
     conditions.push(isNotNull(purchases.refundOfPurchaseId));
+  }
+  if (filters.excludeScheduled === true) {
+    conditions.push(isNull(purchases.scheduleInstanceId));
+  }
+  if (filters.excludePurchases === true) {
+    conditions.push(isNotNull(purchases.scheduleInstanceId));
+  }
+  if (filters.excludeRefunds === true) {
+    conditions.push(isNull(purchases.refundOfPurchaseId));
   }
   if (filters.dateFrom !== undefined) {
     conditions.push(gte(purchases.occurredDate, filters.dateFrom));

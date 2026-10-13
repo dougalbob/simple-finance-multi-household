@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { RecentEntryActions } from '@/components/record-forms';
 import { AttachmentForm } from '@/components/attachment-form';
@@ -13,6 +14,7 @@ import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
 import { listPurchases, type PurchaseFilters } from '@/lib/records/purchases';
 import { listSuppliersForEntry } from '@/lib/records/suppliers';
+import { supplierCardHref } from '@/lib/records/supplier-focus';
 import { targetLabel, targetNames } from '@/lib/records/targets';
 import { listStoredAttachments, type StoredAttachment } from '@/lib/records/attachments';
 import { fuelRowDetails, getFuelRowContext } from '@/lib/records/fuel';
@@ -50,6 +52,20 @@ interface SearchParams {
   scheduleOnly?: string;
   refundsOnly?: string;
   voidedOnly?: string;
+  /** Show toggles (decision 205); repeated when the hidden 0 + ticked 1 both submit — last wins. */
+  showSchedule?: string | string[];
+  showPurchases?: string | string[];
+  showRefunds?: string | string[];
+  showVoided?: string | string[];
+}
+
+function lastValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[value.length - 1] : value;
+}
+
+function showValue(value: string | string[] | undefined, fallback: boolean): boolean {
+  const raw = lastValue(value);
+  return raw === undefined ? fallback : raw !== '0';
 }
 
 function toNumber(value: string | undefined): number | undefined {
@@ -92,6 +108,23 @@ export default async function PurchasesPage({
     ...new Set(requestedCategoryIds.flatMap((id) => childrenOfParent.get(id) ?? [id])),
   ];
 
+  // Show toggles (decision 205): all four kinds show by default. Legacy
+  // `…Only` deep links (charts, tasks) keep their old meaning when no show
+  // toggle was submitted: scheduleOnly hides non-scheduled records, and a
+  // legacy-only visit still hides voided records unless voidedOnly is set.
+  const hasShowParams =
+    params.showSchedule !== undefined ||
+    params.showPurchases !== undefined ||
+    params.showRefunds !== undefined ||
+    params.showVoided !== undefined;
+  const hasLegacyOnly =
+    params.scheduleOnly === '1' || params.refundsOnly === '1' || params.voidedOnly === '1';
+  let showPurchases = showValue(params.showPurchases, true);
+  if (!hasShowParams && params.scheduleOnly === '1') showPurchases = false;
+  const showSchedule = showValue(params.showSchedule, true);
+  const showRefunds = showValue(params.showRefunds, true);
+  const showVoided = showValue(params.showVoided, hasLegacyOnly ? params.voidedOnly === '1' : true);
+
   const filters: PurchaseFilters = {
     potId: toNumber(params.potId),
     supplierId: toNumber(params.supplierId),
@@ -110,6 +143,10 @@ export default async function PurchasesPage({
     scheduleOnly: params.scheduleOnly === '1',
     refundsOnly: params.refundsOnly === '1',
     voidedOnly: params.voidedOnly === '1',
+    includeVoided: showVoided,
+    excludeScheduled: !showSchedule,
+    excludePurchases: !showPurchases,
+    excludeRefunds: !showRefunds,
     limit: 500,
   };
 
@@ -159,7 +196,14 @@ export default async function PurchasesPage({
         people={people.map((person) => ({ id: person.id, label: person.label }))}
         vehicles={vehicles.map((vehicle) => ({ id: vehicle.id, label: vehicle.label }))}
         categories={filterCategories}
-        active={{ ...params, categoryId: requestedCategoryIds[0]?.toString() }}
+        active={{
+          ...params,
+          showSchedule: showSchedule ? '1' : '0',
+          showPurchases: showPurchases ? '1' : '0',
+          showRefunds: showRefunds ? '1' : '0',
+          showVoided: showVoided ? '1' : '0',
+          categoryId: requestedCategoryIds[0]?.toString(),
+        }}
       />
 
       <section aria-labelledby="results-heading" className="mt-6">
@@ -191,9 +235,11 @@ export default async function PurchasesPage({
                 </tr>
               </thead>
               <tbody>
-                {purchases.map(({ purchase, allocations }) => (
+                {purchases.map(({ purchase, allocations }, rowIndex) => (
                   <PurchaseRow
                     key={purchase.id}
+                    rowIndex={rowIndex}
+                    supplierId={purchase.supplierId}
                     purchaseId={purchase.id}
                     totalPence={purchase.totalPence}
                     occurredAt={purchase.occurredAt}
@@ -244,6 +290,8 @@ export default async function PurchasesPage({
 
 interface PurchaseRowProps {
   purchaseId: number;
+  rowIndex: number;
+  supplierId: number | null;
   totalPence: number;
   occurredAt: Date;
   occurredDate: string;
@@ -296,15 +344,24 @@ function PurchaseRow(props: PurchaseRowProps) {
   return (
     <tr
       id={`purchase-${props.purchaseId}`}
-      className={`border-t border-border-hairline align-top ${props.voidedAt !== null ? 'text-ink-faint' : ''}`}
+      className={`border-t border-border-hairline align-top ${props.rowIndex % 2 === 1 ? 'bg-canvas' : ''} ${props.voidedAt !== null ? 'text-ink-faint' : ''}`}
     >
       <td className="whitespace-nowrap px-3 py-2.5">{formatInstantLocal(props.occurredAt)}</td>
       <td className="px-3 py-2.5">
-        <span
-          className={props.voidedAt !== null ? 'line-through' : 'font-medium text-ink-emphasis'}
-        >
-          {props.supplierLabel}
-        </span>
+        {props.supplierId !== null ? (
+          <Link
+            href={supplierCardHref(props.supplierId)}
+            className={`sf-link ${props.voidedAt !== null ? 'line-through' : 'font-medium'}`}
+          >
+            {props.supplierLabel}
+          </Link>
+        ) : (
+          <span
+            className={props.voidedAt !== null ? 'line-through' : 'font-medium text-ink-emphasis'}
+          >
+            {props.supplierLabel}
+          </span>
+        )}
         {props.note !== '' ? <p className="mt-0.5 text-xs text-ink-muted">{props.note}</p> : null}
         {props.fuel !== null ? <FuelDetailsForm {...props.fuel} /> : null}
         <AttachmentForm purchaseId={props.purchaseId} attachments={props.attachments} />
@@ -375,7 +432,7 @@ function PurchaseRow(props: PurchaseRowProps) {
             <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
               Edit
             </summary>
-            <div className="mt-2 max-w-md">
+            <div className="mt-2 w-80 max-w-[calc(100vw-2.5rem)] sm:w-96">
               <RecentEntryActions
                 purchaseId={props.purchaseId}
                 expectedVersion={props.version}

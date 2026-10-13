@@ -1,3 +1,18 @@
+# v1.6.0 release — Purchases page session (2026-10-13)
+
+Four household requests on `/purchases`, released as **`v1.6.0`** (stable; moves `latest`):
+
+1. **Show toggles, not "only" filters** (decision 205): Purchases / From schedule / Refunds / Voided,
+   all on by default (voided records now show by default); unticking hides that kind. See decision 205
+   for the hidden-`0` form trick and the legacy `…Only` deep-link compatibility.
+2. **Two-row line editor**: Spent for | Amount, then Category full-width (Which when needed), shorter
+   (`py-1`) controls, wider edit panel on Purchases.
+3. **Alternating rows**: odd Purchases rows use `bg-canvas`.
+4. **Supplier name is a link** to the already-existing expanded supplier card (`supplierCardHref`).
+
+Gates run locally: typecheck clean; `npm test` **879 tests / 202 suites, 0 failures** (one new
+show-toggle suite). Browser: desktop spec's purchases-filter/edit and void cases pass locally via the SANDBOX entry 8 recipe (2/2); full suite to be confirmed in CI.
+
 # Current handoff — v1.5.0 release: links that look like links, one attach control, and the chart bars that were never drawn (2026-10-12)
 
 ## v1.5.0 delivery status (before merge)

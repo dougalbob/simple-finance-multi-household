@@ -11,6 +11,11 @@ export interface PurchaseFilterValues {
   targetKind?: string;
   targetId?: string;
   paidByPersonId?: string;
+  /** Show toggles (decision 205): '0' hides that kind; anything else (incl. absent) shows it. */
+  showSchedule?: string;
+  showPurchases?: string;
+  showRefunds?: string;
+  showVoided?: string;
   scheduleOnly?: string;
   refundsOnly?: string;
   voidedOnly?: string;
@@ -223,36 +228,29 @@ export function PurchaseFilterForm({
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-          <label className="flex items-center gap-1.5 text-sm text-ink-body">
-            <input
-              type="checkbox"
-              name="scheduleOnly"
-              value="1"
-              defaultChecked={active.scheduleOnly === '1'}
-              className="h-4 w-4 rounded border-border-strong"
-            />
-            From schedule
-          </label>
-          <label className="flex items-center gap-1.5 text-sm text-ink-body">
-            <input
-              type="checkbox"
-              name="refundsOnly"
-              value="1"
-              defaultChecked={active.refundsOnly === '1'}
-              className="h-4 w-4 rounded border-border-strong"
-            />
-            Refunds
-          </label>
-          <label className="flex items-center gap-1.5 text-sm text-ink-body">
-            <input
-              type="checkbox"
-              name="voidedOnly"
-              value="1"
-              defaultChecked={active.voidedOnly === '1'}
-              className="h-4 w-4 rounded border-border-strong"
-            />
-            Voided
-          </label>
+          {(
+            [
+              ['showPurchases', 'Purchases'],
+              ['showSchedule', 'From schedule'],
+              ['showRefunds', 'Refunds'],
+              ['showVoided', 'Voided'],
+            ] as const
+          ).map(([name, label]) => (
+            <label key={name} className="flex items-center gap-1.5 text-sm text-ink-body">
+              {/* An unchecked box submits nothing, which would read as the
+                  "show" default — so a hidden 0 goes first and the box's 1,
+                  when ticked, follows it; the page reads the last value. */}
+              <input type="hidden" name={name} value="0" />
+              <input
+                type="checkbox"
+                name={name}
+                value="1"
+                defaultChecked={active[name] !== '0'}
+                className="h-4 w-4 rounded border-border-strong"
+              />
+              {label}
+            </label>
+          ))}
           <div className="ml-auto flex items-center gap-2">
             <button
               type="submit"
@@ -280,6 +278,10 @@ function filtersAreActive(active: PurchaseFilterValues): boolean {
     Boolean(active.targetKind) ||
     Boolean(active.targetId) ||
     Boolean(active.paidByPersonId) ||
+    active.showSchedule === '0' ||
+    active.showPurchases === '0' ||
+    active.showRefunds === '0' ||
+    active.showVoided === '0' ||
     active.scheduleOnly === '1' ||
     active.refundsOnly === '1' ||
     active.voidedOnly === '1'

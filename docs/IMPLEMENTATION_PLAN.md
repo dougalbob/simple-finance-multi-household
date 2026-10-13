@@ -3039,3 +3039,22 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     `form:has(input[type="file"])` locator, because a purchase row has other forms of its own and a
     `filter({ has })` inner locator is resolved relative to each candidate — so an inner locator
     already anchored on the row matches nothing.
+
+205. **Purchases page: show toggles, two-row line editor, striped rows, supplier links (2026-10-13, unreleased).**
+
+    The three `…Only` tag boxes became four independent **show** toggles — Purchases (anything whose
+    `scheduleInstanceId` is null), From schedule, Refunds, Voided — all ticked by default, so the
+    page now opens on the complete history including voided records (previously voided records were
+    hidden until the Voided box was ticked). Unticking a box hides that kind; a record carrying two
+    tags (a voided refund, say) is hidden if any of its tags is off. `listPurchases` gained
+    `excludeScheduled` / `excludePurchases` / `excludeRefunds`; voided visibility still rides on
+    `includeVoided`, which the page now sets from the Voided toggle. The form submits a hidden
+    `showX=0` ahead of each checkbox's `showX=1`, and the page reads the last value, so an unticked
+    box is distinguishable from no submission at all. Legacy `scheduleOnly` / `refundsOnly` /
+    `voidedOnly` deep links (charts, tasks) keep their old meaning when no show toggle is present.
+    The shared line editor (edit + refund) now lays a line out as Spent for | Amount, then Category
+    full-width (Which follows full-width when needed), with `py-1` controls, and the Purchases edit
+    panel is widened (`w-80 sm:w-96`). Table rows alternate `bg-canvas` on odd rows. The supplier
+    name is an `sf-link` to `supplierCardHref(id)`, which already expands that card (decision 149).
+    Unit coverage in `tests/purchases.test.ts`; browser coverage in `e2e/desktop.spec.ts` (toggles
+    default on, supplier link, row striping, and the reworked void flow).
