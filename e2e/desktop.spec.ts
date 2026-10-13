@@ -150,6 +150,19 @@ test.describe('desktop review', () => {
     const results = page.locator('section[aria-labelledby="results-heading"]');
     await expect(results.getByText('Corner Foods').first()).toBeVisible();
 
+    // All four show toggles start on (decision 205), and the supplier name
+    // links to that supplier's expanded card.
+    for (const label of ['Purchases', 'From schedule', 'Refunds', 'Voided']) {
+      await expect(page.getByLabel(label, { exact: true })).toBeChecked();
+    }
+    const supplierLink = results.getByRole('link', { name: 'Corner Foods' }).first();
+    await expect(supplierLink).toHaveAttribute('href', /\/suppliers\?supplierId=\d+/);
+    // Alternating rows: the second row carries the tinted background.
+    const rowBackgrounds = await results
+      .locator('tbody tr')
+      .evaluateAll((rows) => rows.slice(0, 2).map((row) => getComputedStyle(row).backgroundColor));
+    expect(rowBackgrounds[0]).not.toBe(rowBackgrounds[1]);
+
     // Desktop keeps the filter form open; the phone-only toggle stays hidden.
     await expect(page.getByRole('button', { name: 'Show filters' })).toBeHidden();
     await expect(page.getByLabel('Supplier')).toBeVisible();
@@ -216,21 +229,23 @@ test.describe('desktop review', () => {
       .fill('Entered twice at the till');
     await submit.click();
 
-    // The void lands and the table revalidates. A voided entry leaves the
-    // default history view: listPurchases excludes voided records unless the
-    // Voided tag is active (SPEC §15.2), so the row disappearing *is* the
-    // success signal - a rejected void would leave it there with an error.
-    await expect(rows).toHaveCount(0, { timeout: 30_000 });
-
-    // Voids never delete (decision 6): the record is still in the history under
-    // the Voided tag, with its reason and the editor replaced by "history kept".
-    await page.getByLabel('Voided', { exact: true }).check();
-    await page.getByRole('button', { name: 'Apply filters' }).click();
+    // The void lands and the table revalidates. All four show toggles are on
+    // by default (decision 205), so the voided row stays in view with its
+    // reason — and unchecking Voided is what takes it out of the list.
     const voidedRow = results.locator('tbody tr', { hasText: 'Playwright Duplicate' }).first();
     await expect(voidedRow).toContainText(/Voided .* Entered twice at the till/, {
       timeout: 30_000,
     });
     await expect(voidedRow).toContainText('history kept');
+
+    // Voids never delete (decision 6): hiding Voided removes the row, and
+    // showing it again brings the retained history back.
+    await page.getByLabel('Voided', { exact: true }).uncheck();
+    await page.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(rows).toHaveCount(0, { timeout: 30_000 });
+    await page.getByLabel('Voided', { exact: true }).check();
+    await page.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(voidedRow).toContainText('history kept', { timeout: 30_000 });
   });
 
   test('the month calendar follows a real due-day edit', async ({ page }) => {

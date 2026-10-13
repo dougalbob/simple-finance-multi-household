@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { eq } from 'drizzle-orm';
-import { auditEntries } from '../src/lib/db/schema';
+import { auditEntries, purchases as purchasesTable } from '../src/lib/db/schema';
 import { CategoryLevelError, CategoryNotFoundError } from '../src/lib/records/categories';
 import {
   AlreadyVoidError,
@@ -1076,6 +1076,74 @@ describe('refunds (SPEC §9.5)', () => {
           }),
         RefundLinkError,
       );
+    } finally {
+      fx.close();
+    }
+  });
+});
+
+describe('purchase show toggles (decision 205)', () => {
+  it('hides scheduled, non-scheduled, refund and voided records independently', async () => {
+    const fx = await createHouseholdFixture();
+    try {
+      const groceries = fx.categoryId('Groceries', 'Weekly Shop');
+      const at = new Date('2026-09-20T10:00:00Z');
+      const base = {
+        potId: fx.pots.main.id,
+        paidByPersonId: fx.people.alex.id,
+        occurredAt: at,
+        actor: 'alex@example.com',
+        now: at,
+      };
+      const plain = createPurchase(fx.db, {
+        ...base,
+        supplierName: 'Plain Shop',
+        totalPence: 1000,
+        lines: [{ amountPence: 1000, categoryId: groceries, targetKind: 'household' }],
+      });
+      const scheduled = createPurchase(fx.db, {
+        ...base,
+        supplierName: 'Schedule Shop',
+        totalPence: 2000,
+        lines: [{ amountPence: 2000, categoryId: groceries, targetKind: 'household' }],
+      });
+      fx.db
+        .update(purchasesTable)
+        .set({ scheduleInstanceId: 999 })
+        .where(eq(purchasesTable.id, scheduled.purchase.id))
+        .run();
+      const refund = createRefund(fx.db, {
+        refundOfPurchaseId: plain.purchase.id,
+        totalPence: -400,
+        lines: [{ amountPence: -400, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: at,
+      });
+      const voided = createPurchase(fx.db, {
+        ...base,
+        supplierName: 'Void Shop',
+        totalPence: 3000,
+        lines: [{ amountPence: 3000, categoryId: groceries, targetKind: 'household' }],
+      });
+      voidPurchase(fx.db, {
+        id: voided.purchase.id,
+        expectedVersion: 1,
+        actor: 'alex@example.com',
+        now: at,
+      });
+
+      const ids = (filters: Parameters<typeof listPurchases>[1]) =>
+        listPurchases(fx.db, { includeVoided: true, ...filters }).map((row) => row.purchase.id);
+      const all = ids({});
+      assert.ok(all.includes(plain.purchase.id) && all.includes(scheduled.purchase.id));
+      assert.ok(all.includes(refund.purchase.id) && all.includes(voided.purchase.id));
+      assert.ok(!ids({ excludeScheduled: true }).includes(scheduled.purchase.id));
+      assert.ok(ids({ excludeScheduled: true }).includes(plain.purchase.id));
+      // "Purchases" = anything that is not a scheduled payment.
+      assert.deepEqual(new Set(ids({ excludePurchases: true })), new Set([scheduled.purchase.id]));
+      assert.ok(!ids({ excludeRefunds: true }).includes(refund.purchase.id));
+      assert.ok(ids({ excludeRefunds: true }).includes(plain.purchase.id));
+      assert.ok(!listPurchases(fx.db, {}).some((row) => row.purchase.id === voided.purchase.id));
     } finally {
       fx.close();
     }

@@ -61,6 +61,9 @@ function FormMessage({ status, message }: { status: string; message: string | nu
 
 const inputClass =
   'rounded border border-border-strong bg-surface px-2.5 py-1.5 text-sm focus:border-border-emphasis focus:outline-none';
+/** Line-editor controls sit a touch shorter (decision 205): the two-row line layout earns its room back here. */
+const lineInputClass =
+  'w-full min-w-0 rounded border border-border-strong bg-surface px-2.5 py-1 text-sm focus:border-border-emphasis focus:outline-none';
 const labelClass = 'text-xs font-medium text-ink-soft';
 const submitClass =
   'rounded bg-till px-3 py-1.5 text-sm font-medium text-till-ink disabled:opacity-60';
@@ -107,11 +110,26 @@ function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }:
         const personMatches = line.targetKind === 'person';
         const vehicleMatches = line.targetKind === 'vehicle';
         return (
-          <div
-            key={index}
-            className="grid grid-cols-2 items-end gap-2 rounded-lg bg-canvas p-2 sm:grid-cols-12"
-          >
-            <div className="flex flex-col gap-1 sm:col-span-3">
+          <div key={index} className="grid grid-cols-2 items-end gap-2 rounded-lg bg-canvas p-2">
+            <div className="flex min-w-0 flex-col gap-1">
+              <label htmlFor={`${idPrefix}-target-${index}`} className={labelClass}>
+                Spent for
+              </label>
+              <select
+                id={`${idPrefix}-target-${index}`}
+                value={line.targetKind}
+                onChange={(event) => {
+                  const targetKind = event.target.value as EntryLineState['targetKind'];
+                  updateLine(index, { targetKind, targetId: null });
+                }}
+                className={lineInputClass}
+              >
+                <option value="household">Household (shared)</option>
+                <option value="person">Person</option>
+                <option value="vehicle">Vehicle</option>
+              </select>
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={`${idPrefix}-amount-${index}`} className={labelClass}>
                 Amount
               </label>
@@ -122,10 +140,10 @@ function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }:
                 required
                 value={line.amount}
                 onChange={(event) => updateLine(index, { amount: event.target.value })}
-                className={inputClass}
+                className={lineInputClass}
               />
             </div>
-            <div className="flex flex-col gap-1 sm:col-span-4">
+            <div className="col-span-2 flex min-w-0 flex-col gap-1">
               <label htmlFor={`${idPrefix}-category-${index}`} className={labelClass}>
                 Category
               </label>
@@ -134,7 +152,7 @@ function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }:
                 required
                 value={String(line.categoryId)}
                 onChange={(event) => updateLine(index, { categoryId: Number(event.target.value) })}
-                className={inputClass}
+                className={lineInputClass}
               >
                 <option value="" disabled>
                   Choose…
@@ -146,26 +164,8 @@ function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }:
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1 sm:col-span-3">
-              <label htmlFor={`${idPrefix}-target-${index}`} className={labelClass}>
-                Spent for
-              </label>
-              <select
-                id={`${idPrefix}-target-${index}`}
-                value={line.targetKind}
-                onChange={(event) => {
-                  const targetKind = event.target.value as EntryLineState['targetKind'];
-                  updateLine(index, { targetKind, targetId: null });
-                }}
-                className={inputClass}
-              >
-                <option value="household">Household (shared)</option>
-                <option value="person">Person</option>
-                <option value="vehicle">Vehicle</option>
-              </select>
-            </div>
             {personMatches || vehicleMatches ? (
-              <div className="flex flex-col gap-1 sm:col-span-2">
+              <div className="col-span-2 flex min-w-0 flex-col gap-1">
                 <label htmlFor={`${idPrefix}-targetid-${index}`} className={labelClass}>
                   Which
                 </label>
@@ -178,7 +178,7 @@ function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }:
                       targetId: event.target.value === '' ? null : Number(event.target.value),
                     })
                   }
-                  className={inputClass}
+                  className={lineInputClass}
                 >
                   <option value="" disabled>
                     Choose…
