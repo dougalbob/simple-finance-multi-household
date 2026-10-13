@@ -629,8 +629,14 @@ test.describe('desktop review', () => {
     const agreementForm = register
       .locator('form')
       .filter({ has: page.getByRole('button', { name: 'Add to the register' }) });
+    // The "For" picker is a `<select>` inside its own `<label>`, and Playwright
+    // reads a wrapping label's whole text — options included — so
+    // `getByLabel('For', { exact: true })` can never match (the accessible name
+    // Chromium computes is still "For"). Address the control by role and name.
     await expect(
-      agreementForm.getByLabel('For', { exact: true }).locator('option', { hasText: newVehicle }),
+      agreementForm
+        .getByRole('combobox', { name: 'For', exact: true })
+        .locator('option', { hasText: newVehicle }),
     ).toHaveCount(1);
 
     await page.goto('/insights');
