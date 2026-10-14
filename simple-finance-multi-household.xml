@@ -9,9 +9,9 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.12.0 is the stable production release and moves :latest (the Recurring
-  Schedules list can hide cancelled schedules, and All Transactions purchase
-  links land below the sticky header).
+  v1.13.0 is the stable production release and moves :latest (Supplier
+  schedule links and empty state, in-place Recurring search filter, and
+  remembered cancelled schedule visibility).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.12.0 is the stable production release and moves :latest.
+    v1.13.0 is the stable production release and moves :latest.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.
