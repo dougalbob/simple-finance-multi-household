@@ -5,6 +5,7 @@ import { useActionState, useState } from 'react';
 import {
   addRefundAction,
   addTransferAction,
+  editTransferAction,
   editPurchaseAction,
   voidExternalMovementAction,
   voidPurchaseAction,
@@ -638,6 +639,140 @@ export function TransferForm({ pots, today, idPrefix = 'transfer' }: TransferFor
       </div>
       <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
         {pending ? 'Saving…' : 'Record transfer'}
+      </button>
+      <FormMessage status={state.status} message={state.message} />
+    </form>
+  );
+}
+
+export interface TransferEditFormProps {
+  transferId: number;
+  expectedVersion: number;
+  fromPotId: number;
+  toPotId: number;
+  amountPence: number;
+  occurredDate: string;
+  note: string | null;
+  pots: TargetOption[];
+  today: string;
+  /** Prefix for control ids — one editor renders inside every live row. */
+  idPrefix: string;
+}
+
+/**
+ * Correct a saved pot-to-pot transfer in place (SPEC §10.1, GitHub issue
+ * #33): the two pots, the amount, the date and the note. A transfer is a
+ * money record like any other, so a pot picked by mistake or a mistyped
+ * amount is corrected here rather than voided and re-recorded — and the note
+ * a hurried entry left out can be added afterwards.
+ *
+ * The form arrives holding the record as saved: the date is the transfer's
+ * own local date (never later than today, because the record itself never
+ * is) and the note is pre-filled, so a blank note keeps what is there — the
+ * convention every other record edit follows. The hidden `expectedVersion`
+ * is the page's snapshot of the row: if the record moved underneath, the
+ * save is refused with the domain's own message and nothing is written.
+ */
+export function TransferEditForm({
+  transferId,
+  expectedVersion,
+  fromPotId,
+  toPotId,
+  amountPence,
+  occurredDate,
+  note,
+  pots,
+  today,
+  idPrefix,
+}: TransferEditFormProps) {
+  const [state, formAction, pending] = useActionState(editTransferAction, initialActionState);
+  return (
+    <form action={formAction} className="flex flex-col gap-2">
+      <input type="hidden" name="transferId" value={transferId} />
+      <input type="hidden" name="expectedVersion" value={expectedVersion} />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1">
+          <label htmlFor={`${idPrefix}-from`} className={labelClass}>
+            From pot
+          </label>
+          <select
+            id={`${idPrefix}-from`}
+            name="fromPotId"
+            required
+            defaultValue={String(fromPotId)}
+            className={inputClass}
+          >
+            {pots.map((pot) => (
+              <option key={pot.id} value={pot.id}>
+                {pot.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor={`${idPrefix}-to`} className={labelClass}>
+            To pot
+          </label>
+          <select
+            id={`${idPrefix}-to`}
+            name="toPotId"
+            required
+            defaultValue={String(toPotId)}
+            className={inputClass}
+          >
+            {pots.map((pot) => (
+              <option key={pot.id} value={pot.id}>
+                {pot.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1">
+          <label htmlFor={`${idPrefix}-amount`} className={labelClass}>
+            Amount
+          </label>
+          <input
+            id={`${idPrefix}-amount`}
+            name="amount"
+            type="text"
+            inputMode="decimal"
+            required
+            defaultValue={penceToAmountText(amountPence)}
+            className={inputClass}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor={`${idPrefix}-date`} className={labelClass}>
+            When
+          </label>
+          <input
+            id={`${idPrefix}-date`}
+            name="occurredDate"
+            type="date"
+            required
+            max={today}
+            defaultValue={occurredDate}
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`${idPrefix}-note`} className={labelClass}>
+          Note (blank keeps the current note)
+        </label>
+        <input
+          id={`${idPrefix}-note`}
+          name="note"
+          type="text"
+          maxLength={280}
+          defaultValue={note ?? ''}
+          className={inputClass}
+        />
+      </div>
+      <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
+        {pending ? 'Saving…' : 'Save transfer'}
       </button>
       <FormMessage status={state.status} message={state.message} />
     </form>

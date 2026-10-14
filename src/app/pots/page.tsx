@@ -11,7 +11,7 @@ import {
   VoidSwapPairForm,
 } from '@/components/external-forms';
 import { AddCheckpointForm, CreatePotForm } from '@/components/pot-forms';
-import { VoidForm } from '@/components/record-forms';
+import { TransferEditForm, VoidForm } from '@/components/record-forms';
 import { PotEditForm } from '@/components/settings-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import type { Db } from '@/lib/db/client';
@@ -377,7 +377,8 @@ export default async function PotsPage({
         </h2>
         <p className="mb-3 mt-1 text-sm text-ink-soft">
           Money moving between your own pots — transfers never enter Insights. Record a transfer in
-          Quick Entry → Move → Between pots.
+          Quick Entry → Move → Between pots; correct one here if its pots, amount, date or note were
+          wrong. Voiding keeps the history.
         </p>
         {linkedTransfer !== null ? (
           <p className="mb-2 rounded-lg bg-accent-50 px-3 py-2 text-xs text-accent-900">
@@ -409,21 +410,42 @@ export default async function PotsPage({
                   </span>
                 </div>
                 {transfer.voidedAt === null ? (
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
-                      Void
-                    </summary>
-                    <div className="mt-2 max-w-md">
-                      <VoidForm
-                        kind="transfer"
-                        recordId={transfer.id}
-                        expectedVersion={transfer.version}
-                        summary={`${potNames.get(transfer.fromPotId) ?? 'a pot'} → ${
-                          potNames.get(transfer.toPotId) ?? 'a pot'
-                        }, ${formatPence(transfer.amountPence)}`}
-                      />
-                    </div>
-                  </details>
+                  <div className="mt-1 flex flex-wrap items-start gap-4">
+                    <details className="text-xs">
+                      <summary className="cursor-pointer font-medium text-ink-soft hover:text-ink">
+                        Edit
+                      </summary>
+                      <div className="mt-2 max-w-md">
+                        <TransferEditForm
+                          idPrefix={`transfer-edit-${transfer.id}`}
+                          transferId={transfer.id}
+                          expectedVersion={transfer.version}
+                          fromPotId={transfer.fromPotId}
+                          toPotId={transfer.toPotId}
+                          amountPence={transfer.amountPence}
+                          occurredDate={transfer.occurredDate}
+                          note={transfer.note}
+                          pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
+                          today={today}
+                        />
+                      </div>
+                    </details>
+                    <details className="text-xs">
+                      <summary className="cursor-pointer font-medium text-ink-soft hover:text-ink">
+                        Void
+                      </summary>
+                      <div className="mt-2 max-w-md">
+                        <VoidForm
+                          kind="transfer"
+                          recordId={transfer.id}
+                          expectedVersion={transfer.version}
+                          summary={`${potNames.get(transfer.fromPotId) ?? 'a pot'} → ${
+                            potNames.get(transfer.toPotId) ?? 'a pot'
+                          }, ${formatPence(transfer.amountPence)}`}
+                        />
+                      </div>
+                    </details>
+                  </div>
                 ) : null}
               </li>
             ))}

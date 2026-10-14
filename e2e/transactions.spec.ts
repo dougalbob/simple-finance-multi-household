@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { waitForTill } from './support';
 
 /**
@@ -126,6 +126,130 @@ test.describe('all transactions', () => {
     const row = transfers.locator('li').filter({ hasText: '£7.77' });
     await row.getByText('Void', { exact: true }).click();
     await row.getByLabel(/Why are you voiding this/).fill('Typed the wrong pots');
+    await row.getByRole('button', { name: 'Void transfer' }).click();
+    await expect(row).toContainText(/voided/i, { timeout: 30_000 });
+  });
+
+  test('a saved transfer is corrected in place — pots, amount and note (issue #33)', async ({
+    page,
+  }) => {
+    // The issue as the household hit it: a transfer recorded with the wrong
+    // destination and no note, with only a Void to reach for. It is now
+    // corrected on the page that reviews it.
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    await entry.getByRole('tab', { name: 'Move' }).click();
+    await entry.getByLabel('From pot').selectOption({ label: 'Main account' });
+    await entry.getByLabel('To pot').selectOption({ label: "Alex's cash" });
+    await entry.getByLabel('Amount').fill('12.34');
+    await entry.getByRole('button', { name: 'Record transfer' }).click();
+    await expect(entry.getByRole('status')).toContainText(/recorded/i, { timeout: 30_000 });
+
+    await page.goto('/pots');
+    const transfers = page.locator('section[aria-labelledby="transfers-heading"]');
+    const row = transfers.locator('li').filter({ hasText: '£12.34' });
+    await expect(row).toBeVisible();
+    // The row's own anchor survives the correction; its amount does not.
+    const anchor = await row.getAttribute('id');
+    expect(anchor).toMatch(/^transfer-\d+$/);
+
+    // The editor opens holding the record as saved — the amount, the date
+    // and both pots — instead of blanks the household must retype. The date
+    // can never be later than today, because the record never is.
+    const editor = row
+      .getByText('Edit', { exact: true })
+      .locator('xpath=ancestor-or-self::details[1]');
+    await editor.locator(':scope > summary').click();
+    await expect(editor.getByLabel('Amount')).toHaveValue('12.34');
+    await expect(editor.getByLabel('Note (blank keeps the current note)')).toHaveValue('');
+    await expect(editor.getByLabel('When')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+    await expect(editor.getByLabel('When')).toHaveAttribute('max', /^\d{4}-\d{2}-\d{2}$/);
+    expect(await selectedLabel(editor.getByLabel('From pot'))).toBe('Main account');
+    expect(await selectedLabel(editor.getByLabel('To pot'))).toBe("Alex's cash");
+
+    // Correct the pot, the amount, and add the note the hurried entry left out.
+    await editor.getByLabel('To pot').selectOption({ label: "Sam's cash" });
+    await editor.getByLabel('Amount').fill('12.99');
+    await editor.getByLabel('Note (blank keeps the current note)').fill('Wrong pot — put right');
+    await editor.getByRole('button', { name: 'Save transfer' }).click();
+    // Re-locate by the anchor, not by the amount the correction just changed.
+    const savedRow = transfers.locator(`#${anchor}`);
+    await expect(savedRow.getByRole('status')).toContainText(/corrected/i, { timeout: 30_000 });
+
+    // The row reads the corrected record, and only the corrected record:
+    // one movement, moved, not a void plus a second entry.
+    await page.goto('/pots');
+    const corrected = page.locator(`#${anchor}`);
+    await expect(corrected).toContainText(/Main account\s*→\s*Sam's cash/);
+    await expect(corrected).toContainText('£12.99');
+    await expect(corrected).toContainText('Wrong pot — put right');
+    await expect(transfers.locator('li').filter({ hasText: '£12.34' })).toHaveCount(0);
+
+    // Void it (after a fresh load, because a correction bumps the version and
+    // the app refuses a stale form) so the shared seed's estimates end where
+    // they started.
+    await corrected.getByText('Void', { exact: true }).click();
+    await corrected
+      .getByLabel(/Why are you voiding this/)
+      .fill('Corrected, then voided by the browser test');
+    await corrected.getByRole('button', { name: 'Void transfer' }).click();
+    await expect(corrected).toContainText(/voided/i, { timeout: 30_000 });
+  });
+
+  test('a stale transfer editor saves nothing and says why (issue #33)', async ({
+    page,
+    context,
+  }) => {
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    await entry.getByRole('tab', { name: 'Move' }).click();
+    await entry.getByLabel('From pot').selectOption({ label: 'Main account' });
+    await entry.getByLabel('To pot').selectOption({ label: "Alex's cash" });
+    await entry.getByLabel('Amount').fill('21.21');
+    await entry.getByRole('button', { name: 'Record transfer' }).click();
+    await expect(entry.getByRole('status')).toContainText(/recorded/i, { timeout: 30_000 });
+
+    // Two readers of the same row: the second is loaded before the first
+    // saves, so its editor carries the version the row had when it opened.
+    await page.goto('/pots');
+    const stalePage = await context.newPage();
+    await stalePage.goto('/pots');
+    const transfersOn = (p: typeof page) =>
+      p.locator('section[aria-labelledby="transfers-heading"]');
+    const freshRow = transfersOn(page).locator('li').filter({ hasText: '£21.21' });
+    const staleRow = transfersOn(stalePage).locator('li').filter({ hasText: '£21.21' });
+    await expect(staleRow).toBeVisible();
+
+    const freshEditor = freshRow
+      .getByText('Edit', { exact: true })
+      .locator('xpath=ancestor-or-self::details[1]');
+    await freshEditor.locator(':scope > summary').click();
+    await freshEditor.getByLabel('Note (blank keeps the current note)').fill('saved first');
+    await freshEditor.getByRole('button', { name: 'Save transfer' }).click();
+    await expect(freshEditor.getByRole('status')).toContainText(/corrected/i, { timeout: 30_000 });
+
+    // The stale editor's save is refused by the domain's version guard, with
+    // the domain's own message, and the amount it tried to write is not saved.
+    const staleEditor = staleRow
+      .getByText('Edit', { exact: true })
+      .locator('xpath=ancestor-or-self::details[1]');
+    await staleEditor.locator(':scope > summary').click();
+    await staleEditor.getByLabel('Amount').fill('99.99');
+    await staleEditor.getByRole('button', { name: 'Save transfer' }).click();
+    await expect(staleEditor.getByRole('status')).toContainText(/changed by someone else/i, {
+      timeout: 30_000,
+    });
+    await stalePage.close();
+
+    await page.goto('/pots');
+    const row = transfersOn(page).locator('li').filter({ hasText: '£21.21' });
+    await expect(row).toContainText('saved first');
+    await expect(transfersOn(page).locator('li').filter({ hasText: '£99.99' })).toHaveCount(0);
+
+    await row.getByText('Void', { exact: true }).click();
+    await row.getByLabel(/Why are you voiding this/).fill('Voided by the browser test');
     await row.getByRole('button', { name: 'Void transfer' }).click();
     await expect(row).toContainText(/voided/i, { timeout: 30_000 });
   });
@@ -321,4 +445,9 @@ function minusDays(isoDate: string, days: number): string {
   const [year, month, day] = isoDate.split('-').map(Number);
   const shifted = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, (day ?? 1) - days));
   return shifted.toISOString().slice(0, 10);
+}
+
+/** The visible option text of a <select> — what the household sees selected. */
+async function selectedLabel(select: Locator): Promise<string> {
+  return select.evaluate((el) => (el as HTMLSelectElement).selectedOptions[0]?.textContent ?? '');
 }
