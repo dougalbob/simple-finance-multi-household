@@ -169,6 +169,20 @@ test.describe('all transactions', () => {
     await expect(page.locator('section[aria-labelledby="results-heading"]')).toContainText(
       'Corner Foods',
     );
+
+    // Issue #30: the target row lands *below* the sticky site header, not
+    // underneath it. Native fragment scrolling ignores the header unless the
+    // row carries a scroll margin (`scroll-mt-24` on the Purchases row).
+    const row = page.locator('tr[id^="purchase-"]', { hasText: 'Corner Foods' }).first();
+    const header = page.locator('header.sticky').first();
+    await expect
+      .poll(async () => {
+        const rowBox = await row.boundingBox();
+        const headerBox = await header.boundingBox();
+        if (rowBox === null || headerBox === null) return false;
+        return rowBox.y >= headerBox.y + headerBox.height;
+      })
+      .toBe(true);
   });
 
   test('expected support appears from its due date and gives way to the recorded borrowing', async ({

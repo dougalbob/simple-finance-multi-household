@@ -1,3 +1,14 @@
+# Unreleased — Recurring hide-cancelled toggle and All Transactions anchor fix (2026-10-14)
+
+Working branch `arena/f71eae56-simple-finance-multi-household`; **not released**. No schema change, no migration, no version bump (the next release PR owns `1.12.0`, if the household accepts it).
+
+1. **#28 — Recurring: hide cancelled schedules** (decision 212). `?hideCancelled=1` on `/recurring`; toggle beside the Schedules heading only when a cancelled schedule exists; badge `N hidden` while hiding; calendar Prev/Today/Next keep the choice. Pure helper `src/lib/records/schedule-visibility.ts` (unit tests in `tests/schedule-visibility.test.ts`).
+2. **#30 — All Transactions source link lands under the sticky header** (decision 213). The Purchases row gets `scroll-mt-24`; `e2e/transactions.spec.ts` asserts the row sits below the header.
+
+Gates run locally: `npm run format:check` clean; `npm run typecheck` clean; `npm test` 912 passed, 0 failed across 211 suites; `npm run build` clean.
+
+Not verified locally: **the Playwright specs** (`e2e/recurring-hide-cancelled.spec.ts` is new; the transactions assertion is extended). This sandbox has no browser and the Playwright CDN is unreachable, so CI's `browser` job is the evidence. The scroll fix relies on `scroll-margin` being honoured on table rows (`<tr>`) by the browser; if the CI run or a real phone shows the row still under the header, move the anchor to a block-level wrapper.
+
 # v1.11.0 release — Honest personal spending, steadier month paging, a gentler honesty loop (2026-10-14)
 
 Released on branch `arena/bddeb52c-simple-finance-multi-household` as **`v1.11.0`** (`APP_RELEASE_STAGE = 'stable'`; moves `latest` on `ghcr.io/dougalbob/simple-finance-multi-household`, host port `3009`; GitHub release marked Latest). No schema change, no migration.

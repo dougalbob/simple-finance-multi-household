@@ -18,6 +18,11 @@ import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
 import { listAgreements } from '@/lib/records/agreements';
 import { listInstances, listSchedules } from '@/lib/records/schedules';
+import {
+  filterScheduleVisibility,
+  parseHideCancelled,
+  recurringHref,
+} from '@/lib/records/schedule-visibility';
 import { getMonthlyFuelByVehicle, getWeeklyGroceriesPence } from '@/lib/records/settings';
 import { supplierCardHref } from '@/lib/records/supplier-focus';
 import { listSuppliersForEntry } from '@/lib/records/suppliers';
@@ -127,7 +132,7 @@ function buildCalendar(
 export default async function RecurringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; hideCancelled?: string }>;
 }) {
   const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
@@ -142,6 +147,7 @@ export default async function RecurringPage({
     month: Number(today.slice(5, 7)),
   };
   const ref = parseMonthParam(params.month, thisMonth);
+  const hideCancelled = parseHideCancelled(params.hideCancelled);
 
   const first = `${ref.year}-${String(ref.month).padStart(2, '0')}-01`;
   const last = addDaysLocal(first, daysInMonth(ref.year, ref.month) - 1);
@@ -152,6 +158,11 @@ export default async function RecurringPage({
   const days = buildCalendar(ref, today, monthInstances);
 
   const schedules = listSchedules(db, now);
+  const scheduleView = filterScheduleVisibility(
+    schedules,
+    (row) => row.schedule.cancelledAt !== null,
+    hideCancelled,
+  );
   const agreements = listAgreements(db);
   const agreementByScheduleId = new Map(
     agreements.flatMap((agreement) =>
@@ -240,19 +251,25 @@ export default async function RecurringPage({
             </h2>
             <div className="flex items-center gap-1">
               <Link
-                href={`/recurring?month=${monthParam(shiftMonth(ref, -1))}`}
+                href={recurringHref({
+                  month: monthParam(shiftMonth(ref, -1)),
+                  hideCancelled,
+                })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
                 ← Prev
               </Link>
               <Link
-                href="/recurring"
+                href={recurringHref({ hideCancelled })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
                 Today
               </Link>
               <Link
-                href={`/recurring?month=${monthParam(shiftMonth(ref, 1))}`}
+                href={recurringHref({
+                  month: monthParam(shiftMonth(ref, 1)),
+                  hideCancelled,
+                })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
                 Next →
@@ -281,10 +298,31 @@ export default async function RecurringPage({
           className="order-2 flex flex-col rounded-xl border border-border bg-surface p-4 shadow-sm lg:col-start-2 lg:row-start-1 lg:h-0 lg:min-h-full lg:overflow-hidden"
         >
           <ScrollHashIntoView />
-          <div className="mb-3 flex shrink-0 items-baseline justify-between gap-2">
-            <h2 id="schedules-heading" className="text-lg font-semibold">
-              Schedules
-            </h2>
+          <div className="mb-3 flex shrink-0 flex-wrap items-baseline justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="schedules-heading" className="text-lg font-semibold">
+                Schedules
+              </h2>
+              {scheduleView.cancelledCount > 0 ? (
+                <Link
+                  href={recurringHref({
+                    month: monthParam(ref),
+                    hideCancelled: !hideCancelled,
+                  })}
+                  className="inline-flex items-center gap-1.5 rounded border border-border-strong px-2.5 py-1 text-xs font-medium text-ink-body hover:bg-canvas"
+                >
+                  {hideCancelled ? 'Show cancelled' : 'Hide cancelled'}
+                  {hideCancelled ? (
+                    <span
+                      data-testid="hidden-cancelled-count"
+                      className="rounded-full bg-danger-50 px-1.5 py-0.5 text-[11px] font-semibold text-danger"
+                    >
+                      {scheduleView.hiddenCount} hidden
+                    </span>
+                  ) : null}
+                </Link>
+              ) : null}
+            </div>
             <span className="text-xs text-ink-muted">
               edits apply from the next instance — history is never rewritten; a start date moved
               earlier backfills the dates the app was never told about
@@ -295,12 +333,23 @@ export default async function RecurringPage({
               No schedules yet. Add one below — each converts into a normal record at local midnight
               on its due date.
             </p>
+          ) : scheduleView.visible.length === 0 ? (
+            <p className="mb-3 text-sm text-ink-muted">
+              Every schedule is cancelled and hidden.{' '}
+              <Link
+                href={recurringHref({ month: monthParam(ref), hideCancelled: false })}
+                className="sf-link"
+              >
+                show them
+              </Link>{' '}
+              to see the cancelled ones.
+            </p>
           ) : (
             <ul
               data-schedule-scroller
               className="mb-3 divide-y divide-border-hairline lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-y-contain"
             >
-              {schedules.map(({ schedule, nextDueDate }, rowIndex) => {
+              {scheduleView.visible.map(({ schedule, nextDueDate }, rowIndex) => {
                 const linkedAgreement = agreementByScheduleId.get(schedule.id);
                 return (
                   <li
