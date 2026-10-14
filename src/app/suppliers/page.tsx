@@ -1,12 +1,17 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { SupplierCardData, SupplierCardList } from '@/components/supplier-card';
+import {
+  LinkedScheduleSummary,
+  SupplierCardData,
+  SupplierCardList,
+} from '@/components/supplier-card';
 import { TaskDueBadge } from '@/components/task-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { listStoredAttachments, listStoredSupplierAttachments } from '@/lib/records/attachments';
 import { categoryTree } from '@/lib/records/categories';
 import { listPeople } from '@/lib/records/people';
 import { listPurchases } from '@/lib/records/purchases';
+import { listSchedules } from '@/lib/records/schedules';
 import {
   INTERACTION_CHANNEL_LABELS,
   listSupplierInteractions,
@@ -77,6 +82,20 @@ export default async function SuppliersPage({
     ),
   );
 
+  const allSchedules = listSchedules(db, now);
+  const schedulesBySupplier = new Map<number, LinkedScheduleSummary[]>();
+  for (const item of allSchedules) {
+    if (item.schedule.supplierId !== null) {
+      const list = schedulesBySupplier.get(item.schedule.supplierId) ?? [];
+      list.push({
+        id: item.schedule.id,
+        name: item.schedule.name,
+        isCancelled: item.schedule.cancelledAt !== null,
+      });
+      schedulesBySupplier.set(item.schedule.supplierId, list);
+    }
+  }
+
   const cards: SupplierCardData[] = suppliers.map((supplier) => {
     const purchases = listPurchases(db, { supplierId: supplier.id, limit: 5 });
     const interactions = listSupplierInteractions(db, supplier.id, 20);
@@ -96,6 +115,7 @@ export default async function SuppliersPage({
         notes: supplier.notes,
       },
       references: listSupplierReferences(db, supplier.id),
+      linkedSchedules: schedulesBySupplier.get(supplier.id) ?? [],
       // Every line labelled and every date in words (decision 175): a bare
       // "2026-11-01" under a call read as nothing in particular.
       interactions: interactions.map((interaction) => {
