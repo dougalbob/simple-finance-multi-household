@@ -21,6 +21,7 @@ import {
   type DrillTable,
 } from '@/lib/records/insights-drill';
 import { purchasesHref } from '@/lib/records/chart-series';
+import { honestyBand, honestyDriftPercent, type HonestyBand } from '@/lib/records/insights';
 import { targetLabel, targetNames, type TargetNames } from '@/lib/records/targets';
 import { listPeople } from '@/lib/records/people';
 import { listVehicles } from '@/lib/records/vehicles';
@@ -146,18 +147,24 @@ export default async function InsightsPage({
           className="rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 id="panel-persons-heading" className="text-xl font-semibold">
+            <h2 id="panel-persons-heading" className="scroll-mt-24 text-xl font-semibold">
               By person — {personal.label}
             </h2>
             <div className="flex items-center gap-1">
               <Link
-                href={`/insights?month=${monthParam(shiftMonth(personal.month, -1))}`}
+                href={insightsHref(
+                  { month: monthParam(shiftMonth(personal.month, -1)), show: null },
+                  'panel-persons-heading',
+                )}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
                 ← Prev
               </Link>
               <Link
-                href={`/insights?month=${monthParam(shiftMonth(personal.month, 1))}`}
+                href={insightsHref(
+                  { month: monthParam(shiftMonth(personal.month, 1)), show: null },
+                  'panel-persons-heading',
+                )}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
                 Next →
@@ -1032,6 +1039,53 @@ function VehicleDrillCard({
   );
 }
 
+/**
+ * The honesty verdict sentence (SPEC §16.4, issue #27): friendly while the
+ * drift sits inside the tolerance band, stronger once it leaves it — always
+ * with the pounds, and the percent once it matters.
+ */
+function honestyVerdictText({
+  period,
+  configuredPence,
+  averagePence,
+  driftPence,
+  band,
+  percent,
+}: {
+  period: 'week' | 'month';
+  configuredPence: number;
+  averagePence: number;
+  driftPence: number;
+  band: HonestyBand;
+  percent: number | null;
+}): string {
+  if (driftPence === 0) return 'Your configured figure matches recent actuals exactly.';
+  if (band === 'within-tolerance') {
+    return (
+      `Close to the ${formatPence(configuredPence)} you configured — actual spending of ` +
+      `${formatPence(averagePence)} a ${period} is within the usual range.`
+    );
+  }
+  const gap =
+    percent === null
+      ? ''
+      : band === 'above-tolerance'
+        ? ` (${percent}% over)`
+        : ` (${Math.abs(percent)}% under)`;
+  if (band === 'above-tolerance') {
+    return (
+      `You are spending about ${formatPence(driftPence)} more per ${period} than the ` +
+      `${formatPence(configuredPence)} you configured${gap}. That is outside the usual ` +
+      `range — consider raising the figure, or cutting back.`
+    );
+  }
+  return (
+    `You are spending about ${formatPence(Math.abs(driftPence))} less per ${period} than the ` +
+    `${formatPence(configuredPence)} you configured${gap}. That is outside the usual ` +
+    `range — the projection is being pessimistic, so consider lowering the figure.`
+  );
+}
+
 function HonestyComparison({
   configuredLabel,
   period,
@@ -1047,6 +1101,8 @@ function HonestyComparison({
   averagePence: number;
   driftPence: number | null;
 }) {
+  const band = honestyBand(driftPence, configuredPence);
+  const percent = driftPence === null ? null : honestyDriftPercent(driftPence, configuredPence);
   return (
     <div className="mt-2">
       <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1061,27 +1117,26 @@ function HonestyComparison({
           <p className="font-semibold tabular-nums">{formatPence(averagePence)}</p>
         </div>
       </div>
-      {driftPence === null ? (
+      {band === null ? (
         <p className="mt-2 text-xs text-ink-muted">
           Set the configured figure in Settings to see the drift.
         </p>
       ) : (
         <p
           className={`mt-2 rounded px-3 py-2 text-sm font-medium ${
-            driftPence > 0
+            band === 'above-tolerance'
               ? 'bg-warning-50 text-warning-900 ring-1 ring-warning-200'
               : 'bg-positive-50 text-positive-900 ring-1 ring-positive-200'
           }`}
         >
-          {driftPence === 0
-            ? 'Your configured figure matches recent actuals exactly.'
-            : driftPence > 0
-              ? `You are spending about ${formatPence(driftPence)} more per ${period} than the ${formatPence(
-                  configuredPence ?? 0,
-                )} you configured. Consider raising the figure — or cutting back.`
-              : `You are spending about ${formatPence(Math.abs(driftPence))} less per ${period} than the ${formatPence(
-                  configuredPence ?? 0,
-                )} you configured. The projection is being pessimistic.`}
+          {honestyVerdictText({
+            period,
+            configuredPence: configuredPence ?? 0,
+            averagePence,
+            driftPence: driftPence ?? 0,
+            band,
+            percent,
+          })}
         </p>
       )}
     </div>

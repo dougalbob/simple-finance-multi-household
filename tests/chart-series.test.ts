@@ -338,7 +338,9 @@ describe('chart series: personal spending (C)', () => {
       childName: 'Dining Out & Takeaways',
       targetKind: 'household',
     }),
-    // Out of scope: groceries are not discretionary personal spending…
+    // In scope for Alex: a line marked for a person counts whatever parent it
+    // sits under — clothing bought inside a grocery shop is still theirs
+    // (issue #25)…
     line({
       occurredDate: '2026-09-07',
       amountPence: 8000,
@@ -364,12 +366,17 @@ describe('chart series: personal spending (C)', () => {
       series.series.map((ref) => ref.key),
       ['person:1', 'person:2', 'household'],
     );
+    // Alex: clothing plus the grocery line marked for them (issue #25).
     assert.deepEqual(
       series.totals.map((total) => total.amountPence),
-      [4500, 2000, 3000],
+      [4500 + 8000, 2000, 3000],
     );
-    assert.equal(series.months[0]?.totalPence, 9500);
-    assert.match(series.headline, /Alex £45\.00, Sam £20\.00, Household £30\.00/);
+    assert.deepEqual(series.totals[0]?.children, [
+      { child: 'Groceries / Weekly Shop', amountPence: 8000 },
+      { child: 'Personal / Clothing & Shoes', amountPence: 4500 },
+    ]);
+    assert.equal(series.months[0]?.totalPence, 4500 + 8000 + 2000 + 3000);
+    assert.match(series.headline, /Alex £125\.00, Sam £20\.00, Household £30\.00/);
   });
 
   it('never splits a household line between the two people', () => {
@@ -381,7 +388,7 @@ describe('chart series: personal spending (C)', () => {
     ]);
   });
 
-  it('takes its scope from the parents given, so a new child is in scope at once', () => {
+  it("counts a person's lines under any parent, while the household series keeps the parent scope", () => {
     const withNewChild = [
       ...lines,
       line({
@@ -400,13 +407,24 @@ describe('chart series: personal spending (C)', () => {
         childName: 'Subscriptions & Streaming',
         targetKind: 'household',
       }),
+      // A household line outside the discretionary parents stays out: the
+      // joint grocery shop is not the household's discretionary bar.
+      line({
+        occurredDate: '2026-09-11',
+        amountPence: 5000,
+        parentName: 'Groceries',
+        childName: 'Weekly Shop',
+        targetKind: 'household',
+      }),
     ];
     const series = personalSpendSeries(withNewChild, people, {
       today: TODAY,
       months: 1,
       parentNames,
     });
-    assert.equal(series.totals[0]?.amountPence, 4500 + 999);
+    // Alex: clothing, the grocery line marked for them, and the new child.
+    assert.equal(series.totals[0]?.amountPence, 4500 + 8000 + 999);
+    // Household: dining plus the shared subscription; the grocery shop stays out.
     assert.equal(series.totals[2]?.amountPence, 3000 + 1499);
   });
 

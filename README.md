@@ -2,9 +2,9 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-14):** this is the independent multi-household edition and **`v1.10.0` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.10.0.md`](docs/RELEASE_NOTES_v1.10.0.md).
-> It stripes the All Transactions rows and turns **Chart E (Spending mix)** into **"Where the money went"**: no dates after today, Since last payday / Last full payday cycle / Month to date quick windows, and date pickers that always show the window drawn. `v1.9.0` before it promoted the Contracts & Renewals agreement register to stable and added the expandable category tree selector on Chart E. The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
+> **Status (2026-10-14):** this is the independent multi-household edition and **`v1.11.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.11.0.md`](docs/RELEASE_NOTES_v1.11.0.md).
+> It makes **Chart C (Personal spending)** count every line marked for a person whatever its category, keeps the **By person** panel in view when paging months, and gives the **honesty loop** a −15%…+10% tolerance band. `v1.10.0` before it striped the All Transactions rows and turned Chart E into "Where the money went". The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
 > restore, and registry backup and restore in `/admin` are implemented. Importing the existing household

@@ -676,3 +676,54 @@ export function computeHonestyLoop(
     fuel,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Honesty verdicts — the tolerance band (issue #27, decision 211)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Drift within −15%…+10% of the configured figure reads as normal life, not
+ * a failing: the household asked for a gentler loop, with stronger wording
+ * only once the drift leaves this band (SPEC §16.4).
+ */
+export const HONESTY_TOLERANCE_UNDER_PCT = 15;
+export const HONESTY_TOLERANCE_OVER_PCT = 10;
+
+/** Where a drift reading sits against the tolerance band. */
+export type HonestyBand = 'within-tolerance' | 'above-tolerance' | 'below-tolerance';
+
+/**
+ * Which tolerance band a drift reading falls in. The band edges test the
+ * EXACT ratio, not the rounded percent the sentence shows: +10.4% is
+ * already above the band even though it displays as "10% over". A null
+ * drift (nothing configured) has no band; a zero configured figure cannot
+ * take a percentage, so any drift there is out of band on its own side.
+ */
+export function honestyBand(
+  driftPence: number | null,
+  configuredPence: number | null,
+): HonestyBand | null {
+  if (driftPence === null || configuredPence === null) return null;
+  if (configuredPence <= 0) {
+    if (driftPence === 0) return 'within-tolerance';
+    return driftPence > 0 ? 'above-tolerance' : 'below-tolerance';
+  }
+  const ratio = driftPence / configuredPence;
+  if (ratio > HONESTY_TOLERANCE_OVER_PCT / 100) return 'above-tolerance';
+  if (ratio < -HONESTY_TOLERANCE_UNDER_PCT / 100) return 'below-tolerance';
+  return 'within-tolerance';
+}
+
+/**
+ * The drift as a whole signed percent of the configured figure, rounded
+ * half-up, for the verdict sentence ("12% over"). Null when there is no
+ * configured figure to measure against (null or zero), in which case the
+ * sentence shows pounds only.
+ */
+export function honestyDriftPercent(
+  driftPence: number,
+  configuredPence: number | null,
+): number | null {
+  if (configuredPence === null || configuredPence <= 0) return null;
+  return roundHalfUpDivide(driftPence * 100, configuredPence);
+}

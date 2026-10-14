@@ -39,7 +39,12 @@ import { getCommitmentCategoryIds, getWeeklyGroceriesPence } from './settings';
  * (SPEC §6): the join over `allocations` enforces both by construction.
  */
 
-/** Parent categories the personal chart treats as discretionary (§16.7 C). */
+/**
+ * Parent categories the personal chart's Household series treats as
+ * discretionary (§16.7 C). A person's series counts every line marked for
+ * them, whatever its parent (issue #25) — only the household column keeps
+ * this scope.
+ */
 export const PERSONAL_PARENTS = ['Personal', 'Entertainment & Eating Out'] as const;
 
 /* ------------------------------------------------------------------ */
@@ -228,10 +233,10 @@ export interface PersonalChartView {
   phone: PersonalSeries;
   /** Last 12 calendar months. */
   laptop: PersonalSeries;
-  /** Parent ids in scope — the drill-down link's category filter. */
+  /** Parent ids in scope — the household drill-down link's category filter. */
   parentCategoryIds: number[];
   parentNames: string[];
-  /** Children in scope, for the caption (they come from the live tree). */
+  /** Children in scope for the Household series (they come from the live tree). */
   childNames: string[];
 }
 
@@ -243,12 +248,16 @@ export interface PersonalChartOptions {
 }
 
 /**
- * Discretionary spending per person per month. The scope is the two parent
- * categories, resolved from the **live** tree rather than a hard-coded list
- * of children (decision 154): the tree is user-editable, so a new child
- * under Personal is in scope the day it is created — and a household-marked
- * line such as a shared subscription lands in the Household series, exactly
- * as the household asked, without anything being hard-coded.
+ * Spending per person per month, plus the Household series. A person's
+ * series counts every line marked for them, whatever its category (issue
+ * #25, decision 209) — the lines below are deliberately NOT pre-filtered to
+ * the discretionary parents; the engine scopes only the Household series.
+ * That scope is the two parent categories, resolved from the **live** tree
+ * rather than a hard-coded list of children (decision 154): the tree is
+ * user-editable, so a new child under Personal is in scope the day it is
+ * created — and a household-marked line such as a shared subscription lands
+ * in the Household series, exactly as the household asked, without anything
+ * being hard-coded.
  */
 export function getPersonalChartView(
   db: Db,
@@ -265,9 +274,11 @@ export function getPersonalChartView(
     -(Math.max(phoneMonths, laptopMonths) - 1),
   );
   const parentNames: string[] = [...PERSONAL_PARENTS];
-  const lines = chartSpendingLines(db, windowFrom, today).filter((line) =>
-    parentNames.includes(line.parentName),
-  );
+  // No parent pre-filter: a person's series counts their lines wherever they
+  // sit, and the engine applies the parent scope to the Household series
+  // itself (issue #25). Filtering here would silently re-impose the old
+  // person scope the household just asked to lift.
+  const lines = chartSpendingLines(db, windowFrom, today);
   const people = listPeople(db).map((person) => ({ id: person.id, label: person.label }));
   const tree = categoryTree(db).filter((parent) => parentNames.includes(parent.name));
   const include = options.include;

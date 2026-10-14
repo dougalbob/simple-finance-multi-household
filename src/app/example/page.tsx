@@ -596,8 +596,9 @@ function PersonalChartInline({
         </table>
       </div>
       <p className="mt-2 text-xs text-ink-muted">
-        Scope: {view.parentNames.join(' and ')}. Household-marked spending is its own column and is
-        never split between people.
+        A person&apos;s column counts every line marked for them, whatever its category.
+        Household-marked spending is its own column and is never split between people; its scope is{' '}
+        {view.parentNames.join(' and ')}.
       </p>
     </div>
   );

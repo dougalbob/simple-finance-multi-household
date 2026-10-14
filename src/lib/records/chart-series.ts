@@ -458,7 +458,7 @@ export interface PersonalMonthPoint extends Omit<MonthBucket, 'amountPence'> {
 }
 
 export interface PersonalSeries {
-  /** The parents in scope (from the live tree, never hard-coded names). */
+  /** The parents in scope for the Household series (from the live tree, never hard-coded names). */
   parentNames: string[];
   series: PersonalSeriesRef[];
   months: PersonalMonthPoint[];
@@ -468,7 +468,11 @@ export interface PersonalSeries {
 }
 
 export interface PersonalSeriesOptions extends MonthlyBucketOptions {
-  /** Parent categories that count as discretionary (SPEC §16.7). */
+  /**
+   * Parent categories that count for the Household series (SPEC §16.7 C). A
+   * person's series counts every line marked for them, whatever its parent —
+   * only the household column keeps the discretionary scope.
+   */
   parentNames: readonly string[];
   /**
    * Which series to produce, by key ('person:3', 'household'). Omitted (or
@@ -492,6 +496,13 @@ export interface PersonRef {
  * A line marked "For: household" (a joint takeaway, a shared subscription)
  * is its own series and is never split between people — that is the honest
  * answer, and the caption says so.
+ *
+ * A person's series counts EVERY line marked for them, whatever category it
+ * sits under: clothing bought inside a grocery shop is still their spending
+ * (issue #25 — the chart used to see only the discretionary parents, so a
+ * person column could read lower than the month panel that counts the same
+ * rule). The Household series keeps the discretionary-parent scope, so joint
+ * groceries and bills do not land in it.
  *
  * Vehicle-targeted lines are excluded: they belong to the vehicle (SPEC
  * §13), and the vehicle running-cost panel already answers for them.
@@ -522,7 +533,6 @@ export function personalSpendSeries(
   const cellTotals: number[][] = frame.map(() => series.map(() => 0));
 
   for (const line of lines) {
-    if (!parents.has(line.parentName)) continue;
     const monthPosition = monthIndex.get(line.occurredDate.slice(0, 7));
     if (monthPosition === undefined) continue;
     const key =
@@ -532,6 +542,9 @@ export function personalSpendSeries(
           ? 'household'
           : null;
     if (key === null) continue;
+    // Person lines count wherever they sit; household lines keep the
+    // discretionary-parent scope (issue #25).
+    if (key === 'household' && !parents.has(line.parentName)) continue;
     const seriesPosition = seriesIndex.get(key);
     if (seriesPosition === undefined) continue;
     (cellTotals[monthPosition] as number[])[seriesPosition] =
