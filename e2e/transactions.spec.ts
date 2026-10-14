@@ -60,6 +60,18 @@ test.describe('all transactions', () => {
       /^\/recurring#schedule-\d+$/,
     );
 
+    // Alternating rows (issue #23, as on Purchases): neighbouring movements
+    // carry different backgrounds. Checkpoint dividers are left out — they are
+    // tinted dividers of their own and do not take a turn in the stripe.
+    const movementBackgrounds = await table.locator('tbody tr').evaluateAll((rows) =>
+      rows
+        .filter((row) => !(row.textContent ?? '').includes('Checkpoint · reported'))
+        .slice(0, 2)
+        .map((row) => getComputedStyle(row).backgroundColor),
+    );
+    expect(movementBackgrounds).toHaveLength(2);
+    expect(movementBackgrounds[0]).not.toBe(movementBackgrounds[1]);
+
     // The checkpoint is a divider carrying a reported figure, never a movement.
     const divider = table.locator('tr', { hasText: 'Checkpoint · reported' });
     await expect(divider.first()).toContainText('not a movement');

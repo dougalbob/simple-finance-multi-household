@@ -76,6 +76,13 @@ export default async function TransactionsPage({
 
   const activity = listPotActivity(db, { potId: pot.id, dateFrom, dateTo });
   const net = activity.totals.inPence - activity.totals.outPence;
+  // Alternating rows (issue #23, the Purchases treatment of decision 205).
+  // Only movements count towards the stripe: a checkpoint is already its own
+  // tinted divider, so the movements either side of it keep alternating.
+  const stripeIndex = new Map<string, number>();
+  for (const entry of activity.entries) {
+    if (entry.kind !== 'checkpoint') stripeIndex.set(entry.row.key, stripeIndex.size);
+  }
 
   const monthStart = `${today.slice(0, 7)}-01`;
   const quickPicks = [
@@ -273,7 +280,11 @@ export default async function TransactionsPage({
                       </td>
                     </tr>
                   ) : (
-                    <ActivityTableRow key={entry.row.key} row={entry.row} />
+                    <ActivityTableRow
+                      key={entry.row.key}
+                      row={entry.row}
+                      rowIndex={stripeIndex.get(entry.row.key) ?? 0}
+                    />
                   ),
                 )}
               </tbody>
@@ -327,12 +338,14 @@ export default async function TransactionsPage({
   );
 }
 
-function ActivityTableRow({ row }: { row: ActivityRow }) {
+function ActivityTableRow({ row, rowIndex }: { row: ActivityRow; rowIndex: number }) {
   const incoming = row.direction === 'in';
   const balance = row.runningBalancePence;
   const balanceInCredit = balance !== null && balance >= 0;
   return (
-    <tr className="border-t border-border-hairline align-top">
+    <tr
+      className={`border-t border-border-hairline align-top ${rowIndex % 2 === 1 ? 'bg-canvas' : ''}`}
+    >
       <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ink-body">{row.date}</td>
       <td className="whitespace-nowrap px-3 py-2.5">
         <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold tracking-wide text-ink-body">

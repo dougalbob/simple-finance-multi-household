@@ -1017,6 +1017,11 @@ behind the row's link. The amount column is single and coloured by sign: **green
 selected pot, red = money out**, so one pot→pot transfer is automatically green on one side and red
 on the other with no data change anywhere.
 
+**Alternating rows (v1.10.0, issue #23, decision 208).** Movement rows alternate a tinted background
+(`bg-canvas` on every second movement), the same treatment as the Purchases list (decision 205) and the
+Schedules list (decision 206). Checkpoint dividers do not take a turn in the stripe: they are already a
+tinted divider with heavy rules above and below, so the movements either side of one keep alternating.
+
 | Code | Record | Source cell | Category cell | Notes cell |
 |---|---|---|---|---|
 | `PUR` | `purchases`, manual entry | supplier name | allocation: `Parent / Child (Target)` | `purchase.note` |
@@ -1222,7 +1227,7 @@ picker in Settings. Not one page, component or chart changed to make that possib
 ### 16.7 Charts — the drawings, and the rules they all keep (v0.14.0)
 
 `/charts` answers one question per picture: the month ahead, the weekly shop, personal spending, the fixed
-commitments, where the money goes (E), and how the last three months compare (F). Every figure on it is the same arithmetic the tables
+commitments, where the money went (E), and how the last three months compare (F). Every figure on it is the same arithmetic the tables
 on `/insights` use, over the same records, so the two can never disagree.
 
 **A. Where the balance goes, today to a month ahead.** A step area of the **household total** (every pot,
@@ -1260,12 +1265,24 @@ household's own direct debits and standing orders already use, and says so. A **
 toggle narrows the chart to purchases the app converted from a schedule (`purchases.scheduleInstanceId`) —
 true DD/SOs, no hand-typed bills.
 
-**E. Where the money goes (decisions 195, 207).** A pie of **net spending by parent category**
-over a window the household chooses, so the question "what share of our money goes on each thing" has a picture.
-The default window is the **payday cycle**: from the most recent payday up to the day before the next one
-(a weekend payday counts as the Friday before, decision 112). The selector offers the previous payday cycle and
-the calendar month, and any custom window with both dates given and running forwards. The selector is a plain GET
-form, so the window and the category ticks live in the URL and work with JavaScript switched off.
+**E. Where the money went (decisions 195, 207, 208).** A pie of **net spending by parent category**
+over a window the household chooses, so the question "what share of our money went on each thing" has a picture.
+It counts **money already spent, never a projection**, which is why it was renamed from "Where the money goes"
+in v1.10.0 (issue #24): **no window runs past today**.
+
+- **Quick windows** (decision 208): **Since last payday** (the default — the most recent payday up to today),
+  **Last full payday cycle** (the payday before that up to the day before the most recent one) and **Month to
+  date** (the 1st up to today). A weekend payday counts as the Friday before (decision 112). The payday dates
+  come from the main salary's recorded instances, and when the salary schedule is too new to have recorded the
+  earlier payday, it is worked out from the salary's cadence, so both payday windows are offered from the first
+  day. With no salary scheduled at all, the chart shows month to date and says why.
+- **Custom windows** need both dates, running forwards, and a start no later than today. Both date pickers carry
+  `max` = today. An end date after today (typed into the URL, say) is brought back to today with a sentence
+  saying so. Typed dates that match a quick window light that window's button.
+- **The pickers always show the window drawn.** Pressing a quick window puts its dates in the From and To pickers,
+  even when a picker had been edited by hand first (the inputs are keyed on the window, so they remount).
+- The selector is a plain GET form, so the window and the category ticks live in the URL and work with
+  JavaScript switched off.
 
 - **Slices are parent categories**, counted from the same allocation lines as Insights, with refunds netted off
   their own category. **Personal is the one exception**: each person's own spending is a slice of its own
