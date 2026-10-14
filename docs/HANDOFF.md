@@ -14,7 +14,7 @@ The household filed three GitHub issues (#23, #24, #25) and asked the agent to p
 
 Gates run locally before the PR: `npm run typecheck` clean; `npm run format:check` clean; `npm run themes:check` clean; `npm test` **902 passed, 0 failed across 208 suites** (new `tests/payday-windows.test.ts`, extended `tests/spending-mix-view.test.ts`); `npm run build` clean; `npm audit --omit=dev` 0 vulnerabilities. Browser (SANDBOX entry 8 recipe): `transactions` + `charts` projects **16/16**; full-suite result recorded in `docs/RELEASE_NOTES_v1.10.0.md`.
 
-Watch out for: the `caret-color: transparent` hydration warning in the dev-server log during the charts pixel test is Playwright's screenshot caret hiding, pre-existing and harmless. Merge SHA, check runs, Publish run and digest are to be recorded by the next session from `gh` (the merge closes this session).
+Watch out for: **re-run `npm test` after the version bump.** `tests/multi-household-isolation-contract.test.ts` requires AGENTS.md, README.md, docs/HANDOFF.md, docs/RELEASE_PROCESS.md **and docs/MULTI_HOUSEHOLD_PLAN.md** to name the current tag; this release's first CI `gates` run failed because MULTI_HOUSEHOLD_PLAN.md still said v1.9.0 (the local full run had happened before the bump). Also: the `caret-color: transparent` hydration warning in the dev-server log during the charts pixel test is Playwright's screenshot caret hiding, pre-existing and harmless. Merge SHA, check runs, Publish run and digest are to be recorded by the next session from `gh` (the merge closes this session).
 
 # v1.9.0 release — Granular Spending Mix category tree selector & Contracts & Renewals stable promotion (2026-10-14)
 
