@@ -1,3 +1,17 @@
+# v1.9.0 release — Granular Spending Mix category tree selector & Contracts & Renewals stable promotion (2026-10-14)
+
+Released on branch `arena/9001fee2-simple-finance-multi-household` as **`v1.9.0`** (`APP_RELEASE_STAGE = 'stable'`; moves `latest` on `ghcr.io/dougalbob/simple-finance-multi-household` on host port `3009` and marks the GitHub release Latest):
+
+1. **Granular parent/child category tree selector on Chart E (`E · Spending mix — Where the money goes`, decision 207):**
+   - `MixCategoryTree` (`src/components/charts/mix-category-tree.tsx`) renders the category selector starting collapsed with just parent categories and a compact drop-down arrow beside each parent.
+   - Expanding a parent reveals its indented child categories (`ml-2 border-l border-border-strong pl-3`). Ticking or unticking a parent toggles all of its children; partial child selection displays the parent checkbox's `indeterminate` state plus a `(ticked/total)` badge.
+   - `spendingMix` (`src/lib/records/spending-mix.ts`) and `getSpendingMixView` (`src/lib/records/charts-view.ts`) filter by `includedCategoryIds` alongside `includedParentIds`, keeping slices grouped by parent category (and `Personal` split per person/household) while summing only the ticked child categories.
+2. **Contracts & Renewals (`v1.8.0-rc.1`) signed off in the field and promoted to stable in `v1.9.0`.**
+3. **Batched unit test runner (`scripts/run-tests.mjs`, `docs/SANDBOX.md` entry 21):**
+   - Running all ~100 test files in a single `node --import tsx --test` invocation caused an out-of-memory warning in the Arena sandbox. `npm test` now invokes `node scripts/run-tests.mjs`, running the suite in 5 sequential batches of 20 files with `--test-concurrency=2` so each child process exits and reclaims memory between batches. During iterative development, prefer running targeted test files (`npx tsx --test tests/<file>.test.ts`).
+
+Gates run locally before PR: `npm run typecheck` clean; `npm run format:check` clean; `npm run themes:check` clean; `npm test` (batched via `scripts/run-tests.mjs`) **885 passed, 0 failed across 204 suites**; `npm run build` clean; `npm audit --omit=dev` **0 vulnerabilities**. See `docs/RELEASE_NOTES_v1.9.0.md`.
+
 # v1.8.0-rc.1 candidate — Contracts & Renewals redesign (2026-10-13)
 
 The release PR is **#21** (`Release candidate v1.8.0-rc.1: Contracts & Renewals`) on the assigned Arena branch `arena/71f43cea-simple-finance-multi-household`. It carries both commits prepared in #20 plus the fix the failing `browser` job needed: the register's "For" picker is addressed by role and accessible name (`combobox`, `For`) because Playwright reads a wrapping `<label>`'s option text, so the exact label match could never succeed. This is an acceptance candidate, not a stable release: `v1.7.0` remains the accepted stable version and `latest` must not move. The candidate adds the explicit insurance/service/other agreement register, separate renewal and fee-free switch dates, independent provider auto-renew and app reminder settings, additive tenant migrations, and agreement-aware key-date prompts. The exact merge SHA, required check run IDs, Publish run, and verified image digest are to be appended here after successful publication; use `docs/RELEASE_NOTES_v1.8.0-rc.1.md` for candidate testing instructions.

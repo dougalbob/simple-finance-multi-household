@@ -3058,3 +3058,16 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     name is an `sf-link` to `supplierCardHref(id)`, which already expands that card (decision 149).
     Unit coverage in `tests/purchases.test.ts`; browser coverage in `e2e/desktop.spec.ts` (toggles
     default on, supplier link, row striping, and the reworked void flow).
+
+206. **Recurring page: cancel inside Edit, double-confirm, restore with back-fill warning, alternating rows (2026-10-13, v1.7.0).**
+
+    Cancel moved inside the Edit disclosure, requires a second confirmation press ("Yes, cancel it"), and cancelled schedules can be restored (`restoreSchedule`) after ticking an explicit back-fill acknowledgement; Schedules rows alternate `bg-canvas` on odd rows.
+
+207. **Granular parent/child category tree selector on Chart E — Where the money goes (2026-10-14, v1.9.0).**
+
+    The household asked for the category selector on Chart E (`E · Spending mix — Where the money goes`, `/charts#mix`) to start collapsed showing only parent categories as before, with a tiny drop-down arrow beside each parent that expands to reveal its child categories slightly indented like a tree view. Confirmed with the household: pie slices remain grouped by parent category (with `Personal` split per person and household), summing only the ticked child categories under each parent; and ticking or unticking a parent checkbox toggles all of its child categories, with the parent checkbox displaying its partial (`indeterminate`) state alongside a `(ticked/total)` indicator when only a subset of its children are ticked.
+
+    As built (SPEC §16.7 E): `MixCategoryTree` (`src/components/charts/mix-category-tree.tsx`) renders the expandable parent/child tree inside `#mix-controls`. Child checkboxes remain mounted in the form (hidden when collapsed) so submitting the form always sends the exact set of ticked child category IDs whether a parent is expanded or collapsed. `getSpendingMixView` (`src/lib/records/charts-view.ts`) and `spendingMix` (`src/lib/records/spending-mix.ts`) accept `includedCategoryIds` alongside `includedParentIds`, remaining backwards-compatible with parent-id URLs and callers. Preset window links, slice drill-down links, and the `"Open these purchases →"` link preserve the active child-category selection.
+
+    In the same `v1.9.0` stable release, the field-tested `v1.8.0-rc.1` Contracts & Renewals agreement register is signed off and promoted to stable (`latest`), and `npm test` now runs `scripts/run-tests.mjs` in sequential batches of 20 files with `--test-concurrency=2` (`docs/SANDBOX.md` entry 21) so memory is reclaimed between batches and never triggers an out-of-memory warning in the Arena sandbox.
+

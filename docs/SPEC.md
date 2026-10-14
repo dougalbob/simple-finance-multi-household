@@ -1260,7 +1260,7 @@ household's own direct debits and standing orders already use, and says so. A **
 toggle narrows the chart to purchases the app converted from a schedule (`purchases.scheduleInstanceId`) —
 true DD/SOs, no hand-typed bills.
 
-**E. Where the money goes (decision 195).** A pie of **net spending by parent category**
+**E. Where the money goes (decisions 195, 207).** A pie of **net spending by parent category**
 over a window the household chooses, so the question "what share of our money goes on each thing" has a picture.
 The default window is the **payday cycle**: from the most recent payday up to the day before the next one
 (a weekend payday counts as the Friday before, decision 112). The selector offers the previous payday cycle and
@@ -1270,8 +1270,13 @@ form, so the window and the category ticks live in the URL and work with JavaScr
 - **Slices are parent categories**, counted from the same allocation lines as Insights, with refunds netted off
   their own category. **Personal is the one exception**: each person's own spending is a slice of its own
   ("Personal — Alex", "Personal — Sam"), and household-marked personal spending is a third slice that is never
-  split between people. Entertainment & Eating Out stays one slice. Unticking a category removes it from the pie
-  and from the total.
+  split between people. Entertainment & Eating Out stays one slice.
+- **Granular parent/child category tree selector (decision 207).** The category selector starts collapsed showing
+  only parent categories, with a tiny drop-down arrow beside each parent that expands to reveal its indented child
+  categories (`MixCategoryTree`). Ticking or unticking a parent toggles all of its child categories, and when only
+  some children under a parent are ticked the parent checkbox shows its partial (`indeterminate`) state alongside a
+  `(ticked/total)` indicator. Pie slices remain grouped by parent category (and Personal by person), summing only
+  the ticked child categories. Unticking a category or child category removes it from the pie and from the total.
 - **A category that nets to zero or below is not drawn**, because a slice cannot be negative. It stays in the
   table with its real figure, and the legend says "not drawn". A person in Personal with no spending in the
   window still appears with an honest £0.00.

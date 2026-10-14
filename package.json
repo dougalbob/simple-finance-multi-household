@@ -1,6 +1,6 @@
 {
   "name": "simple-finance",
-  "version": "1.8.0-rc.1",
+  "version": "1.9.0",
   "private": true,
   "description": "Private household spending app for two people watching money carefully. See docs/SPEC.md.",
   "engines": {
@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node scripts/run-tests.mjs",
     "themes:build": "node --import tsx scripts/themes/cli.mts",
     "themes:check": "node --import tsx scripts/themes/cli.mts --check",
     "format": "prettier --write .",

@@ -63,6 +63,8 @@ export interface MixOptions {
   to: string;
   /** Parent ids counted; null means every parent. */
   includedParentIds: ReadonlySet<number> | null;
+  /** Child (leaf) category ids counted; null/undefined means every child under included parents. */
+  includedCategoryIds?: ReadonlySet<number> | null;
   people: readonly PersonRef[];
   /** Parents whose person-targeted lines are split per person (e.g. Personal). */
   splitParents: ReadonlyArray<{ id: number; name: string }>;
@@ -84,7 +86,7 @@ export function spendingMix(lines: readonly MixLine[], options: MixOptions): Spe
   if (!LOCAL_DATE.test(options.from) || !LOCAL_DATE.test(options.to)) {
     throw new Error('spendingMix expects YYYY-MM-DD bounds');
   }
-  const { from, to, includedParentIds, people, splitParents } = options;
+  const { from, to, includedParentIds, includedCategoryIds = null, people, splitParents } = options;
   const splitParentNames = splitParents.map((parent) => parent.name);
   const byKey = new Map<string, MixSlice>();
 
@@ -103,6 +105,7 @@ export function spendingMix(lines: readonly MixLine[], options: MixOptions): Spe
   for (const line of lines) {
     if (line.occurredDate < from || line.occurredDate > to) continue;
     if (includedParentIds !== null && !includedParentIds.has(line.parentId)) continue;
+    if (includedCategoryIds !== null && !includedCategoryIds.has(line.categoryId)) continue;
     totalPence += line.amountPence;
 
     if (splitParentNames.includes(line.parentName)) {

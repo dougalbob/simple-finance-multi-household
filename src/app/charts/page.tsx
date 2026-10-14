@@ -7,6 +7,7 @@ import {
   ChartLegend,
   ChartScroller,
   GroupedBarChart,
+  MixCategoryTree,
   abbrevCategory,
   PieChart,
   StackedBarChart,
@@ -981,9 +982,24 @@ interface PresetLink {
   window: MixWindow;
 }
 
+function selectedMixCategoryIds(view: SpendingMixView): number[] | null {
+  if (view.allCategoriesIncluded) return null;
+  const childlessIncluded = view.parents
+    .filter((parent) => parent.children.length === 0 && view.includedParentIds.includes(parent.id))
+    .map((parent) => parent.id);
+  return [...view.includedCategoryIds, ...childlessIncluded];
+}
+
 function MixSelector({ view }: { view: SpendingMixView }) {
-  const { window, presets, parents, includedParentIds, allParentsIncluded } = view;
-  const cats = allParentsIncluded ? null : includedParentIds;
+  const {
+    window,
+    presets,
+    parents,
+    includedParentIds,
+    includedCategoryIds,
+    allCategoriesIncluded,
+  } = view;
+  const cats = selectedMixCategoryIds(view);
   const presetLinks: PresetLink[] = [];
   if (presets.payday !== null) {
     presetLinks.push({ key: 'payday', label: 'Payday cycle', window: presets.payday });
@@ -1067,43 +1083,13 @@ function MixSelector({ view }: { view: SpendingMixView }) {
           })}
         </div>
 
-        <fieldset>
-          <legend className="mb-1 text-xs font-medium text-ink-soft">
-            Which categories count?{' '}
-            <span className="font-normal text-ink-faint">
-              {allParentsIncluded
-                ? 'Every category counts.'
-                : `${includedParentIds.length} of ${parents.length} counted.`}
-            </span>
-          </legend>
-          <ul className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1">
-            {parents.map((parent) => (
-              <li key={parent.id}>
-                <label className="flex items-center gap-2 text-sm text-ink-body">
-                  <input
-                    type="checkbox"
-                    name="cat"
-                    value={parent.id}
-                    defaultChecked={includedParentIds.includes(parent.id)}
-                    className="h-4 w-4 rounded border-border-strong"
-                  />
-                  {parent.name}
-                  {parent.retired ? (
-                    <span className="text-xs text-ink-faint">(retired)</span>
-                  ) : null}
-                </label>
-              </li>
-            ))}
-          </ul>
-          {allParentsIncluded ? null : (
-            <Link
-              href={mixHref(window, { cats: null })}
-              className="mt-2 inline-block text-xs sf-link"
-            >
-              Count every category
-            </Link>
-          )}
-        </fieldset>
+        <MixCategoryTree
+          parents={parents}
+          includedParentIds={includedParentIds}
+          includedCategoryIds={includedCategoryIds}
+          allCategoriesIncluded={allCategoriesIncluded}
+          resetHref={mixHref(window, { cats: null })}
+        />
       </form>
     </section>
   );
@@ -1144,7 +1130,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
     const index = slots.indexOf(key);
     return mixColour(index < 0 ? slots.length : index);
   };
-  const cats = view.allParentsIncluded ? null : view.includedParentIds;
+  const cats = selectedMixCategoryIds(view);
   const selected =
     selectedKey === null ? null : (mix.slices.find((slice) => slice.key === selectedKey) ?? null);
   const drawn = mix.slices.filter((slice) => slice.drawn);
@@ -1168,7 +1154,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
   }));
 
   const headline =
-    view.allParentsIncluded === false && view.includedParentIds.length === 0
+    view.allCategoriesIncluded === false && view.includedParentIds.length === 0
       ? 'No categories are ticked, so nothing is counted.'
       : largest === undefined
         ? `Nothing is above zero from ${windowText}.`
@@ -1286,10 +1272,18 @@ function MixLineItems({
       : slice.kind === 'household'
         ? { targetKind: 'household' as const }
         : {};
+  const parent = view.parents.find((entry) => entry.id === slice.parentId);
+  const parentChildIds = parent?.children.map((child) => child.id) ?? [];
+  const includedSet = new Set(view.includedCategoryIds);
+  const tickedChildren = parentChildIds.filter((id) => includedSet.has(id));
+  const sliceCategoryIds =
+    tickedChildren.length > 0 && tickedChildren.length < parentChildIds.length
+      ? tickedChildren
+      : [slice.parentId];
   const openHref = purchasesHref({
     from: window.from,
     to: window.to,
-    categoryIds: [slice.parentId],
+    categoryIds: sliceCategoryIds,
     ...target,
   });
   return (
