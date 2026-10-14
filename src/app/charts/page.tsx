@@ -561,7 +561,7 @@ function PersonalSection({
   selected: string[] | null;
   params: SearchParams;
 }) {
-  const caption = `Attributed by “For: …”, the way Insights already does it — not by whose card was used. Household-marked spending (a joint takeaway, a shared subscription) is its own bar and is never split between people. Scope: ${view.parentNames.join(' and ')}.`;
+  const caption = `Attributed by “For: …”, the way Insights already does it — not by whose card was used. A person's bar counts every line marked for them, whatever its category. Household-marked spending (a joint takeaway, a shared subscription) is its own bar and is never split between people; its scope is ${view.parentNames.join(' and ')}.`;
   const chips = everyone.laptop.series.map((ref) => ({
     key: ref.key,
     label: ref.label,
@@ -628,13 +628,15 @@ function renderPersonal(
   fills: Map<string, string>,
   labelEvery: number,
 ) {
+  // A person's drill-down carries no category filter: their bar counts every
+  // line marked for them, so the review page must show every line (issue
+  // #25). The household bar keeps the discretionary-parent filter.
   const hrefFor = (from: string, to: string, key: string): string =>
     purchasesHref({
       from,
       to,
-      categoryIds: view.parentCategoryIds,
       ...(key === 'household'
-        ? { targetKind: 'household' as const }
+        ? { targetKind: 'household' as const, categoryIds: view.parentCategoryIds }
         : { targetKind: 'person' as const, targetId: Number(key.split(':')[1]) }),
     });
 

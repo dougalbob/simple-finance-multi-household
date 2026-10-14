@@ -9,9 +9,10 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.10.0 is the accepted stable production release and moves :latest
-  (alternating rows on All Transactions, and Chart E becomes "Where the money
-  went": no dates after today, and quick windows that keep the pickers in sync).
+  v1.11.0 is the accepted stable production release and moves :latest
+  (Chart C counts every line marked for a person whatever its category, By
+  Person month navigation keeps the panel in view, and the honesty loop reads
+  drift within -15%..+10% as normal life).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +48,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.10.0 is the accepted stable production release and moves :latest.
+    v1.11.0 is the accepted stable production release and moves :latest.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

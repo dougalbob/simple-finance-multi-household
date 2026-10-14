@@ -6,6 +6,8 @@ import {
   FUEL_CHILD,
   compareCalendarMonths,
   computeHonestyLoop,
+  honestyBand,
+  honestyDriftPercent,
   personalSpending,
   spreadOverCoverMonths,
   startOfWeekLocal,
@@ -646,6 +648,43 @@ describe('insights: honesty loop (panel 4)', () => {
     const b = loop.fuel.find((row) => row.vehicleId === 2);
     assert.equal(b?.averageMonthlyPence, 0);
     assert.equal(b?.driftPence, null);
+  });
+
+  it('reads drift within −15%…+10% as normal, stronger bands outside it (issue #27)', () => {
+    // Configured £85.00 throughout: the edges belong to the band itself.
+    assert.equal(honestyBand(0, 8500), 'within-tolerance');
+    assert.equal(honestyBand(850, 8500), 'within-tolerance'); // +10% exactly
+    assert.equal(honestyBand(851, 8500), 'above-tolerance');
+    assert.equal(honestyBand(-1275, 8500), 'within-tolerance'); // −15% exactly
+    assert.equal(honestyBand(-1276, 8500), 'below-tolerance');
+    assert.equal(honestyBand(2000, 8500), 'above-tolerance');
+    assert.equal(honestyBand(-2000, 8500), 'below-tolerance');
+    // The edges test the EXACT ratio, not the rounded display percent:
+    // +10.4% is above the band even though it shows as "10% over".
+    assert.equal(honestyBand(884, 8500), 'above-tolerance');
+    assert.equal(honestyDriftPercent(884, 8500), 10);
+  });
+
+  it('has no band without a configured figure, and no percent off a zero one', () => {
+    assert.equal(honestyBand(null, 8500), null);
+    assert.equal(honestyBand(500, null), null);
+    assert.equal(honestyBand(null, null), null);
+    // A zero configured figure cannot take a percentage: any drift is out
+    // of band on its own side, and the sentence shows pounds only.
+    assert.equal(honestyBand(0, 0), 'within-tolerance');
+    assert.equal(honestyBand(500, 0), 'above-tolerance');
+    assert.equal(honestyBand(-500, 0), 'below-tolerance');
+    assert.equal(honestyDriftPercent(500, null), null);
+    assert.equal(honestyDriftPercent(500, 0), null);
+    assert.equal(honestyDriftPercent(0, 8500), 0);
+  });
+
+  it('reports the drift as a whole signed percent, rounded half-up', () => {
+    assert.equal(honestyDriftPercent(1020, 8500), 12);
+    assert.equal(honestyDriftPercent(-1275, 8500), -15);
+    assert.equal(honestyDriftPercent(893, 8500), 11); // 10.5…% rounds up
+    assert.equal(honestyDriftPercent(840, 8000), 11); // exactly 10.5% → 11
+    assert.equal(honestyDriftPercent(-840, 8000), -11);
   });
 });
 

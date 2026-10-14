@@ -1195,7 +1195,10 @@ picker in Settings. Not one page, component or chart changed to make that possib
    so an annual road-tax payment against a vehicle is spread as well. A spread row is labelled "(annual ÷ 12)",
    and the Insights subtitle names this one exception to exact reconciliation with the purchase history.
 4. **Projection feedback (honesty loop)** — configured weekly grocery and per-vehicle monthly fuel figures vs
-   recent actuals (last 4–8 weeks), so drift is visible and fixable.
+   recent actuals (the last 8 complete weeks for groceries, the last 3 complete months for fuel), so drift is
+   visible and fixable. Drift within −15%…+10% of the configured figure reads as normal life (v1.11.0,
+   issue #27): the verdict stays friendly inside that band and only speaks more strongly — with the percent
+   ("12% over") — once the drift leaves it.
 5. **To-payday projection strip** — lives on Overview (§15.2) with the two warning tiers and the pot-level
    transfer watch; the phone home carries the short summary card and links to Horizon (v0.36.0, decision 186).
 6. **Fuel economy (v0.10.0, §16.6)** — per vehicle mpg and fuel cost per mile from the litres and odometer
@@ -1249,13 +1252,17 @@ are not counted either**: recording starts at the first recorded purchase (the e
 hand-entered one), and a week counts only if it is complete and begins on or after that date. Those weeks
 are labelled "not counted" rather than read as shopping-free (decision 183).
 
-**C. Hers, his, household.** Stacked monthly bars of discretionary spending — 6 months on a phone, 12 on a
-laptop — split into one series per person plus a Household series. Attribution is **"For: person"**, the
-allocation's target, never "Paid by": whose card was used says nothing about whose spending it was.
+**C. Hers, his, household.** Stacked monthly bars — 6 months on a phone, 12 on a laptop — split into one
+series per person plus a Household series. Attribution is **"For: person"**, the allocation's target, never
+"Paid by": whose card was used says nothing about whose spending it was. A person's series counts every line
+marked for them, whatever category it sits under (v1.11.0, issue #25): clothing bought inside a grocery shop
+is still their spending, and the chart agrees with the Insights month panel that counts the same rule.
 Household-marked spending (a joint takeaway, a shared subscription) is its own bar and is **never split**
-between people. The scope is the parents *Personal* and *Entertainment & Eating Out*, resolved from the
-live category tree rather than a fixed list of children, so a child added under Personal is in scope the
-day it is created. Chips filter the chart by person; the choice lives in the URL.
+between people; only the Household series keeps the discretionary scope — the parents *Personal* and
+*Entertainment & Eating Out*, resolved from the live category tree rather than a fixed list of children, so
+a child added under Personal is in scope the day it is created. Chips filter the chart by person; the choice
+lives in the URL. A person's bar drills down with no category filter; the household bar keeps the
+discretionary-parent filter.
 
 **D. Are the direct debits coming down?** Monthly bars of the household's **tracked fixed commitments**.
 "Direct debit" is not a field on a purchase, so the definition is an explicit list of child categories,

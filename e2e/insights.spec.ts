@@ -80,3 +80,54 @@ test.describe('annual vehicle payments', () => {
     await expect(payments.first()).toContainText('£600.00');
   });
 });
+
+test.describe('By Person month navigation (issue #26)', () => {
+  test('prev/next keep the panel in view, clear of the sticky header', async ({ page }) => {
+    await page.goto('/insights');
+    const panel = page.locator('section[aria-labelledby="panel-persons-heading"]');
+    const heading = panel.getByRole('heading', { name: /^By person/ });
+    const prev = panel.getByRole('link', { name: 'Prev' });
+    const next = panel.getByRole('link', { name: 'Next' });
+    // The anchor target clears the sticky header: scroll-hash scrolls to the
+    // heading itself, so the offset lives on it, not the section.
+    await expect(heading).toHaveClass(/scroll-mt-24/);
+    await expect(prev).toHaveAttribute('href', /#panel-persons-heading$/);
+    await expect(next).toHaveAttribute('href', /#panel-persons-heading$/);
+
+    // Paging months keeps the panel put: the heading lands in view, below
+    // the header — not at the top of the page.
+    await next.click();
+    await expect(page).toHaveURL(/#panel-persons-heading$/);
+    await expect(heading).toBeInViewport();
+    const headerBottom = (await page.locator('header.sticky').boundingBox())?.height ?? 0;
+    const headingTop = (await heading.boundingBox())?.y ?? -1;
+    expect(headingTop, 'the heading sits under the sticky header').toBeGreaterThanOrEqual(
+      headerBottom - 1,
+    );
+
+    // And back again: Prev returns to the starting month, still anchored.
+    await prev.click();
+    await expect(page).toHaveURL(/#panel-persons-heading$/);
+    await expect(heading).toBeInViewport();
+  });
+});
+
+test.describe('honesty loop tolerance band (issue #27)', () => {
+  test('the groceries verdict speaks in bands, with the percent once it matters', async ({
+    page,
+  }) => {
+    await page.goto('/insights');
+    const loop = page.getByRole('region', { name: /configured figures honest/i });
+    const groceries = loop.locator('div.rounded-lg', { hasText: 'Actual average weekly' });
+    // The seed's shops drift upwards against the configured £85, robustly
+    // past the +10% edge whatever weekday the suite runs on (any trailing-8
+    // window of seed shops averages over £96 — and the till specs only add
+    // to the in-progress week, which the average never sees). So the verdict
+    // says outside the usual range, with the percent.
+    await expect(groceries).toContainText(/outside the usual range/);
+    await expect(groceries).toContainText(/\d+% over/);
+    // …while the configured and actual figures the charts agree on stay put.
+    await expect(groceries).toContainText('Configured weekly');
+    await expect(groceries).toContainText('Actual average weekly');
+  });
+});

@@ -30,7 +30,7 @@ import {
   setWeeklyGroceriesPence,
 } from '../src/lib/records/settings';
 import { addDaysLocal, addMonthsClamped } from '../src/lib/records/dates';
-import { firstOfLocalMonth, startOfWeekLocal } from '../src/lib/records/insights';
+import { firstOfLocalMonth, personalSpending, startOfWeekLocal } from '../src/lib/records/insights';
 import { categories } from '../src/lib/db/schema';
 import type { Db } from '../src/lib/db/client';
 
@@ -134,6 +134,11 @@ function seedHistory(fixture: HouseholdFixture) {
   buy('2026-08-03', 2600, hobbies, { kind: 'person', id: people.alex.id });
   buy('2026-08-19', 3150, clothing, { kind: 'person', id: people.sam.id });
   buy('2026-09-06', 1975, hobbies, { kind: 'person', id: people.sam.id });
+  // …plus Sam's top-up grouped under Groceries (the split-bill case from
+  // issue #25): marked for them, so the personal chart counts it wherever
+  // it sits. Dated in the week of Mon 10 Aug, which no grocery assertion
+  // hard-codes, inside the trailing-8 average window.
+  buy('2026-08-10', 1240, topUp, { kind: 'person', id: people.sam.id });
   // Shared, and never split between the two.
   buy('2026-09-07', 4200, dining);
   buy('2026-09-09', 1499, subscriptions);
@@ -289,6 +294,8 @@ describe('charts-view: reconciliation with the purchase history', () => {
       );
     const windowFrom = addMonthsClamped(firstOfLocalMonth(TODAY), -11);
     for (const total of view.laptop.totals) {
+      // A person's total is every line marked for them, whatever its parent
+      // (issue #25); only the household total keeps the parent scope.
       const independent =
         total.key === 'household'
           ? lineTotalPence(
@@ -302,7 +309,6 @@ describe('charts-view: reconciliation with the purchase history', () => {
               windowFrom,
               TODAY,
               (line) =>
-                inScope(line.categoryId) &&
                 line.targetKind === 'person' &&
                 line.targetId === Number(total.key.slice('person:'.length)),
             );
@@ -313,9 +319,10 @@ describe('charts-view: reconciliation with the purchase history', () => {
       view.laptop.totals.find((total) => total.key === `person:${alex.id}`)?.amountPence,
       4500 + 2600,
     );
+    // Sam's Groceries top-up counts: marked for them, wherever it sits.
     assert.equal(
       view.laptop.totals.find((total) => total.key === `person:${sam.id}`)?.amountPence,
-      3150 + 1975,
+      3150 + 1975 + 1240,
     );
     // Dining out + the shared subscription, whole, attributed to nobody.
     assert.equal(
@@ -324,15 +331,35 @@ describe('charts-view: reconciliation with the purchase history', () => {
     );
   });
 
-  it('the personal chart excludes vehicle and grocery lines, and lists everyone', () => {
+  it("a person's September cell matches the Insights month panel behind it (issue #25)", () => {
+    const view = getPersonalChartView(db(), {}, NOW);
+    const september = view.laptop.months.find((month) => month.label === 'September 2026');
+    const { alex, sam } = fixture.people;
+    // Panel 2's own rule, run over the same lines the chart read.
+    const spends = personalSpending(
+      chartSpendingLines(db(), '2026-09-01', '2026-09-30'),
+      [
+        { id: alex.id, label: 'Alex' },
+        { id: sam.id, label: 'Sam' },
+      ],
+      '2026-09-01',
+      '2026-09-30',
+    );
+    for (const spend of spends) {
+      const cell = september?.cells.find((entry) => entry.key === `person:${spend.personId}`);
+      assert.equal(cell?.amountPence, spend.totalPence, spend.person);
+    }
+  });
+
+  it('the personal chart excludes vehicle lines but counts grocery lines marked for a person', () => {
     const view = getPersonalChartView(db(), {}, NOW);
     assert.deepEqual(
       view.people.map((person) => person.label),
       ['Alex', 'Sam'],
     );
     const drawn = view.laptop.totals.reduce((sum, total) => sum + total.amountPence, 0);
-    assert.equal(drawn, 4500 + 2600 + 3150 + 1975 + 4200 + 1499);
-    // Fuel (vehicle) and groceries are simply not in these parents.
+    assert.equal(drawn, 4500 + 2600 + 3150 + 1975 + 1240 + 4200 + 1499);
+    // The £60 vehicle fuel line reaches no month; the voided £999.99 neither.
     assert.equal(
       view.laptop.months.every((month) => month.totalPence < 60000),
       true,
@@ -348,7 +375,7 @@ describe('charts-view: reconciliation with the purchase history', () => {
     );
     assert.equal(
       view.laptop.totals.reduce((sum, total) => sum + total.amountPence, 0),
-      3150 + 1975,
+      3150 + 1975 + 1240,
     );
     // …and the full cast is still offered as chips.
     assert.equal(view.people.length, 2);
@@ -358,10 +385,18 @@ describe('charts-view: reconciliation with the purchase history', () => {
     const view = getPersonalChartView(db(), {}, NOW);
     const september = view.laptop.months.find((month) => month.label === 'September 2026');
     const parents = parentNames(db());
-    const independent = lineTotalPence(db(), '2026-09-01', '2026-09-30', (line) =>
-      PERSONAL_PARENTS.includes(
-        (parents.get(line.categoryId) ?? '') as (typeof PERSONAL_PARENTS)[number],
-      ),
+    // Person lines everywhere, household lines under the discretionary
+    // parents — the engine's rule, restated against the review rows.
+    const independent = lineTotalPence(
+      db(),
+      '2026-09-01',
+      '2026-09-30',
+      (line) =>
+        (line.targetKind === 'person' && line.targetId !== null) ||
+        (line.targetKind === 'household' &&
+          PERSONAL_PARENTS.includes(
+            (parents.get(line.categoryId) ?? '') as (typeof PERSONAL_PARENTS)[number],
+          )),
     );
     assert.equal(september?.totalPence, independent);
     assert.equal(september?.complete, false);
