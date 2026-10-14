@@ -12,7 +12,11 @@ import { categoryTree } from '@/lib/records/categories';
 import { buildEntryData } from '@/lib/records/entry-view';
 import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
-import { listPurchases, type PurchaseFilters } from '@/lib/records/purchases';
+import {
+  listPurchases,
+  sumListedPurchasesPence,
+  type PurchaseFilters,
+} from '@/lib/records/purchases';
 import { listSuppliersForEntry } from '@/lib/records/suppliers';
 import { supplierCardHref } from '@/lib/records/supplier-focus';
 import { targetLabel, targetNames } from '@/lib/records/targets';
@@ -151,6 +155,7 @@ export default async function PurchasesPage({
   };
 
   const purchases = listPurchases(db, filters);
+  const shownTotalPence = sumListedPurchasesPence(purchases);
 
   const pots = listPots(db);
   const people = listPeople(db);
@@ -207,14 +212,19 @@ export default async function PurchasesPage({
       />
 
       <section aria-labelledby="results-heading" className="mt-6">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
+        <div className="mb-1 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
           <h2 id="results-heading" className="text-xl font-semibold">
-            {purchases.length} {purchases.length === 1 ? 'entry' : 'entries'}
+            {purchases.length} {purchases.length === 1 ? 'entry' : 'entries'}: Total{' '}
+            <span className="whitespace-nowrap tabular-nums">{formatPence(shownTotalPence)}</span>
           </h2>
           <span className="text-xs text-ink-muted">
             Newest first · line items shown receipt-style
           </span>
         </div>
+        <p className="mb-3 text-xs text-ink-muted">
+          Net of refunds; voided history adds nothing. Total covers the rows shown (up to 500 newest
+          matches).
+        </p>
         {purchases.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
             Nothing matches these filters. Clear the filters to see the full history.

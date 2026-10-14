@@ -589,6 +589,20 @@ export interface PurchaseFilters {
 }
 
 /**
+ * Net total of the rows actually shown in the Purchases history (issue #38).
+ * A category/target filter matches a whole purchase, including its other
+ * lines; count that purchase only once. Refunds carry negative totals and
+ * reduce the sum. Voided rows may still be shown for history, but are not
+ * money spent and must never contribute to the total.
+ */
+export function sumListedPurchasesPence(rows: readonly PurchaseWithLines[]): number {
+  return rows.reduce(
+    (sum, { purchase }) => sum + (purchase.voidedAt === null ? purchase.totalPence : 0),
+    0,
+  );
+}
+
+/**
  * Purchase history with the review-table filters (SPEC §15.2 Purchases
  * page, Phase 4a): date range, pot, supplier, category, target, paid-by
  * person and the "from schedule" / refund / voided tags. Voided records are
