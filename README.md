@@ -2,9 +2,9 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-14):** this is the independent multi-household edition and **`v1.12.0` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.12.0.md`](docs/RELEASE_NOTES_v1.12.0.md).
-> It lets the Recurring Schedules list hide cancelled schedules (with a count of those hidden) and makes All Transactions purchase links land below the sticky header. `v1.11.0` before it makes **Chart C (Personal spending)** count every line marked for a person whatever its category, keeps the **By person** panel in view when paging months, and gives the **honesty loop** a −15%…+10% tolerance band. `v1.10.0` before it striped the All Transactions rows and turned Chart E into "Where the money went". The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
+> **Status (2026-10-14):** this is the independent multi-household edition and **`v1.13.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.13.0.md`](docs/RELEASE_NOTES_v1.13.0.md).
+> It links Supplier cards to recurring schedules with deep links (and an explicit unlinked notice), provides an in-place filter search box on Recurring, and remembers the cancelled schedule visibility setting across navigations. `v1.12.0` before it lets the Recurring Schedules list hide cancelled schedules (with a count of those hidden) and makes All Transactions purchase links land below the sticky header. `v1.11.0` before it makes **Chart C (Personal spending)** count every line marked for a person whatever its category, keeps the **By person** panel in view when paging months, and gives the **honesty loop** a −15%…+10% tolerance band. `v1.10.0` before it striped the All Transactions rows and turned Chart E into "Where the money went". The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
 > restore, and registry backup and restore in `/admin` are implemented. Importing the existing household

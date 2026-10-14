@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { AttachmentForm } from '@/components/attachment-form';
 import {
@@ -10,6 +11,7 @@ import {
 import { DoneTaskList, OpenTaskList, TaskCreateForm } from '@/components/task-forms';
 import { formatPence } from '@/lib/money';
 import type { StoredAttachment } from '@/lib/records/attachments';
+import { scheduleRecurringHref } from '@/lib/records/schedule-visibility';
 import {
   hasSupplierFocus,
   resolveSupplierFocus,
@@ -48,6 +50,12 @@ function ChevronUpIcon({ className = 'h-5 w-5' }: { className?: string }) {
   );
 }
 
+export interface LinkedScheduleSummary {
+  id: number;
+  name: string;
+  isCancelled: boolean;
+}
+
 export interface SupplierCardData {
   supplier: {
     id: number;
@@ -71,6 +79,8 @@ export interface SupplierCardData {
   };
   /** Letters, policy documents and terms attached to the supplier itself (v0.25.0). */
   documents: StoredAttachment[];
+  /** Recurring schedules linked to this canonical supplier (issue #34). */
+  linkedSchedules?: LinkedScheduleSummary[];
   recentPurchases: Array<{
     id: number;
     date: string;
@@ -137,6 +147,7 @@ export function SupplierCard({
   interactions,
   tasks,
   documents,
+  linkedSchedules = [],
   recentPurchases,
   isExpanded,
   onToggle,
@@ -207,6 +218,29 @@ export function SupplierCard({
             <dd className="break-words">{supplier.website ?? '—'}</dd>
             <dt className="font-medium text-ink-muted">Address</dt>
             <dd className="whitespace-pre-line">{supplier.address ?? '—'}</dd>
+            <dt className="font-medium text-ink-muted">Schedule</dt>
+            <dd>
+              {linkedSchedules.length === 0 ? (
+                <span className="text-ink-muted">
+                  No scheduled payments relate to this supplier currently
+                </span>
+              ) : (
+                <ul className="space-y-1">
+                  {linkedSchedules.map((schedule) => (
+                    <li key={schedule.id}>
+                      <Link href={scheduleRecurringHref(schedule)} className="sf-link">
+                        {`Linked to schedule "${schedule.name}"`}
+                      </Link>
+                      {schedule.isCancelled ? (
+                        <span className="ml-1.5 rounded bg-danger-50 px-1.5 py-0.5 text-xs font-medium text-danger">
+                          Cancelled
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </dd>
           </dl>
           {supplier.notes !== null && supplier.notes !== '' ? (
             <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{supplier.notes}</p>

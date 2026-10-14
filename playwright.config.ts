@@ -211,6 +211,11 @@ export default defineConfig({
           use: { viewport: { width: 1400, height: 950 } },
         },
         {
+          name: 'recurring',
+          testMatch: /recurring-hide-cancelled\.spec\.ts/,
+          use: { viewport: { width: 1400, height: 950 } },
+        },
+        {
           // The payday example rewrites only the isolated E2E seed. Keep it last so
           // its fictional account, schedules and settings cannot affect other specs.
           name: 'payday-summary',

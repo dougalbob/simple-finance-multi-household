@@ -3114,3 +3114,11 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
 213. **All Transactions source links clear the sticky header (2026-10-14, v1.12.0, GitHub issue #30).**
 
     Native fragment scrolling to `/purchases#purchase-{id}` put the row under the 56px-plus sticky site header, on phone and laptop. The Purchases row carries `scroll-mt-24`, as the other anchored targets do (decision 210 pattern). `e2e/transactions.spec.ts` asserts the row's top sits below the header. Not run in this sandbox; CI's browser job is the evidence.
+
+214. **Persistent hide-cancelled schedule preference across navigations (2026-10-14, v1.13.0, GitHub issue #35).**
+
+    The hide-cancelled toggle on `/recurring` introduced in decision 212 is now remembered across page navigations via a device cookie (`sf_hide_cancelled_schedules`, max-age 1 year, path `/`, SameSite `lax`), matching the app's established client preference conventions (such as `sf_theme`). If the URL provides an explicit `?hideCancelled=1` or `0`, it overrides and updates the cookie. When navigating away and returning to `/recurring` without query parameters, the user's preference is maintained.
+
+215. **Supplier card linked recurring schedule & in-place schedule filter (2026-10-14, v1.13.0, GitHub issue #34).**
+
+    In the Supplier card directly under Address, connected recurring schedules are shown with deep links (`Linked to schedule "<Name>"` linking to `/recurring?q=<name>#schedule-<id>`); if unlinked, displays `"No scheduled payments relate to this supplier currently"`. On the Recurring page, an in-place filter search box with a Clear filter button enables instant filtering by schedule name or supplier name. When filtered, any matching schedule is displayed even if cancelled and the hide-cancelled setting is active.

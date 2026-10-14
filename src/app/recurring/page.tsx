@@ -1,14 +1,11 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { ProjectionSettingsForm, type RecurringData } from '@/components/recurring';
 import {
-  AddScheduleForm,
-  CancelScheduleForm,
-  ProjectionSettingsForm,
-  RestoreScheduleForm,
-  type RecurringData,
-} from '@/components/recurring';
-import { ScrollHashIntoView } from '@/components/scroll-hash';
-import { ScheduleEditForm } from '@/components/schedule-forms';
+  RecurringScheduleSection,
+  type ScheduleListRow,
+} from '@/components/recurring-schedule-list';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import { categoryTree } from '@/lib/records/categories';
@@ -19,12 +16,11 @@ import { listPots } from '@/lib/records/pots';
 import { listAgreements } from '@/lib/records/agreements';
 import { listInstances, listSchedules } from '@/lib/records/schedules';
 import {
-  filterScheduleVisibility,
-  parseHideCancelled,
   recurringHref,
+  resolveHideCancelled,
+  SCHEDULE_HIDE_CANCELLED_COOKIE,
 } from '@/lib/records/schedule-visibility';
 import { getMonthlyFuelByVehicle, getWeeklyGroceriesPence } from '@/lib/records/settings';
-import { supplierCardHref } from '@/lib/records/supplier-focus';
 import { listSuppliersForEntry } from '@/lib/records/suppliers';
 import { toLocalDateString } from '@/lib/time';
 import { listVehicles } from '@/lib/records/vehicles';
@@ -132,7 +128,7 @@ function buildCalendar(
 export default async function RecurringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; hideCancelled?: string }>;
+  searchParams: Promise<{ month?: string; hideCancelled?: string; q?: string }>;
 }) {
   const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
@@ -142,12 +138,16 @@ export default async function RecurringPage({
   const today = toLocalDateString(now);
   const params = await searchParams;
 
+  const cookieJar = await cookies();
+  const cookieValue = cookieJar.get(SCHEDULE_HIDE_CANCELLED_COOKIE)?.value;
+  const hideCancelled = resolveHideCancelled(params.hideCancelled, cookieValue);
+  const initialQuery = params.q?.trim() ?? '';
+
   const thisMonth = {
     year: Number(today.slice(0, 4)),
     month: Number(today.slice(5, 7)),
   };
   const ref = parseMonthParam(params.month, thisMonth);
-  const hideCancelled = parseHideCancelled(params.hideCancelled);
 
   const first = `${ref.year}-${String(ref.month).padStart(2, '0')}-01`;
   const last = addDaysLocal(first, daysInMonth(ref.year, ref.month) - 1);
@@ -158,11 +158,6 @@ export default async function RecurringPage({
   const days = buildCalendar(ref, today, monthInstances);
 
   const schedules = listSchedules(db, now);
-  const scheduleView = filterScheduleVisibility(
-    schedules,
-    (row) => row.schedule.cancelledAt !== null,
-    hideCancelled,
-  );
   const agreements = listAgreements(db);
   const agreementByScheduleId = new Map(
     agreements.flatMap((agreement) =>
@@ -179,6 +174,7 @@ export default async function RecurringPage({
       .map((child) => ({ id: child.id, parentName: parent.name, childName: child.name })),
   );
   const fuelByVehicle = getMonthlyFuelByVehicle(db);
+  const potNames = new Map(pots.map((pot) => [pot.id, pot.label]));
 
   const recurringData: RecurringData = {
     pots: pots.map(({ id, label }) => ({ id, label })),
@@ -195,7 +191,7 @@ export default async function RecurringPage({
       amountPence: schedule.amountPence,
       dueDayOfMonth: schedule.dueDayOfMonth,
       dueMonth: schedule.dueMonth,
-      potLabel: pots.find((pot) => pot.id === schedule.potId)?.label ?? 'Pot',
+      potLabel: potNames.get(schedule.potId) ?? 'Pot',
       nextDueDate,
       version: schedule.version,
       cancelledEffectiveOn: schedule.cancelledEffectiveOn,
@@ -216,7 +212,37 @@ export default async function RecurringPage({
     },
   };
 
-  const potNames = new Map(pots.map((pot) => [pot.id, pot.label]));
+  const scheduleRows: ScheduleListRow[] = schedules.map(({ schedule, nextDueDate }) => {
+    const linkedAgreement = agreementByScheduleId.get(schedule.id);
+    return {
+      id: schedule.id,
+      name: schedule.name,
+      kind: schedule.kind,
+      frequency: schedule.frequency,
+      dueDayOfMonth: schedule.dueDayOfMonth,
+      dueMonth: schedule.dueMonth,
+      excludedMonths: schedule.excludedMonths,
+      amountPence: schedule.amountPence,
+      potId: schedule.potId,
+      potLabel: potNames.get(schedule.potId) ?? 'Pot',
+      categoryId: schedule.categoryId,
+      supplierId: schedule.supplierId,
+      supplierName:
+        schedule.supplierId === null
+          ? null
+          : (suppliers.find((s) => s.id === schedule.supplierId)?.name ?? null),
+      targetKind: schedule.targetKind,
+      targetId: schedule.targetId,
+      contractEndsOn: schedule.contractEndsOn,
+      activeFrom: schedule.activeFrom,
+      activeUntil: schedule.activeUntil,
+      isCancelled: schedule.cancelledAt !== null,
+      cancelledEffectiveOn: schedule.cancelledEffectiveOn,
+      version: schedule.version,
+      nextDueDate,
+      agreement: linkedAgreement ? { id: linkedAgreement.id, name: linkedAgreement.name } : null,
+    };
+  });
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
@@ -254,13 +280,17 @@ export default async function RecurringPage({
                 href={recurringHref({
                   month: monthParam(shiftMonth(ref, -1)),
                   hideCancelled,
+                  q: initialQuery !== '' ? initialQuery : undefined,
                 })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
                 ← Prev
               </Link>
               <Link
-                href={recurringHref({ hideCancelled })}
+                href={recurringHref({
+                  hideCancelled,
+                  q: initialQuery !== '' ? initialQuery : undefined,
+                })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
                 Today
@@ -269,6 +299,7 @@ export default async function RecurringPage({
                 href={recurringHref({
                   month: monthParam(shiftMonth(ref, 1)),
                   hideCancelled,
+                  q: initialQuery !== '' ? initialQuery : undefined,
                 })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
@@ -293,235 +324,19 @@ export default async function RecurringPage({
           </div>
         </section>
 
-        <section
-          aria-labelledby="schedules-heading"
-          className="order-2 flex flex-col rounded-xl border border-border bg-surface p-4 shadow-sm lg:col-start-2 lg:row-start-1 lg:h-0 lg:min-h-full lg:overflow-hidden"
-        >
-          <ScrollHashIntoView />
-          <div className="mb-3 flex shrink-0 flex-wrap items-baseline justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id="schedules-heading" className="text-lg font-semibold">
-                Schedules
-              </h2>
-              {scheduleView.cancelledCount > 0 ? (
-                <Link
-                  href={recurringHref({
-                    month: monthParam(ref),
-                    hideCancelled: !hideCancelled,
-                  })}
-                  className="inline-flex items-center gap-1.5 rounded border border-border-strong px-2.5 py-1 text-xs font-medium text-ink-body hover:bg-canvas"
-                >
-                  {hideCancelled ? 'Show cancelled' : 'Hide cancelled'}
-                  {hideCancelled ? (
-                    <span
-                      data-testid="hidden-cancelled-count"
-                      className="rounded-full bg-danger-50 px-1.5 py-0.5 text-[11px] font-semibold text-danger"
-                    >
-                      {scheduleView.hiddenCount} hidden
-                    </span>
-                  ) : null}
-                </Link>
-              ) : null}
-            </div>
-            <span className="text-xs text-ink-muted">
-              edits apply from the next instance — history is never rewritten; a start date moved
-              earlier backfills the dates the app was never told about
-            </span>
-          </div>
-          {schedules.length === 0 ? (
-            <p className="mb-3 text-sm text-ink-muted">
-              No schedules yet. Add one below — each converts into a normal record at local midnight
-              on its due date.
-            </p>
-          ) : scheduleView.visible.length === 0 ? (
-            <p className="mb-3 text-sm text-ink-muted">
-              Every schedule is cancelled and hidden.{' '}
-              <Link
-                href={recurringHref({ month: monthParam(ref), hideCancelled: false })}
-                className="sf-link"
-              >
-                show them
-              </Link>{' '}
-              to see the cancelled ones.
-            </p>
-          ) : (
-            <ul
-              data-schedule-scroller
-              className="mb-3 divide-y divide-border-hairline lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-y-contain"
-            >
-              {scheduleView.visible.map(({ schedule, nextDueDate }, rowIndex) => {
-                const linkedAgreement = agreementByScheduleId.get(schedule.id);
-                return (
-                  <li
-                    key={schedule.id}
-                    id={`schedule-${schedule.id}`}
-                    className={`py-2.5 ${rowIndex % 2 === 1 ? 'bg-canvas' : ''}`}
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-sm">
-                        <span
-                          className={
-                            schedule.cancelledAt !== null
-                              ? 'font-medium text-ink-faint line-through'
-                              : 'font-medium text-ink-emphasis'
-                          }
-                        >
-                          {schedule.name}
-                        </span>{' '}
-                        {schedule.cancelledAt !== null ? (
-                          <span className="rounded bg-danger-50 px-1.5 py-0.5 text-xs font-medium text-danger">
-                            Cancelled
-                          </span>
-                        ) : null}{' '}
-                        <span className="text-xs text-ink-muted">
-                          {schedule.kind === 'receipt'
-                            ? 'income'
-                            : schedule.kind === 'dd'
-                              ? 'direct debit'
-                              : 'standing order'}
-                          {schedule.frequency === 'annual'
-                            ? ` · every year, ${MONTH_NAMES[(schedule.dueMonth ?? 1) - 1]}`
-                            : ` · monthly`}{' '}
-                          · {potNames.get(schedule.potId) ?? 'Pot'}
-                          {schedule.supplierId !== null
-                            ? ` · ${suppliers.find((s) => s.id === schedule.supplierId)?.name ?? 'supplier'}`
-                            : ''}
-                        </span>
-                      </span>
-                      <span className="text-sm font-semibold tabular-nums">
-                        {schedule.kind === 'receipt' ? '+' : '−'}
-                        {formatPence(schedule.amountPence)}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-ink-muted">
-                      {schedule.cancelledAt !== null ? (
-                        <>Cancelled from {schedule.cancelledEffectiveOn} — history kept</>
-                      ) : (
-                        <>Next due: {nextDueDate ?? '—'}</>
-                      )}
-                      {` · active from ${schedule.activeFrom}`}
-                      {linkedAgreement !== undefined ? (
-                        <>
-                          {' · '}
-                          <Link
-                            href={`/contracts#agreement-${linkedAgreement.id}`}
-                            className="sf-link"
-                          >
-                            Agreement: {linkedAgreement.name}
-                          </Link>
-                        </>
-                      ) : null}
-                      {schedule.supplierId !== null ? (
-                        <>
-                          {' · '}
-                          <Link href={supplierCardHref(schedule.supplierId)} className="sf-link">
-                            Supplier card
-                          </Link>
-                        </>
-                      ) : null}
-                    </p>
-                    <details className="mt-1.5">
-                      <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
-                        {schedule.cancelledAt !== null ? 'Schedule options' : 'Edit schedule'}
-                      </summary>
-                      <div className="mt-2 max-w-2xl">
-                        {schedule.cancelledAt === null ? (
-                          <>
-                            <ScheduleEditForm
-                              scheduleId={schedule.id}
-                              version={schedule.version}
-                              name={schedule.name}
-                              kind={schedule.kind}
-                              frequency={schedule.frequency}
-                              dueDayOfMonth={schedule.dueDayOfMonth}
-                              dueMonth={schedule.dueMonth}
-                              excludedMonths={schedule.excludedMonths}
-                              amountPence={schedule.amountPence}
-                              contractEndsOn={schedule.contractEndsOn}
-                              activeFrom={schedule.activeFrom}
-                              activeUntil={schedule.activeUntil}
-                              potId={schedule.potId}
-                              potOptions={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-                              categoryId={schedule.categoryId}
-                              categoryOptions={categoryOptions}
-                              supplierId={schedule.supplierId}
-                              supplierOptions={suppliers.map((s) => ({ id: s.id, label: s.name }))}
-                              targetKind={schedule.targetKind}
-                              targetId={schedule.targetId}
-                              people={recurringData.people}
-                              vehicles={recurringData.vehicles}
-                            />
-                            <hr className="my-3 border-border-hairline" />
-                            <CancelScheduleForm
-                              schedule={
-                                recurringData.schedules.find((entry) => entry.id === schedule.id) ??
-                                ({
-                                  id: schedule.id,
-                                  name: schedule.name,
-                                  kind: schedule.kind,
-                                  frequency: schedule.frequency,
-                                  amountPence: schedule.amountPence,
-                                  dueDayOfMonth: schedule.dueDayOfMonth,
-                                  dueMonth: schedule.dueMonth,
-                                  potLabel: potNames.get(schedule.potId) ?? 'Pot',
-                                  nextDueDate,
-                                  version: schedule.version,
-                                  cancelledEffectiveOn: schedule.cancelledEffectiveOn,
-                                  contractEndsOn: schedule.contractEndsOn,
-                                  supplierId: schedule.supplierId,
-                                  supplierName:
-                                    schedule.supplierId === null
-                                      ? null
-                                      : (suppliers.find((s) => s.id === schedule.supplierId)
-                                          ?.name ?? null),
-                                } as RecurringData['schedules'][number])
-                              }
-                              today={today}
-                            />
-                          </>
-                        ) : (
-                          <RestoreScheduleForm
-                            schedule={
-                              recurringData.schedules.find((entry) => entry.id === schedule.id) ??
-                              ({
-                                id: schedule.id,
-                                name: schedule.name,
-                                kind: schedule.kind,
-                                frequency: schedule.frequency,
-                                amountPence: schedule.amountPence,
-                                dueDayOfMonth: schedule.dueDayOfMonth,
-                                dueMonth: schedule.dueMonth,
-                                potLabel: potNames.get(schedule.potId) ?? 'Pot',
-                                nextDueDate,
-                                version: schedule.version,
-                                cancelledEffectiveOn: schedule.cancelledEffectiveOn,
-                                contractEndsOn: schedule.contractEndsOn,
-                                supplierId: schedule.supplierId,
-                                supplierName:
-                                  schedule.supplierId === null
-                                    ? null
-                                    : (suppliers.find((s) => s.id === schedule.supplierId)?.name ??
-                                      null),
-                              } as RecurringData['schedules'][number])
-                            }
-                          />
-                        )}
-                      </div>
-                    </details>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <details className="shrink-0 lg:max-h-[45%] lg:overflow-y-auto lg:border-t lg:border-border-hairline lg:pt-3">
-            <summary className="cursor-pointer text-sm font-medium text-ink-body">
-              Add a schedule
-            </summary>
-            <div className="mt-3">
-              <AddScheduleForm data={recurringData} />
-            </div>
-          </details>
-        </section>
+        <RecurringScheduleSection
+          schedules={scheduleRows}
+          pots={pots.map(({ id, label }) => ({ id, label }))}
+          categories={categoryOptions}
+          suppliers={suppliers.map(({ id, name }) => ({ id, name }))}
+          people={people.map(({ id, label }) => ({ id, label }))}
+          vehicles={vehicles.map(({ id, label }) => ({ id, label }))}
+          recurringData={recurringData}
+          month={monthParam(ref)}
+          initialHideCancelled={hideCancelled}
+          initialQuery={initialQuery}
+          today={today}
+        />
 
         <section
           aria-labelledby="agreements-heading"
@@ -549,9 +364,10 @@ export default async function RecurringPage({
           <h2 id="projection-figures-heading" className="text-base font-semibold">
             Projection figures
           </h2>
-          <p className="mb-3 mt-1 text-xs text-ink-muted">
-            Weekly shop and per-vehicle fuel the payday projection uses. Insights compares them with
-            recent actuals.
+          <p className="mb-3 text-sm text-ink-soft">
+            What you expect to spend on weekly food and monthly fuel. These figures shape the
+            cash-flow projection on the Horizon page, and the honesty loop compares them with recent
+            actuals.
           </p>
           <ProjectionSettingsForm data={recurringData.projectionSettings} />
         </section>
@@ -562,83 +378,68 @@ export default async function RecurringPage({
 
 function CalendarGrid({ days }: { days: CalendarDay[] }) {
   return (
-    <div>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-wide text-ink-muted">
-        {WEEKDAYS.map((day) => (
-          <div key={day} className="py-1">
-            {day}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {days.map((day) => (
-          <div
-            key={day.date}
-            // Exposed for the browser acceptance run: one cell per date, and the
-            // cell is rendered from the same instance list as the lists below.
-            data-date={day.date}
-            className={`min-h-20 rounded-lg border p-1.5 ${
-              day.isToday
-                ? 'border-accent-400 bg-accent-50'
-                : day.inMonth
-                  ? 'border-border bg-surface'
-                  : 'border-border-hairline bg-canvas'
-            }`}
-          >
-            <p
-              className={`text-xs font-medium ${
-                day.inMonth ? 'text-ink-body' : 'text-ink-faint'
-              } ${day.isToday ? 'text-accent' : ''}`}
+    <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-border">
+      {WEEKDAYS.map((name) => (
+        <div
+          key={name}
+          className="bg-canvas py-1.5 text-center text-xs font-semibold text-ink-muted"
+        >
+          {name}
+        </div>
+      ))}
+      {days.map((day) => (
+        <div
+          key={day.date}
+          data-date={day.date}
+          className={`min-h-[70px] p-1.5 transition-colors sm:min-h-[85px] ${
+            day.inMonth ? 'bg-surface' : 'bg-surface-faint text-ink-faint'
+          } ${day.isToday ? 'ring-2 ring-accent ring-inset' : ''}`}
+        >
+          <div className="flex items-center justify-between">
+            <span
+              className={`text-xs ${
+                day.isToday
+                  ? 'flex h-5 w-5 items-center justify-center rounded-full bg-accent font-semibold text-accent-ink'
+                  : 'font-medium'
+              }`}
             >
-              {Number(day.date.slice(8))}
-              {day.isToday ? ' · today' : ''}
-            </p>
-            {day.instances.length > 0 ? (
-              <details className="mt-1">
-                <summary className="cursor-pointer list-none text-xs font-medium text-ink-soft hover:text-ink">
-                  {day.instances.length} {day.instances.length === 1 ? 'item' : 'items'}
-                </summary>
-                <ul className="mt-1 space-y-1">
-                  {day.instances.map((instance) => (
-                    <li key={instance.instanceId}>
-                      <a
-                        href={`#schedule-${instance.scheduleId}`}
-                        className={`flex items-start gap-1 rounded px-1 py-0.5 text-xs hover:bg-surface-muted ${
-                          instance.kind === 'receipt' ? 'text-positive-800' : 'text-ink-body'
-                        }`}
-                      >
-                        <span
-                          className={`mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                            instance.kind === 'receipt' ? 'bg-positive-500' : 'bg-marker-muted'
-                          }`}
-                        />
-                        <span>
-                          <span
-                            className={
-                              instance.state === 'converted'
-                                ? 'line-through decoration-ink-ghost'
-                                : ''
-                            }
-                          >
-                            {instance.scheduleName}
-                          </span>{' '}
-                          <span className="tabular-nums">
-                            {instance.kind === 'receipt' ? '+' : '−'}
-                            {formatPence(instance.amountPence)}
-                          </span>
-                          {instance.state === 'upcoming' ? (
-                            <span className="ml-1 text-ink-faint">pending</span>
-                          ) : null}
-                        </span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
+              {Number(day.date.slice(8, 10))}
+            </span>
           </div>
-        ))}
-      </div>
+          <div className="mt-1 space-y-1">
+            {day.instances.map((instance) => {
+              const isOutgo = instance.kind !== 'receipt';
+              const dotClass = isOutgo ? 'bg-marker-muted' : 'bg-positive-500';
+              return (
+                <Link
+                  key={instance.instanceId}
+                  href={`#schedule-${instance.scheduleId}`}
+                  title={`${instance.scheduleName}: £${(instance.amountPence / 100).toFixed(2)} (${
+                    instance.state
+                  })`}
+                  className={`block truncate rounded px-1 py-0.5 text-[11px] leading-tight transition-colors hover:bg-canvas ${
+                    instance.state === 'converted' ? 'text-ink-body' : 'text-ink-muted font-normal'
+                  }`}
+                >
+                  <span className="flex items-center gap-1">
+                    <span
+                      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                        instance.state === 'converted'
+                          ? dotClass
+                          : 'border border-marker-muted bg-surface'
+                      }`}
+                    />
+                    <span className="truncate">{instance.scheduleName}</span>
+                    <span className="ml-auto font-mono text-[10px] tabular-nums text-ink-muted">
+                      {formatPence(instance.amountPence)}
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
