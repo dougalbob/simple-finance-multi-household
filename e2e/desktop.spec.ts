@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { formatPence } from '../src/lib/money';
 import { addDaysIso, londonToday, waitForFilters, waitForTill } from './support';
 
 function rolling12Start(today: string): string {
@@ -182,6 +183,48 @@ test.describe('desktop review', () => {
     await expect(results.getByText('Edited in a browser test').first()).toBeVisible({
       timeout: 30_000,
     });
+  });
+
+  test('the Purchases result total follows the filtered, displayed rows (issue #38)', async ({
+    page,
+  }) => {
+    await page.goto('/purchases');
+    await waitForFilters(page);
+    const results = page.locator('section[aria-labelledby="results-heading"]');
+
+    const checkHeadingAgainstRows = async () => {
+      const rows = await results.locator('tbody tr').evaluateAll((elements) =>
+        elements.map((row) => ({
+          amount: row.querySelector('td:nth-child(6)')?.textContent?.trim() ?? '',
+          status: row.querySelector('td:nth-child(7)')?.textContent?.trim() ?? '',
+        })),
+      );
+      const netPence = rows.reduce((sum, row) => {
+        if (row.status.startsWith('Voided')) return sum;
+        const match = /^(-?)£([\d,]+)\.(\d{2})$/.exec(row.amount);
+        if (match === null) throw new Error(`Unexpected purchase total: ${row.amount}`);
+        return (
+          sum +
+          (Number(match[2]?.replaceAll(',', '')) * 100 + Number(match[3])) *
+            (match[1] === '-' ? -1 : 1)
+        );
+      }, 0);
+      const count = rows.length;
+      await expect(results.getByRole('heading', { level: 2 })).toHaveText(
+        `${count} ${count === 1 ? 'entry' : 'entries'}: Total ${formatPence(netPence)}`,
+      );
+    };
+
+    await checkHeadingAgainstRows();
+    await page.getByLabel('Supplier').selectOption({ label: 'Corner Foods' });
+    await page.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page).toHaveURL(/supplierId=/);
+    await expect(results.getByText('Corner Foods').first()).toBeVisible();
+    await checkHeadingAgainstRows();
+
+    await page.goto('/purchases?from=1900-01-01&to=1900-01-02');
+    await expect(results.getByRole('heading', { level: 2 })).toHaveText('0 entries: Total £0.00');
+    await expect(results.locator('tbody tr')).toHaveCount(0);
   });
 
   test('a purchase can be voided, and the void control stays legible', async ({ page }) => {

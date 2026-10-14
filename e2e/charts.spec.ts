@@ -338,6 +338,48 @@ test.describe('charts', () => {
     await expect(headline).toContainText('Sam');
   });
 
+  test('Chart C person filters keep the current scroll position (issue #39)', async ({ page }) => {
+    // The chips are real URL links, but changing a series is an in-place
+    // choice, not a request to jump to the start of the card (or the page).
+    for (const width of [390, 1400]) {
+      await page.setViewportSize({ width, height: 950 });
+      await page.goto('/charts');
+      const card = page.locator('#personal');
+      const chips = card.getByRole('group', { name: 'Whose spending to show' });
+      await expect(chips.getByRole('link', { name: 'Alex' })).toBeVisible();
+      // The nav publishes this once hydrated; before then a link click can
+      // fall back to a full navigation, which cannot preserve scroll.
+      await page.waitForFunction(() =>
+        Boolean(document.documentElement.style.getPropertyValue('--sf-anchor-offset')),
+      );
+      await card.evaluate((element) => {
+        window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 160);
+      });
+      const before = await page.evaluate(() => window.scrollY);
+      expect(before).toBeGreaterThan(100);
+
+      await chips.getByRole('link', { name: 'Alex' }).click();
+      await expect(page).toHaveURL(/who=/);
+      await expect(chips.getByRole('link', { name: 'Alex' })).not.toHaveAttribute(
+        'aria-current',
+        'true',
+      );
+      // Allow the hash scroll helper's delayed checks to settle too. They
+      // must not undo this choice or steal the viewport after the click.
+      await page.waitForTimeout(450);
+      expect(Math.abs((await page.evaluate(() => window.scrollY)) - before)).toBeLessThan(8);
+
+      await chips.getByRole('link', { name: 'Alex' }).click();
+      await expect(page).not.toHaveURL(/who=/);
+      await expect(chips.getByRole('link', { name: 'Alex' })).toHaveAttribute(
+        'aria-current',
+        'true',
+      );
+      await page.waitForTimeout(450);
+      expect(Math.abs((await page.evaluate(() => window.scrollY)) - before)).toBeLessThan(8);
+    }
+  });
+
   test('the commitments chart is defined in Settings, and the schedule-only view is narrower', async ({
     page,
   }) => {

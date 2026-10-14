@@ -583,9 +583,12 @@ function PersonalSection({
       action={
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Whose spending to show">
           {chips.map((chip) => (
+            // Keep the reader's exact place on a soft navigation. The #personal
+            // fragment remains in the URL so a direct/no-JS visit lands here.
             <Link
               key={chip.key}
               href={chip.href}
+              scroll={false}
               aria-current={chip.on ? 'true' : undefined}
               className={`rounded-full border px-3 py-1 text-xs font-medium ${
                 chip.on
@@ -1545,7 +1548,7 @@ function ChartCard({
     <section
       id={id}
       aria-labelledby={`${id}-heading`}
-      className={`min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm ${className ?? ''}`}
+      className={`sf-anchor min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm ${className ?? ''}`}
     >
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">

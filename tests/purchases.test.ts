@@ -18,6 +18,7 @@ import {
   findPossibleDuplicates,
   getPurchaseWithLines,
   listPurchases,
+  sumListedPurchasesPence,
   voidPurchase,
   InvalidPurchaseInputError,
   PurchaseNotFoundError,
@@ -1144,6 +1145,74 @@ describe('purchase show toggles (decision 205)', () => {
       assert.ok(!ids({ excludeRefunds: true }).includes(refund.purchase.id));
       assert.ok(ids({ excludeRefunds: true }).includes(plain.purchase.id));
       assert.ok(!listPurchases(fx.db, {}).some((row) => row.purchase.id === voided.purchase.id));
+    } finally {
+      fx.close();
+    }
+  });
+});
+
+describe('filtered Purchases result total (issue #38)', () => {
+  it('nets refunds, counts split purchases once, and excludes voided history from the shown rows', async () => {
+    const fx = await createHouseholdFixture();
+    try {
+      const groceries = fx.categoryId('Groceries', 'Weekly Shop');
+      const clothing = fx.categoryId('Personal', 'Clothing & Shoes');
+      const base = {
+        potId: fx.pots.main.id,
+        paidByPersonId: fx.people.alex.id,
+        actor: 'alex@example.com',
+      };
+      const first = createPurchase(fx.db, {
+        ...base,
+        supplierName: 'Split shop',
+        totalPence: 1234,
+        occurredAt: new Date('2026-09-19T10:00:00Z'),
+        lines: [
+          { amountPence: 734, categoryId: groceries, targetKind: 'household' },
+          { amountPence: 500, categoryId: clothing, targetKind: 'household' },
+        ],
+      });
+      createPurchase(fx.db, {
+        ...base,
+        supplierName: 'Other shop',
+        totalPence: 1000,
+        occurredAt: new Date('2026-09-20T10:00:00Z'),
+        lines: [{ amountPence: 1000, categoryId: clothing, targetKind: 'household' }],
+      });
+      createRefund(fx.db, {
+        refundOfPurchaseId: first.purchase.id,
+        totalPence: -234,
+        occurredAt: new Date('2026-09-21T10:00:00Z'),
+        lines: [{ amountPence: -234, categoryId: groceries, targetKind: 'household' }],
+        actor: base.actor,
+      });
+      const voided = createPurchase(fx.db, {
+        ...base,
+        supplierName: 'Voided shop',
+        totalPence: 4000,
+        occurredAt: new Date('2026-09-22T10:00:00Z'),
+        lines: [{ amountPence: 4000, categoryId: groceries, targetKind: 'household' }],
+      });
+      voidPurchase(fx.db, {
+        id: voided.purchase.id,
+        expectedVersion: 1,
+        actor: base.actor,
+        now: new Date('2026-09-23T10:00:00Z'),
+      });
+
+      const shown = (filters: Parameters<typeof listPurchases>[1] = {}) =>
+        listPurchases(fx.db, { includeVoided: true, ...filters });
+      assert.equal(shown().length, 4);
+      assert.equal(sumListedPurchasesPence(shown()), 2000); // £12.34 + £10 - £2.34
+      assert.equal(sumListedPurchasesPence(shown({ categoryId: groceries })), 1000);
+      assert.equal(sumListedPurchasesPence(shown({ categoryId: clothing })), 2234);
+      assert.equal(sumListedPurchasesPence(shown({ excludeRefunds: true })), 2234);
+      assert.equal(sumListedPurchasesPence(shown({ voidedOnly: true })), 0);
+      assert.equal(sumListedPurchasesPence(shown({ limit: 2 })), -234);
+      assert.equal(
+        sumListedPurchasesPence(shown({ dateFrom: '1900-01-01', dateTo: '1900-01-02' })),
+        0,
+      );
     } finally {
       fx.close();
     }
