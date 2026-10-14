@@ -344,7 +344,7 @@ function PurchaseRow(props: PurchaseRowProps) {
   return (
     <tr
       id={`purchase-${props.purchaseId}`}
-      className={`scroll-mt-24 border-t border-border-hairline align-top ${props.rowIndex % 2 === 1 ? 'bg-canvas' : ''} ${props.voidedAt !== null ? 'text-ink-faint' : ''}`}
+      className={`sf-anchor border-t border-border-hairline align-top ${props.rowIndex % 2 === 1 ? 'bg-canvas' : ''} ${props.voidedAt !== null ? 'text-ink-faint' : ''}`}
     >
       <td className="whitespace-nowrap px-3 py-2.5">{formatInstantLocal(props.occurredAt)}</td>
       <td className="px-3 py-2.5">

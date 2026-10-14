@@ -263,7 +263,7 @@ export function OpenTaskList({
         <li
           key={task.id}
           id={`task-${task.id}`}
-          className="scroll-mt-24 rounded-lg border border-border-hairline bg-surface p-2.5"
+          className="sf-anchor rounded-lg border border-border-hairline bg-surface p-2.5"
         >
           <div className="flex items-start gap-2">
             <TaskCheckbox task={task} />

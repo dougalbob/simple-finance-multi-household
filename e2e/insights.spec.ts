@@ -90,7 +90,7 @@ test.describe('By Person month navigation (issue #26)', () => {
     const next = panel.getByRole('link', { name: 'Next' });
     // The anchor target clears the sticky header: scroll-hash scrolls to the
     // heading itself, so the offset lives on it, not the section.
-    await expect(heading).toHaveClass(/scroll-mt-24/);
+    await expect(heading).toHaveClass(/sf-anchor/);
     await expect(prev).toHaveAttribute('href', /#panel-persons-heading$/);
     await expect(next).toHaveAttribute('href', /#panel-persons-heading$/);
 

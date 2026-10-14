@@ -147,7 +147,7 @@ export default async function InsightsPage({
           className="rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 id="panel-persons-heading" className="scroll-mt-24 text-xl font-semibold">
+            <h2 id="panel-persons-heading" className="sf-anchor text-xl font-semibold">
               By person — {personal.label}
             </h2>
             <div className="flex items-center gap-1">
@@ -325,7 +325,7 @@ export default async function InsightsPage({
                   <div
                     key={vehicle.vehicleId}
                     id={`vehicle-${vehicle.vehicleId}`}
-                    className="scroll-mt-24 rounded-lg bg-canvas p-3"
+                    className="sf-anchor rounded-lg bg-canvas p-3"
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="font-semibold">{vehicle.label}</p>
@@ -865,7 +865,7 @@ function LineItemsCard({
     <section
       id={id}
       aria-labelledby={`${id}-heading`}
-      className="mt-4 scroll-mt-24 rounded-xl border border-border bg-canvas p-4"
+      className="mt-4 sf-anchor rounded-xl border border-border bg-canvas p-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id={`${id}-heading`} className="text-sm font-semibold">

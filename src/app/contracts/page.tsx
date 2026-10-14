@@ -354,10 +354,10 @@ function AgreementGroup({
               <li key={agreement.id}>
                 <article
                   id={`agreement-${agreement.id}`}
-                  className="scroll-mt-24 rounded-xl border border-border bg-surface-muted/40 p-4 sm:p-5"
+                  className="sf-anchor rounded-xl border border-border bg-surface-muted/40 p-4 sm:p-5"
                 >
                   {agreement.legacyRenewalId !== null ? (
-                    <span id={`renewal-${agreement.legacyRenewalId}`} className="scroll-mt-24" />
+                    <span id={`renewal-${agreement.legacyRenewalId}`} className="sf-anchor" />
                   ) : null}
                   <AgreementCardBody
                     agreement={agreement}

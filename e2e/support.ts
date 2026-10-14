@@ -61,6 +61,19 @@ export function addDaysIso(isoDate: string, days: number): string {
 }
 
 /**
+ * Wait until the Recurring schedule filter is listening (SPEC §15.1 — the
+ * decision 131 rule the till, the Purchases filters, the theme gallery and the
+ * category editor already follow). The schedules panel is a client island: a
+ * keystroke into the filter before React hydrates it is wiped by the hydration
+ * render, so a fast test on a cold dev server would type into a box that never
+ * filters. The filter row is `inert` until it can hear and publishes
+ * `data-schedules-ready`.
+ */
+export async function waitForScheduleFilter(page: Page): Promise<void> {
+  await expect(page.locator('[data-schedules-ready="true"]')).toBeAttached();
+}
+
+/**
  * Wait until the category tree editor is listening (decision 167). The
  * rename/retire picker is controlled React state with `parent:` / `child:`
  * option values; a `selectOption` before hydration would leave the visible

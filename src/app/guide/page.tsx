@@ -57,7 +57,7 @@ export default async function GuidePage() {
             key={section.anchor}
             id={section.anchor}
             aria-labelledby={`guide-${section.anchor}-heading`}
-            className="scroll-mt-24 rounded-xl border border-border bg-surface p-4 shadow-sm"
+            className="sf-anchor rounded-xl border border-border bg-surface p-4 shadow-sm"
           >
             <h2
               id={`guide-${section.anchor}-heading`}
