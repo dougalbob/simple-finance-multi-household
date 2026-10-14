@@ -1,13 +1,17 @@
-# Unreleased — Recurring hide-cancelled toggle and All Transactions anchor fix (2026-10-14)
+# v1.12.0 release — Hide cancelled schedules, and purchase links that land in view (2026-10-14)
 
-Working branch `arena/f71eae56-simple-finance-multi-household`; **not released**. No schema change, no migration, no version bump (the next release PR owns `1.12.0`, if the household accepts it).
+Released as **`v1.12.0`** (`APP_RELEASE_STAGE = 'stable'`; moves `latest` on `ghcr.io/dougalbob/simple-finance-multi-household`, host port `3009`; GitHub release marked Latest). Release PR: the same PR as the feature work (#32), so the working branch's one merge carries both. No schema change, no migration.
 
-1. **#28 — Recurring: hide cancelled schedules** (decision 212). `?hideCancelled=1` on `/recurring`; toggle beside the Schedules heading only when a cancelled schedule exists; badge `N hidden` while hiding; calendar Prev/Today/Next keep the choice. Pure helper `src/lib/records/schedule-visibility.ts` (unit tests in `tests/schedule-visibility.test.ts`).
-2. **#30 — All Transactions source link lands under the sticky header** (decision 213). The Purchases row gets `scroll-mt-24`; `e2e/transactions.spec.ts` asserts the row sits below the header.
+1. **#28 — Recurring: hide cancelled schedules** (decision 212). `?hideCancelled=1` on `/recurring`; the Hide/Show cancelled link appears beside the Schedules heading only when a cancelled schedule exists; `N hidden` badge while hiding; calendar Prev/Today/Next keep the choice; an all-hidden list says so. Pure helper `src/lib/records/schedule-visibility.ts` (unit tests in `tests/schedule-visibility.test.ts`).
+2. **#30 — All Transactions source link lands under the sticky header** (decision 213). The Purchases row carries `scroll-mt-24`; `e2e/transactions.spec.ts` asserts the row sits below the header.
+
+Version files bumped together: `package.json`, `package-lock.json` (root and `packages[""]`), `src/lib/version.ts`, `simple-finance-multi-household.xml`, `docs/RELEASE_NOTES_v1.12.0.md`.
 
 Gates run locally: `npm run format:check` clean; `npm run typecheck` clean; `npm test` 912 passed, 0 failed across 211 suites; `npm run build` clean.
 
-Not verified locally: **the Playwright specs** (`e2e/recurring-hide-cancelled.spec.ts` is new; the transactions assertion is extended). This sandbox has no browser and the Playwright CDN is unreachable, so CI's `browser` job is the evidence. The scroll fix relies on `scroll-margin` being honoured on table rows (`<tr>`) by the browser; if the CI run or a real phone shows the row still under the header, move the anchor to a block-level wrapper.
+Not verified locally: **the Playwright specs** (the new `e2e/recurring-hide-cancelled.spec.ts` and the extended transactions assertion). This sandbox has no browser. The CI `browser` job is the evidence. The scroll fix relies on `scroll-margin` being honoured on table rows; if a real phone still shows the row under the header, move the anchor to a block-level wrapper in a `v1.12.1`.
+
+Next session: record the merge SHA, the CI run IDs, the Publish run and the GHCR digest here from `gh`.
 
 # v1.11.0 release — Honest personal spending, steadier month paging, a gentler honesty loop (2026-10-14)
 
