@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { APP_NAME, APP_RELEASE_STAGE, APP_VERSION } from '@/lib/version';
 import { Bell } from '@/components/bell';
+import {
+  ANCHOR_OFFSET_VARIABLE,
+  STICKY_HEADER_ATTRIBUTE,
+  anchorScrollMargin,
+} from '@/lib/records/anchor-scroll';
 
 const NAV_ITEMS = [
   { href: '/overview', label: 'Overview' },
@@ -101,6 +106,7 @@ function XMarkIcon({ className = 'h-5 w-5' }: { className?: string }) {
 export function SiteNav() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
 
   const isActive = (href: string) => {
     // Compare the path only: a hash link ("/#quick-entry") is the home page.
@@ -108,6 +114,29 @@ export function SiteNav() {
     if (path === '/') return pathname === '/';
     return pathname === path || pathname.startsWith(`${path}/`);
   };
+
+  // Publish the bar's real height as `--sf-anchor-offset`, so anchored links
+  // land below it wherever the nav happens to wrap (re-opened issue #34). A
+  // ResizeObserver rather than a window listener: the header's height follows
+  // its own content, not only the viewport.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (header === null) return;
+    const publish = () => {
+      const height = Math.round(header.getBoundingClientRect().height);
+      document.documentElement.style.setProperty(
+        ANCHOR_OFFSET_VARIABLE,
+        `${anchorScrollMargin(height)}px`,
+      );
+    };
+    publish();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(publish);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   // Close drawer on route changes
   useEffect(() => {
@@ -197,7 +226,19 @@ export function SiteNav() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 shadow-sm backdrop-blur">
+      <header
+        ref={headerRef}
+        // Anchored deep links (`#schedule-12`, `#purchase-3`) have to land
+        // *below* this bar, and its height is not a constant: the desktop nav
+        // wraps onto a second row between 1024px and 1199px, so it measures
+        // 57px on a phone, 121px on a small laptop and 85px on a wide one
+        // (re-opened GitHub issue #34). `site-nav` measures itself into
+        // `--sf-anchor-offset`, and `sf-anchor` (globals.css) spends it as the
+        // `scroll-margin-top` of every anchored target. The attribute is
+        // `STICKY_HEADER_ATTRIBUTE` (tests/anchor-scroll.test.ts pins the pair).
+        data-sticky-header=""
+        className="sticky top-0 z-30 border-b border-border bg-surface/95 shadow-sm backdrop-blur"
+      >
         {/* Desktop Navbar (lg and up) */}
         <div className="mx-auto hidden max-w-7xl items-center justify-between gap-x-4 px-4 py-2 lg:flex">
           <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight text-ink">

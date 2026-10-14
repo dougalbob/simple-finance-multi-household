@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollHashIntoView } from '@/components/scroll-hash';
 import { ScheduleEditForm } from '@/components/schedule-forms';
 import {
   AddScheduleForm,
@@ -91,6 +90,19 @@ export function RecurringScheduleSection({
 }: RecurringScheduleSectionProps) {
   const [query, setQuery] = useState(initialQuery);
   const [hideCancelled, setHideCancelled] = useState(initialHideCancelled);
+  /**
+   * SPEC §15.1 (decision 131, the rule the till, the Purchases filters, the
+   * theme gallery and the category editor all follow): the filter box is
+   * controlled React state, so a keystroke that lands before hydration is
+   * wiped by the hydration render and the household watches their typing
+   * disappear. The filter row says whether it is listening and stays `inert`
+   * until it is, so nothing can be silently swallowed.
+   */
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
 
   const updateHideCancelled = (next: boolean) => {
     setHideCancelled(next);
@@ -114,7 +126,6 @@ export function RecurringScheduleSection({
       aria-labelledby="schedules-heading"
       className="order-2 flex flex-col rounded-xl border border-border bg-surface p-4 shadow-sm lg:col-start-2 lg:row-start-1 lg:h-0 lg:min-h-full lg:overflow-hidden"
     >
-      <ScrollHashIntoView />
       <div className="mb-3 flex shrink-0 flex-wrap items-baseline justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h2 id="schedules-heading" className="text-lg font-semibold">
@@ -148,7 +159,11 @@ export function RecurringScheduleSection({
         </span>
       </div>
 
-      <div className="mb-3 flex shrink-0 items-center gap-2">
+      <div
+        className="mb-3 flex shrink-0 items-center gap-2"
+        data-schedules-ready={ready ? 'true' : 'false'}
+        inert={!ready}
+      >
         <div className="relative flex-1">
           <input
             type="search"
@@ -227,7 +242,10 @@ export function RecurringScheduleSection({
               <li
                 key={schedule.id}
                 id={`schedule-${schedule.id}`}
-                className={`scroll-mt-6 py-2.5 ${rowIndex % 2 === 1 ? 'bg-canvas' : ''}`}
+                // `sf-anchor`, not a fixed `scroll-mt-*`: the landing has to
+                // clear the sticky header's *measured* height (re-opened
+                // issue #34 — see globals.css and records/anchor-scroll.ts).
+                className={`sf-anchor py-2.5 ${rowIndex % 2 === 1 ? 'bg-canvas' : ''}`}
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm">

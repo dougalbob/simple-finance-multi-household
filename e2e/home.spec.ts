@@ -602,9 +602,9 @@ test.describe('mobile quick entry', () => {
     await expectNoFieldFocused(page);
 
     // Decision 158: on a phone the home page opens AT the till. The card's
-    // top parks just under the 56px sticky header (the section carries
-    // scroll-mt-16 = 64px), so the type tabs are on screen on arrival and a
-    // purchase starts in one tap.
+    // top parks just under the sticky header (the section spends the measured
+    // `sf-anchor` offset — 69px against the 57px phone bar, #34), so the type
+    // tabs are on screen on arrival and a purchase starts in one tap.
     const top = await entry.evaluate((element) => element.getBoundingClientRect().top);
     expect(
       top,
@@ -612,7 +612,7 @@ test.describe('mobile quick entry', () => {
     ).toBeGreaterThanOrEqual(56);
     expect(
       top,
-      `the till's top sits at ${top}px on open — expected 64px (scroll-mt-16)`,
+      `the till's top sits at ${top}px on open — expected under 96px (sf-anchor)`,
     ).toBeLessThanOrEqual(96);
     const scrolled = await page.evaluate(() => window.scrollY);
     expect(

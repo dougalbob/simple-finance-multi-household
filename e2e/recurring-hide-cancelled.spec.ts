@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { waitForScheduleFilter } from './support';
 
 /**
  * Issues #28, #34, #35:
@@ -8,7 +9,28 @@ import { expect, test, type Page } from '@playwright/test';
  * - Matching cancelled schedules show when filtered even if hidden (issue #34).
  * - Supplier card displays "Linked to schedule" link to recurring schedule, or
  *   "No scheduled payments relate to this supplier currently" (issue #34).
+ * - A linked schedule lands *below* the sticky site header (re-opened issue #34).
  */
+
+/**
+ * The row a deep link names must land below the sticky site header, not
+ * underneath it. The header's height is not a constant — the desktop nav wraps
+ * onto a second row between 1024px and 1199px, measuring 85px at 1400×950 and
+ * 121px at 1100×950 — so the landing offset has to be measured rather than
+ * baked into a `scroll-mt-*` class: the old 24px margin put the row's top at
+ * 24px, and even the app's usual 96px would not clear a 121px bar.
+ */
+async function expectRowClearsStickyHeader(page: Page, row: Locator): Promise<void> {
+  const header = page.locator('header.sticky').first();
+  await expect
+    .poll(async () => {
+      const rowBox = await row.boundingBox();
+      const headerBox = await header.boundingBox();
+      if (rowBox === null || headerBox === null) return false;
+      return rowBox.y >= headerBox.y + headerBox.height;
+    })
+    .toBe(true);
+}
 
 const scheduleName = `Hide-cancel probe ${Date.now()}`;
 const supplierScheduleName = `Supplier linked probe ${Date.now()}`;
@@ -75,6 +97,7 @@ test.describe('recurring schedules: hide cancelled & navigation persistence', ()
 
     // Issue #34: In-place filter search box shows matching cancelled schedules even when hidden.
     const filterInput = page.getByPlaceholder('Filter schedules…');
+    await waitForScheduleFilter(page);
     await filterInput.fill(scheduleName);
     await expect(list.locator('li', { hasText: scheduleName })).toHaveCount(1);
     await expect(list.locator('li', { hasText: scheduleName })).toContainText('Cancelled');
@@ -123,9 +146,35 @@ test.describe('recurring schedules: hide cancelled & navigation persistence', ()
     await scheduleLink.click();
     await expect(page).toHaveURL(/\/recurring\?q=BroadbandCo\+fibre#schedule-\d+/);
     const filterBox = page.getByPlaceholder('Filter schedules…');
+    await waitForScheduleFilter(page);
     await expect(filterBox).toHaveValue('BroadbandCo fibre');
     const list = page.locator('section[aria-labelledby="schedules-heading"] ul');
-    await expect(list.locator('li', { hasText: 'BroadbandCo fibre' })).toHaveCount(1);
+    const row = list.locator('li', { hasText: 'BroadbandCo fibre' });
+    await expect(row).toHaveCount(1);
+
+    // Re-opened issue #34: the row is not behind the menu. The household's
+    // report was exactly this landing — the row's top at 24px, under a 85px
+    // bar — and the fix is the measured `sf-anchor` offset.
+    await expectRowClearsStickyHeader(page, row);
+    // The row arrives whole: its own "Edit schedule" disclosure is on screen,
+    // so nothing about this schedule needs a scroll to reach.
+    await expect(row.locator('summary', { hasText: 'Edit schedule' })).toBeInViewport();
+
+    // The same link at 1100px, cold: the wrapped-nav header is *taller* than
+    // the app's usual 96px offset, and at this point nothing has measured it,
+    // so this is the case a constant cannot fix at all. (Go to another page
+    // first: re-navigating to the URL the page already shows would not load a
+    // document, and the fragment would never be tested.)
+    const scheduleId = new URL(page.url()).hash.replace('#', '');
+    await page.setViewportSize({ width: 1100, height: 950 });
+    await page.goto('/purchases');
+    await page.goto(`/recurring?q=BroadbandCo+fibre#${scheduleId}`);
+    await expect(page).toHaveURL(new RegExp(`#${scheduleId}$`));
+    await expect(filterBox).toHaveValue('BroadbandCo fibre');
+    await expectRowClearsStickyHeader(page, list.locator(`li#${scheduleId}`));
+
+    // Back to the laptop width for the rest of the journey.
+    await page.setViewportSize({ width: 1400, height: 950 });
 
     // Clearing the filter restores other schedules.
     await page.getByRole('button', { name: 'Clear filter' }).click();

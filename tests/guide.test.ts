@@ -120,6 +120,6 @@ describe('the guide: eight anchored ideas, pinned to what the app really does', 
     const page = repoFile('src/app/guide/page.tsx');
     assert.ok(page.includes('GUIDE_SECTIONS'), 'the guide page must render GUIDE_SECTIONS');
     assert.ok(page.includes('id={section.anchor}'), 'every section must carry its anchor id');
-    assert.ok(page.includes('scroll-mt-24'), 'anchor jumps must clear the sticky header');
+    assert.ok(page.includes('sf-anchor'), 'anchor jumps must clear the sticky header');
   });
 });

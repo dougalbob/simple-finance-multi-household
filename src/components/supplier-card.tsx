@@ -158,7 +158,7 @@ export function SupplierCard({
   return (
     <article
       id={`supplier-${supplier.id}`}
-      className="flex scroll-mt-24 flex-col rounded-xl border border-border bg-surface p-5 shadow-sm transition-shadow hover:shadow-md"
+      className="flex sf-anchor flex-col rounded-xl border border-border bg-surface p-5 shadow-sm transition-shadow hover:shadow-md"
     >
       <button
         type="button"

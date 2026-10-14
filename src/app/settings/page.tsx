@@ -262,7 +262,7 @@ export default async function SettingsPage() {
         <section
           id="commitment-categories"
           aria-labelledby="commitment-categories-heading"
-          className="scroll-mt-24 rounded-xl border border-border bg-surface p-4 shadow-sm"
+          className="sf-anchor rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <h2 id="commitment-categories-heading" className="mb-1 text-lg font-semibold">
             Fixed commitments (the direct-debit chart)
@@ -328,7 +328,7 @@ export default async function SettingsPage() {
         <section
           id="support-access"
           aria-labelledby="support-access-heading"
-          className="scroll-mt-24 rounded-xl border border-border bg-surface p-4 shadow-sm"
+          className="sf-anchor rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <h2 id="support-access-heading" className="mb-1 text-lg font-semibold">
             Support access
@@ -346,7 +346,7 @@ export default async function SettingsPage() {
         <section
           id="appearance"
           aria-labelledby="appearance-heading"
-          className="scroll-mt-24 rounded-xl border border-border bg-surface p-4 shadow-sm"
+          className="sf-anchor rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <h2 id="appearance-heading" className="mb-1 text-lg font-semibold">
             Appearance

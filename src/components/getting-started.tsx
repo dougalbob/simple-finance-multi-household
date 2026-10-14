@@ -252,7 +252,7 @@ function StepCard({
   return (
     <li
       id={`setup-${step.id}`}
-      className="scroll-mt-24 rounded-xl border border-border bg-surface p-4 shadow-sm"
+      className="sf-anchor rounded-xl border border-border bg-surface p-4 shadow-sm"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className={compact ? 'text-base font-semibold' : 'text-lg font-semibold'}>

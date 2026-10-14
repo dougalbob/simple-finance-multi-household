@@ -171,9 +171,14 @@ test.describe('all transactions', () => {
     );
 
     // Issue #30: the target row lands *below* the sticky site header, not
-    // underneath it. Native fragment scrolling ignores the header unless the
-    // row carries a scroll margin (`scroll-mt-24` on the Purchases row).
-    const row = page.locator('tr[id^="purchase-"]', { hasText: 'Corner Foods' }).first();
+    // underneath it. The row the fragment names is the one that must clear it —
+    // a `hasText` match would find whichever Corner Foods row comes first in a
+    // seed grown by other specs, which is not the row under test. The landing
+    // offset is measured (`sf-anchor`, re-opened issue #34), and the root-layout
+    // scroll pass corrects a cold load's own scroll (`src/components/scroll-hash.tsx`).
+    const anchoredId = new URL(page.url()).hash.slice(1);
+    const row = page.locator(`tr[id="${anchoredId}"]`);
+    await expect(row).toContainText('Corner Foods');
     const header = page.locator('header.sticky').first();
     await expect
       .poll(async () => {

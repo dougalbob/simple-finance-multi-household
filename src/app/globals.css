@@ -231,6 +231,37 @@
 }
 
 /*
+ * The landing offset of every anchored deep link (`#schedule-12`,
+ * `#purchase-3`, `#panel-persons-heading`): the sticky site header's real
+ * height plus a small gap. `site-nav.tsx` measures the header into
+ * `--sf-anchor-offset` (it is 57px on a phone, 121px between 1024px and
+ * 1199px where the desktop nav wraps, 85px above that), and the fallback is
+ * the compact bar plus the same gap — the pre-hydration guess. A fixed
+ * `scroll-mt-*` cannot clear all of those, which is how a supplier's
+ * "Linked to schedule" link used to land the schedule behind the menu
+ * (re-opened GitHub issue #34).
+ */
+@utility sf-anchor {
+  /*
+   * Below 1024px the bar is the compact one — a fixed `h-14` — so the guess
+   * (56px + a 12px gap) is not a guess at all.
+   */
+  scroll-margin-top: var(--sf-anchor-offset, calc(56px + 12px));
+
+  /*
+   * From 1024px the nav can wrap onto a second row, and a cold load scrolls
+   * before any JavaScript has measured anything. The pre-hydration guess is
+   * then the tallest the bar has been measured at (121px, a wrapped desktop
+   * nav) rather than a value that would park the target behind the menu:
+   * `scroll-hash.tsx` corrects the landing from the real header within a frame
+   * or two, and a generous gap is invisible next to a hidden row.
+   */
+  @media (min-width: 1024px) {
+    scroll-margin-top: var(--sf-anchor-offset, calc(121px + 12px));
+  }
+}
+
+/*
  * A link that is its own call to action keeps its arrow and weight, but the
  * blue and underline are permanent here too — an arrow is not an exception
  * to the household's chosen treatment (decision 203).
