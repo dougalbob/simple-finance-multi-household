@@ -13,16 +13,16 @@ Next session: record the merge SHA, the CI run IDs, the Publish run and the GHCR
 
 # v1.13.0 release — Supplier schedule links, in-place Recurring search, and remembered cancelled schedule visibility (2026-10-14)
 
-Released as **`v1.13.0`** (`APP_RELEASE_STAGE = 'stable'`; moves `latest` on `ghcr.io/dougalbob/simple-finance-multi-household`, host port `3009`; GitHub release marked Latest). Release PR: the same PR as the feature work, so the working branch's one merge carries both. No schema change, no migration.
+Released as **`v1.13.0`** (`APP_RELEASE_STAGE = 'stable'`; moves `latest` on `ghcr.io/dougalbob/simple-finance-multi-household`, host port `3009`; GitHub release marked Latest). Release PR: the same PR as the feature work (#36), merged at `744257f08dd46d3d5b78ae6b2cb95ffb8a142b7f`. CI run on main `38611992298`, Publish run `38613387507`, GHCR digest `sha256:87366f8d165939d558234e605fe97e25830e510b7b7bd13b888de5801d356274`. No schema change, no migration.
 
 1. **#34 — Supplier card links to schedule & in-place Recurring search** (decision 215). In the Supplier card below Address, connected recurring schedules display as `Linked to schedule "<Schedule Name>"` with deep links to `/recurring?q=<name>#schedule-<id>`, or `No scheduled payments relate to this supplier currently` when unlinked. On Recurring, an instant search filter with Clear button filters schedules by schedule or supplier name. Matching schedules are displayed even if cancelled and cancelled schedules are hidden.
 2. **#35 — Recurring remembers hidden cancelled schedules setting across navigations** (decision 214). The hide-cancelled setting is stored in device cookie `sf_hide_cancelled_schedules` (max-age 1 year, path `/`, SameSite `lax`), matching `sf_theme`. Navigating away from `/recurring` and back without query params maintains the user's hidden/shown preference. Explicit `?hideCancelled=1` or `0` in URL takes precedence and updates the cookie.
 
 Version files bumped together: `package.json`, `package-lock.json` (root and `packages[""]`), `src/lib/version.ts`, `simple-finance-multi-household.xml`, `docs/RELEASE_NOTES_v1.13.0.md`.
 
-Gates run locally: `npm run format:check` clean; `npm run typecheck` clean; `npm test` 912 passed, 0 failed across 211 suites; `npm run build` clean. Browser tests verified locally with Chromium (2 passed in `e2e/recurring-hide-cancelled.spec.ts`).
+Gates run locally: `npm run format:check` clean; `npm run typecheck` clean; `npm test` 922 passed, 0 failed across 213 suites; `npm run build` clean. Browser tests verified locally with Chromium (2 passed in `e2e/recurring-hide-cancelled.spec.ts`).
 
-Next session: record the merge SHA, the CI run IDs, the Publish run and the GHCR digest here from `gh`.
+Next session: evaluate remaining open issue #33 (edit pot-to-pot transfers on Accounts, Pots & Checkpoints page).
 
 # v1.12.0 release — Hide cancelled schedules, and purchase links that land in view (2026-10-14)
 
