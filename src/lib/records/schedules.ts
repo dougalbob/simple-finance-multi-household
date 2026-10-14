@@ -667,6 +667,45 @@ export function nextDueDateAfter(schedule: Schedule, afterDate: string): string 
 }
 
 /**
+ * The schedule's own dates on or before `onOrBefore`, newest first, from its
+ * cadence alone (issue #24). Unlike `nextDueDateAfter` this deliberately
+ * **ignores `activeFrom`**: a salary that has been paid on the 25th for years
+ * still had a payday last month, even when the household only started telling
+ * the app about it this month. It is a calendar of the rhythm, not a list of
+ * expectations — nothing here is materialised or converted. Income dates take
+ * the weekend shift (`dueDateForPeriod`), so a Sunday payday is the Friday
+ * before, exactly as its instances would be.
+ */
+export function cadenceDatesOnOrBefore(
+  schedule: Schedule,
+  onOrBefore: string,
+  count: number,
+): string[] {
+  if (count <= 0) return [];
+  const anchor = checkedLocalDate(onOrBefore);
+  const result: string[] = [];
+  if (schedule.frequency === 'monthly') {
+    // Start one month ahead: a weekend shift can pull next month's 1st back
+    // into this month (Sat 1 Aug → Fri 31 Jul).
+    for (let step = -1; step <= 12 * 4 && result.length < count; step += 1) {
+      const index = anchor.year * 12 + (anchor.month - 1) - step;
+      const year = Math.floor(index / 12);
+      const month = (index % 12) + 1;
+      if (schedule.excludedMonths.includes(month)) continue;
+      const candidate = dueDateForPeriod(schedule, year, month);
+      if (candidate <= onOrBefore) result.push(candidate);
+    }
+    return result;
+  }
+  if (schedule.dueMonth === null) return result; // annual without a month: malformed row
+  for (let year = anchor.year + 1; year >= anchor.year - 4 && result.length < count; year -= 1) {
+    const candidate = dueDateForPeriod(schedule, year, schedule.dueMonth);
+    if (candidate <= onOrBefore) result.push(candidate);
+  }
+  return result;
+}
+
+/**
  * Materialize a schedule's instances: idempotent inserts of missing due
  * dates inside the effective window, and removal of stale upcoming rows
  * (after an edit or cancellation). Converted instances are never touched —

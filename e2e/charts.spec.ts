@@ -398,6 +398,65 @@ test.describe('charts', () => {
     ).toContain(average);
   });
 
+  test('the spending mix is where the money went: no date after today, and the pickers follow the quick windows (issue #24)', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1400, height: 950 });
+    await page.goto('/charts#mix');
+    const card = page.locator('#mix');
+    await expect(card.getByRole('heading', { name: 'Where the money went' })).toBeVisible();
+    await expect(page.getByText('Where the money goes')).toHaveCount(0);
+
+    const controls = page.locator('#mix-controls');
+    const from = controls.getByLabel('From', { exact: true });
+    const to = controls.getByLabel('To', { exact: true });
+    // Both pickers stop at today: the chart counts money already spent.
+    const today = await to.getAttribute('max');
+    expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await expect(from).toHaveAttribute('max', today as string);
+
+    const quick = page.getByRole('group', { name: 'Quick windows' });
+    const sinceLastPayday = quick.getByRole('link', { name: /Since last payday$/ });
+    const lastFullCycle = quick.getByRole('link', { name: /Last full payday cycle$/ });
+    const monthToDate = quick.getByRole('link', { name: /Month to date$/ });
+    await expect(sinceLastPayday).toBeVisible();
+    await expect(lastFullCycle).toBeVisible();
+    await expect(monthToDate).toBeVisible();
+    await expect(quick.getByRole('link')).toHaveCount(3);
+
+    // The default window is since last payday, ending today.
+    await expect(sinceLastPayday).toHaveAttribute('aria-current', 'true');
+    await expect(to).toHaveValue(today as string);
+
+    // Each quick window ends by today, and pressing one puts its dates in the
+    // pickers. The pickers are edited by hand first: once a date input has been
+    // touched the browser stops following its default value, so a soft
+    // navigation alone would leave the hand-typed dates showing beside a chart
+    // drawn for different ones.
+    for (const button of [monthToDate, lastFullCycle, sinceLastPayday]) {
+      await from.fill('2020-01-01');
+      await to.fill('2020-01-02');
+      const href = (await button.getAttribute('href')) ?? '';
+      const query = new URL(href, 'http://local').searchParams;
+      const windowFrom = query.get('from') ?? '';
+      const windowTo = query.get('to') ?? '';
+      expect(windowTo <= (today as string), `${href} ends ${windowTo}`).toBe(true);
+      await button.click();
+      await expect(page).toHaveURL(new RegExp(`from=${windowFrom}&to=${windowTo}`));
+      await expect(button).toHaveAttribute('aria-current', 'true');
+      await expect(from).toHaveValue(windowFrom);
+      await expect(to).toHaveValue(windowTo);
+    }
+    expect((await monthToDate.getAttribute('href')) ?? '').toContain(
+      `from=${(today as string).slice(0, 7)}-01&to=${today}`,
+    );
+
+    // An end date after today typed into the URL is brought back to today.
+    await page.goto(`/charts?from=${(today as string).slice(0, 7)}-01&to=2999-12-31#mix`);
+    await expect(to).toHaveValue(today as string);
+    await expect(card.getByText(/window stops at today/)).toBeVisible();
+  });
+
   test('Charts is reachable from the navigation and from the home page', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 950 });
     await page.goto('/');

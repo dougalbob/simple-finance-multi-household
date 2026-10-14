@@ -1,7 +1,7 @@
 import type { PersonRef, SpendingLineInput } from './insights';
 
 /**
- * Where the money goes (SPEC §16.7 E): the share of net spending that each
+ * Where the money went (SPEC §16.7 E): the share of net spending that each
  * parent category takes over a chosen window, drawn as a pie.
  *
  * Pure arithmetic, no database. The DB assembly lives in charts-view.ts, and

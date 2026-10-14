@@ -37,6 +37,8 @@ import { advanceDueRenewals, listRenewals } from './renewals';
 import { advanceDueAgreementRenewals, listAgreements } from './agreements';
 import { debtsSummary, type DebtsSummary } from './debts';
 import {
+  cadenceDatesOnOrBefore,
+  getSchedule,
   listSchedules,
   materializeAndConvert,
   MATERIALIZATION_HORIZON_DAYS,
@@ -743,6 +745,34 @@ export function recentScheduledIncomeDates(db: Db, today: string, count: number)
     .limit(count)
     .all()
     .map((row) => row.dueDate);
+}
+
+/** How far before the oldest recorded payday a derived one must fall. */
+const PAYDAY_MIN_GAP_DAYS = 14;
+
+/**
+ * The paydays already lived through, newest first — like
+ * `recentScheduledIncomeDates`, but never short of history (issue #24). The
+ * salary's own recorded instances come first; when the schedule started too
+ * recently to have `count` of them (the household began telling the app about
+ * the salary this month), the earlier paydays are worked out from the
+ * salary's cadence. That is what lets the spending-mix chart offer "Last full
+ * payday cycle" on day one instead of quietly hiding it. Empty only when no
+ * payday is scheduled at all.
+ */
+export function recentPaydayDates(db: Db, today: string, count: number): string[] {
+  const mainSalary = nextReceiptScheduleInstance(db, today);
+  if (mainSalary === undefined || count <= 0) return [];
+  const recorded = recentScheduledIncomeDates(db, today, count);
+  if (recorded.length >= count) return recorded;
+  const oldest = recorded[recorded.length - 1];
+  // A derived payday must sit a clear fortnight before the oldest recorded
+  // one: when the due day was edited, the old cadence's instance and the new
+  // cadence's date for the same period must not both count as paydays.
+  const before = oldest === undefined ? today : addDaysLocal(oldest, -PAYDAY_MIN_GAP_DAYS);
+  const schedule = getSchedule(db, mainSalary.scheduleId);
+  const derived = cadenceDatesOnOrBefore(schedule, before, count - recorded.length);
+  return [...recorded, ...derived];
 }
 
 function nextExpectedIncome(db: Db, today: string): NextIncome | null {

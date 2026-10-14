@@ -9,9 +9,9 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.9.0 is the accepted stable production release and moves :latest
-  (promoting the accepted v1.8.0-rc.1 Contracts & Renewals agreement register
-  and adding the granular child-category Spending Mix selector).
+  v1.10.0 is the accepted stable production release and moves :latest
+  (alternating rows on All Transactions, and Chart E becomes "Where the money
+  went": no dates after today, and quick windows that keep the pickers in sync).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.9.0 is the accepted stable production release and moves :latest.
+    v1.10.0 is the accepted stable production release and moves :latest.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

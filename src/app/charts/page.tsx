@@ -133,10 +133,10 @@ export default async function ChartsPage({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Charts</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">The money, drawn</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          Six questions: where the balance goes next month, where this payday cycle&apos;s money
-          goes, whether the shopping is creeping up, whose discretionary spending is moving, whether
-          the fixed bills are coming down, and how the last three months compare. Every chart
-          carries its numbers underneath —{' '}
+          Six questions: where the balance goes next month, where the money went since payday,
+          whether the shopping is creeping up, whose discretionary spending is moving, whether the
+          fixed bills are coming down, and how the last three months compare. Every chart carries
+          its numbers underneath —{' '}
           <Link href="/insights" className="sf-link">
             Insights
           </Link>{' '}
@@ -929,7 +929,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
 }
 
 /* ------------------------------------------------------------------ */
-/* E. Where the money goes — the spending-mix pie                      */
+/* E. Where the money went — the spending-mix pie                     */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -1000,18 +1000,25 @@ function MixSelector({ view }: { view: SpendingMixView }) {
     allCategoriesIncluded,
   } = view;
   const cats = selectedMixCategoryIds(view);
+  // Quick windows (issue #24). None runs past today: this chart counts money
+  // already spent, never a projection.
   const presetLinks: PresetLink[] = [];
   if (presets.payday !== null) {
-    presetLinks.push({ key: 'payday', label: 'Payday cycle', window: presets.payday });
+    presetLinks.push({ key: 'payday', label: 'Since last payday', window: presets.payday });
   }
   if (presets.previousPayday !== null) {
     presetLinks.push({
       key: 'previous-payday',
-      label: 'Previous payday cycle',
+      label: 'Last full payday cycle',
       window: presets.previousPayday,
     });
   }
-  presetLinks.push({ key: 'month', label: 'This calendar month', window: presets.month });
+  presetLinks.push({ key: 'month', label: 'Month to date', window: presets.month });
+  // The date pickers are uncontrolled, and a quick-window link is a soft
+  // navigation that keeps this form mounted, so `defaultValue` alone would
+  // leave the pickers showing the old dates. Keying them on the window
+  // remounts them, so the pickers always show the dates the pie is drawn for.
+  const windowKey = `${window.from}:${window.to}`;
 
   return (
     <section
@@ -1024,8 +1031,8 @@ function MixSelector({ view }: { view: SpendingMixView }) {
         Choose what to count
       </h2>
       <p className="mt-1 text-xs text-ink-muted">
-        By default this is the payday cycle: from the last payday up to the day before the next one.
-        Press Show after changing anything.
+        By default this is since last payday: from the last payday up to today. This chart counts
+        money already spent, so no window runs past today. Press Show after changing anything.
       </p>
 
       <form method="get" action="/charts#mix" className="mt-4 space-y-4">
@@ -1035,9 +1042,11 @@ function MixSelector({ view }: { view: SpendingMixView }) {
           <label className="flex flex-col gap-1 text-xs text-ink-soft">
             From
             <input
+              key={`from:${windowKey}`}
               type="date"
               name="from"
               required
+              max={view.today}
               defaultValue={window.from}
               className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
             />
@@ -1045,9 +1054,11 @@ function MixSelector({ view }: { view: SpendingMixView }) {
           <label className="flex flex-col gap-1 text-xs text-ink-soft">
             To
             <input
+              key={`to:${windowKey}`}
               type="date"
               name="to"
               required
+              max={view.today}
               defaultValue={window.to}
               className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
             />
@@ -1124,7 +1135,7 @@ function sharePercent(share: number): string {
 }
 
 function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey: string | null }) {
-  const { mix, window, today, notice } = view;
+  const { mix, window, notice } = view;
   const slots = mixColourSlots(view);
   const colourOf = (key: string): string => {
     const index = slots.indexOf(key);
@@ -1160,10 +1171,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
         ? `Nothing is above zero from ${windowText}.`
         : `${formatPence(mix.totalPence)} net spending from ${windowText}. ${largest.label} is the biggest slice, at ${sharePercent(largest.share)}.`;
 
-  const runningPast = window.to > today;
-  const caption = `Net spending by parent category, drawn from the purchase lines in the window — refunds net off their category. Personal is split by “For: …”: each person’s own slice, and household-marked personal spending as its own slice, never split between people. A category that nets to zero or below is listed in the table but not drawn.${
-    runningPast ? ' The window runs past today, so days still to come are not counted yet.' : ''
-  }`;
+  const caption = `Net spending by parent category, drawn from the purchase lines in the window — refunds net off their category. It counts money already spent, never a projection, so the window ends today at the latest. Personal is split by “For: …”: each person’s own slice, and household-marked personal spending as its own slice, never split between people. A category that nets to zero or below is listed in the table but not drawn.`;
 
   const columns = [
     { key: 'slice', label: 'Slice' },
@@ -1236,7 +1244,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
   );
 
   return (
-    <ChartCard id="mix" eyebrow="E · Spending mix" title="Where the money goes" className="min-w-0">
+    <ChartCard id="mix" eyebrow="E · Spending mix" title="Where the money went" className="min-w-0">
       {notice === null ? null : (
         <p className="mb-3 rounded-lg border border-dashed border-border-strong bg-canvas p-3 text-xs text-ink-soft">
           {notice}

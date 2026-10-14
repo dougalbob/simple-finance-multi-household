@@ -15,19 +15,8 @@ import {
   type GroceriesSeries,
   type PersonalSeries,
 } from './chart-series';
-import {
-  firstOfLocalMonth,
-  lastOfLocalMonth,
-  startOfWeekLocal,
-  GROCERIES_PARENT,
-  type PersonRef,
-} from './insights';
-import {
-  ensureScheduleState,
-  getHorizonProjectionView,
-  nextScheduledIncomeDate,
-  recentScheduledIncomeDates,
-} from './money-view';
+import { firstOfLocalMonth, startOfWeekLocal, GROCERIES_PARENT, type PersonRef } from './insights';
+import { ensureScheduleState, getHorizonProjectionView, recentPaydayDates } from './money-view';
 import { getMonthComparisonView } from './insights-view';
 import { spendingMix, type MixLine, type SpendingMix } from './spending-mix';
 import { listVehicles } from './vehicles';
@@ -484,7 +473,7 @@ export function chartSpendingLines(db: Db, from: string, to: string): ChartSpend
 }
 
 /* ------------------------------------------------------------------ */
-/* E. Where the money goes — the spending-mix pie                      */
+/* E. Where the money went — the spending-mix pie                     */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -517,7 +506,11 @@ export interface MixParentChoice {
 export interface SpendingMixView {
   today: string;
   window: MixWindow;
-  /** The windows the selector links to; null when a payday cycle cannot be found. */
+  /**
+   * The quick windows the selector links to (issue #24): since last payday,
+   * the last full payday cycle, and month to date. None ends after today. The
+   * payday ones are null when no payday is scheduled.
+   */
   presets: {
     payday: MixWindow | null;
     previousPayday: MixWindow | null;
@@ -610,24 +603,26 @@ export function spendingMixLines(db: Db, from: string, to: string): MixLine[] {
 }
 
 /**
- * The selector's windows. The **payday cycle** runs from the most recent
- * payday up to the day before the next one — the household's own month. The
- * previous cycle is the one before that. Both are null until the main salary
- * has two paydays on record to bracket them.
+ * The selector's payday windows (issue #24). The pie counts money already
+ * spent, never a projection, so no window runs past today:
+ *
+ * - **Since last payday** (`payday`) runs from the most recent payday up to
+ *   today.
+ * - **Last full payday cycle** (`previous-payday`) runs from the payday before
+ *   that up to the day before the most recent one — a whole cycle, finished.
+ *
+ * The paydays come from `recentPaydayDates`, which works earlier paydays out
+ * from the salary's cadence when the schedule is too new to have recorded
+ * them, so the full cycle is offered from the first day. Both are null only
+ * when no payday is scheduled at all.
  */
 export function paydayCycleWindows(
   db: Db,
   today: string,
 ): { payday: MixWindow | null; previousPayday: MixWindow | null } {
-  const [latest, previous] = recentScheduledIncomeDates(db, today, 2);
-  const next = nextScheduledIncomeDate(db, today);
+  const [latest, previous] = recentPaydayDates(db, today, 2);
   if (latest === undefined) return { payday: null, previousPayday: null };
-  const payday: MixWindow = {
-    kind: 'payday',
-    from: latest,
-    // With no next payday on record the cycle runs up to today, not into the future.
-    to: next === null ? today : addDaysLocal(next, -1),
-  };
+  const payday: MixWindow = { kind: 'payday', from: latest, to: today };
   const previousPayday: MixWindow | null =
     previous === undefined
       ? null
@@ -636,9 +631,11 @@ export function paydayCycleWindows(
 }
 
 /**
- * Where the money goes (§16.7 E). The default window is the current payday
- * cycle; a custom window must have both bounds and run forwards. Every figure
- * comes from `spendingMix`, the engine the Insights totals also read.
+ * Where the money went (§16.7 E). The default window is since last payday; a
+ * custom window must have both bounds, run forwards and start no later than
+ * today, and an end date after today is brought back to today — the chart
+ * counts spending that has happened, not spending that is projected. Every
+ * figure comes from `spendingMix`, the engine the Insights totals also read.
  */
 export function getSpendingMixView(
   db: Db,
@@ -648,11 +645,8 @@ export function getSpendingMixView(
   const now = nowArg ?? new Date();
   ensureScheduleState(db, now);
   const today = toLocalDateString(now);
-  const month: MixWindow = {
-    kind: 'month',
-    from: firstOfLocalMonth(today),
-    to: lastOfLocalMonth(today),
-  };
+  // Month to date: the 1st up to today, never the rest of the month.
+  const month: MixWindow = { kind: 'month', from: firstOfLocalMonth(today), to: today };
   const cycles = paydayCycleWindows(db, today);
 
   let notice: string | null = null;
@@ -665,9 +659,20 @@ export function getSpendingMixView(
       askedTo !== null &&
       isLocalDateText(askedFrom) &&
       isLocalDateText(askedTo) &&
-      askedFrom <= askedTo
+      askedFrom <= askedTo &&
+      askedFrom <= today
     ) {
-      window = { kind: 'custom', from: askedFrom, to: askedTo };
+      const to = askedTo > today ? today : askedTo;
+      if (askedTo > today) {
+        notice =
+          'This chart counts money already spent, so the window stops at today rather than the end date asked for.';
+      }
+      // A custom window with exactly a preset's dates is that preset, so its
+      // button lights up whether it was pressed or typed.
+      const presetMatch = [cycles.payday, cycles.previousPayday, month].find(
+        (preset) => preset !== null && preset.from === askedFrom && preset.to === to,
+      );
+      window = presetMatch ?? { kind: 'custom', from: askedFrom, to };
     } else {
       window = cycles.payday ?? month;
       notice = 'Those dates were not a valid window, so the default window is shown.';
@@ -677,7 +682,7 @@ export function getSpendingMixView(
   } else {
     window = month;
     notice =
-      'No payday is scheduled yet, so this shows the current calendar month. Add the salary on the Money coming in page (/income) for payday cycles.';
+      'No payday is scheduled yet, so this shows the month to date. Add the salary on the Money coming in page (/income) for payday windows.';
   }
 
   const parentTree = categoryTree(db);

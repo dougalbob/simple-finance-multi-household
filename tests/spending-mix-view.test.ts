@@ -27,10 +27,10 @@ import type { Db } from '../src/lib/db/client';
  */
 
 const ACTOR = 'alex@example.com';
-// Friday 9 October 2026, evening: the current payday cycle runs 25 Sept to 26 Oct.
+// Friday 9 October 2026, evening: the last payday was Friday 25 Sept, the next is 27 Oct.
 const NOW = new Date('2026-10-09T17:00:00Z');
 
-describe('charts-view: where the money goes (E)', () => {
+describe('charts-view: where the money went (E)', () => {
   let fixture: HouseholdFixture;
 
   before(async () => {
@@ -41,13 +41,47 @@ describe('charts-view: where the money goes (E)', () => {
 
   const db = (): Db => fixture.db;
 
-  it('defaults to the payday cycle: last payday up to the day before the next', () => {
+  it('defaults to since last payday: the last payday up to today, never past it', () => {
     const view = getSpendingMixView(db(), {}, NOW);
     assert.equal(view.window.kind, 'payday');
     // The 27th of September is a Sunday, so payday is the Friday before (the
-    // income weekend shift, decision 7): the cycle runs 25 Sept to 26 Oct.
+    // income weekend shift, decision 7). The window stops at today (issue #24):
+    // the pie counts money already spent, not the rest of the cycle.
     assert.equal(view.window.from, '2026-09-25');
-    assert.equal(view.window.to, '2026-10-26');
+    assert.equal(view.window.to, '2026-10-09');
+    assert.equal(view.notice, null);
+  });
+
+  it('offers month to date, not the whole calendar month (issue #24)', () => {
+    const view = getSpendingMixView(db(), {}, NOW);
+    assert.deepEqual(view.presets.month, { kind: 'month', from: '2026-10-01', to: '2026-10-09' });
+  });
+
+  it('never lets a quick window end after today', () => {
+    const view = getSpendingMixView(db(), {}, NOW);
+    for (const preset of [view.presets.payday, view.presets.previousPayday, view.presets.month]) {
+      assert.ok(preset !== null);
+      assert.ok(preset.to <= view.today, `${preset.kind} ends ${preset.to}`);
+    }
+  });
+
+  it('brings an end date after today back to today, and says so', () => {
+    const view = getSpendingMixView(db(), { from: '2026-10-01', to: '2026-10-31' }, NOW);
+    assert.equal(view.window.from, '2026-10-01');
+    assert.equal(view.window.to, '2026-10-09');
+    assert.match(view.notice ?? '', /already spent/);
+    assert.equal(view.mix.totalPence, independentNet(db(), '2026-10-01', '2026-10-09'));
+  });
+
+  it('refuses a window that starts after today', () => {
+    const view = getSpendingMixView(db(), { from: '2026-10-12', to: '2026-10-20' }, NOW);
+    assert.equal(view.window.kind, 'payday');
+    assert.match(view.notice ?? '', /not a valid window/);
+  });
+
+  it('treats typed dates that match a quick window as that window', () => {
+    const view = getSpendingMixView(db(), { from: '2026-08-27', to: '2026-09-24' }, NOW);
+    assert.equal(view.window.kind, 'previous-payday');
     assert.equal(view.notice, null);
   });
 

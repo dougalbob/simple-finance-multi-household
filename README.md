@@ -2,9 +2,9 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-14):** this is the independent multi-household edition and **`v1.9.0` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.9.0.md`](docs/RELEASE_NOTES_v1.9.0.md).
-> It promotes the field-tested `v1.8.0-rc.1` Contracts & Renewals agreement register to stable, adds the granular expandable parent/child category tree selector on **Chart E (Spending mix — Where the money goes)**, and updates `npm test` to run in memory-bounded batches. The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
+> **Status (2026-10-14):** this is the independent multi-household edition and **`v1.10.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.10.0.md`](docs/RELEASE_NOTES_v1.10.0.md).
+> It stripes the All Transactions rows and turns **Chart E (Spending mix)** into **"Where the money went"**: no dates after today, Since last payday / Last full payday cycle / Month to date quick windows, and date pickers that always show the window drawn. `v1.9.0` before it promoted the Contracts & Renewals agreement register to stable and added the expandable category tree selector on Chart E. The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
 > restore, and registry backup and restore in `/admin` are implemented. Importing the existing household
@@ -103,7 +103,7 @@ Merging a pull request does not publish an image. A lower-case annotated tag on 
 - **Charts:** `/charts` — the same figures drawn: the month ahead (household total, with zero always on the
   axis and the overdraft limit marked), the weekly shop against the configured figure and the trailing
   8-week average, personal spending per person per month with the household's shared spending kept
-  separate, the fixed commitments over the child categories ticked in Settings, where the money goes
+  separate, the fixed commitments over the child categories ticked in Settings, where the money went
   (a spending-mix pie), and three months by category (with an Exclude Housing toggle). Hand-rolled SVG, no
   client JavaScript, a table of the exact numbers under every chart, and a link from every bar to the
   purchases behind it.

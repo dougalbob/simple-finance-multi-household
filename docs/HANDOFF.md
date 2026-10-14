@@ -1,3 +1,21 @@
+# v1.10.0 release — Striped transactions, and the spending mix shows where the money went (2026-10-14)
+
+Released on branch `arena/75d5a4f4-simple-finance-multi-household` as **`v1.10.0`** (`APP_RELEASE_STAGE = 'stable'`; moves `latest` on `ghcr.io/dougalbob/simple-finance-multi-household`, host port `3009`; GitHub release marked Latest). No schema change, no migration.
+
+The household filed three GitHub issues (#23, #24, #25) and asked the agent to pick a manageable slice. Agreed with them: **#23 + #24** this release (presentation only); **#25 deferred** because it changes what Chart C measures.
+
+1. **#23 — alternating rows on All Transactions** (`src/app/transactions/page.tsx`): movement rows alternate `bg-canvas`; checkpoint dividers don't take a turn (`stripeIndex`). Same treatment as decisions 205/206.
+2. **#24 — Chart E is "Where the money went"** (decision 208, SPEC §16.7 E):
+   - Title renamed; both pickers `max` = today; server refuses a start after today and clamps an end after today (with a notice).
+   - Quick windows: **Since last payday** (default, latest payday → today) · **Last full payday cycle** (previous payday → day before latest) · **Month to date** (1st → today). `MixWindowKind` values unchanged.
+   - **Why the household never saw the previous-cycle button:** windows were bracketed by *recorded* salary instances only, and their salary schedule is recent. New `cadenceDatesOnOrBefore` (`schedules.ts`, pure, ignores `activeFrom`) + `recentPaydayDates` (`money-view.ts`, recorded first, cadence fills the gap, 14-day minimum gap) fix it.
+   - **Pickers follow the buttons:** the date inputs are uncontrolled; after a hand edit the browser's dirty-value flag stops them following `defaultValue` across a soft navigation. Both inputs are now keyed on `from:to`. The e2e spec edits the pickers first; it fails without the key and passes with it.
+3. **#25 — agreed direction for the next session** (household answer, 2026-10-14): Chart C's person series should count **every line whose "For" is that person, whatever the parent category**; the **Household series keeps its current scope** (household-marked lines under Personal and Entertainment & Eating Out only). `personalSpendSeries` filters by `parentNames` for every series today; the drill-down links (`hrefFor` in `renderPersonal`) pass `parentCategoryIds` and will need to drop the category filter for person segments; SPEC §16.7 C and decision 154 need updating. Check the caption ("Scope: …") and `/insights` panel 2 for agreement.
+
+Gates run locally before the PR: `npm run typecheck` clean; `npm run format:check` clean; `npm run themes:check` clean; `npm test` **902 passed, 0 failed across 208 suites** (new `tests/payday-windows.test.ts`, extended `tests/spending-mix-view.test.ts`); `npm run build` clean; `npm audit --omit=dev` 0 vulnerabilities. Browser (SANDBOX entry 8 recipe): `transactions` + `charts` projects **16/16**. Local full suite 118/129: all 11 failures were entry-17 server loss after the admin registry-restore test, and all 11 passed when rerun. CI `browser` passed on the PR's first commit (`f644211`).
+
+Watch out for: **re-run `npm test` after the version bump.** `tests/multi-household-isolation-contract.test.ts` requires AGENTS.md, README.md, docs/HANDOFF.md, docs/RELEASE_PROCESS.md **and docs/MULTI_HOUSEHOLD_PLAN.md** to name the current tag; this release's first CI `gates` run failed because MULTI_HOUSEHOLD_PLAN.md still said v1.9.0 (the local full run had happened before the bump). Also: the `caret-color: transparent` hydration warning in the dev-server log during the charts pixel test is Playwright's screenshot caret hiding, pre-existing and harmless. Merge SHA, check runs, Publish run and digest are to be recorded by the next session from `gh` (the merge closes this session).
+
 # v1.9.0 release — Granular Spending Mix category tree selector & Contracts & Renewals stable promotion (2026-10-14)
 
 Released on branch `arena/9001fee2-simple-finance-multi-household` as **`v1.9.0`** (`APP_RELEASE_STAGE = 'stable'`; moves `latest` on `ghcr.io/dougalbob/simple-finance-multi-household` on host port `3009` and marks the GitHub release Latest):
