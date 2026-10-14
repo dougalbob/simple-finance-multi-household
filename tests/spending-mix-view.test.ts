@@ -119,11 +119,40 @@ describe('charts-view: where the money goes (E)', () => {
       NOW,
     );
     assert.equal(without.allParentsIncluded, false);
+    assert.equal(without.allCategoriesIncluded, false);
     assert.ok(without.mix.slices.every((slice) => slice.parentId !== groceriesId));
     const groceriesNet = everything.mix.slices
       .filter((slice) => slice.parentId === groceriesId)
       .reduce((sum, slice) => sum + slice.amountPence, 0);
     assert.equal(without.mix.totalPence, everything.mix.totalPence - groceriesNet);
+  });
+
+  it('counts a single child category exclusion out of its parent slice and the total', () => {
+    const everything = getSpendingMixView(db(), {}, NOW);
+    const topUpId = fixture.categoryId('Groceries', 'Top-up Shops');
+    const weeklyShopId = fixture.categoryId('Groceries', 'Weekly Shop');
+    const groceriesId = parentId(db(), 'Groceries');
+
+    const withoutTopUp = getSpendingMixView(
+      db(),
+      {
+        from: everything.window.from,
+        to: everything.window.to,
+        includedCategoryIds: everything.includedCategoryIds.filter((id) => id !== topUpId),
+      },
+      NOW,
+    );
+
+    assert.equal(withoutTopUp.allParentsIncluded, true);
+    assert.equal(withoutTopUp.allCategoriesIncluded, false);
+    assert.ok(withoutTopUp.includedParentIds.includes(groceriesId));
+    assert.ok(withoutTopUp.includedCategoryIds.includes(weeklyShopId));
+    assert.ok(!withoutTopUp.includedCategoryIds.includes(topUpId));
+
+    const groceriesSlice = withoutTopUp.mix.slices.find((slice) => slice.parentId === groceriesId);
+    // In current cycle: Weekly Shop is 9250; Top-up Shops is 2600 + 1200 - 1200 = 2600.
+    assert.equal(groceriesSlice?.amountPence, 9250);
+    assert.equal(withoutTopUp.mix.totalPence, everything.mix.totalPence - 2600);
   });
 
   it('uses a custom window only when both bounds are given and run forwards', () => {

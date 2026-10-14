@@ -237,6 +237,35 @@ describe('spendingMix: the category selector', () => {
     assert.equal(mix.slices.length, 0);
     assert.equal(mix.totalPence, 0);
   });
+
+  it('filters individual child categories when includedCategoryIds is provided', () => {
+    const weeklyShop = GROCERIES * 10 + 1;
+    const topUpShop = GROCERIES * 10 + 2;
+    const childLines: MixLine[] = [
+      {
+        ...line('2026-09-28', GROCERIES, 'Groceries', 8000),
+        categoryId: weeklyShop,
+        childName: 'Weekly Shop',
+      },
+      {
+        ...line('2026-10-02', GROCERIES, 'Groceries', 2000),
+        categoryId: topUpShop,
+        childName: 'Top-up Shops',
+      },
+    ];
+    const mix = spendingMix(
+      childLines,
+      options({
+        includedParentIds: new Set([GROCERIES]),
+        includedCategoryIds: new Set([weeklyShop]),
+      }),
+    );
+    const groceries = mix.slices.find((slice) => slice.parentId === GROCERIES);
+    assert.equal(groceries?.amountPence, 8000);
+    assert.equal(groceries?.lines.length, 1);
+    assert.equal(groceries?.lines[0]?.childName, 'Weekly Shop');
+    assert.equal(mix.totalPence, 8000);
+  });
 });
 
 describe('spendingMix: guards and ordering', () => {

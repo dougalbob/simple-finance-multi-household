@@ -501,10 +501,17 @@ export interface MixWindow {
   to: string;
 }
 
+export interface MixChildChoice {
+  id: number;
+  name: string;
+  retired: boolean;
+}
+
 export interface MixParentChoice {
   id: number;
   name: string;
   retired: boolean;
+  children: MixChildChoice[];
 }
 
 export interface SpendingMixView {
@@ -519,9 +526,12 @@ export interface SpendingMixView {
   /** Plain words for why the window is what it is, when it is a fallback. */
   notice: string | null;
   parents: MixParentChoice[];
-  /** Parent ids counted. Every parent unless the selector says otherwise. */
+  /** Parent ids counted (parents with at least one counted child, or counted if childless). */
   includedParentIds: number[];
+  /** Child (leaf) category ids counted. Every child unless the selector says otherwise. */
+  includedCategoryIds: number[];
   allParentsIncluded: boolean;
+  allCategoriesIncluded: boolean;
   mix: SpendingMix;
   /** Who or what a line was for: `person:3`, `vehicle:1`, `household`. */
   targetLabels: Map<string, string>;
@@ -532,8 +542,14 @@ export interface SpendingMixOptions {
   /** Both bounds, or neither: a half-given window falls back to the default. */
   from?: string | null;
   to?: string | null;
-  /** Parent ids to count. Null (the default) counts every parent. */
+  /**
+   * Parent or child category ids to count. When a parent id is given without
+   * any of its child ids, all of that parent's children are counted. Null (the
+   * default) counts every category.
+   */
   includedParentIds?: readonly number[] | null;
+  /** Child category ids to count; merged with `includedParentIds` when given. */
+  includedCategoryIds?: readonly number[] | null;
 }
 
 function isLocalDateText(value: string): boolean {
@@ -669,19 +685,62 @@ export function getSpendingMixView(
     id: parent.id,
     name: parent.name,
     retired: parent.retiredAt !== null,
+    children: parent.children.map((child) => ({
+      id: child.id,
+      name: child.name,
+      retired: child.retiredAt !== null,
+    })),
   }));
   const allParentIds = parents.map((parent) => parent.id);
-  const requested = options.includedParentIds ?? null;
-  const includedParentIds =
-    requested === null ? allParentIds : allParentIds.filter((id) => requested.includes(id));
+  const allChildIds = parents.flatMap((parent) => parent.children.map((child) => child.id));
+  const hasSelection =
+    (options.includedParentIds !== undefined && options.includedParentIds !== null) ||
+    (options.includedCategoryIds !== undefined && options.includedCategoryIds !== null);
+
+  let includedParentIds: number[];
+  let includedCategoryIds: number[];
+  if (!hasSelection) {
+    includedParentIds = allParentIds;
+    includedCategoryIds = allChildIds;
+  } else {
+    const requested = new Set<number>([
+      ...(options.includedParentIds ?? []),
+      ...(options.includedCategoryIds ?? []),
+    ]);
+    includedParentIds = [];
+    includedCategoryIds = [];
+    for (const parent of parents) {
+      if (parent.children.length === 0) {
+        if (requested.has(parent.id)) {
+          includedParentIds.push(parent.id);
+        }
+        continue;
+      }
+      const matchingChildren = parent.children.filter((child) => requested.has(child.id));
+      if (matchingChildren.length > 0) {
+        includedParentIds.push(parent.id);
+        for (const child of matchingChildren) {
+          includedCategoryIds.push(child.id);
+        }
+      } else if (requested.has(parent.id)) {
+        includedParentIds.push(parent.id);
+        for (const child of parent.children) {
+          includedCategoryIds.push(child.id);
+        }
+      }
+    }
+  }
   const allParentsIncluded = includedParentIds.length === allParentIds.length;
+  const allCategoriesIncluded =
+    allParentsIncluded && includedCategoryIds.length === allChildIds.length;
 
   const people = listPeople(db).map((person) => ({ id: person.id, label: person.label }));
   const lines = spendingMixLines(db, window.from, window.to);
   const mix = spendingMix(lines, {
     from: window.from,
     to: window.to,
-    includedParentIds: allParentsIncluded ? null : new Set(includedParentIds),
+    includedParentIds: allCategoriesIncluded ? null : new Set(includedParentIds),
+    includedCategoryIds: allCategoriesIncluded ? null : new Set(includedCategoryIds),
     people,
     splitParents: parents
       .filter((parent) => (PIE_SPLIT_PARENTS as readonly string[]).includes(parent.name))
@@ -699,7 +758,9 @@ export function getSpendingMixView(
     notice,
     parents,
     includedParentIds,
+    includedCategoryIds,
     allParentsIncluded,
+    allCategoriesIncluded,
     mix,
     targetLabels,
     people,

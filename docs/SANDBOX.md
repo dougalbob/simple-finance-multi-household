@@ -455,8 +455,15 @@ empty — the fetch was blocked.
   coordinates, and probe the raster with a threshold that page furniture cannot reach (the chart's gridlines
   and paper are grey; a painted bar is not). `e2e/pixels.ts` holds the decoder (`node:zlib`, no dependency).
 
+## 21. Running all ~100 test files in one `node --import tsx --test` invocation triggers Arena OOM warnings — run in batches (`scripts/run-tests.mjs`) or target specific files (2026-10-14)
+
+- **Symptom:** running `node --import tsx --test tests/*.test.ts` across the entire ~100-file suite in a single invocation spawns default-parallelism workers that retain compiled TypeScript modules and SQLite fixtures across the run, triggering an out-of-memory warning in the Arena sandbox.
+- **What `npm test` does now:** `package.json`'s `"test"` script runs `node scripts/run-tests.mjs`, which executes `tests/*.test.ts` in sequential child-process batches of 20 files with `--test-concurrency=2` (configurable via `TEST_BATCH_SIZE` and `TEST_CONCURRENCY`). Each batch exits cleanly when its 20 files finish so the OS reclaims all memory before the next batch starts.
+- **During iterative work:** run only the test files that touch the area you are changing (`npx tsx --test tests/spending-mix.test.ts tests/spending-mix-view.test.ts` or `npm test -- tests/spending-mix.test.ts`), and reserve the full batched `npm test` for pre-PR gate verification.
+
 ---
 
+- **2026-10-14 (v1.9.0, session `arena/9001fee2-simple-finance-multi-household`):** entry 21 and `scripts/run-tests.mjs` added so `npm test` runs in 20-file sequential batches with `--test-concurrency=2`, avoiding Arena OOM warnings across the 885-test / 204-suite run.
 - **2026-10-12 (v1.5.0, session `arena/b3e92c4d-simple-finance-multi-household`):** entry 20 added while
   proving the chart hatch fix by pixels. `@sparticuz/chromium` behaved exactly as entry 8 records
   (`npm i` in `/tmp/pwbrowsers`, `lambdafs.inflate(bin/al2023.tar.br)` → `/tmp/al2023`,
