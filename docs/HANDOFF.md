@@ -1,3 +1,11 @@
+# Release v1.15.1 — Keep By Person month navigation in place (GitHub issue #45) (2026-10-15)
+
+**Release scope is prepared on this branch.** On `/insights`, the By Person Prev/Next links keep the current scroll position during month changes, while retaining their `#panel-persons-heading` fragment for direct and no-JavaScript visits. Next's default hash scrolling followed that fragment on soft navigation; both links now use `scroll={false}`. No financial data, schema, migration or backup format changes. See decision 220 and SPEC §16.2.
+
+The new browser regression test first failed against the unmodified page: at 390px, Next shifted the page by **91px** from the starting position. It now passes at 390px and 1400px in both directions, retaining `window.scrollY` within 8px after 450ms. The prior test already covered the sticky-header-safe heading anchor; that check remains. The full Insights Playwright project passed **3/3** locally using `docs/SANDBOX.md` entry 8. Local gates passed: format, typecheck, themes, `npm test` (**939/939** across 217 suites), build, and production audit (0 vulnerabilities). Required PR CI and tagged Publish evidence remain pending; the local results are not a substitute. This is still a pre-merge record, not evidence that a tag or image exists.
+
+---
+
 # Release v1.15.0 — Pin a default pot for All Transactions (GitHub issue #44) (2026-10-15)
 
 **Release scope is prepared on this branch.** `/transactions` now resolves a valid `potId` from the URL first, then the household's saved `default_transactions_pot_id`, then the former `Main account` / first-live-pot fallback. The new Settings → All Transactions selector can set, change or clear that household-level preference. It uses the existing settings table and audit trail; no migration or backup-format change. Explicit URL targets remain authoritative, including submissions from the Target filter.

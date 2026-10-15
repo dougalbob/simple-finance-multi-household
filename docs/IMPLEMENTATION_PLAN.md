@@ -3168,3 +3168,9 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     The value lives in the existing tenant-local key/value settings table (`default_transactions_pot_id`) and uses the ordinary audit trail; no database migration or backup-format change. Archived pots cannot be pinned, and a previously pinned pot that is later archived is ignored. The server action uses the request's immutable household context and refuses writes from a read-only support view.
 
     Coverage: `tests/settings-domain.test.ts` checks unset/set/change/clear, invalid and archived pots, and the audit entries. `e2e/settings.spec.ts` saves a default, verifies `/transactions` opens on it, verifies an explicit page target overrides it, and clears it to restore the old fallback. No schema change, no migration.
+
+220. **By Person month paging preserves the current scroll position (2026-10-15, v1.15.1, GitHub issue #45).**
+
+    The report was a regression in the earlier issue #26 behavior: Prev/Next kept `#panel-persons-heading` in the URL, but Next's default link scrolling followed that fragment during a soft query-string navigation and moved the reader away from their current vertical position. Both links now pass `scroll={false}`. Their month and fragment remain shareable, direct/no-JavaScript visits still use native fragment navigation and the heading's `sf-anchor` offset, and in-place month paging leaves the live viewport where the reader put it. No financial data or schema is changed.
+
+    The browser regression test positions the heading at a known scrolled location, then checks Next and Prev retain `window.scrollY` after delayed anchor checks settle, on both a 390px phone and a 1400px desktop. Run red against the prior code it moved **91px** on the phone; with the fix, both directions stay within **8px** of the starting position at both widths. No migration or backup-format change.

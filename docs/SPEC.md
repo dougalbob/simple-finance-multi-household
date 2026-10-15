@@ -1187,7 +1187,9 @@ picker in Settings. Not one page, component or chart changed to make that possib
    with the matching line's amount, exactly like the pie's line items (§16.7 E).
 2. **Personal comparison** — each person's for-person allocations (e.g. Clothing, Hobbies), side by side,
    per month. Household allocations are **never** attributed to whoever happened to pay. Each figure opens
-   its own line items in the same way (`?show=p:2:2026-10:3#person-drill`, v1.4.0, decision 198).
+   its own line items in the same way (`?show=p:2:2026-10:3#person-drill`, v1.4.0, decision 198). Prev/Next
+   month navigation preserves the current vertical scroll position during a soft navigation; the
+   `#panel-persons-heading` fragment remains for direct/no-JavaScript visits (decision 220).
 3. **Vehicle running costs** — per vehicle: monthly totals and rolling 12-month, by child category
    (fuel/insurance/maintenance/road tax/parking). On Overview, each vehicle name links to Purchases
    filtered to that vehicle from `rolling12From` through today (decision 179). Each figure opens its line
