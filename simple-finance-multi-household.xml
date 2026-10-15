@@ -9,8 +9,8 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.16.2 is the stable production release and moves :latest (the Supplier
-  card's schedule link now lands below the menu bar in every browser).
+  v1.17.0 is the stable production release and moves :latest (Spending trends
+  with saved household category presets, GitHub issue #40).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>

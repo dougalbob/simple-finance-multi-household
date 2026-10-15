@@ -1,3 +1,4 @@
+import { getSpendingPresets, type SpendingPresets, type SpendingPreset } from './spending-presets';
 import { and, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { allocations, categories, purchases, schedules, suppliers } from '../db/schema';
@@ -359,7 +360,10 @@ export interface CommitmentCategoryPicker {
 }
 
 /** The Settings checkbox list: every child, grouped by parent, pre-ticked. */
-export function getCommitmentCategoryPicker(db: Db): CommitmentCategoryPicker {
+export function getCommitmentCategoryPicker(
+  db: Db,
+  includeRetired = false,
+): CommitmentCategoryPicker {
   const tracking = effectiveCommitmentCategoryIds(db);
   const ticked = new Set(tracking.categoryIds);
   const used = new Set(scheduleCommitmentCategoryIds(db));
@@ -368,7 +372,13 @@ export function getCommitmentCategoryPicker(db: Db): CommitmentCategoryPicker {
       parentId: parent.id,
       parent: parent.name,
       children: parent.children
-        .filter((child) => child.retiredAt === null || ticked.has(child.id) || used.has(child.id))
+        .filter(
+          (child) =>
+            includeRetired ||
+            child.retiredAt === null ||
+            ticked.has(child.id) ||
+            used.has(child.id),
+        )
         .map((child) => ({
           id: child.id,
           name: child.name,
@@ -391,6 +401,7 @@ export interface CommitmentChartView {
 }
 
 export interface CommitmentChartOptions {
+  categoryIds?: number[];
   months?: number;
   scheduleOnly?: boolean;
 }
@@ -405,7 +416,10 @@ export function getCommitmentChartView(
   const today = toLocalDateString(now);
   const months = options.months ?? 12;
   const scheduleOnly = options.scheduleOnly === true;
-  const tracking = effectiveCommitmentCategoryIds(db);
+  const tracking: CommitmentTracking =
+    options.categoryIds === undefined
+      ? effectiveCommitmentCategoryIds(db)
+      : { categoryIds: options.categoryIds, source: 'configured' };
   const windowFrom = addMonthsClamped(firstOfLocalMonth(today), -(months - 1));
   const lines = chartSpendingLines(db, windowFrom, today);
   const names = new Map(
@@ -435,6 +449,22 @@ export function getCommitmentChartView(
       child: names.get(id)?.child ?? `Category ${id}`,
       retired: names.get(id)?.retired ?? false,
     })),
+  };
+}
+
+export interface SpendingTrendsView extends CommitmentChartView {
+  presets: SpendingPresets;
+  selectedPreset: SpendingPreset | null;
+}
+
+export function getSpendingTrendsView(db: Db, presetId?: string, now?: Date): SpendingTrendsView {
+  const presets = getSpendingPresets(db);
+  const selectedPreset =
+    presets.presets.find((preset) => preset.id === presetId) ?? presets.presets[0] ?? null;
+  return {
+    ...getCommitmentChartView(db, { categoryIds: selectedPreset?.categoryIds ?? [] }, now),
+    presets,
+    selectedPreset,
   };
 }
 

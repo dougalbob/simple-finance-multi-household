@@ -1,10 +1,11 @@
+import { SpendingPresetManager } from '@/components/spending-presets';
+import { getSpendingPresets } from '@/lib/records/spending-presets';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ProjectionSettingsForm } from '@/components/recurring';
 import {
   AddVehicleForm,
   CategoryTreeEditor,
-  CommitmentCategoriesForm,
   DefaultPurchasePotForm,
   DefaultTransactionsPotForm,
   PersonSignInForm,
@@ -77,7 +78,7 @@ export default async function SettingsPage() {
   const fuelByVehicle = getMonthlyFuelByVehicle(db);
   const defaultPurchasePotId = getDefaultPurchasePotId(db);
   const defaultTransactionsPotId = getDefaultTransactionsPotId(db);
-  const commitmentPicker = getCommitmentCategoryPicker(db);
+  const commitmentPicker = getCommitmentCategoryPicker(db, true);
   const projection = getProjectionView(db, now);
   const theme = await currentTheme();
 
@@ -285,21 +286,21 @@ export default async function SettingsPage() {
           className="sf-anchor rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <h2 id="commitment-categories-heading" className="mb-1 text-lg font-semibold">
-            Fixed commitments (the direct-debit chart)
+            Spending trends — category presets
           </h2>
-          <p className="mb-3 text-xs text-ink-muted">
-            Which child categories count as a fixed commitment on{' '}
+          <p className="mb-3 text-sm text-ink-muted">
+            Save named groups of categories for{' '}
             <Link href="/charts#commitments" className="sf-link">
-              Charts
+              Spending trends
             </Link>
-            . “Direct debit” is not a field on a purchase, so this list is the definition — tick
-            Insurance and Road Tax but leave Fuel alone, for instance. The chart has its own
-            “schedule-converted only” toggle for the strict bills-only view, which needs nothing
-            here. Saved with the usual audit entry.
+            . Every recorded purchase in a selected category counts, whether entered by hand or
+            generated from a schedule. These are actual spending totals, not projected commitments.
+            Presets are shared by your household.
           </p>
-          <CommitmentCategoriesForm
+          <SpendingPresetManager
+            state={getSpendingPresets(db)}
             groups={commitmentPicker.groups}
-            source={commitmentPicker.source}
+            readOnly={user.readOnly}
           />
         </section>
 

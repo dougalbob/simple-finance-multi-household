@@ -1,5 +1,6 @@
 'use server';
 
+import { changeSpendingPreset } from '@/lib/records/spending-presets';
 import { eq } from 'drizzle-orm';
 import { purchases } from '@/lib/db/schema';
 import {
@@ -238,7 +239,6 @@ import {
   setDefaultTransactionsPotId,
   setMonthlyFuelPence,
   setRenewalWarningLeadDays,
-  setCommitmentCategoryIds,
   setWeeklyGroceriesPence,
 } from '@/lib/records/settings';
 
@@ -3007,44 +3007,40 @@ export async function saveWarningLeadsAction(
   }
 }
 
-/**
- * Which child categories count as fixed commitments (SPEC §16.7 D, v0.14.0,
- * decision 156). The checkbox list posts one `categoryId` per tick; an empty
- * post is a real answer ("track nothing") and is stored as such, which is
- * what distinguishes it from the never-configured state that falls back to
- * the categories the household's schedules already use.
- */
-export async function saveCommitmentCategoriesAction(
-  _previous: ActionState,
+/** Household category preset CRUD: identity/read-only guards before any settings write. */
+export async function changeSpendingPresetAction(
+  _previous: ActionState & { presetId?: string },
   formData: FormData,
-): Promise<ActionState> {
+): Promise<ActionState & { presetId?: string }> {
   const user = await householdContextFromRequest();
   if (user === null) return NOT_SIGNED_IN;
   if (user.readOnly) return READ_ONLY_VIEW;
-  const ids: number[] = [];
-  for (const value of formData.getAll('categoryId')) {
-    const id = Number(typeof value === 'string' ? value.trim() : '');
-    if (!Number.isInteger(id) || id <= 0) {
-      return { status: 'error', message: 'That category list could not be read. Try again.' };
-    }
-    ids.push(id);
-  }
+  const operation = formData.get('operation');
+  if (operation !== 'save' && operation !== 'delete')
+    return { status: 'error', message: 'Choose save or delete.' };
   try {
-    const db = user.db;
-    setCommitmentCategoryIds(db, ids, user.email);
+    const presetId = changeSpendingPreset(user.db, {
+      operation,
+      id: String(formData.get('presetId') ?? ''),
+      name: String(formData.get('name') ?? ''),
+      categoryIds: formData.getAll('categoryId').map((value) => Number(value)),
+      version: Number(formData.get('version') ?? -1),
+      actor: user.email,
+    });
     revalidatePages();
     return {
       status: 'ok',
-      message:
-        ids.length === 0
-          ? 'Saved — no categories are tracked as fixed commitments.'
-          : `Saved — ${ids.length} ${ids.length === 1 ? 'category' : 'categories'} tracked as fixed commitments.`,
+      message: operation === 'delete' ? 'Preset deleted.' : 'Category preset saved.',
+      presetId: operation === 'delete' ? '' : presetId,
     };
   } catch (err) {
-    if (err instanceof InvalidSettingValueError) {
-      return { status: 'error', message: err.message };
-    }
-    return { status: 'error', message: 'The categories could not be saved. Please try again.' };
+    return {
+      status: 'error',
+      message:
+        err instanceof InvalidSettingValueError
+          ? err.message
+          : 'The preset could not be saved. Please try again.',
+    };
   }
 }
 

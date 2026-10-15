@@ -46,7 +46,7 @@ import { addDaysLocal } from '@/lib/records/dates';
  * - Forecast chart (Charts A)
  * - Groceries chart (Charts B)
  * - Personal spending chart (Charts C)
- * - Fixed commitments chart (Charts D)
+ * - Spending trends chart (Charts D)
  * - Spending mix pie (Charts E)
  * - Insights: month comparison, personal spending, vehicle costs, honesty loop
  * - Horizon: the full projection with day-by-day breakdown
@@ -295,18 +295,19 @@ export default async function ExamplePage() {
           <PersonalChartInline view={personal} everyone={everyone} />
         </section>
 
-        {/* Charts - Fixed commitments */}
+        {/* Charts - Spending trends */}
         <section
           id="commitments"
           aria-labelledby="commitments-heading"
           className="rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <h2 id="commitments-heading" className="text-lg font-semibold">
-            Chart D — Fixed commitments: are the direct debits coming down?
+            Chart D — Spending trends: how is this spending changing month by month?
           </h2>
           <p className="mt-1 text-sm text-ink-soft">
-            Tracked categories are the household's own list, ticked in Settings — "direct debit" is
-            not a field on a purchase.
+            This example uses a Fixed commitments selection. In your household, save named category
+            presets in Settings and switch between them on Charts. Recorded spending, not
+            projections.
           </p>
           <CommitmentsChartInline view={commitments} />
         </section>
@@ -608,7 +609,7 @@ function CommitmentsChartInline({ view }: { view: ReturnType<typeof getCommitmen
   if (view.tracking.categoryIds.length === 0) {
     return (
       <p className="text-sm text-ink-soft">
-        No categories are tracked as fixed commitments yet. Tick the ones that are bills in{' '}
+        No categories are selected yet. Create a category preset in{' '}
         <a href="/settings#commitment-categories" className="sf-link">
           Settings
         </a>
@@ -654,11 +655,6 @@ function CommitmentsChartInline({ view }: { view: ReturnType<typeof getCommitmen
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-ink-muted">
-        Tracked categories:{' '}
-        {view.trackedCategories.map((c) => `${c.parent} / ${c.child}`).join(', ')}
-        {view.tracking.source === 'schedules' ? ' (from schedules — nothing saved yet)' : ''}.
-      </p>
     </div>
   );
 }

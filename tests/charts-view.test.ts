@@ -1,3 +1,4 @@
+import { changeSpendingPreset, getSpendingPresets } from '../src/lib/records/spending-presets';
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { createHouseholdFixture, type HouseholdFixture } from './household';
@@ -16,6 +17,7 @@ import {
   effectiveCommitmentCategoryIds,
   getCommitmentCategoryPicker,
   getCommitmentChartView,
+  getSpendingTrendsView,
   getCategoryMonthsView,
   getForecastChartView,
   getGroceriesChartView,
@@ -459,6 +461,53 @@ describe('charts-view: reconciliation with the purchase history', () => {
     assert.equal(
       onlySchedules.series.months.find((month) => month.label === 'August 2026')?.amountPence,
       3499,
+    );
+  });
+
+  it('Spending trends uses the selected preset and reconciles every month with purchase lines', () => {
+    const energy = fixture.categoryId('Utilities', 'Energy');
+    const broadband = fixture.categoryId('Utilities', 'Broadband');
+    const presetId = changeSpendingPreset(db(), {
+      operation: 'save',
+      id: '',
+      name: 'Bills',
+      categoryIds: [energy, broadband],
+      version: getSpendingPresets(db()).version,
+      actor: ACTOR,
+      now: NOW,
+    });
+    const view = getSpendingTrendsView(db(), presetId, NOW);
+    assert.equal(view.selectedPreset?.name, 'Bills');
+    assert.equal(view.scheduleOnly, false);
+    for (const month of view.series.months) {
+      assert.equal(
+        month.amountPence,
+        lineTotalPence(db(), month.from, month.to, (line) =>
+          [energy, broadband].includes(line.categoryId),
+        ),
+        month.label,
+      );
+    }
+    assert.equal(
+      view.series.months.find((month) => month.label === 'August 2026')?.amountPence,
+      7400 + 3499,
+    );
+    assert.equal(
+      getSpendingTrendsView(db(), 'missing-id', NOW).selectedPreset?.id,
+      'fixed-commitments',
+    );
+    const emptyId = changeSpendingPreset(db(), {
+      operation: 'save',
+      id: '',
+      name: 'Empty',
+      categoryIds: [],
+      version: getSpendingPresets(db()).version,
+      actor: ACTOR,
+    });
+    assert.ok(
+      getSpendingTrendsView(db(), emptyId, NOW).series.months.every(
+        (month) => month.amountPence === 0,
+      ),
     );
   });
 

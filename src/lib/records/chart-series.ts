@@ -759,10 +759,10 @@ function describeCommitments(
 ): string {
   const strict = scheduleOnly ? ' (schedule-converted only)' : '';
   if (trackedCount === 0) {
-    return 'No categories are tracked as fixed commitments yet — choose them in Settings.';
+    return 'No categories are tracked yet — choose a category preset in Settings.';
   }
   if (latest === null) {
-    return `No complete month of tracked commitments yet${strict}.`;
+    return `No complete month of selected spending yet${strict}.`;
   }
   const headline = `${formatPence(latest.amountPence)} in ${latest.label}${strict}`;
   if (compared === null || deltaPence === null) {
