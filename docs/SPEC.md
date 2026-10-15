@@ -1286,13 +1286,33 @@ lives in the URL, and a filter click keeps the reader's scroll position. The `#p
 the card on a direct/no-JavaScript visit, below the sticky header. A person's bar drills down with no
 category filter; the household bar keeps the discretionary-parent filter.
 
-**D. Are the direct debits coming down?** Monthly bars of the household's **tracked fixed commitments**.
-"Direct debit" is not a field on a purchase, so the definition is an explicit list of child categories,
-ticked in Settings (`commitment_category_ids`) — Insurance and Road Tax, say, but not Fuel, which is why
-the list is by child and not by parent. Until something is saved, the chart tracks the categories the
-household's own direct debits and standing orders already use, and says so. A **schedule-converted only**
-toggle narrows the chart to purchases the app converted from a schedule (`purchases.scheduleInstanceId`) —
-true DD/SOs, no hand-typed bills.
+**D. Spending trends (issue #40, decision 223).** Monthly bars of **recorded net spending** in a
+household's chosen category preset — never projected groceries, fuel or future commitments.
+The title is “How is this spending changing month by month?” A dropdown selects a named preset;
+`?preset=<stable-id>` makes the selection shareable, and soft selection preserves the reader's scroll
+position and other query filters. Missing/deleted IDs fall back to the first preset; no presets and
+explicitly empty selections show an honest empty state, never all spending.
+
+**Create/Edit category presets** opens Settings. The household can create, rename, edit and delete
+presets, using an expandable parent/child tree with mixed parent ticks. Parent selection saves the
+current child IDs, not a rule that silently includes future children. Shortcuts select all categories,
+select categories used by DD/SO schedules, or clear the selection. “Used by a schedule” is a category
+shortcut, not a purchase-source filter: manual and schedule-generated purchases both count. Retired
+categories remain available for historical spending. Deletion needs confirmation and never alters purchases.
+Names are trimmed, nonblank, at most 60 characters and unique within the household (case-insensitive).
+
+Presets are household settings (`spending_category_presets`, JSON in the existing settings table),
+audited before/after, guarded against stale collection versions, refused in read-only support views,
+and included in household backups without a schema or backup-format change. Before the first save,
+the old `commitment_category_ids` selection appears as **Fixed commitments** (including an explicit
+empty list); if never configured, existing schedule categories supply the starting selection. This
+compatibility read writes nothing. The first mutation persists that starting preset alongside the
+new changes. A saved empty collection never resurrects the fallback.
+
+The old **Schedule-converted only** toggle and the long tracked-category/breakdown lists are removed.
+Monthly comparison headlines, the in-progress month hatch, exact-number tables and filtered purchase
+drill-downs remain. Presets classify categories only; they do not reclassify purchases or impose a
+household-independent definition of “discretionary”.
 
 **E. Where the money went (decisions 195, 207, 208).** A pie of **net spending by parent category**
 over a window the household chooses, so the question "what share of our money went on each thing" has a picture.

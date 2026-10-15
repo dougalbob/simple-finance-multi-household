@@ -1,3 +1,40 @@
+# Release v1.17.0 — Spending trends (issue #40) (2026-10-15)
+
+**Release scope is prepared on this branch.** The household accepted the Arena preview, requested the
+minor final label change from “Edit preset” to **“Create/Edit preset”**, and explicitly authorised
+publication for Unraid testing. This supersedes the preview hold. Version files are aligned at
+**v1.17.0 stable**, moving `latest` on `ghcr.io/dougalbob/simple-finance-multi-household` only.
+No schema, migration or backup-format change. Required PR CI, main CI and tagged Publish evidence
+remain pending at preparation time; this is a pre-merge record, not proof a tag or image exists.
+
+Chart D now selects household category presets from a dropdown without scrolling. Settings offers
+create/rename/edit/delete, expandable parent/child ticks, all/schedule-category/clear shortcuts,
+retired categories, empty selections, delete confirmation and a read-only refusal. The old category
+selection survives as Fixed commitments; an unset selection uses the existing schedule fallback until
+first save. The new JSON setting is audited and collection-version guarded; no schema or backup-format
+change. Reported spending includes manual and schedule-generated purchases; no forecast data is added.
+The old schedule-only UI and long category lists are removed. See SPEC §16.7 D and decision 223.
+
+**Verified locally (including the final label/version change):** format, typecheck, production build, themes, production audit (0 vulnerabilities),
+all **953 unit tests / 219 suites**, and the **11 Charts + 5 Settings browser tests** using SANDBOX entry 8.
+The preset browser journey checks creation/rename/deletion, persistence, mixed parent ticks, filtered
+bar URLs, deleted-ID fallback, other-query preservation and scroll preservation in both directions at
+390px and 1400px. Additional live-preview browser checks exercised a long-name empty preset at 320px,
+empty state, switching back to a populated chart, cancellation/confirmation of deletion, and screenshots
+of the phone chart and desktop editor: no horizontal overflow or browser errors. The preset browser journey was rerun successfully with the final Create/Edit preset label before the release PR.
+
+**Live preview:** port **3000**, Next development mode bound to 0.0.0.0, using only fictional data in
+ignored `.preview-data` with the development-only `alex@example.com` identity. Open `/charts#commitments`
+and `/settings#commitment-categories`. Four illustrative presets are seeded: Fixed commitments,
+Everyday essentials, Discretionary, All spending. They are preview examples, not imposed production defaults.
+The persistent server was started with:
+`DATA_DIR=/home/user/simple-finance-multi-household/.preview-data AUTH_DEV_BYPASS=true AUTH_DEV_IDENTITY_EMAIL=alex@example.com NEXT_TELEMETRY_DISABLED=1 npm run dev`.
+No real household data was accessed. Browser config, seed helpers and screenshots are ignored artifacts;
+if the sandbox restarts, dependencies and preview data may need rebuilding using SANDBOX entry 8 and
+the fictional E2E seed. The required PR CI will run the full seeded and fresh-household browser suites before merge.
+
+---
+
 # Release v1.16.2 — Verified anchor landings (GitHub issue #43) (2026-10-15)
 
 **Release scope is prepared on this branch.** Open issues were #43 and #40; this session took #43 (a concrete production bug) and left Chart D #40 untouched — its own text asks for a naming/design discussion first. #43: after v1.13.1 (decision 216), following a Supplier card's "Linked to schedule" link could still leave the filtered schedule behind the menu bar in production. Root cause found by simulation: decision 216 assumed every browser honours `scroll-margin-top` during Next's bare `scrollIntoView()` / fragment scroll; one that does not (older WebKit) lands the row at viewport top 0 and nothing rescued it. Chromium honours it at every width, which is why v1.13.1's checks all passed. The fix (decision 222): `ScrollHashIntoView` now measures each settle sample against the sticky header and corrects the document once — only when the target is settled behind the bar (`ANCHOR_CORRECTION_STABLE_MS`), once per navigation, and disarmed by the household's first pointer/wheel/touch/key input (the three guards decision 216's removed attempt lacked). Pure rule `anchorCorrectionDelta` in `src/lib/records/anchor-scroll.ts`. No schema, migration, backup-format or financial-data change.

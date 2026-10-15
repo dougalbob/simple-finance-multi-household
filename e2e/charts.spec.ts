@@ -380,46 +380,104 @@ test.describe('charts', () => {
     }
   });
 
-  test('the commitments chart is defined in Settings, and the schedule-only view is narrower', async ({
+  test('Spending trends presets can be created, renamed and deleted; switching preserves scroll and drill-downs', async ({
     page,
   }) => {
     test.slow();
     await page.setViewportSize({ width: 1400, height: 950 });
-
-    // 1. Tick a category the household pays by hand as well as by direct debit.
     await page.goto('/settings#commitment-categories');
     const section = page.locator('#commitment-categories');
-    await expect(section.getByRole('heading', { name: /Fixed commitments/ })).toBeVisible();
-    const utilities = section.getByRole('group', { name: 'Utilities' });
-    await utilities.getByRole('checkbox', { name: /^Energy/ }).check();
-    await section.getByRole('button', { name: 'Save tracked commitments' }).click();
-    await expect(section.getByRole('status')).toContainText(/commitment/i, { timeout: 30_000 });
-
-    // 2. The chart now counts Energy, and lists what it counts.
-    await page.goto('/charts#commitments');
-    const commitments = figure(page, 'commitments', 'laptop');
-    await expect(page.locator('#commitments')).toContainText('Utilities / Energy');
-    const everything = await trackedTotal(commitments);
-
-    // 3. "Schedule-converted only" is a link, and it never counts more: the
-    //    hand-typed energy bills drop out, the converted direct debits stay.
-    const toggle = page.getByRole('link', { name: /Schedule-converted only/ });
-    await expect(toggle).not.toHaveAttribute('aria-current', 'true');
-    await toggle.click();
-    await expect(page).toHaveURL(/scheduleOnly=1/);
-    await expect(commitments.locator('[data-chart-headline]')).toContainText(
-      /schedule-converted only/i,
+    await expect(section.locator('[data-presets-ready="true"]')).toBeAttached();
+    await section.getByLabel('Create/Edit preset').selectOption('');
+    await section.getByLabel('Preset name').fill('Test bills');
+    await section.getByRole('button', { name: /^Utilities/ }).click();
+    await section.getByRole('checkbox', { name: 'Select all Utilities', exact: true }).check();
+    await expect(section.getByRole('checkbox', { name: /^Energy/ })).toBeChecked();
+    await section.getByRole('button', { name: 'Clear selection', exact: true }).click();
+    await section.getByRole('checkbox', { name: /^Energy/ }).check();
+    await section.getByRole('checkbox', { name: /^Broadband/ }).check();
+    await expect(
+      section.getByRole('checkbox', { name: 'Select all Utilities', exact: true }),
+    ).toHaveJSProperty('indeterminate', true);
+    await section.getByRole('button', { name: 'Save preset', exact: true }).click();
+    await expect(section.getByRole('status')).toHaveText('Category preset saved.');
+    const billsId = await section.getByLabel('Create/Edit preset').inputValue();
+    expect(billsId).not.toBe('');
+    await section.getByLabel('Preset name').fill('Test essential bills');
+    await section.getByRole('button', { name: 'Save preset', exact: true }).click();
+    await expect(section.getByLabel('Create/Edit preset').locator('option:checked')).toHaveText(
+      'Test essential bills',
     );
-    expect(
-      await trackedTotal(commitments),
-      'schedule-converted only counted MORE',
-    ).toBeLessThanOrEqual(everything);
+    await section.getByLabel('Create/Edit preset').selectOption('');
+    await section.getByLabel('Preset name').fill('Test all spending');
+    await section.getByRole('button', { name: 'Select all categories', exact: true }).click();
+    await section.getByRole('button', { name: 'Save preset', exact: true }).click();
+    await expect(section.getByLabel('Create/Edit preset').locator('option:checked')).toHaveText(
+      'Test all spending',
+    );
+    const allId = await section.getByLabel('Create/Edit preset').inputValue();
 
-    // 4. The way back is the same link, and it says which state it is in.
-    const pressed = page.getByRole('link', { name: /Schedule-converted only/ });
-    await expect(pressed).toHaveAttribute('aria-current', 'true');
-    await pressed.click();
-    await expect(page).not.toHaveURL(/scheduleOnly=1/);
+    for (const width of [390, 1400]) {
+      await page.setViewportSize({ width, height: 950 });
+      await page.goto('/settings');
+      await page.goto(`/charts?preset=${billsId}&noHousing=1#commitments`);
+      const card = page.locator('#commitments');
+      const selector = card.getByLabel('Category preset');
+      await expect(selector).toBeEnabled();
+      await expect(card).toContainText('D · Spending trends');
+      await expect(card.getByRole('link', { name: /Schedule-converted/ })).toHaveCount(0);
+      await expect(card).not.toContainText('Tracked categories');
+      const drawing = figure(page, 'commitments', width < 1024 ? 'phone' : 'laptop');
+      const links = await barLinks(drawing);
+      expect(links.length).toBeGreaterThan(0);
+      expect(
+        new URL(links[0]!, 'http://example.test').searchParams.getAll('categoryId'),
+      ).toHaveLength(2);
+      expect(links[0]).not.toContain('scheduleOnly');
+      const bills = await trackedTotal(drawing);
+      await selector.scrollIntoViewIfNeeded();
+      // Let the cold-load anchor settle, then measure the user's chosen position.
+      await page.waitForTimeout(1200);
+      const before = await page.evaluate(() => window.scrollY);
+      await selector.selectOption(allId);
+      await expect(page).toHaveURL(new RegExp(`preset=${allId}`));
+      await expect(selector).toBeEnabled();
+      await page.waitForTimeout(500);
+      expect(Math.abs((await page.evaluate(() => window.scrollY)) - before)).toBeLessThanOrEqual(8);
+      expect(new URL(page.url()).searchParams.get('noHousing')).toBe('1');
+      expect(await trackedTotal(drawing)).toBeGreaterThanOrEqual(bills);
+      await selector.scrollIntoViewIfNeeded();
+      const backBefore = await page.evaluate(() => window.scrollY);
+      await selector.selectOption(billsId);
+      await expect(selector).toBeEnabled();
+      await expect(page).toHaveURL(new RegExp(`preset=${billsId}`));
+      await page.waitForTimeout(500);
+      expect(
+        Math.abs((await page.evaluate(() => window.scrollY)) - backBefore),
+      ).toBeLessThanOrEqual(8);
+      await page.goBack();
+      await expect(selector).toHaveValue(allId);
+      await noOverflow(page, `preset dropdown at ${width}`);
+    }
+
+    await page.goto('/settings#commitment-categories');
+    await expect(section.locator('[data-presets-ready="true"]')).toBeAttached();
+    await section.getByLabel('Create/Edit preset').selectOption(billsId);
+    await expect(section.getByLabel('Preset name')).toHaveValue('Test essential bills');
+    await section.getByRole('button', { name: 'Delete preset', exact: true }).click();
+    await section.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+    await expect(section.getByRole('status')).toHaveText('Preset deleted.');
+    await expect(
+      section.getByLabel('Create/Edit preset').locator(`option[value="${billsId}"]`),
+    ).toHaveCount(0);
+    await page.goto(`/charts?preset=${billsId}#commitments`);
+    await expect(page.getByLabel('Category preset')).toHaveValue('fixed-commitments');
+    await page.goto('/settings#commitment-categories');
+    await expect(section.locator('[data-presets-ready="true"]')).toBeAttached();
+    await section.getByLabel('Create/Edit preset').selectOption(allId);
+    await section.getByRole('button', { name: 'Delete preset', exact: true }).click();
+    await section.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+    await expect(section.getByRole('status')).toHaveText('Preset deleted.');
   });
 
   test('the charts agree with the tables on Insights', async ({ page }) => {

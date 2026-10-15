@@ -1,3 +1,4 @@
+import { SpendingPresetSelect } from '@/components/spending-presets';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
@@ -25,14 +26,14 @@ import { formatPence } from '@/lib/money';
 import { NeedsFirst } from '@/components/needs-first';
 import {
   PIE_SPLIT_PARENTS,
-  getCommitmentChartView,
+  getSpendingTrendsView,
   getCategoryMonthsView,
   getForecastChartView,
   getGroceriesChartView,
   getPersonalChartView,
   getSpendingMixView,
   type CategoryMonthsView,
-  type CommitmentChartView,
+  type SpendingTrendsView,
   type ForecastChartView,
   type GroceriesChartView,
   type MixWindow,
@@ -64,16 +65,15 @@ export const dynamic = 'force-dynamic';
  * Every drawing on this page is server-rendered SVG and is on the screen in
  * the first paint; every chart states whether its figures are reported or
  * projected; and every chart ships with a table twin holding the exact
- * numbers. The filter chips and the schedule-converted toggle are plain
- * links, so they work with JavaScript switched off and can be sent to the
- * other person. The one hydrated piece is the months chart's scroll arrows
- * (decision 201): the sideways swipe itself is native overflow scrolling and
+ * numbers. Filters live in the URL so views can be shared. The preset dropdown uses
+ * soft navigation without scrolling. The months chart's scroll arrows
+ * (decision 201) are also hydrated: the sideways swipe itself is native overflow scrolling and
  * works with JavaScript off, and the arrows are pure enhancement on top.
  */
 
 interface SearchParams {
   who?: string;
-  scheduleOnly?: string;
+  preset?: string;
   /** Spending mix (E): the window, the category ticks and the selected slice. */
   from?: string;
   to?: string;
@@ -98,7 +98,6 @@ export default async function ChartsPage({
   const db = user.db;
   const now = new Date();
   const params = await searchParams;
-  const scheduleOnly = params.scheduleOnly === '1';
 
   // “What this page needs first” (Slice 2), split by the two halves of the
   // page: the forecast reads the checkpoint chain, and the four reported
@@ -114,7 +113,7 @@ export default async function ChartsPage({
   const everyone = getPersonalChartView(db, {}, now);
   const include = parseWho(params.who, everyone);
   const personal = include === null ? everyone : getPersonalChartView(db, { include }, now);
-  const commitments = getCommitmentChartView(db, { scheduleOnly }, now);
+  const commitments = getSpendingTrendsView(db, params.preset, now);
   const mixView = getSpendingMixView(
     db,
     {
@@ -155,7 +154,7 @@ export default async function ChartsPage({
               selected={include}
               params={params}
             />
-            <CommitmentsSection view={commitments} params={params} />
+            <CommitmentsSection view={commitments} />
             <MixLayout view={mixView} selectedKey={sliceKey} />
             <MonthsSection view={monthsView} params={params} />
           </>
@@ -742,34 +741,19 @@ function labelOf(series: PersonalSeries, key: string): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* D. Fixed commitments                                                */
+/* D. Spending trends                                                  */
 /* ------------------------------------------------------------------ */
 
-function CommitmentsSection({ view, params }: { view: CommitmentChartView; params: SearchParams }) {
-  const toggleHref = hrefWith(params, {
-    scheduleOnly: view.scheduleOnly ? undefined : '1',
-  });
-  const caption = `Tracked categories are the household's own list, ticked in Settings — “direct debit” is not a field on a purchase. ${
-    view.scheduleOnly
-      ? 'Narrowed to purchases the app converted from a schedule: true DD/SOs only.'
-      : 'Every purchase in a tracked category counts, converted from a schedule or typed by hand.'
-  }${view.tracking.source === 'schedules' ? ' Nothing is saved yet, so this is the set your schedules already use.' : ''}`;
-
+function CommitmentsSection({ view }: { view: SpendingTrendsView }) {
+  const caption = `${view.selectedPreset?.name ?? 'No preset selected'}: recorded spending in the selected categories, including manual and schedule-generated purchases. Not a projection.${view.presets.source === 'schedules' ? ' Starting with categories used by your schedules; save a preset to keep this selection fixed.' : ''}`;
   const action = (
-    <div className="flex flex-wrap items-center gap-2">
-      <Link
-        href={toggleHref}
-        aria-current={view.scheduleOnly ? 'true' : undefined}
-        className={`rounded-full border px-3 py-1 text-xs font-medium ${
-          view.scheduleOnly
-            ? 'border-till bg-till text-till-ink'
-            : 'border-border-strong bg-surface text-ink-soft hover:bg-canvas'
-        }`}
-      >
-        {view.scheduleOnly ? '✓ ' : ''}Schedule-converted only
-      </Link>
+    <div className="flex min-w-0 flex-wrap items-end gap-3">
+      <SpendingPresetSelect
+        presets={view.presets.presets}
+        selectedId={view.selectedPreset?.id ?? ''}
+      />
       <Link href="/settings#commitment-categories" className="text-xs sf-link-arrow">
-        Choose categories →
+        Create/Edit category presets →
       </Link>
     </div>
   );
@@ -778,17 +762,18 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
     return (
       <ChartCard
         id="commitments"
-        eyebrow="D · Fixed commitments"
-        title="Are the direct debits coming down?"
+        eyebrow="D · Spending trends"
+        title="How is this spending changing month by month?"
         action={action}
       >
         <p className="text-sm text-ink-soft">
-          No categories are tracked as fixed commitments yet. Tick the ones that are bills —
-          Insurance and Road Tax but not Fuel, for instance — in{' '}
+          {view.selectedPreset
+            ? 'This preset has no selected categories.'
+            : 'No category presets yet.'}{' '}
           <Link href="/settings#commitment-categories" className="sf-link">
-            Settings
-          </Link>
-          , and this chart fills in.
+            Create or edit a category preset
+          </Link>{' '}
+          to fill in this chart.
         </p>
       </ChartCard>
     );
@@ -837,8 +822,8 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
   return (
     <ChartCard
       id="commitments"
-      eyebrow="D · Fixed commitments"
-      title="Are the direct debits coming down?"
+      eyebrow="D · Spending trends"
+      title="How is this spending changing month by month?"
       action={action}
     >
       <div className="lg:hidden">
@@ -858,7 +843,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
             idPrefix="chart-hatch-commitments-phone"
             width={PHONE_WIDTH}
             height={200}
-            ariaLabel={`Tracked fixed commitments by month. ${series.headline}`}
+            ariaLabel={`Spending trends by month. ${series.headline}`}
             xTicks={everyNth(
               bars.map((bar) => bar.label),
               2,
@@ -876,44 +861,6 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
           columns={columns}
           rows={rows}
           totals={totals}
-          footer={
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold text-ink-soft">
-                  Tracked categories ({view.trackedCategories.length})
-                </p>
-                <ul className="mt-1 space-y-0.5 text-xs text-ink-soft">
-                  {view.trackedCategories.map((category) => (
-                    <li key={category.id}>
-                      {category.parent} / {category.child}
-                      {category.retired ? ' (retired)' : ''}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-ink-soft">
-                  By category over {series.months.length} months
-                </p>
-                {series.byCategory.length === 0 ? (
-                  <p className="mt-1 text-xs text-ink-muted">
-                    Nothing recorded in the tracked categories in this window.
-                  </p>
-                ) : (
-                  <ul className="mt-1 space-y-0.5 text-xs text-ink-soft">
-                    {series.byCategory.map((entry) => (
-                      <li key={entry.categoryId} className="flex justify-between gap-3">
-                        <span>
-                          {entry.parent} / {entry.child}
-                        </span>
-                        <span className="tabular-nums">{formatPence(entry.amountPence)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          }
         >
           <BarChart
             bars={bars}
@@ -921,7 +868,7 @@ function CommitmentsSection({ view, params }: { view: CommitmentChartView; param
             idPrefix="chart-hatch-commitments-laptop"
             width={LAPTOP_WIDTH}
             height={260}
-            ariaLabel={`Tracked fixed commitments by month. ${series.headline}`}
+            ariaLabel={`Spending trends by month. ${series.headline}`}
             xTicks={everyNth(
               bars.map((bar) => bar.label),
               1,
@@ -1619,9 +1566,10 @@ function chipHref(params: SearchParams, key: string, everyone: PersonalChartView
 function hrefWith(params: SearchParams, changes: Partial<SearchParams>): string {
   const merged: SearchParams = { ...params, ...changes };
   const query = new URLSearchParams();
-  if (merged.who !== undefined && merged.who !== '') query.set('who', merged.who);
-  if (merged.scheduleOnly === '1') query.set('scheduleOnly', '1');
-  if (merged.noHousing === '1') query.set('noHousing', '1');
+  for (const [key, value] of Object.entries(merged)) {
+    if (key === 'scheduleOnly' || value === undefined || value === '') continue;
+    for (const item of Array.isArray(value) ? value : [value]) query.append(key, item);
+  }
   const text = query.toString();
   return text === '' ? '/charts' : `/charts?${text}`;
 }

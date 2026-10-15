@@ -3220,3 +3220,29 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     **The guards are decision 216's lesson, kept.** That decision removed an unguarded correction (fixed-delay re-measuring and `scrollBy`) after it moved `/charts` under a click whose hit-test had already happened. This correction may fire only when (a) the target has sat behind the header *unmoving* for `ANCHOR_CORRECTION_STABLE_MS` (100ms) — a page still growing keeps moving its target and keeps restarting the clock; (b) once per `pathname` + `#hash`; and (c) it is disarmed by the household's first `pointerdown`, `wheel`, `touchstart` or `keydown`. `tests/anchor-scroll.test.ts` pins the delta rule (clear-by-anything is the household's landing; only the missing distance plus gap is corrected) and the wiring of all three guards. The charts, insights and transactions browser projects — including the exact commitments-chart settings journey that caught the 216 attempt — pass unchanged locally.
 
     No schema, migration, backup-format or financial-data change; the change is one client component, one pure helper and their tests.
+
+
+223. **Chart D becomes Spending trends with household category presets (2026-10-15, issue #40, v1.17.0).**
+
+    The household accepted the name **Spending trends** and requested an Arena preview before publication.
+    The chart now asks “How is this spending changing month by month?” and selects a saved category group
+    from a dropdown, with `router.push(..., { scroll: false })` and a stable `preset` URL ID. The old
+    schedule-only control and category lists are gone; reported monthly totals, comparison, table twins,
+    hatch and purchase drill-downs remain. This is actual net spending, not projected commitments.
+
+    Settings has a create/rename/edit/delete manager with an expandable, mixed-state parent/child tree,
+    all/schedule-category/clear shortcuts, counts and confirmation before deletion. Parent and schedule
+    selections save snapshots of child IDs; no silent future additions. Retired categories stay selectable
+    for historical reporting. The old selection becomes Fixed commitments on a read-only compatibility
+    path, falling back to schedule categories only if never configured. First mutation persists the
+    collection; deleting every preset leaves an explicit empty collection.
+
+    Storage is `spending_category_presets` in the household settings table, with stable IDs, validated
+    leaf IDs, trimmed unique names (1–60 chars), collection-version conflict refusal and atomic audit.
+    Authenticated actions refuse read-only support access. No migration or backup-format change.
+    Legacy series/domain helpers remain for the worked example and backward-compatibility tests.
+
+    Verification: `tests/spending-presets.test.ts`, reconciliation in `tests/charts-view.test.ts`, and
+    the Chart D journey in `e2e/charts.spec.ts` (CRUD, mixed ticks, persistence, filtered drill-downs,
+    deleted-ID fallback, query preservation and scroll preservation in both directions at 390/1400px).
+    Local browser execution uses SANDBOX entry 8. The household accepted the preview, requested the final label “Create/Edit preset”, and authorised a stable release.
