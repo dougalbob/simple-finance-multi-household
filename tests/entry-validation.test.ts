@@ -4,6 +4,7 @@ import {
   checkpointEntrySchema,
   debtEntrySchema,
   editScheduleEntrySchema,
+  editTransferEntrySchema,
   editExternalMovementEntrySchema,
   externalMovementEntrySchema,
   fuelEntrySchema,
@@ -275,6 +276,75 @@ describe('schedule edit boundary schema', () => {
         editScheduleEntrySchema.safeParse({ ...base, activeFrom }).success,
         false,
         activeFrom,
+      );
+    }
+  });
+});
+
+describe('transfer edit boundary schema (SPEC §10.1, issue #33)', () => {
+  const base = {
+    transferId: 7,
+    expectedVersion: 2,
+    fromPotId: 1,
+    toPotId: 2,
+    amountPence: 45000,
+    occurredDate: '2026-09-25',
+    note: 'cover the 1st',
+  } as const;
+
+  it('accepts a full correction: pots, amount, date and note together', () => {
+    const parsed = editTransferEntrySchema.safeParse(base);
+    assert.equal(parsed.success, true);
+    assert.deepEqual(parsed.success && parsed.data, base);
+  });
+
+  it('keeps the version guard and the record id mandatory', () => {
+    for (const missing of ['transferId', 'expectedVersion'] as const) {
+      const payload: Record<string, unknown> = { ...base };
+      delete payload[missing];
+      assert.equal(editTransferEntrySchema.safeParse(payload).success, false, missing);
+    }
+  });
+
+  it('refuses a zero, negative or non-integer amount and unnamed pots', () => {
+    for (const amountPence of [0, -100, 12.5]) {
+      assert.equal(editTransferEntrySchema.safeParse({ ...base, amountPence }).success, false);
+    }
+    assert.equal(editTransferEntrySchema.safeParse({ ...base, fromPotId: null }).success, false);
+    assert.equal(editTransferEntrySchema.safeParse({ ...base, toPotId: 0 }).success, false);
+  });
+
+  it('accepts the two pots being swapped — the domain refuses only the same pot twice', () => {
+    const swapped = editTransferEntrySchema.safeParse({ ...base, fromPotId: 2, toPotId: 1 });
+    assert.equal(swapped.success, true);
+    // The same pot on both sides is the domain's refusal (a second edit
+    // inside the version window), not the schema's: it is a legal shape.
+    assert.equal(
+      editTransferEntrySchema.safeParse({ ...base, fromPotId: 2, toPotId: 2 }).success,
+      true,
+    );
+  });
+
+  it('treats a missing date as "unchanged" and a blank note as "unchanged"', () => {
+    const partial = editTransferEntrySchema.safeParse({
+      transferId: 7,
+      expectedVersion: 2,
+      fromPotId: 1,
+      toPotId: 2,
+      amountPence: 45000,
+      note: '',
+    });
+    assert.equal(partial.success, true);
+    assert.equal(partial.success && partial.data.occurredDate, null);
+    assert.equal(partial.success && partial.data.note, null);
+  });
+
+  it('still refuses a date that is not a real local date', () => {
+    for (const occurredDate of ['2026-09-31', 'yesterday', '2026-02-30', '']) {
+      assert.equal(
+        editTransferEntrySchema.safeParse({ ...base, occurredDate }).success,
+        false,
+        occurredDate,
       );
     }
   });

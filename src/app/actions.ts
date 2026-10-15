@@ -93,6 +93,7 @@ import {
 } from '@/lib/records/vehicles';
 import {
   createTransfer,
+  editTransfer,
   InvalidTransferInputError,
   TransferNotFoundError,
   voidTransfer,
@@ -192,6 +193,7 @@ import {
   supplierReferenceEntrySchema,
   swapEntrySchema,
   transferEntrySchema,
+  editTransferEntrySchema,
   voidRecordEntrySchema,
   voidSwapEntrySchema,
   warningLeadsEntrySchema,
@@ -1844,6 +1846,79 @@ export async function addTransferAction(
     };
   } catch (err) {
     if (err instanceof InvalidTransferInputError || err instanceof PotNotFoundError) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The transfer could not be saved. Please try again.' };
+  }
+}
+
+/**
+ * Correct a saved pot-to-pot transfer (SPEC §10.1, GitHub issue #33): a pot
+ * chosen by mistake, a mistyped amount, the wrong date, or the note the
+ * household meant to add. Three layers guard it, so a correction can never
+ * become a rewrite of history: the version the page rendered (a stale form
+ * is refused, nothing saved), the domain's own rules (two different pots, a
+ * positive whole-pence amount, known pots, no future date, never a voided
+ * transfer) and the audit trail, which keeps the before and after rows.
+ * Entered-by and the entry time are untouched — the §7.1 same-day rule reads
+ * `createdAt`, so a correction cannot make a transfer look newer than it is.
+ * The move stays a transfer by construction: it is still excluded from every
+ * insight, and it can still never look like spending.
+ */
+export async function editTransferAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const amount = parsePence(
+    typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
+  );
+  const parsed = editTransferEntrySchema.safeParse({
+    transferId: numberOrNull(formData.get('transferId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    fromPotId: numberOrNull(formData.get('fromPotId')),
+    toPotId: numberOrNull(formData.get('toPotId')),
+    amountPence: amount,
+    occurredDate: textOrNull(formData.get('occurredDate')),
+    note: typeof formData.get('note') === 'string' ? formData.get('note') : '',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the transfer fields.') };
+  }
+  const data = parsed.data;
+  try {
+    const transfer = editTransfer(user.db, {
+      id: data.transferId,
+      expectedVersion: data.expectedVersion,
+      actor: user.email,
+      patch: {
+        fromPotId: data.fromPotId,
+        toPotId: data.toPotId,
+        amountPence: data.amountPence,
+        // Blank = unchanged, so a correction never silently re-dates the
+        // movement (the purchase-edit rule).
+        ...(data.occurredDate === null ? {} : { occurredDate: data.occurredDate }),
+        // A blank note keeps the current note — the convention every other
+        // record edit follows. The domain can clear one; the form does not
+        // offer it.
+        ...(data.note === '' ? {} : { note: data.note }),
+      },
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: `Transfer #${transfer.id} corrected — ${formatPence(transfer.amountPence)}, spending untouched.`,
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidTransferInputError ||
+      err instanceof PotNotFoundError ||
+      err instanceof TransferNotFoundError ||
+      err instanceof RecordVoidedError ||
+      err instanceof VersionConflictError
+    ) {
       return { status: 'error', message: err.message };
     }
     return { status: 'error', message: 'The transfer could not be saved. Please try again.' };

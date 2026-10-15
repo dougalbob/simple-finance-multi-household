@@ -530,6 +530,26 @@ export const transferEntrySchema = z.object({
 });
 
 /**
+ * Correcting a saved pot-to-pot transfer (SPEC §10.1, GitHub issue #33): the
+ * two pots, the amount, the date and the note are all editable, because a
+ * transfer is a money record like any other and a pot picked by mistake
+ * should not have to be voided and re-recorded. A blank note keeps the
+ * current note — the convention every other record edit follows (the field
+ * arrives pre-filled, so a correction is typed over it). `entered_by`, the
+ * entry time and the audit trail are never editable: an edit is a
+ * correction, not a new movement.
+ */
+export const editTransferEntrySchema = z.object({
+  transferId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  fromPotId: positiveIdSchema,
+  toPotId: positiveIdSchema,
+  amountPence: positivePenceSchema,
+  occurredDate: localDateSchema.nullable().default(null),
+  note: nullableText(280, 'Note'),
+});
+
+/**
  * Pot context edit (Settings page, SPEC §15.2): label, type and the
  * overdraft context. Blanks clear the optional figures; the threshold-
  * inside-limit rule is the domain's to enforce (SPEC §8).

@@ -210,6 +210,73 @@ describe('transfer editing and voiding', () => {
         () => voidTransfer(fx.db, { id: moved.id, expectedVersion: 3, actor: 'sam@example.com' }),
         AlreadyVoidError,
       );
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('corrects the pots, amount and date in place — the entry time never moves (issue #33)', async () => {
+    const fx = await createHouseholdFixture();
+    try {
+      const recordedAt = new Date('2026-09-25T10:00:00Z');
+      const moved = createTransfer(fx.db, {
+        fromPotId: fx.pots.salary.id,
+        toPotId: fx.pots.main.id,
+        amountPence: 40000,
+        occurredAt: recordedAt,
+        note: 'cover the 1st',
+        actor: 'sam@example.com',
+        now: recordedAt,
+      });
+
+      // A slip in the entry form: money left Sam's cash, not the salary
+      // account, and it happened a day earlier than recorded.
+      const corrected = editTransfer(fx.db, {
+        id: moved.id,
+        expectedVersion: 1,
+        actor: 'alex@example.com',
+        now: new Date('2026-09-25T11:00:00Z'),
+        patch: {
+          fromPotId: fx.pots.samCash.id,
+          toPotId: fx.pots.main.id,
+          amountPence: 4550,
+          occurredDate: '2026-09-24',
+        },
+      });
+      assert.equal(corrected.fromPotId, fx.pots.samCash.id);
+      assert.equal(corrected.amountPence, 4550);
+      assert.equal(corrected.occurredDate, '2026-09-24');
+      // The edit re-dates when the money belongs, and no later than the end
+      // of that local date (the date-only rule, SPEC §9.1).
+      assert.equal(corrected.occurredAt.toISOString(), endOfLocalDate('2026-09-24').toISOString());
+      // The entry time is history: §7.1's same-day rule reads `createdAt`, so
+      // a correction must never make the record look newer than it is.
+      assert.equal(corrected.createdAt.toISOString(), recordedAt.toISOString());
+      assert.equal(corrected.enteredBy, 'sam@example.com');
+      assert.equal(corrected.version, 2);
+      // Both pots' legs moved with it — the old pot keeps no phantom leg.
+      assert.equal(
+        listTransfers(fx.db, { potId: fx.pots.salary.id, includeVoided: true }).length,
+        0,
+      );
+      assert.equal(listTransfers(fx.db, { potId: fx.pots.samCash.id }).length, 1);
+
+      const audit = fx.db
+        .select()
+        .from(auditEntries)
+        .where(eq(auditEntries.entityId, String(moved.id)))
+        .all()
+        .filter((row) => row.entity === 'transfer');
+      assert.deepEqual(
+        audit.map((row) => row.action),
+        ['transfer.create', 'transfer.edit'],
+      );
+      const edit = audit[1];
+      // The audit keeps both sides of the correction, so "what was it
+      // before?" survives any later void or restore.
+      assert.equal(JSON.parse(edit?.before ?? '{}').fromPotId, fx.pots.salary.id);
+      assert.equal(JSON.parse(edit?.after ?? '{}').fromPotId, fx.pots.samCash.id);
+      assert.equal(JSON.parse(edit?.after ?? '{}').amountPence, 4550);
       assert.throws(
         () => voidTransfer(fx.db, { id: 999999, expectedVersion: 1, actor: 'sam@example.com' }),
         TransferNotFoundError,
