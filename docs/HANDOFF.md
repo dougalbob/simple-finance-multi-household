@@ -1,4 +1,99 @@
-# Current session — Recurring calendar crowding (GitHub issue #53) (2026-10-15)
+# Release v1.19.0 — Transfers open in place on All Transactions (GitHub issue #55) (2026-10-15)
+
+**Release scope is prepared on this branch.** The household approved the Arena preview of issue #55. They
+authorised a stable release on one condition: fix the failure the PR's CI Playwright run picked up (done;
+see "CI catch" below). They also accepted `v1.18.0-rc.1` (issue #53), so it ships inside this stable
+release, following the `v1.9.0` precedent. Version files are aligned at **v1.19.0 stable**, moving
+`latest` on `ghcr.io/dougalbob/simple-finance-multi-household` only. No schema, migration or
+backup-format change. Required PR CI, main CI and tagged Publish evidence are still pending at
+preparation time; this is a pre-merge record, not proof that a tag or image exists.
+
+**#55 (decision 225).** On All Transactions, an internal transfer's row (`TX>` / `TX<`, family
+`transfer`) makes the other pot's name a disclosure button. The panel opens **directly below the row**
+(`<tr><td colSpan=7>`, pinned to the visible width on a phone) with **Correct it** (the existing
+`TransferEditForm`) and **Void it** (`VoidForm`) side by side from `md` up, plus Close. One transfer is
+open at a time.
+
+- **The open transfer lives in the URL**, as `?transfer={id}#transfer-{id}`. `OpenTransferProvider`
+  sets it with `router.replace(…, { scroll: false })` plus `useOptimistic`. Do not use
+  `history.replaceState`: the first save afterwards scrolled the page 439px, and the spec ran red at
+  333px.
+- **A save never pulls the panel away.** If a void, or a correction to other pots or dates, takes the
+  transfer out of the projection, it is pinned at the index it held while live. It is labelled
+  "voided / moved to other pots / outside these dates / past the row limit — not counted", is excluded
+  from totals, stripe and balance, and shows "See it in … →" / "Show … around … →" links. Closing
+  removes it.
+- **The pots page.** The "Transfers between pots" card is gone. `/pots?transfer={id}` redirects to the
+  in-place view, on the usual pot if the transfer touches it, otherwise its from-pot.
+- **Unchanged:** purchases keep their link to Purchases, and every other family is untouched.
+  Recording still happens in Quick Entry → Move → Between pots.
+- **Two fixes made along the way:**
+  - The `TransferEditForm` selects are keyed by pot. An uncontrolled `<select defaultValue>` snapped
+    back after a save, and the next save would have rewritten the old pot.
+  - Pinned rows are placed with the shared `compareActivityOrder` (`src/lib/records/activity-order.ts`),
+    not by date. Placement by date moved the panel 163px.
+
+Code: `src/components/transfer-activity-row.tsx`, `src/lib/records/transfer-activity.ts`,
+`src/lib/records/activity-order.ts`, `src/app/transactions/page.tsx`, `src/app/pots/page.tsx`. SPEC §10.1
+and §15.2–15.3 and the guide are updated.
+
+**Prior v1.18.0-rc.1, verified from `gh`:**
+
+- PR #54 merged as `7c8fecc798bf16ec58d8dea2ceff864b6a9011ca` (2026-10-15T15:23:00Z).
+- PR CI `38758289072`, main CI `38759833241` and Publish `38761006486` all succeeded.
+- Digest `sha256:b99b0adf06e91bbe7f3c365c81d60428c552cfb9644db2f0d4329b70412ffb0a`.
+- The GitHub release "v1.18.0-rc.1 — Recurring calendar day summaries" is marked pre-release.
+- `latest` stayed on `v1.17.0` (`sha256:f886f7976f19dc7e5f2c610239ebccc792dd6302b0608295f360b3d8053aacd7`).
+- The household accepted the candidate in this session.
+
+**Verified locally:**
+
+- Gates: format, typecheck and themes are clean. `npm test` passes **973/973 across 225 suites** (18 new
+  in `tests/transfer-activity.test.ts`). The production build is clean, and `npm audit --omit=dev`
+  reports 0 vulnerabilities.
+- Browser, via SANDBOX entry 8:
+  - The six projects desktop, settings, external, checkpoint, transactions and income passed 42/42.
+  - After the CI fix, every project in CI's order up to and including `transactions` (mobile, desktop,
+    attachments, settings, external, checkpoint, transactions) passed **69/69**.
+
+**CI catch.** The first PR browser run (`38784645889`) failed one assertion: 143 passed, 1 failed, in
+"a saved transfer is corrected in place". After correcting £12.34 to £12.99, it expected no activity row
+to contain "£12.34". In CI the earlier `mobile` project records a £12.34 till purchase ("Playwright
+Paints") on Main account today, and the old card-scoped check could never see purchases. The spec's
+lookups now use `transferRows(page)` (`tbody > tr[id^="transfer-"]`; the panel's `<tr>` has no id).
+
+- Reproduced red locally: the mobile till test plus the corrected-transfer test, unscoped check,
+  Expected 0, Received 1.
+- Green with the fix.
+- **Lesson:** when changing an e2e spec, run the CI projects that precede it too (`mobile` first), not
+  only its own project.
+
+**Live preview:** port **3000**, Next development mode bound to `0.0.0.0`, using only fictional records
+in ignored `.preview-data` and the development-only `alex@example.com` identity. Open `/transactions`
+(Main account) and select **Sam's cash** on the 1st bridging payment row. Recreate the preview with
+`DATA_DIR=.preview-data node --import tsx scripts/seed-example-household.mts`, then add these
+illustrative transfers with a throwaway script calling `createTransfer`, or through Quick Entry → Move
+→ Between pots:
+
+- Sam's cash → Main £1,100.00, yesterday, "1st bridging payment plus £100 of charity donation"
+- Main → Alex's cash £60.00, 5 days ago
+- Salary account → Main £1,250.00, 12 days ago
+- Main → Sam's cash £40.00, 15 days ago
+- Main → Salary account £25.00, 21 days ago
+
+Also add a Main account checkpoint of £162.01 dated 31 days ago. No real household data was accessed.
+
+**Trade-offs accepted with the household (decision 225):** voided transfers are no longer listed
+anywhere in the UI (the audit trail keeps them), and an older transfer is reached by widening the
+dates.
+
+---
+
+# Release v1.18.0-rc.1 — Recurring calendar crowding (GitHub issue #53) (2026-10-15)
+
+**Outcome (recorded in the v1.19.0 session):** published from `7c8fecc` (PR #54, Publish
+`38761006486`) as a pre-release that never moved `latest`. Accepted by the household on 2026-10-15 and
+promoted to stable in `v1.19.0`. The text below is this session's pre-merge record.
 
 **Release candidate `v1.18.0-rc.1` is being prepared for Unraid acceptance.** PR checks, main CI and
 tagged Publish are still pending; the candidate is not yet published. Stable `v1.17.0` and `latest` remain

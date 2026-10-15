@@ -87,11 +87,11 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     lead: 'Moving money between your own pots changes where it sits, not how much you have.',
     paragraphs: [
       'A transfer — current account to bills account, bank to a cash pot, bank to your own credit card — is internal and two-sided. It moves the pots’ estimates, and no insight, chart or month comparison ever counts it as spending. Paying your own card back is a transfer, not a payment.',
-      'That is why the till keeps a Move tab of its own, and why transfers can be reviewed, corrected and voided on the pots page: a mistaken transfer is fixed there — its pots, its amount, its date or a note added afterwards — and never re-categorised as spending.',
+      'That is why the till keeps a Move tab of its own, and why a transfer opens right where you read it in All Transactions: select its pot name and a mistaken transfer is corrected beneath its own row — its pots, its amount, its date or a note added afterwards — or voided, and never re-categorised as spending.',
     ],
     seeAlso: [
       { href: '/#quick-entry', label: 'the till’s Move tab' },
-      { href: '/pots', label: 'review, correct and void transfers' },
+      { href: '/transactions', label: 'correct and void transfers in All Transactions' },
     ],
   },
   {

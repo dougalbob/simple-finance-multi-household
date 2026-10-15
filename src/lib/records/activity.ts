@@ -19,6 +19,8 @@ import { listPeople } from './people';
 import { listPotsIncludingArchived } from './pots';
 import { listSuppliers } from './suppliers';
 import { purchaseLineSummary, targetNames } from './targets';
+import { ACTIVITY_FAMILY_RANK, compareActivityOrder, type ActivityOrder } from './activity-order';
+import { transferInPlaceHref } from './transfer-activity';
 import { listVehicles } from './vehicles';
 import { recordIsAfterCheckpoint, type CheckpointFacts, type SignedMovement } from './estimates';
 
@@ -119,6 +121,26 @@ export interface ActivityRow {
   badge: string | null;
   /** Running balance after this movement, anchored on checkpoints (null when no anchor). */
   runningBalancePence: number | null;
+  /**
+   * An internal transfer opens in place (decision 225): these are the facts
+   * its correction and void forms start from. Null on every other family.
+   */
+  transfer: ActivityTransferFacts | null;
+}
+
+/** What the in-place transfer panel needs beyond the row's own cells (decision 225). */
+export interface ActivityTransferFacts {
+  /** The version the page rendered — the edit and void forms' stale-form guard. */
+  version: number;
+  fromPotId: number;
+  toPotId: number;
+  fromLabel: string;
+  toLabel: string;
+  /** The saved note as stored (the row's `note` is the display string). */
+  note: string | null;
+  enteredBy: string;
+  /** Null while the transfer stands; the reason ('' when none was given) once voided. */
+  voidReason: string | null;
 }
 
 export interface ActivityCheckpoint {
@@ -130,7 +152,13 @@ export interface ActivityCheckpoint {
 }
 
 export type ActivityEntry =
-  { kind: 'row'; row: ActivityRow } | { kind: 'checkpoint'; checkpoint: ActivityCheckpoint };
+  | {
+      kind: 'row';
+      row: ActivityRow;
+      /** Where the row sorts — kept so a row placed later lands where it belongs. */
+      order: ActivityOrder;
+    }
+  | { kind: 'checkpoint'; checkpoint: ActivityCheckpoint };
 
 export interface ActivityTotals {
   /** Sum of the recorded rows actually shown, credits. */
@@ -181,6 +209,15 @@ interface BalanceMovement extends SignedMovement {
   familyRank: number;
   key: string;
   signedPence: number;
+}
+
+function pendingOrder(item: PendingRow): ActivityOrder {
+  return {
+    at: item.sortAt,
+    familyRank: item.familyRank,
+    recordId: item.recordId,
+    key: item.row.key,
+  };
 }
 
 function movementOrderLE(a: BalanceMovement, b: BalanceMovement): boolean {
@@ -311,6 +348,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
               },
         badge: null,
         runningBalancePence: null,
+        transfer: null,
       },
       movement: {
         key: `purchase-${purchase.id}`,
@@ -343,33 +381,13 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
 
   for (const transfer of transferRows) {
     const incoming = transfer.toPotId === potId;
-    const otherPotId = incoming ? transfer.fromPotId : transfer.toPotId;
     const sortAt = transfer.occurredAt.getTime();
     const signedPence = incoming ? transfer.amountPence : -transfer.amountPence;
     pending.push({
       sortAt,
       recordId: transfer.id,
-      familyRank: 1,
-      row: {
-        key: `transfer-${transfer.id}`,
-        family: 'transfer',
-        recordId: transfer.id,
-        date: transfer.occurredDate,
-        code: incoming ? 'TX<' : 'TX>',
-        source: potLabels.get(otherPotId) ?? 'Another pot',
-        category: '',
-        extraLines: 0,
-        amountPence: transfer.amountPence,
-        direction: incoming ? 'in' : 'out',
-        note: transfer.note ?? '',
-        link: {
-          href: `/pots?transfer=${transfer.id}#transfer-${transfer.id}`,
-          label: 'Open this transfer',
-        },
-        secondaryLink: null,
-        badge: null,
-        runningBalancePence: null,
-      },
+      familyRank: ACTIVITY_FAMILY_RANK.transfer,
+      row: transferActivityRow(transfer, potId, potLabels, { dateFrom, dateTo }),
       movement: {
         key: `transfer-${transfer.id}`,
         recordId: transfer.id,
@@ -442,6 +460,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           movement.kind === 'swap' ? { href: '/pots#swaps', label: 'Open the swap list' } : null,
         badge: movement.kind === 'swap' ? (swapPartners.get(movement.id) ?? null) : null,
         runningBalancePence: null,
+        transfer: null,
       },
       movement: {
         key: `external-${movement.id}`,
@@ -506,6 +525,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
             : { href: `/recurring#schedule-${scheduleId}`, label: 'Open the schedule' },
         badge: scheduleName === null ? null : 'from schedule',
         runningBalancePence: null,
+        transfer: null,
       },
       movement: {
         key: `receipt-${receipt.id}`,
@@ -554,6 +574,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           secondaryLink: null,
           badge: 'expected — not recorded yet',
           runningBalancePence: null,
+          transfer: null,
         },
         movement: null,
       });
@@ -562,13 +583,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
 
   // One deterministic order across families: newest first, then a stable
   // tie-break so a re-render cannot reshuffle rows sharing an instant.
-  pending.sort(
-    (a, b) =>
-      b.sortAt - a.sortAt ||
-      a.familyRank - b.familyRank ||
-      b.recordId - a.recordId ||
-      a.row.key.localeCompare(b.row.key),
-  );
+  pending.sort((a, b) => compareActivityOrder(pendingOrder(a), pendingOrder(b)));
   const shown = pending.slice(0, limit);
   const windowRowCount =
     countRows(db, purchases, potId, dateFrom, dateTo) +
@@ -792,13 +807,21 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
     if (item.row.family === 'expected') {
       expectedInPence += item.row.amountPence;
       expectedRowCount += 1;
-      return { kind: 'row', row: { ...item.row, runningBalancePence: null } };
+      return {
+        kind: 'row',
+        row: { ...item.row, runningBalancePence: null },
+        order: pendingOrder(item),
+      };
     }
     shownRecordCount += 1;
     if (item.row.direction === 'in') inPence += item.row.amountPence;
     else outPence += item.row.amountPence;
     const bal = runningBalanceByKey.get(item.row.key) ?? null;
-    return { kind: 'row', row: { ...item.row, runningBalancePence: bal } };
+    return {
+      kind: 'row',
+      row: { ...item.row, runningBalancePence: bal },
+      order: pendingOrder(item),
+    };
   });
   const hiddenRowCount = Math.max(windowRowCount - shownRecordCount, 0);
 
@@ -842,6 +865,84 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       expectedRowCount,
       expectedInPence,
     },
+  };
+}
+
+/**
+ * The pot All Transactions shows when the URL names none (issue #44): the
+ * household's saved default, then the pot labelled "Main account", then the
+ * first live pot. `pots` are the live pots in display order.
+ */
+export function defaultActivityPot<T extends { id: number; label: string }>(
+  pots: readonly T[],
+  savedDefaultPotId: number | null,
+): T | null {
+  return (
+    pots.find((candidate) => candidate.id === savedDefaultPotId) ??
+    pots.find((candidate) => candidate.label.toLowerCase() === 'main account') ??
+    pots[0] ??
+    null
+  );
+}
+
+/**
+ * One internal transfer as a row of `potId`'s activity: `TX<` on the pot it
+ * reached, `TX>` on the pot it left, the other pot's label as the source.
+ * Its link is this page's own in-place URL (decision 225) — the transfer's
+ * correction and void forms open beneath the row rather than on another
+ * page — and it carries the facts those forms start from.
+ *
+ * Exported for the page's pinned row (`transfer-activity.ts`): the open
+ * transfer stays on screen after a save takes it out of the list, so it is
+ * projected the same way whether or not it still counts here.
+ */
+export function transferActivityRow(
+  transfer: typeof transfers.$inferSelect,
+  potId: number,
+  potLabels: ReadonlyMap<number, string>,
+  window: { dateFrom: string; dateTo: string },
+): ActivityRow {
+  const incoming = transfer.toPotId === potId;
+  const otherPotId = incoming ? transfer.fromPotId : transfer.toPotId;
+  return {
+    key: `transfer-${transfer.id}`,
+    family: 'transfer',
+    recordId: transfer.id,
+    date: transfer.occurredDate,
+    code: incoming ? 'TX<' : 'TX>',
+    source: potLabels.get(otherPotId) ?? 'Another pot',
+    category: '',
+    extraLines: 0,
+    amountPence: transfer.amountPence,
+    direction: incoming ? 'in' : 'out',
+    note: transfer.note ?? '',
+    link: {
+      href: transferInPlaceHref(potId, window, transfer.id),
+      label: 'Open this transfer',
+    },
+    secondaryLink: null,
+    badge: null,
+    runningBalancePence: null,
+    transfer: {
+      version: transfer.version,
+      fromPotId: transfer.fromPotId,
+      toPotId: transfer.toPotId,
+      fromLabel: potLabels.get(transfer.fromPotId) ?? 'Another pot',
+      toLabel: potLabels.get(transfer.toPotId) ?? 'Another pot',
+      note: transfer.note,
+      enteredBy: transfer.enteredBy,
+      voidReason: transfer.voidedAt === null ? null : (transfer.voidReason ?? ''),
+    },
+  };
+}
+
+/** Where a transfer sorts among the rows — the same position whether it is live or pinned. */
+export function transferActivityOrder(transfer: typeof transfers.$inferSelect): ActivityOrder {
+  return {
+    at: transfer.occurredAt.getTime(),
+    familyRank: ACTIVITY_FAMILY_RANK.transfer,
+    recordId: transfer.id,
+    key: `transfer-${transfer.id}`,
   };
 }
 

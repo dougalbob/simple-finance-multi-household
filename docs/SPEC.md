@@ -561,8 +561,10 @@ month end.
   checkpoint.
 - **Correction discipline (v1.14.0, decision 218).** A saved transfer is a money record like any other, so
   it is **corrected where it is reviewed**: the two pots, the amount, the date and the note are editable in
-  place on Accounts, Pots & Checkpoints, guarded by the version the page rendered (a stale form is refused
-  and nothing is saved) and audited before-and-after like every other correction. `entered_by` and the entry
+  place — since decision 225 (GitHub issue #55) beneath the transfer's own row in All Transactions (§15.3),
+  where the household reads it; Accounts, Pots & Checkpoints no longer lists transfers — guarded by the
+  version the page rendered (a stale form is refused and nothing is saved) and audited before-and-after
+  like every other correction. `entered_by` and the entry
   time are never editable — a correction is not a new movement, so §7.1's same-day rule, which reads
   `createdAt`, cannot be rewritten by one. Voiding stays for a transfer that should not exist at all; a
   wrong pot, a mistyped amount or a missing note is an edit, not a void plus a second entry.
@@ -985,13 +987,13 @@ Menu pages:
 |---|---|
 | **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; payday projection panel retaining its date, tier, liquid funds, day-to-day total, commitments and receipts, plus the worst-pot bills-only transfer nudge (§7.5), but **no expandable forecast sections or day-by-day table** (v0.37.0 follow-up, decision 187). Horizon owns the dated shops/fills, expected-support list and day-by-day detail; the panel links there, opening on the day before payday. Quick Entry/Till stays visible beside the projection. Due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
 | **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); the four record-kind boxes — **Purchases** (anything not from a schedule), **From schedule**, **Refunds**, **Voided** — are show toggles, all on by default so the full history including voided records is shown, and unticking one hides that kind (a record with two tags is hidden if either is off; decision 205); the result heading shows the number of entries and their **net total** from the rows actually displayed (up to 500 newest matches): whole purchases count once even if a category filter matched one line, refunds subtract, and voided history adds nothing; rows alternate plain/tinted (`bg-canvas`) so neighbouring records are easy to tell apart; the supplier name links to that supplier's expanded card on Suppliers (decision 149's link); inline editing; the line editor puts **Spent for** and **Amount** on its first row and **Category** full-width on the second (plus **Which** when a person/vehicle is chosen), with slightly shorter controls; refund/void/correct with audit trail visible; split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
-| **All Transactions** | Read-only activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. No add, edit or void on the page (§15.3). |
+| **All Transactions** | Activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. Nothing is added here, and nothing is edited or voided here **except an internal transfer**, which opens in place — its correction and void forms in a panel directly beneath its row (decision 225, GitHub issue #55; §15.3). |
 | **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance and state); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. Provider agreements and their review dates live on Contracts & Renewals, with an optional link from a schedule. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below and a link card to Contracts & Renewals beside projection. On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row, below the sticky site header (every hash target in the app spends the measured `sf-anchor` offset, so a link works at any window width whatever the nav wraps to — decision 216, re-opened issue #34; and the scroll pass verifies each landing against the real header, correcting once a settled landing a browser left behind the bar — decision 222, issue #43). Cancelled schedules show by default; a Hide cancelled toggle (`?hideCancelled=1`, with a count of those hidden) removes them from the list while keeping the calendar and history (decision 212); the hide-cancelled preference is remembered across page navigations via a device cookie (decision 214). An in-place filter search box with Clear button filters schedules by name or supplier, revealing matching cancelled schedules even when cancelled schedules are hidden (decision 215). |
 | **Horizon** | "How far the money would go" (§7.6): pick a date up to 400 days ahead (opens on the day before the next scheduled income; a date change applies itself, v0.13.0), scope by pot (all selected by default) and toggle day-to-day; the free-to-spend headline, the always-shown lowest point with its date and tier, and detail blocks for the commitments, expected money in (debts' expected support flagged `expected`), the projected day-to-day events (dated shops/fills, v0.6.0) and the day-by-day table. Same engine as the payday projection; laptop-shaped by the household's choice. |
 | **Income** | Money coming in: the scheduled income (salary) that converts itself, editable in place from the next instance onward; one-off income recorded by hand with an optional source; and one list of everything received — scheduled and one-off together, with inline correction, void and the retained history. Income is desktop-shaped by the household's choice: it is not a till-side task, so nothing here is squeezed into the mobile quick-entry panel. |
 | **Suppliers** | Supplier list + detail: contact card (phone, email, website, address, label→value reference pairs such as policy numbers, notes; directly below Address, connected recurring schedules link to `/recurring?q=<name>#schedule-<id>` or indicate no scheduled payments relate to the supplier; decision 215), interaction log with "+ Create Interaction", linked purchases (§21), including removing a receipt from a linked purchase (§23.4). Tap-to-call on mobile. |
 | **Contracts & Renewals** | The agreement register groups explicit insurance policies (regardless of provider auto-renew status), service contracts and other reminders. It owns renewal/review and separate fee-free switch dates, independent per-date in-app leads, provider auto-renew status for insurance, notes and optional recurring-schedule links. It also retains credit-card payment reviews and supplier follow-ups. |
-| **Accounts, Pots & Checkpoints** (was **Accounts & Pots**; renamed v0.28.0) | Leads with the **Record a balance checkpoint** card, then **Add a pot** (both v0.28.0, decision 178 — recording is the page's most frequent job), then a card per pot: reported figure, estimate, owner (decision 178), checkpoint timeline, edit form; **cash pot cards show no overdraft or warning threshold** (decision 178); transfer records (correctable in place — pots, amount, date, note — since v1.14.0, decision 218, with Void kept for a transfer that should not exist); staleness of every pot; overdraft context (limit, threshold) for the Main account; informal debts with derived balances and an optional expected-support plan (amount, day-of-month, until date — editable forward-looking, v0.7.0); borrow/repay/swap/other entry and history; archiving for empty pots. |
+| **Accounts, Pots & Checkpoints** (was **Accounts & Pots**; renamed v0.28.0) | Leads with the **Record a balance checkpoint** card, then **Add a pot** (both v0.28.0, decision 178 — recording is the page's most frequent job), then a card per pot: reported figure, estimate, owner (decision 178), checkpoint timeline, edit form; **cash pot cards show no overdraft or warning threshold** (decision 178); staleness of every pot; **no transfer list** — internal transfers are recorded in Quick Entry → Move and corrected or voided in place on All Transactions (decision 225, which retired the "Transfers between pots" card of decisions 164 and 218), and an old `/pots?transfer={id}` link redirects there with that transfer open; overdraft context (limit, threshold) for the Main account; informal debts with derived balances and an optional expected-support plan (amount, day-of-month, until date — editable forward-looking, v0.7.0); borrow/repay/swap/other entry and history; archiving for empty pots. |
 | **Insights** | §16 panels. |
 | **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; legacy default warning leads for standalone renewal rows/unlinked schedule ends; agreement reminders have per-date leads; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **the default pot for All Transactions** (issue #44 — an explicit household preference for the activity page's initial target, with the normal fallback available by clearing it); **"Signs in as"** per person (the verified identity assigned to that household in the app registry; drives the till's Paid by and Fuel vehicle defaults; audited and unique across household membership); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
 
@@ -1006,14 +1008,42 @@ only the app's expectation, never a bank instruction.
 
 **Version display:** the app version is visible unobtrusively on desktop and mobile (blueprint §1).
 
-### 15.3 All Transactions — read-only activity for one pot (v0.3.0 line; household sketch 2026-09-23)
+### 15.3 All Transactions — activity for one pot (v0.3.0 line; household sketch 2026-09-23)
 
 One page, one pot at a time: every movement that touched the selected pot inside a date window, in
 one dense table — purchases, direct debits and standing orders, transfers, money across the
-household boundary, and income (`BAC`). It is a **pure projection of existing records** — it stores nothing, renders no
-forms, and every row links to the canonical record that owns the add/edit/void behaviour and the
+household boundary, and income (`BAC`). It is a **pure projection of existing records** — it stores
+nothing, and every row links to the canonical record that owns the add/edit/void behaviour and the
 retained history. (One derived exception since v0.7.0: a debt's expected support renders as a flagged
-`EXP<` row that is not a record at all — it links to the debt, not to a form.) It is not statement import and not bank reconciliation, both of which remain
+`EXP<` row that is not a record at all — it links to the debt, not to a form.) **One exception since
+decision 225:** an internal transfer's canonical form *is* this page — it opens in place, beneath its
+own row (below).
+
+**Internal transfers open in place (decision 225, GitHub issue #55).** The pots page's separate
+"Transfers between pots" list only repeated what this table already shows, and grew harder to read with
+every transfer, so it is gone. On a `TX<` / `TX>` row that is an internal transfer, the other pot's name
+is a disclosure button (dotted underline, as Horizon's breakdowns, decision 203): selecting it opens a
+panel **directly beneath that row** — the page does not navigate away — naming the transfer in full
+(`#id · from → to`, amount, date, who recorded it) with its **correction form** (the two pots, amount,
+date, note; decision 218's rules and stale-version guard, unchanged) beside its **void form** (reason
+required; the record and reason are kept). One transfer is open at a time; opening another closes the
+first, and Close (or the name again) shuts it. Purchases, income, boundary money (`TX` rows for `other`
+money included) and expectations keep their links exactly as before.
+
+- **The open transfer is the URL's `?transfer={id}`** (with `#transfer-{id}`), replaced through the
+  router without a history entry or a scroll, so a refresh or a shared link reopens it and the page the
+  server renders after a save knows which transfer is open. An id that names no transfer is ignored.
+- **A save never pulls the panel out from under the household.** A void always takes the transfer out of
+  this list (voids are never movements), and a correction can (onto two other pots, or re-dated outside
+  the window). The open transfer then stays on screen as a **pinned row** in exactly the position it
+  held — muted, outside the totals, the stripe and the running balance, and badged *voided*, *moved to
+  other pots*, *outside these dates* or *past the row limit* — with a panel saying why: a voided transfer
+  shows its reason and no forms; a moved or re-dated one keeps its forms (so a mistake is put right in
+  place) and links to where it is a live row again. Closing the panel lets the pinned row go.
+- **Old links:** `/pots?transfer={id}` (bookmarks from decision 164) redirects to this page with that
+  transfer open — on the household's usual pot (the saved default, then `Main account`, then the first
+  pot) when the transfer touches it, otherwise the pot the money left — over the last 30 days when they
+  hold its date, otherwise about a month around it. It is not statement import and not bank reconciliation, both of which remain
 non-goals (§2): the rows are the household's own records, not a bank's lines.
 
 **Filters.** A target selector (the household's live pots; if the URL does not name a valid pot, use
@@ -1079,8 +1109,10 @@ window still cannot reach into the future (§9.1), so a payment due next month i
 projections (§7.2, §7.6) are what show the plan ahead, while this page shows the money that moved — or was
 expected to move — on the days the window covers.
 
-**Voided records are excluded** (`voided_at IS NULL` on every family) and no void or history
-machinery is rendered; corrections happen on the canonical page behind the link. **Refunds are
+**Voided records are excluded** (`voided_at IS NULL` on every family) and no history machinery is
+rendered; corrections happen on the canonical page behind the link — for an internal transfer, in place
+(decision 225), where a transfer voided while its panel is open stays pinned, struck through and
+uncounted, until the panel closes. **Refunds are
 shown** as green `REF` rows: a refund is already just a purchase with a negative total and the
 estimate counts it (§7.1), so hiding it would make this page disagree with the pot for no gain.
 
@@ -1096,20 +1128,22 @@ page says so rather than implying an equality it cannot keep.
 
 **Deep links.** Each row links to its record's canonical form: purchases to
 `/purchases?potId&from&to#purchase-{id}`; `DD`/`SO` rows additionally to `/recurring#schedule-{id}`;
-internal transfers to `/pots?transfer={id}#transfer-{id}`; boundary money (other, loan, swap
+internal transfers open in place (decision 225), their URL being this page's own
+`/transactions?potId&from&to&transfer={id}#transfer-{id}`; boundary money (other, loan, swap
 legs) to `/pots?external={id}#external-{id}`, swaps also under `/pots#swaps`; income to
-`/income?receipt={id}#receipt-{id}`. Those anchors and the
-`?transfer=` / `?external=` parameters exist so that a linked record lying outside a page's recent
-list is still rendered and findable, instead of the link landing on a list that no longer contains
-it.
+`/income?receipt={id}#receipt-{id}`. Those anchors and the `?external=` parameter exist so that a
+linked record lying outside a page's recent list is still rendered and findable, instead of the link
+landing on a list that no longer contains it; `?transfer=` on this page does the same for the open
+transfer, and on `/pots` it now only redirects here.
 
 **Running balance is not shown** (deferred, not rejected): every pot balance is checkpoint-based, so
 any running figure is relative to the last checkpoint only — and on a checkpoint's own day §7.1
 makes even that ambiguous.
 
 **The lazy due pass still runs** on this page as on every read page (§11.2), so a direct debit that
-came due today appears. "Read-only" means no user-facing writes: no form on this page can create,
-edit or void anything.
+came due today appears. Nothing on this page creates a record, and the only user-facing writes are the
+open internal transfer's correction and void (decision 225) — the same server actions, guards and audit
+as anywhere else, refused for a read-only support view.
 
 ### 15.5 The guide and "what this page needs first" (v1.2.0, decision 196)
 

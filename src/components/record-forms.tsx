@@ -695,7 +695,15 @@ export function TransferEditForm({
           <label htmlFor={`${idPrefix}-from`} className={labelClass}>
             From pot
           </label>
+          {/* Keyed by the saved pot (decision 225). React resets a form after
+              its action succeeds, and an uncontrolled <select> resets to the
+              option it was *mounted* with — React never re-applies a changed
+              `defaultValue` to a select. Without the key, a corrected pot
+              would snap back on screen to the old one, and the next save
+              would quietly write the old pot back. Inputs need no key: their
+              changed `defaultValue` is applied. */}
           <select
+            key={fromPotId}
             id={`${idPrefix}-from`}
             name="fromPotId"
             required
@@ -714,6 +722,7 @@ export function TransferEditForm({
             To pot
           </label>
           <select
+            key={toPotId}
             id={`${idPrefix}-to`}
             name="toPotId"
             required

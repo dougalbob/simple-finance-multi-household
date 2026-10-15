@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { toLocalDateString } from '../src/lib/time';
 
 /**
@@ -71,6 +71,17 @@ export function addDaysIso(isoDate: string, days: number): string {
  */
 export async function waitForScheduleFilter(page: Page): Promise<void> {
   await expect(page.locator('[data-schedules-ready="true"]')).toBeAttached();
+}
+
+/**
+ * Wait until a transfer row's in-place toggle is listening (decision 225 —
+ * the decision 131 rule applied to All Transactions). Each transfer row is a
+ * client island: a click on its pot name before React hydrates it would open
+ * nothing, so the toggle is `inert` until then and publishes
+ * `data-transfer-ready`.
+ */
+export async function waitForTransferToggle(row: Locator): Promise<void> {
+  await expect(row.locator('[data-transfer-ready="true"]')).toBeAttached();
 }
 
 /**

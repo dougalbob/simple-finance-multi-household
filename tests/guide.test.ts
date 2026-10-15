@@ -82,6 +82,18 @@ describe('the guide: eight anchored ideas, pinned to what the app really does', 
     // Transfers are not spending — including paying your own card back.
     assert.match(text('transfers'), /two-sided/);
     assert.match(text('transfers'), /Paying your own card back is a transfer, not a payment/);
+    // Decision 225 (issue #55): a transfer is corrected or voided where it is
+    // read — beneath its own row in All Transactions — not on the pots page.
+    assert.match(text('transfers'), /opens right where you read it in All Transactions/);
+    assert.ok(
+      guideSection('transfers').seeAlso.some((link) => link.href === '/transactions'),
+      'the transfers section points at All Transactions',
+    );
+    assert.equal(
+      guideSection('transfers').seeAlso.some((link) => link.href === '/pots'),
+      false,
+      'the pots page no longer lists transfers',
+    );
     // Borrowing is owed, never income; informal IOUs only; awaiting, never
     // falsely settled (decision 168).
     assert.match(text('borrowing'), /expected — never received/);

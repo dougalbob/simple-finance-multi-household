@@ -1990,6 +1990,11 @@ src/components/recurring.tsx  — Phase 3 client forms: Add/Cancel schedule, Add
                                 (slim props, decision 73)
 src/components/record-forms.tsx — Phase 4a: line editor, PurchaseEditForm, RefundForm, generic VoidForm,
                                 TransferForm, RecentEntryActions (edit/refund/void switcher)
+src/components/transfer-activity-row.tsx — decision 225: All Transactions' in-place transfer row + panel,
+                                OpenTransferProvider (one open transfer, `?transfer=` via router.replace)
+src/lib/records/transfer-activity.ts — decision 225 (pure): open-transfer URL/windows, the usual pot,
+                                pinned-row reasons, links and placement
+src/lib/records/activity-order.ts — the newest-first comparator shared by the projection and the pin
 src/components/schedule-forms.tsx — Phase 4a: ScheduleEditForm (composite target picker), RenewalEditForm
 src/components/settings-forms.tsx — Phase 4a: TargetRenameForm, PotEditForm, CategoryTreeEditor, WarningLeadsForm;
                                 v0.14.0 CommitmentCategoriesForm (the tracked fixed-commitment children)
@@ -3247,7 +3252,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     deleted-ID fallback, query preservation and scroll preservation in both directions at 390/1400px).
     Local browser execution uses SANDBOX entry 8. The household accepted the preview, requested the final label “Create/Edit preset”, and authorised a stable release.
 
-224. **The Recurring calendar summarizes crowded days, then opens the exact schedule (2026-10-15, GitHub issue #53).**
+224. **The Recurring calendar summarizes crowded days, then opens the exact schedule (2026-10-15, GitHub issue #53, v1.18.0-rc.1; accepted and stable in v1.19.0).**
 
     The report: listing every schedule name and amount inside a calendar cell makes a busy day
     unreadable. Each populated day now shows only its item count and combined amount beside the day
@@ -3261,3 +3266,78 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     navigation, and its measured `sf-anchor` offset keeps the expanded editor below the sticky header.
     The day grid and detail list still use the same `listInstances` rows. This is presentation and
     navigation only: no financial data, schema, migration or backup-format change.
+
+225. **A transfer between the household's own pots opens in place on All Transactions; the pots page's transfer card is retired (2026-10-15, GitHub issue #55, v1.19.0).**
+
+    The household's report: Accounts, Pots & Checkpoints is the least intuitive page, and its
+    "Transfers between pots" card the worst of it — a layout that degraded as transfers accumulated,
+    whose only job was Edit or Void, repeating rows All Transactions already lists. Asked for: selecting
+    a transfer in All Transactions (their example, Main account's `2026-10-14 TX< Sam's cash +£1,100.00
+    1st bridging payment…` row) should not navigate away but open an edit section **directly below that
+    row**, covering edit and void; transfers only — purchases keep their link to Purchases; and the card
+    removed if possible. It was possible with **no schema, migration, backup-format or domain change**:
+    `editTransfer` / `voidTransfer` and their actions (decision 218) are reused untouched.
+
+    **The row and the panel.** `TransferActivityRow` (`src/components/transfer-activity-row.tsx`) renders
+    an internal transfer's row with the other pot's name as a disclosure button (`aria-expanded`,
+    Horizon's dotted underline, decision 203; `data-transfer-ready` + `inert` until hydrated, decision
+    131). The panel is a `<tr><td colSpan={7}>` straight after the row, pinned to the visible width as
+    Horizon's breakdown is, holding the transfer's identity line, the existing `TransferEditForm` and
+    `VoidForm` side by side (stacked on a phone), and Close. One transfer is open at a time. Every other
+    family still renders through the page's linked `ActivityTableRow`.
+
+    **The open transfer lives in the URL** (`?transfer={id}#transfer-{id}`) so the server knows which
+    transfer is open. `OpenTransferProvider` replaces the URL through `router.replace(…, { scroll: false })`
+    — no history entry — and shows the new state at once with `useOptimistic` while that navigation
+    completes. *Not* `history.replaceState`, which was the first design: Next's router then keeps the old
+    query in its tree while the URL has the new one, so the first save after opening returns a page
+    segment the router treats as new and scrolls to `#transfer-{id}`. Measured in the browser before the
+    switch: a note-only save moved the page 439px; the regression spec below ran red at **333px** with
+    `replaceState` and green with the router.
+
+    **A save never pulls the panel away.** A void always removes the transfer from the projection
+    (voids are never movements), and a correction can (two other pots, or a date outside the window).
+    The page then pins the open transfer (`src/lib/records/transfer-activity.ts`, pure):
+    `pinnedTransferReason` names why (`voided` › `elsewhere` › `outside-window` › `hidden` past the row
+    cap), `transferActivityRow` / `transferActivityOrder` project it exactly as a live row, and
+    `withPinnedTransfer` inserts it with the projection's own comparator (`activity-order.ts`, shared so
+    the two cannot drift) — the very position it held while live. Pinned rows are muted, outside totals,
+    stripe and running balance; voided ones show their reason and no forms; moved or re-dated ones keep
+    their forms and link to where they are live again (`pinnedTransferLinks`). Closing the panel removes
+    the pinned row at once. The first placement rule (by date only) was caught by the wider browser run:
+    three same-day, date-only boundary movements shared the transfer's end-of-day instant, the live
+    transfer sorted first (transfers rank ahead of boundary money) but the pin dropped below them, and
+    the panel moved 163px; `tests/transfer-activity.test.ts` now pins that exact case and a DB-backed
+    "same index live and pinned" check.
+
+    **A real bug the panel exposed in `TransferEditForm`.** React resets a form after its action
+    succeeds, and an uncontrolled `<select>` resets to the option it was *mounted* with — React applies a
+    changed `defaultValue` to inputs but never to a select. After correcting a pot the picker therefore
+    showed the old pot again, and the next save (say, of the amount) would quietly write it back. The old
+    card had the same latent flaw. Both pot pickers are now keyed by the saved pot id, so they re-mount
+    holding the saved value while the form — and its success message — survives; the correction spec
+    asserts the pickers after a save.
+
+    **Old links and the guide.** `/pots?transfer={id}` redirects to `transferActivityHref`: the
+    household's usual All Transactions pot when the transfer touches it (`defaultActivityPot`, now shared
+    with the page: saved default, `Main account`, first pot), else the pot the money left, over the last
+    30 days when they hold its date, else about a month around it. The guide's transfers section points
+    at All Transactions. Read-only support views see the forms, and the actions refuse them as before.
+
+    **Supersedes** the transfer clauses of decisions 101 and 105 (All Transactions renders no forms; the
+    `transfer-{id}` anchor on `/pots`), 164 (the review list and void on Accounts & Pots, and
+    `/pots?transfer=` as the canonical transfer URL) and 218's UI location (its correction contract stands).
+    Trade-offs accepted with the household: voided transfers are no longer listed anywhere in the UI (the
+    audit trail keeps them), and an older transfer is reached by widening the dates.
+
+    Coverage: `tests/transfer-activity.test.ts` (18: URL parsing, windows, the usual pot, reasons, links,
+    placement incl. same-instant ties, DB-backed void/move projections, wiring), `tests/activity.test.ts`
+    (the in-place link and transfer facts), `tests/guide.test.ts`. `e2e/transactions.spec.ts` rewrites
+    the three card specs for the panel (open beneath the row, void → pinned → close; correct pots, amount
+    and note with the pickers holding the saved pots; the stale-version refusal) and adds the moved-transfer
+    spec (pinned with links, panel within 60px across the save, put right in place, `/pots` has no card,
+    the old link redirects and opens it). The specs look a transfer up only among transfer rows
+    (`tr[id^="transfer-"]`), never by amount across the whole table. The first PR browser run failed
+    because of that: the `mobile` project, which runs earlier in CI, records a £12.34 till purchase on
+    the same pot and day as the corrected transfer's old amount. When checking an e2e change locally,
+    run the projects that precede it in CI as well, not just its own project.

@@ -234,6 +234,15 @@ export function getTransfer(db: Db | DbTx, transferId: number): Transfer {
   return row;
 }
 
+/**
+ * The transfer a link names, voided or not — or null when that id is not a
+ * transfer. For read paths that take an id from a URL (`?transfer=`) and must
+ * ignore one that names nothing rather than fail the page.
+ */
+export function findTransfer(db: Db | DbTx, transferId: number): Transfer | null {
+  return db.select().from(transfers).where(eq(transfers.id, transferId)).get() ?? null;
+}
+
 export interface TransferFilters {
   /** Either side of the transfer. */
   potId?: number;

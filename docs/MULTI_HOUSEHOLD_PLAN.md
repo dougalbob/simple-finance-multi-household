@@ -80,4 +80,6 @@ Target host/container layout:
 
 **v1.17.0 stable feature:** Spending trends with saved household category presets (issue #40, decision 223). Existing tracked categories are preserved. No schema, backup-format, household-isolation or deployment-boundary change. See `docs/RELEASE_NOTES_v1.17.0.md`.
 
-**v1.18.0-rc.1 acceptance candidate:** Recurring calendar day summaries show item counts and gross amounts, expand to per-schedule details, and link to the exact schedule's open Edit section (issue #53). This pre-release does not move `latest`; pin the exact RC tag for Unraid testing. See `docs/RELEASE_NOTES_v1.18.0-rc.1.md`.
+**v1.18.0-rc.1 acceptance candidate:** Recurring calendar day summaries show item counts and gross amounts, expand to per-schedule details, and link to the exact schedule's open Edit section (issue #53). This pre-release never moved `latest`; the household accepted it and it ships in stable `v1.19.0`. See `docs/RELEASE_NOTES_v1.18.0-rc.1.md`.
+
+**v1.19.0 stable feature:** Internal transfers open in place on All Transactions for correction or void, and the pots page's transfer card is retired (issue #55, decision 225), with the accepted `v1.18.0-rc.1` Recurring calendar day summaries (issue #53). No schema, backup-format, household-isolation or deployment-boundary change. See `docs/RELEASE_NOTES_v1.19.0.md`.
