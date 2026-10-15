@@ -857,7 +857,9 @@ Home = four big actions:
      running total — same category, same target, no extra split. Line 1 still follows the remainder.
      The household never leaves the till for a calculator. Empty or zero current starts the line at
      the first item; a half-typed amount is left alone. Enter in the item field adds, it never saves
-     the purchase.
+     the purchase. In v1.16.1, category, amount row and adder stack at every width, so the
+     adder uses the full split-card width on laptop rather than the old 0.8fr column;
+     the separate "+" button retains its 48×48px target.
    - **"Add another" (decision 174)** sits next to Save while the confirmation is up **and the next
      entry has not begun** — it is offered when the form is still blank, and steps aside as soon as
      the household starts typing the next purchase, rather than wiping it under their thumb. It
