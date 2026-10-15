@@ -79,3 +79,5 @@ Target host/container layout:
 **v1.16.2 stable patch:** A Supplier card's "Linked to schedule" link (and every anchored deep link) is verified against the sticky menu after landing and corrected once if a browser left it behind the bar (issue #43, decision 222). No schema or migration change. See `docs/RELEASE_NOTES_v1.16.2.md`.
 
 **v1.17.0 stable feature:** Spending trends with saved household category presets (issue #40, decision 223). Existing tracked categories are preserved. No schema, backup-format, household-isolation or deployment-boundary change. See `docs/RELEASE_NOTES_v1.17.0.md`.
+
+**v1.18.0-rc.1 acceptance candidate:** Recurring calendar day summaries show item counts and gross amounts, expand to per-schedule details, and link to the exact schedule's open Edit section (issue #53). This pre-release does not move `latest`; pin the exact RC tag for Unraid testing. See `docs/RELEASE_NOTES_v1.18.0-rc.1.md`.

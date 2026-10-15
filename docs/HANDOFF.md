@@ -1,6 +1,8 @@
 # Current session — Recurring calendar crowding (GitHub issue #53) (2026-10-15)
 
-**Implemented on the Arena working branch; not merged or released.** The Recurring month grid
+**Release candidate `v1.18.0-rc.1` is being prepared for Unraid acceptance.** PR checks, main CI and
+tagged Publish are still pending; the candidate is not yet published. Stable `v1.17.0` and `latest` remain
+unchanged. The Recurring month grid
 now keeps populated day cells compact: each shows an item count and the gross combined amount. Selecting
 a day opens a full-width details panel below the grid with each schedule's name, amount, type and
 conversion state. Receipts are included in the gross amount, never netted against outgoings. Each

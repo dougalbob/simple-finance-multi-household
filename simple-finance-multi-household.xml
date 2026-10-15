@@ -9,8 +9,9 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.17.0 is the stable production release and moves :latest (Spending trends
-  with saved household category presets, GitHub issue #40).
+  v1.17.0 remains the stable release on :latest. v1.18.0-rc.1 is the
+  acceptance candidate for the Recurring calendar summaries (issue #53); pin its
+  exact image tag to test it. The candidate does not move :latest.
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -45,8 +46,8 @@
   <DonateText/>
   <DonateLink/>
   <Description>
-    Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.15.1 is the stable production release and moves :latest.
+    Simple Finance Multi-household. Stable default: ghcr.io/dougalbob/simple-finance-multi-household:latest (v1.17.0).
+    Acceptance candidate v1.18.0-rc.1 is available by pinning its exact image tag; it does not move :latest.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.
