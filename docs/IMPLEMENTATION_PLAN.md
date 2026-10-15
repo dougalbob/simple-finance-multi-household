@@ -3246,3 +3246,18 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     the Chart D journey in `e2e/charts.spec.ts` (CRUD, mixed ticks, persistence, filtered drill-downs,
     deleted-ID fallback, query preservation and scroll preservation in both directions at 390/1400px).
     Local browser execution uses SANDBOX entry 8. The household accepted the preview, requested the final label “Create/Edit preset”, and authorised a stable release.
+
+224. **The Recurring calendar summarizes crowded days, then opens the exact schedule (2026-10-15, GitHub issue #53).**
+
+    The report: listing every schedule name and amount inside a calendar cell makes a busy day
+    unreadable. Each populated day now shows only its item count and combined amount beside the day
+    number. Selecting that summary opens a full-width details panel below the grid, with the names,
+    amounts, schedule kind and conversion state. The amount is the gross sum of all listed instances;
+    a same-day expected receipt is not netted against outgoings.
+
+    Each detail row links back to Recurring with the readable name in the filter and an exact
+    `scheduleId` constraint, so similarly named schedules cannot leak into the result. The
+    `#schedule-edit-{id}` target is the Edit disclosure itself; the page opens it on direct and soft
+    navigation, and its measured `sf-anchor` offset keeps the expanded editor below the sticky header.
+    The day grid and detail list still use the same `listInstances` rows. This is presentation and
+    navigation only: no financial data, schema, migration or backup-format change.

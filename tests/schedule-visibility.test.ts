@@ -5,6 +5,7 @@ import {
   parseHideCancelled,
   recurringHref,
   resolveHideCancelled,
+  scheduleEditorHref,
   scheduleRecurringHref,
   SCHEDULE_HIDE_CANCELLED_COOKIE,
 } from '../src/lib/records/schedule-visibility';
@@ -149,6 +150,10 @@ describe('recurringHref', () => {
       recurringHref({ month: '2026-11', hideCancelled: true, q: 'Tax' }),
       '/recurring?month=2026-11&hideCancelled=1&q=Tax',
     );
+    assert.equal(
+      recurringHref({ q: 'Mortgage', scheduleId: 42, hash: 'schedule-edit-42' }),
+      '/recurring?q=Mortgage&scheduleId=42#schedule-edit-42',
+    );
   });
 });
 
@@ -161,6 +166,18 @@ describe('scheduleRecurringHref (issue #34)', () => {
     assert.equal(
       scheduleRecurringHref({ id: 12, name: 'South Staffs Water' }),
       '/recurring?q=South+Staffs+Water#schedule-12',
+    );
+  });
+});
+
+describe('scheduleEditorHref (issue #53)', () => {
+  it('filters to one schedule ID and opens its edit disclosure from the calendar', () => {
+    assert.equal(
+      scheduleEditorHref(
+        { id: 42, name: 'Mortgage & council tax' },
+        { month: '2026-10', hideCancelled: true },
+      ),
+      '/recurring?month=2026-10&hideCancelled=1&q=Mortgage+%26+council+tax&scheduleId=42#schedule-edit-42',
     );
   });
 });

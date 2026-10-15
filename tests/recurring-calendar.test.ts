@@ -10,6 +10,10 @@ import {
 } from '../src/lib/records/schedules';
 import { addDaysLocal, daysInMonth } from '../src/lib/records/dates';
 import { startOfWeekLocal } from '../src/lib/records/insights';
+import {
+  buildRecurringCalendar,
+  type CalendarInstanceRow,
+} from '../src/lib/records/recurring-calendar';
 
 /**
  * Phase 4a exit criterion: the recurring month calendar stays consistent
@@ -26,6 +30,45 @@ import { startOfWeekLocal } from '../src/lib/records/insights';
 
 const NOW = new Date('2026-09-20T17:00:00Z');
 const p = (value: number) => Math.round(value * 100);
+
+describe('recurring calendar day summaries (issue #53)', () => {
+  it('counts every instance and sums its amount once, including same-day receipts', () => {
+    const namesAndAmounts = [
+      ['Council Tax', p(296)],
+      ['Mortgage', p(646.08)],
+      ['Water Bill', p(48.71)],
+      ['Electricity', p(192.1)],
+      ['Home Insurance', p(78.5)],
+      ['Childcare', p(285.21)],
+    ] as const;
+    const rows: CalendarInstanceRow[] = namesAndAmounts.map(
+      ([scheduleName, amountPence], index) => ({
+        instance: {
+          id: index + 1,
+          scheduleId: index + 1,
+          dueDate: '2026-10-21',
+          state: index === 5 ? 'converted' : 'upcoming',
+        },
+        scheduleName,
+        scheduleKind: index === 5 ? 'receipt' : 'dd',
+        amountPence,
+      }),
+    );
+
+    const days = buildRecurringCalendar({ year: 2026, month: 10 }, '2026-10-15', rows);
+    const day = days.find((entry) => entry.date === '2026-10-21');
+
+    assert.equal(days.length, 42);
+    assert.ok(day !== undefined);
+    assert.equal(day.inMonth, true);
+    assert.equal(day.instances.length, 6);
+    assert.equal(day.totalPence, p(1546.6));
+    assert.deepEqual(
+      day.instances.map((instance) => instance.scheduleName),
+      ['Childcare', 'Council Tax', 'Electricity', 'Home Insurance', 'Mortgage', 'Water Bill'],
+    );
+  });
+});
 
 interface MonthRef {
   year: number;

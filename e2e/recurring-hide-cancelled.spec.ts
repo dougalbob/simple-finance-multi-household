@@ -120,6 +120,117 @@ test.describe('recurring schedules: hide cancelled & navigation persistence', ()
     await expect(page.getByTestId('hidden-cancelled-count')).toHaveCount(0);
   });
 
+  test('calendar day summaries expand and open one filtered schedule editor (issue #53)', async ({
+    page,
+  }) => {
+    test.slow();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/recurring');
+
+    const dueDate = await page.evaluate((dueDay) => {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/London',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(new Date());
+      const part = (type: Intl.DateTimeFormatPartTypes) =>
+        Number(parts.find((entry) => entry.type === type)?.value ?? 0);
+      let year = part('year');
+      let month = part('month');
+      const today = part('day');
+      if (today > dueDay) {
+        month += 1;
+        if (month > 12) {
+          month = 1;
+          year += 1;
+        }
+      }
+      return `${year}-${String(month).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
+    }, 2);
+
+    const suffix = Date.now();
+    const firstScheduleName = `Calendar summary alpha ${suffix}`;
+    // The second name contains the first, proving scheduleId keeps the deep link exact.
+    const schedulesToAdd = [
+      { name: firstScheduleName, amount: '950.00' },
+      { name: `${firstScheduleName} backup`, amount: '178.50' },
+      { name: `Energy ${suffix}`, amount: '124.60' },
+      { name: `Broadband ${suffix}`, amount: '53.50' },
+      { name: `Streaming ${suffix}`, amount: '34.00' },
+      { name: `Car finance ${suffix}`, amount: '206.00' },
+    ];
+    const names = schedulesToAdd.map(({ name }) => name);
+    const schedules = page.locator('section[aria-labelledby="schedules-heading"]');
+    await schedules.getByText('Add a schedule').click();
+    const addForm = schedules
+      .locator('form')
+      .filter({ has: page.getByRole('button', { name: 'Add schedule' }) });
+    const scheduleList = schedules.locator('ul[data-schedule-scroller]');
+
+    for (const schedule of schedulesToAdd) {
+      await addForm.locator('input[name="name"]').fill(schedule.name);
+      await addForm.locator('input[name="amount"]').fill(schedule.amount);
+      await addForm.locator('select[name="kind"]').selectOption('so');
+      await addForm.locator('input[name="dueDayOfMonth"]').fill('2');
+      await addForm.locator('select[name="potId"]').selectOption({ label: 'Main account' });
+      await addForm.locator('select[name="categoryId"]').selectOption({
+        label: 'Utilities / Energy',
+      });
+      await addForm.getByRole('button', { name: 'Add schedule' }).click();
+      await expect(addForm.getByRole('status')).toContainText(/added/i, { timeout: 30_000 });
+      await expect(scheduleList.getByText(schedule.name, { exact: true })).toBeVisible();
+    }
+
+    await page.goto(`/recurring?month=${dueDate.slice(0, 7)}`);
+    const calendar = page.locator('section[aria-labelledby="calendar-heading"]');
+    const cell = calendar.locator(`[data-date="${dueDate}"]`);
+    const summary = cell.getByRole('button');
+    await expect(summary).toContainText('6 items');
+    await expect(summary).toContainText('£1546.60');
+    const amountLabel = summary.locator('span').nth(1);
+    await expect(amountLabel).toHaveText('£1546.60');
+    expect(
+      await amountLabel.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+    await page.setViewportSize({ width: 320, height: 844 });
+    expect(
+      await amountLabel.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(summary).toHaveAttribute('aria-expanded', 'false');
+
+    await summary.click();
+    await expect(summary).toHaveAttribute('aria-expanded', 'true');
+    const dayDetails = calendar.getByRole('region', { name: /Scheduled items for/ });
+    for (const name of names) {
+      await expect(dayDetails.getByText(name, { exact: true })).toBeVisible();
+    }
+    const editLink = dayDetails.getByRole('link', {
+      name: `Edit schedule: ${firstScheduleName}`,
+      exact: true,
+    });
+    await expect(editLink).toBeVisible();
+    await editLink.click();
+
+    await expect(page).toHaveURL(/scheduleId=\d+#schedule-edit-\d+$/);
+    await waitForScheduleFilter(page);
+    const url = new URL(page.url());
+    const scheduleId = url.searchParams.get('scheduleId');
+    expect(url.searchParams.get('q')).toBe(firstScheduleName);
+    expect(scheduleId).not.toBeNull();
+    expect(url.hash).toBe(`#schedule-edit-${scheduleId}`);
+
+    const list = page.locator('section[aria-labelledby="schedules-heading"] ul');
+    await expect(list.locator('li')).toHaveCount(1);
+    const row = list.locator('li').first();
+    await expect(row).toContainText(firstScheduleName);
+    const editor = row.locator(`details#schedule-edit-${scheduleId}`);
+    await expect(editor).toHaveJSProperty('open', true);
+    await expect(editor.locator('form input[name="name"]')).toHaveValue(firstScheduleName);
+    await expectRowClearsStickyHeader(page, editor);
+  });
+
   test('supplier card links to schedule, filters recurring page, and shows empty state when unlinked', async ({
     page,
   }) => {
