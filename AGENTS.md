@@ -39,3 +39,5 @@ The sandbox has real network/filesystem/memory limits. Before you retry a failin
 - **Test runs and memory (`docs/SANDBOX.md` entry 21):** running ~100 TypeScript test files in a single `node --import tsx --test` invocation can trigger out-of-memory warnings in the Arena sandbox. During iterative work, run only the relevant test files (`npx tsx --test tests/<file>.test.ts` or `npm test -- tests/<file>.test.ts`). For full-suite verification, `npm test` invokes `scripts/run-tests.mjs`, which runs the suite in sequential batches of 20 files with `--test-concurrency=2` so each child process exits and reclaims memory between batches.
 
 [`AGENT_APP_BLUEPRINT.md`](AGENT_APP_BLUEPRINT.md) supported the initial build through the first release. It is historical context, not required reading for ongoing work. Do not treat it as a gate, and do not send future sessions back to it first.
+
+**v1.16.1 stable patch:** Quick Entry split category, amount and Add item stack at every width, fixing the cramped laptop column without changing totalling. No schema or migration change. See `docs/RELEASE_NOTES_v1.16.1.md`.

@@ -1,3 +1,11 @@
+# Release v1.16.1 — Laptop split-card layout patch (2026-10-15)
+
+Prepared on the assigned branch: category, amount row and adder stack at every width; no totalling changes. The "+" explicitly stays 48px tall despite the till-wide 44px minimum rule. Geometry test ran red against the old desktop row placement, green after the fix. Old 1400px client widths were 127px (amount) and 102px (item), not below 80px in this seed; row-placement coverage catches the regression regardless. All seven targeted remainder/mobile split tests passed using SANDBOX entry 8. Local format, types, themes, build, production audit (0 vulnerabilities) and all 946 unit tests across 218 suites pass. CI and publication remain pending at preparation time.
+
+Prior v1.16.0 verified: PR #49 merge `052e369ef311c98a87232c9295bc21124de10ad5`; PR CI `38713521081`, main CI `38714493023`, Publish `38715290201` all succeeded. Household accepted the totalling and mobile layout. This patch does not reopen those rules, Chart D #40, or #43.
+
+---
+
 # Release v1.16.0 — Total same-category items on a split line (GitHub issue #46) (2026-10-15)
 
 **Release scope is prepared on this branch.** On Quick Entry, a split line that is not Line 1's auto remainder offers a **"+"** beside its amount. Tapping it opens **Add item**: each amount is added in whole pence to that line's running total (same category, same target, no extra split). Line 1 still follows the remainder. Empty or zero current starts the line at the first item; a half-typed amount is left alone. Enter in the item field adds and never saves the purchase. No financial data, schema, migration or backup format changes. See decision 221 and SPEC §15.1.

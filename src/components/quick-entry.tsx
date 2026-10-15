@@ -1094,7 +1094,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
               <div className="space-y-3">
                 {lines.map((line, index) => (
                   <div key={index} className="rounded-lg border border-border bg-surface p-3">
-                    <div className="grid gap-2 sm:grid-cols-[1.2fr_0.8fr]">
+                    <div className="grid gap-2">
                       <label className="min-w-0 text-xs font-semibold text-ink-soft">
                         Category
                         <select
@@ -1140,7 +1140,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                               aria-label={`Add another item to line ${index + 1}`}
                               aria-expanded={addingLineIndex === index}
                               onClick={() => toggleLineAdder(index)}
-                              className="min-h-[48px] min-w-[48px] shrink-0 rounded-lg border border-border-strong text-lg font-semibold text-ink-body hover:bg-surface-muted"
+                              className="h-[48px] min-h-[48px] min-w-[48px] shrink-0 rounded-lg border border-border-strong text-lg font-semibold text-ink-body hover:bg-surface-muted"
                             >
                               +
                             </button>

@@ -3201,3 +3201,10 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     cases. `e2e/remainder.spec.ts` fills a £100 till total, adds a split, proves Line 1 has no "+",
     then adds £38.50 + £11.65 + £8.25 + £11.99 into Line 2 via Enter and asserts Line 2 is £70.39
     with Line 1 remainder £29.61, at 393px and 1400px.
+
+    **v1.16.1 layout follow-up:** category, amount row and Add item stack at every width,
+    giving the adder the full card width on laptop rather than the old 0.8fr amount
+    column. The separate "+" retains a 48×48px target (explicit height defeats the
+    till-wide 44px minimum override). Totalling is unchanged. Geometry coverage ran
+    red on the old side-by-side layout and green after stacking; all four remainder
+    specs and three mobile split specs passed locally.
