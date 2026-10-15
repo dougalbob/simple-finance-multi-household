@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  addToLineAmount,
   editDistance,
   followedLineAmount,
   remainderLineAmount,
@@ -143,5 +144,52 @@ describe('remainderLineAmount', () => {
     for (const amount of ['80.', '-1', 'abc'])
       assert.deepEqual(remainderLineAmount('100', [amount]), { action: 'hold' });
     assert.deepEqual(remainderLineAmount('100.', ['80']), { action: 'hold' });
+  });
+});
+
+/**
+ * In-line totalling for several items of the same category (issue #46).
+ * Fictional Amazon clothing: trousers £38.50, tie £11.65, belt £8.25, socks £11.99.
+ */
+describe('addToLineAmount', () => {
+  it('starts an empty line at the first item', () => {
+    assert.deepEqual(addToLineAmount('', '38.50'), { action: 'set', amount: '38.50' });
+    assert.deepEqual(addToLineAmount('  ', '11.65'), { action: 'set', amount: '11.65' });
+    assert.deepEqual(addToLineAmount('0.00', '8.25'), { action: 'set', amount: '8.25' });
+  });
+
+  it('sums successive items of the same category in integer pence', () => {
+    let current = '';
+    for (const item of ['38.50', '11.65', '8.25', '11.99']) {
+      const next = addToLineAmount(current, item);
+      assert.equal(next.action, 'set');
+      if (next.action === 'set') current = next.amount;
+    }
+    assert.equal(current, '70.39');
+  });
+
+  it('accepts the loose forms people type (£, commas, one decimal)', () => {
+    assert.deepEqual(addToLineAmount('11.65', '£38.50'), { action: 'set', amount: '50.15' });
+    assert.deepEqual(addToLineAmount('1,000.00', '2.5'), { action: 'set', amount: '1002.50' });
+  });
+
+  it('holds a half-typed current so an in-flight keystroke is not destroyed', () => {
+    assert.deepEqual(addToLineAmount('11.', '8.25'), { action: 'hold' });
+    assert.deepEqual(addToLineAmount('abc', '8.25'), { action: 'hold' });
+  });
+
+  it('holds a non-positive or unparseable addend', () => {
+    assert.deepEqual(addToLineAmount('11.65', ''), { action: 'hold' });
+    assert.deepEqual(addToLineAmount('11.65', '0'), { action: 'hold' });
+    assert.deepEqual(addToLineAmount('11.65', '-1.00'), { action: 'hold' });
+    assert.deepEqual(addToLineAmount('11.65', '8.'), { action: 'hold' });
+  });
+
+  it('holds a negative current — purchase lines are not mixed-sign', () => {
+    assert.deepEqual(addToLineAmount('-5.00', '1.00'), { action: 'hold' });
+  });
+
+  it('holds a sum past the representable range', () => {
+    assert.deepEqual(addToLineAmount('9999999999.99', '0.01'), { action: 'hold' });
   });
 });

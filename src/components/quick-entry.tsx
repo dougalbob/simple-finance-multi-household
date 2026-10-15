@@ -20,6 +20,7 @@ import { formatPence, parsePence, penceInput } from '@/lib/money';
 import { formatOrdinalDayMonthShortLocalDate } from '@/lib/time';
 import { formatPencePerLitre, parseLitres } from '@/lib/records/fuel-economy';
 import {
+  addToLineAmount,
   remainderLineAmount,
   nearestSupplierName,
   normalizeSupplierQuery,
@@ -570,6 +571,14 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
   const [lines, setLines] = useState<LineDraft[]>(() => [newLine(data.defaultCategoryId, data)]);
   /** Line 1 is the remainder until its amount is explicitly taken over. */
   const [lineFollowsTotal, setLineFollowsTotal] = useState(true);
+  /**
+   * Which split line (if any) is totalling extra same-category items into
+   * its amount (issue #46). One adder at a time; the running total stays
+   * visible in the line amount itself.
+   */
+  const [addingLineIndex, setAddingLineIndex] = useState<number | null>(null);
+  const [addend, setAddend] = useState('');
+  const addendRef = useRef<HTMLInputElement | null>(null);
   const submitGuard = useRef(false);
   const supplierRef = useRef<HTMLInputElement | null>(null);
   const amountRef = useRef<HTMLInputElement | null>(null);
@@ -596,7 +605,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
    * strip off the top of the screen. The household decides what to fill in by
    * tapping it, so the only focus moves left are answers to something they
    * did: a suggestion tapped, Enter in Supplier, Next, "+ Note", "Add
-   * another".
+   * another", or "+" on a split line.
    */
   useEffect(() => {
     const target = pendingFocus.current;
@@ -605,6 +614,11 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     if (target === 'supplier') supplierRef.current?.focus();
     else categoryRef.current?.focus({ preventScroll: true });
   }, [panel, lines]);
+
+  useEffect(() => {
+    if (addingLineIndex === null) return;
+    addendRef.current?.focus();
+  }, [addingLineIndex]);
 
   /**
    * A saved purchase hands the form back empty (decision 174). The household
@@ -642,6 +656,8 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     setNoteOpen(false);
     setLines([newLine(data.defaultCategoryId, data)]);
     setLineFollowsTotal(true);
+    setAddingLineIndex(null);
+    setAddend('');
     // `state` alone, deliberately: a `data` dependency would re-fire this on a
     // parent re-render (a revalidating server action hands the island a fresh
     // props object) and wipe the *next* entry half-typed under it.
@@ -801,6 +817,19 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     });
   }
 
+  function toggleLineAdder(index: number) {
+    setAddingLineIndex((current) => (current === index ? null : index));
+    setAddend('');
+  }
+
+  function addItemToLine(index: number) {
+    const current = lines[index]?.amount ?? '';
+    const result = addToLineAmount(current, addend);
+    if (result.action !== 'set') return;
+    updateLineAmount(index, result.amount);
+    setAddend('');
+  }
+
   function addSplit() {
     setLines((current) => [...current, newLine(data.defaultCategoryId, data)]);
   }
@@ -891,6 +920,8 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     setNoteOpen(false);
     setLines([newLine(data.defaultCategoryId, data)]);
     setLineFollowsTotal(true);
+    setAddingLineIndex(null);
+    setAddend('');
     // A fresh entry starts where every entry starts: Panel 1, on the supplier
     // (decision 137) — once panel 1 is no longer inert. This is the one thing
     // the save does *not* do by itself (decision 151: focus moves only as the
@@ -1086,21 +1117,78 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                           ))}
                         </select>
                       </label>
-                      <label className="min-w-0 text-xs font-semibold text-ink-soft">
-                        {lines.length > 1 ? `Line ${index + 1} amount` : 'Amount'}
-                        {index === 0 && lineFollowsTotal ? <span> (auto remainder)</span> : null}
-                        {index === 0 && lineFollowsTotal && line.amount === '0.00' ? (
-                          <span role="status"> No remainder left — adjust the splits.</span>
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-ink-soft">
+                          {lines.length > 1 ? `Line ${index + 1} amount` : 'Amount'}
+                          {index === 0 && lineFollowsTotal ? <span> (auto remainder)</span> : null}
+                          {index === 0 && lineFollowsTotal && line.amount === '0.00' ? (
+                            <span role="status"> No remainder left — adjust the splits.</span>
+                          ) : null}
+                        </span>
+                        <div className="mt-1 flex items-stretch gap-1.5">
+                          <input
+                            aria-label={`Line ${index + 1} amount`}
+                            value={line.amount}
+                            onChange={(event) => updateLineAmount(index, event.target.value)}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            className={`${inputClass} min-w-0 flex-1`}
+                          />
+                          {lines.length > 1 && !(index === 0 && lineFollowsTotal) ? (
+                            <button
+                              type="button"
+                              aria-label={`Add another item to line ${index + 1}`}
+                              aria-expanded={addingLineIndex === index}
+                              onClick={() => toggleLineAdder(index)}
+                              className="min-h-[48px] min-w-[48px] shrink-0 rounded-lg border border-border-strong text-lg font-semibold text-ink-body hover:bg-surface-muted"
+                            >
+                              +
+                            </button>
+                          ) : null}
+                        </div>
+                        {addingLineIndex === index ? (
+                          <div className="mt-2 rounded-md bg-canvas p-2">
+                            <p className="text-xs font-semibold text-ink-soft">Add item</p>
+                            <div className="mt-1 flex items-stretch gap-1.5">
+                              <input
+                                ref={addendRef}
+                                aria-label={`Item amount for line ${index + 1}`}
+                                value={addend}
+                                onChange={(event) => setAddend(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key !== 'Enter') return;
+                                  event.preventDefault();
+                                  addItemToLine(index);
+                                }}
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                className={`${inputClass} min-w-0 flex-1`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => addItemToLine(index)}
+                                disabled={addToLineAmount(line.amount, addend).action !== 'set'}
+                                className="min-h-[48px] rounded-lg border border-border-strong px-3 text-sm font-semibold text-ink-body hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Add
+                              </button>
+                            </div>
+                            <p className="mt-1.5 text-xs text-ink-muted">
+                              Adds to this line — same category, no extra split.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddingLineIndex(null);
+                                setAddend('');
+                              }}
+                              className="mt-1 text-xs font-semibold text-accent underline decoration-dotted"
+                            >
+                              Done
+                            </button>
+                          </div>
                         ) : null}
-                        <input
-                          aria-label={`Line ${index + 1} amount`}
-                          value={line.amount}
-                          onChange={(event) => updateLineAmount(index, event.target.value)}
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          className={`${inputClass} mt-1`}
-                        />
-                      </label>
+                      </div>
                     </div>
                     <div className="mt-2 space-y-1.5">
                       <div
@@ -1197,15 +1285,17 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                     {lines.length > 1 ? (
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          setAddingLineIndex(null);
+                          setAddend('');
                           setLines((current) =>
                             lineFollowsTotal
                               ? followRemainder(
                                   current.filter((_, lineIndex) => lineIndex !== index),
                                 )
                               : current.filter((_, lineIndex) => lineIndex !== index),
-                          )
-                        }
+                          );
+                        }}
                         className="mt-2 block text-xs font-semibold text-danger underline"
                       >
                         Remove line

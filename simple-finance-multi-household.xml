@@ -9,8 +9,8 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.15.1 is the stable production release and moves :latest (By Person month
-  paging preserves the current scroll position on soft navigation; issue #45).
+  v1.16.0 is the stable production release and moves :latest (Quick Entry split
+  lines can total several same-category items in place; issue #46).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>

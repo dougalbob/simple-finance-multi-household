@@ -1,4 +1,4 @@
-import { parsePence, penceInput } from '../money';
+import { MAX_ABS_PENCE, parsePence, penceInput } from '../money';
 
 /**
  * Quick Entry Line 1 following the payment amount (mobile flow, SPEC §15.1).
@@ -126,6 +126,30 @@ export function editDistance(left: string, right: string): number {
     }
   }
   return row[right.length] ?? 99;
+}
+
+/**
+ * Add one receipt item into a split line (GitHub issue #46, decision 221).
+ *
+ * The household is standing at a till with several items of the same
+ * category — four clothing lines on one Amazon order — and should not have
+ * to leave the app for a calculator. This sums in integer pence and writes
+ * the running total back into the *same* allocation line (same category,
+ * same target). It never creates a second split.
+ *
+ * Empty or zero current starts the line at the addend. A half-typed current
+ * ("11."), a negative current, a non-positive addend, or a sum past the
+ * representable range holds so an in-flight keystroke is never destroyed.
+ */
+export function addToLineAmount(current: string, addend: string): FollowedLineAmount {
+  const extra = parsePence(addend);
+  if (extra === null || extra <= 0) return { action: 'hold' };
+  const trimmed = current.trim();
+  const base = trimmed === '' ? 0 : parsePence(current);
+  if (base === null || base < 0) return { action: 'hold' };
+  const total = base + extra;
+  if (!Number.isSafeInteger(total) || total > MAX_ABS_PENCE) return { action: 'hold' };
+  return { action: 'set', amount: penceInput(total) };
 }
 
 /** Empty split drafts count as zero; invalid in-flight input holds the last remainder. */
