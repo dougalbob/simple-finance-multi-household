@@ -410,9 +410,9 @@ export default async function PotsPage({
                   </span>
                 </div>
                 {transfer.voidedAt === null ? (
-                  <div className="mt-1 flex flex-wrap items-start gap-4">
-                    <details className="text-xs">
-                      <summary className="cursor-pointer font-medium text-ink-soft hover:text-ink">
+                  <>
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
                         Edit
                       </summary>
                       <div className="mt-2 max-w-md">
@@ -430,8 +430,8 @@ export default async function PotsPage({
                         />
                       </div>
                     </details>
-                    <details className="text-xs">
-                      <summary className="cursor-pointer font-medium text-ink-soft hover:text-ink">
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
                         Void
                       </summary>
                       <div className="mt-2 max-w-md">
@@ -445,7 +445,7 @@ export default async function PotsPage({
                         />
                       </div>
                     </details>
-                  </div>
+                  </>
                 ) : null}
               </li>
             ))}
