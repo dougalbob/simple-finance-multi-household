@@ -6,6 +6,7 @@ import {
   CategoryTreeEditor,
   CommitmentCategoriesForm,
   DefaultPurchasePotForm,
+  DefaultTransactionsPotForm,
   PersonSignInForm,
   PotEditForm,
   TargetRenameForm,
@@ -36,6 +37,7 @@ import { getProjectionView } from '@/lib/records/money-view';
 import {
   getContractEndWarningLeadDays,
   getDefaultPurchasePotId,
+  getDefaultTransactionsPotId,
   getMonthlyFuelByVehicle,
   getRenewalWarningLeadDays,
   getWeeklyGroceriesPence,
@@ -74,6 +76,7 @@ export default async function SettingsPage() {
   const tree = categoryTree(db);
   const fuelByVehicle = getMonthlyFuelByVehicle(db);
   const defaultPurchasePotId = getDefaultPurchasePotId(db);
+  const defaultTransactionsPotId = getDefaultTransactionsPotId(db);
   const commitmentPicker = getCommitmentCategoryPicker(db);
   const projection = getProjectionView(db, now);
   const theme = await currentTheme();
@@ -164,6 +167,23 @@ export default async function SettingsPage() {
           <DefaultPurchasePotForm
             pots={pots.map(({ id, label }) => ({ id, label }))}
             defaultPotId={defaultPurchasePotId}
+          />
+        </section>
+
+        <section
+          aria-labelledby="all-transactions-settings-heading"
+          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+        >
+          <h2 id="all-transactions-settings-heading" className="mb-1 text-lg font-semibold">
+            All Transactions
+          </h2>
+          <p className="mb-3 text-xs text-ink-muted">
+            Choose the pot that opens by default when you visit All Transactions. A pot selected
+            from the page&apos;s Target filter still takes precedence.
+          </p>
+          <DefaultTransactionsPotForm
+            pots={pots.map(({ id, label }) => ({ id, label }))}
+            defaultPotId={defaultTransactionsPotId}
           />
         </section>
 

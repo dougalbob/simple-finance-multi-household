@@ -9,9 +9,9 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.14.0 is the stable production release and moves :latest (a saved
-  pot-to-pot transfer is corrected in place - its pots, amount, date and note
-  - instead of being voided and re-recorded; GitHub issue #33).
+  v1.15.0 is the stable production release and moves :latest (All Transactions
+  opens on the household's chosen default pot; explicit targets still win;
+  GitHub issue #44).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.14.0 is the stable production release and moves :latest.
+    v1.15.0 is the stable production release and moves :latest.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

@@ -26,6 +26,7 @@ const KEY_FUEL_PREFIX = 'monthly_fuel_pence:';
 const KEY_RENEWAL_LEAD = 'renewal_warning_lead_days';
 const KEY_CONTRACT_END_LEAD = 'contract_end_warning_lead_days';
 const KEY_DEFAULT_PURCHASE_POT = 'default_purchase_pot_id';
+const KEY_DEFAULT_TRANSACTIONS_POT = 'default_transactions_pot_id';
 const KEY_COMMITMENT_CATEGORIES = 'commitment_category_ids';
 
 export const DEFAULT_RENEWAL_WARNING_LEAD_DAYS = 21;
@@ -171,6 +172,41 @@ export function setDefaultPurchasePotId(
     potId === null ? '' : String(potId),
     actor,
     'quick entry',
+    now,
+  );
+}
+
+/**
+ * The pot All Transactions opens on when its URL does not select one (issue
+ * #44). This is a household setting, not an inferred preference; null keeps
+ * the page's existing Main account / first pot fallback. Only live pots can
+ * be pinned because the page's target picker offers live pots.
+ */
+export function getDefaultTransactionsPotId(db: Db): number | null {
+  const row = settingRow(db, KEY_DEFAULT_TRANSACTIONS_POT);
+  if (row === null || row.value === '') return null;
+  const potId = Number(row.value);
+  if (!Number.isInteger(potId) || potId <= 0) return null;
+  return isLivePot(db, potId) ? potId : null;
+}
+
+export function setDefaultTransactionsPotId(
+  db: Db,
+  potId: number | null,
+  actor: string,
+  now?: Date,
+): void {
+  if (potId !== null && (!Number.isInteger(potId) || potId <= 0 || !isLivePot(db, potId))) {
+    throw new InvalidSettingValueError(
+      'That pot does not exist (or is archived), so it cannot be the default for All Transactions.',
+    );
+  }
+  upsertSetting(
+    db,
+    KEY_DEFAULT_TRANSACTIONS_POT,
+    potId === null ? '' : String(potId),
+    actor,
+    'all transactions',
     now,
   );
 }

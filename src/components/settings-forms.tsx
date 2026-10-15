@@ -8,6 +8,7 @@ import {
   saveCategoryAction,
   saveCommitmentCategoriesAction,
   saveDefaultPurchasePotAction,
+  saveDefaultTransactionsPotAction,
   savePersonEmailAction,
   saveWarningLeadsAction,
 } from '@/app/actions';
@@ -639,6 +640,52 @@ export function DefaultPurchasePotForm({ pots, defaultPotId }: DefaultPurchasePo
         <p className="text-xs text-ink-muted">
           Every purchase can still be recorded against any pot — this only decides where the form
           starts. A cash pot can be the default; the form simply shows no balance for cash.
+        </p>
+      </div>
+      <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
+        {pending ? 'Saving…' : 'Save default pot'}
+      </button>
+      <FormMessage status={state.status} message={state.message} />
+    </form>
+  );
+}
+
+export interface DefaultTransactionsPotFormProps {
+  pots: Array<{ id: number; label: string }>;
+  defaultPotId: number | null;
+}
+
+/** The target All Transactions opens on until the page URL names a pot (issue #44). */
+export function DefaultTransactionsPotForm({
+  pots,
+  defaultPotId,
+}: DefaultTransactionsPotFormProps) {
+  const [state, formAction, pending] = useActionState(
+    saveDefaultTransactionsPotAction,
+    initialActionState,
+  );
+  return (
+    <form action={formAction} className="flex flex-col gap-3 sm:max-w-md">
+      <div className="flex flex-col gap-1">
+        <label htmlFor="default-transactions-pot" className={labelClass}>
+          Default pot for All Transactions
+        </label>
+        <select
+          id="default-transactions-pot"
+          name="potId"
+          defaultValue={defaultPotId?.toString() ?? ''}
+          className={inputClass}
+        >
+          <option value="">No default — keep the existing fallback</option>
+          {pots.map((pot) => (
+            <option key={pot.id} value={pot.id}>
+              {pot.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-ink-muted">
+          This applies only when All Transactions opens without a pot in its URL. Choosing a pot
+          from the page&apos;s Target filter always overrides it.
         </p>
       </div>
       <button type="submit" disabled={pending} className={`${submitClass} self-start`}>

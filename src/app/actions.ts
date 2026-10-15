@@ -235,6 +235,7 @@ import {
   InvalidSettingValueError,
   setContractEndWarningLeadDays,
   setDefaultPurchasePotId,
+  setDefaultTransactionsPotId,
   setMonthlyFuelPence,
   setRenewalWarningLeadDays,
   setCommitmentCategoryIds,
@@ -1507,6 +1508,7 @@ const PAGE_PATHS = [
   '/charts',
   '/income',
   '/settings',
+  '/transactions',
   '/tasks',
   // The setup path (docs/ONBOARDING_PLAN.md): derived from the records, so an
   // action taken anywhere must refresh it too.
@@ -1554,6 +1556,43 @@ export async function saveDefaultPurchasePotAction(
       return { status: 'error', message: err.message };
     }
     return { status: 'error', message: 'The default pot could not be saved. Please try again.' };
+  }
+}
+
+/** Save the household's default target when All Transactions opens without a potId. */
+export async function saveDefaultTransactionsPotAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+
+  const raw = formData.get('potId');
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  const potId = text === '' ? null : Number(text);
+  if (potId !== null && (!Number.isInteger(potId) || potId <= 0)) {
+    return { status: 'error', message: 'Choose a pot from the list, or “No default”.' };
+  }
+  try {
+    const db = user.db;
+    setDefaultTransactionsPotId(db, potId, user.email);
+    revalidatePages();
+    return {
+      status: 'ok',
+      message:
+        potId === null
+          ? 'Default cleared — All Transactions uses its normal starting pot.'
+          : 'Default pot saved — All Transactions will open there.',
+    };
+  } catch (err) {
+    if (err instanceof InvalidSettingValueError) {
+      return { status: 'error', message: err.message };
+    }
+    return {
+      status: 'error',
+      message: 'The All Transactions default pot could not be saved. Please try again.',
+    };
   }
 }
 
