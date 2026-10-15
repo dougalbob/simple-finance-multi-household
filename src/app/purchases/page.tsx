@@ -259,6 +259,7 @@ export default async function PurchasesPage({
                         ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
                         : 'Unknown supplier'
                     }
+                    potId={purchase.potId}
                     potLabel={potNames.get(purchase.potId) ?? 'Pot'}
                     paidByLabel={
                       purchase.paidByPersonId !== null
@@ -306,6 +307,7 @@ interface PurchaseRowProps {
   occurredAt: Date;
   occurredDate: string;
   supplierLabel: string;
+  potId: number;
   potLabel: string;
   paidByLabel: string;
   lines: Array<{
@@ -445,6 +447,7 @@ function PurchaseRow(props: PurchaseRowProps) {
             <div className="mt-2 w-80 max-w-[calc(100vw-2.5rem)] sm:w-96">
               <RecentEntryActions
                 purchaseId={props.purchaseId}
+                potId={props.potId}
                 expectedVersion={props.version}
                 occurredDate={props.occurredDate}
                 note={props.note}

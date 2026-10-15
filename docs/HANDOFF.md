@@ -1,3 +1,109 @@
+# Release v1.20.0 — Purchases open in place on All Transactions, and Record refund works again (GitHub issue #57) (2026-10-15)
+
+**Release scope is prepared on this branch.** The household accepted the Arena preview of issue #57 and
+authorised a stable release in the same session. Version files are aligned at **v1.20.0 stable**, moving
+`latest` on `ghcr.io/dougalbob/simple-finance-multi-household` only. No schema, migration or
+backup-format change. Required PR CI, main CI and tagged Publish evidence are still pending at
+preparation time; this is a pre-merge record, not proof that a tag or image exists.
+
+**#57 (decision 226).** On All Transactions, a purchase's row makes the supplier's name (or the
+schedule's name, when the record has none) a disclosure button. The panel opens **directly below the
+row** — `<tr><td colSpan={7}>`, pinned to the visible width on a phone, as decision 225's transfer panel
+is — with **Correct it** (the Purchases page's own `PurchaseEditForm`: amount per split line, category,
+who it was for, date, note) and **Void it** (`VoidForm`) side by side from `md` up, plus Close. One
+record is open at a time.
+
+- **Codes:** `PUR` (recorded by hand), `DD` and `SO` (converted from a schedule — the household asked
+  for "PUR and DD", and `SO` is the same record with the same editor, so it was included). A **refund**
+  (`REF`) keeps its link to Purchases: its amount lives in the negative and its form belongs beside the
+  original it was refunded against. Correcting a `DD`/`SO` never touches the schedule; its link stays
+  beside the code.
+- **The open purchase lives in the URL**, as `?purchase={id}#purchase-{id}`, alongside decision 225's
+  `?transfer={id}`. The two are alternatives — opening one clears the other — and a URL carrying both
+  resolves to the transfer (the older contract). Same mechanism as before: `router.replace(…, {
+  scroll: false })` + `useOptimistic`, never `history.replaceState`.
+- **A save never pulls the panel away.** A void takes the purchase out of the projection; a re-date can
+  too. The open purchase is then pinned where the projection would list it (`compareActivityOrder`),
+  muted, outside the totals, stripe and running balance, badged *voided / outside these dates / past the
+  row limit*. A voided one keeps its reason and links to `/purchases?voidedOnly=1#purchase-{id}`; a
+  re-dated one keeps its forms and links to "Show <pot> around <date>". Closing lets the pinned row go.
+- **Shared, not copied:** `src/lib/records/in-place-activity.ts` (the URL/window/pinned-placement
+  contract) and `src/components/activity-open-row.tsx` (provider, ready hook, panel frame) now serve both
+  kinds; `transfer-activity-row.tsx` was refactored onto them with no behaviour change, and
+  `tests/transfer-activity.test.ts`'s wiring suite points at the shared module.
+- **Placement, measured rather than assumed:** the pinned row goes by the record's own date. A **void**
+  cannot change the date, so the row — and the panel with it — stays exactly where the household was
+  reading it; the spec measures the page for that case (**≤ 4px**, the v1.19.0 regression guard: the
+  abandoned `history.replaceState` moved it 439px and ran red at 333px). A **re-date out of the window**
+  does move the row: an older date sorts last, so the pinned row lands at the far end of a 30-day list —
+  measured at first as a 931px panel move, which was the row legitimately relocating. `PurchaseActivityRow`
+  and `TransferActivityRow` therefore share `useKeepPinnedPanelInView`: when a record becomes pinned and
+  its panel is **entirely** off screen, the panel is brought back to the middle of the view **once** —
+  never a general scroll rule (an in-view panel, a panel the household scrolled away from, and a hash
+  landing are all left alone, so the page never moves under a pointer; SANDBOX 22). The spec asserts the
+  panel is in the viewport afterwards instead of asserting the row did not move.
+
+**Decision 227 — the Purchases page's Record refund button never worked, and now does.** Found by this
+release's own browser test (which needs a real `REF` row): `RefundForm` sent `purchaseId` where
+`addRefundAction` parses `refundOfPurchaseId`, and sent neither `potId` nor `amount`, so every attempt
+failed with `Invalid input: expected number, received null`; its lines also went in the editor's typed
+text shape where the action's schema reads whole pence. The action additionally passed the parsed `null`
+supplier and payer through, which reads as "no supplier" rather than "inherit the original's". Both
+halves now share one named contract, `tests/purchases.test.ts` pins every field name in each half, and
+the browser records a real refund, reads its `REF` row, follows its link back to Purchases, checks the
+issue-30 anchored landing and voids it again. Reported to the household as a separate repair.
+
+Code: `src/components/activity-open-row.tsx`, `src/components/purchase-activity-row.tsx`,
+`src/lib/records/in-place-activity.ts`, `src/lib/records/purchase-activity.ts`,
+`src/lib/records/activity.ts`, `src/lib/records/entry-view.ts`, `src/lib/records/purchases.ts`,
+`src/app/transactions/page.tsx`, `src/components/record-forms.tsx`, `src/app/actions.ts`,
+`src/app/purchases/page.tsx`, `src/lib/guide.ts`. SPEC §9.5, §15.1–15.3 and the guide are updated.
+
+**Verified locally:**
+
+- Gates: format, typecheck and themes are clean. `npm test` passes **992/992 across 230 suites** (16 new
+  in `tests/purchase-activity.test.ts`, 19 in `tests/transfer-activity.test.ts`, 2 new wiring tests
+  for the refund form in `tests/purchases.test.ts`). The production build is clean and `npm audit --omit=dev` reports 0
+  vulnerabilities.
+- Browser, via SANDBOX entry 8 (Chromium 153.0.8010.0, `LD_LIBRARY_PATH=/tmp/al2023/lib`):
+  - `transactions` **11/11** — including the three new issue-57 journeys: a purchase recorded at the till
+    and corrected then voided in place (the page unmoved, ≤ 4px); a re-date out of the window (pinned,
+    honest, panel brought back into view); and a refund recorded on Purchases whose `REF` row keeps its
+    link, lands below the sticky header and is voided again.
+  - `projects`, `credit-card-pots`, `insights`, `recurring` and `payday-summary` **11/11** on a fresh
+    server, and `backup` **3/3** — the same projects that failed earlier in this session only because the
+    sandbox's `next dev` had died part-way through a 146-test run (SANDBOX 17's hazard; the failures were
+    `net::ERR_CONNECTION_REFUSED`).
+  - **`admin` is the one project this sandbox cannot finish: 2/4.** Re-run **against the clean `HEAD` tree
+    with the change stashed** it is *worse* — 3/4, including the same two tests — so it is the environment
+    (the dev server dies on the registry backup/restore and household-creation flows here), not this
+    change; the spec touches no code this release edits, and CI's `browser` job passes it on GitHub
+    runners. CI's run is the authoritative full-suite evidence for this PR.
+  - A full 146-test run in this sandbox passed 128 and lost its server for the rest (SANDBOX 17); the
+    per-project runs above are the local evidence that matters.
+
+**Live preview:** port **3000**, Next development mode bound to `0.0.0.0`, using only fictional records in
+ignored `.preview-data` and the development-only `alex@example.com` identity. Recreate it with
+`DATA_DIR=.preview-data node --import tsx scripts/seed-example-household.mts`. On **All Transactions**
+(Main account), select **Corner Foods** on the split purchase row to open it in place, correct the amount
+or the note, then void it and close; select the **Phone plan** `SO` row to see a converted record. On
+**Purchases**, open a purchase's **Edit → Refund** section and record a refund, then find its `REF` row on
+All Transactions and follow it back. No real household data was accessed.
+
+**Trade-offs accepted with the household (decision 226):** a refund is recorded, corrected and voided on
+Purchases only (it does not open in place); the panel offers Correct it and Void it, not Refund; and a
+purchase re-dated outside the window is pinned at its own date's place in the list rather than under the
+household's pointer.
+
+**Prior release, verified from `gh` in this session:** `v1.19.0` published on 2026-10-15T19:08:10Z. Its
+annotated tag dereferences to `284f15e02eb56e892b7714ae3938418e31fa2842` (the `main` merge commit of PR
+#56), and Publish run `38791004005` (job `116615216479`) succeeded. The GitHub release is **not** a draft
+and **not** a pre-release, so `latest` has moved off `v1.17.0`. The published digest is verified by the
+workflow's own step; this sandbox cannot read the run's log blob (its host is outside the network
+allow-list), so no digest is restated here.
+
+---
+
 # Release v1.19.0 — Transfers open in place on All Transactions (GitHub issue #55) (2026-10-15)
 
 **Release scope is prepared on this branch.** The household approved the Arena preview of issue #55. They

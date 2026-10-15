@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { eq } from 'drizzle-orm';
 import { auditEntries, purchases as purchasesTable } from '../src/lib/db/schema';
@@ -1292,5 +1293,59 @@ describe('purchase history queries', () => {
     } finally {
       fx.close();
     }
+  });
+});
+
+/**
+ * The refund form and `addRefundAction` are wired by field name, and nothing
+ * else checks it: the form is a client component and the action reads a
+ * `FormData`, so no unit test can submit one, and the browser suite only
+ * learned to in decision 227. A field that goes missing is silent until a
+ * household taps **Record refund** — which is exactly how `potId`, `amount`
+ * and the original's id were lost between the two halves of the flow.
+ */
+describe('the refund form sends what the refund action reads (decision 227)', () => {
+  const read = (relativePath: string) =>
+    readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
+
+  /**
+   * Only the refund form itself — the other forms in that file have their own
+   * actions — with its whitespace removed: what is checked here is which names
+   * travel, not how prettier laid them out.
+   */
+  const refundForm = () => {
+    const file = read('src/components/record-forms.tsx');
+    const form = file.slice(
+      file.indexOf('export function RefundForm'),
+      file.indexOf('interface VoidFormProps'),
+    );
+    return form.replace(/\s+/g, '');
+  };
+
+  it('carries every field addRefundAction parses', () => {
+    const action = read('src/app/actions.ts');
+    const form = refundForm();
+    for (const field of [
+      'refundOfPurchaseId',
+      'potId',
+      'amount',
+      'linesJson',
+      'occurredDate',
+      'note',
+      'expectedVersion',
+    ]) {
+      assert.ok(action.includes(`formData.get('${field}')`), `addRefundAction must read ${field}`);
+      assert.ok(
+        form.includes(`name="${field}"`) || form.includes(`formData.set('${field}'`),
+        `the refund form must send ${field}`,
+      );
+    }
+  });
+
+  it('sends the lines as whole pence — the shape the action parses, not the editor text', () => {
+    const form = refundForm();
+    assert.ok(form.includes('amountPence:pence[index]??0'));
+    // Positive magnitudes: the action flips the signs (SPEC §9.5).
+    assert.ok(form.includes('Math.abs(poundsToPence(line.amount).pence??0)'));
   });
 });

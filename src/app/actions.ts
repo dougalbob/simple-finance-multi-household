@@ -1774,8 +1774,13 @@ export async function addRefundAction(
       refundOfPurchaseId: parsed.data.refundOfPurchaseId,
       totalPence: -parsed.data.totalPence,
       potId: parsed.data.potId,
-      supplierName: parsed.data.supplierName,
-      paidByPersonId: parsed.data.paidByPersonId,
+      // The refund form carries the pot and the amounts and nothing else, so
+      // the supplier and the payer stay the original's (createRefund's own
+      // default, and SPEC §9.5: the same record, in the negative). Passing the
+      // parsed nulls on would read as "this purchase has no supplier" and
+      // leave the refund unlinked from the shop it came back from.
+      supplierName: parsed.data.supplierName ?? undefined,
+      paidByPersonId: parsed.data.paidByPersonId ?? undefined,
       occurredDate: parsed.data.occurredDate ?? undefined,
       note: parsed.data.note,
       lines: parsed.data.lines.map((line) => ({

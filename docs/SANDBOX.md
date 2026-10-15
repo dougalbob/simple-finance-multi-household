@@ -471,8 +471,36 @@ empty — the fetch was blocked.
 
 ---
 
+## 23. A cold `.next` is worth warming before a release run, and the preview cannot share the directory with the e2e server (2026-10-15)
+
+- **Warm the cache first (entry 22).** This session's full run reused a `.next` that an earlier
+  `--project=transactions` run had already built, so entry 22's cold-run flakiness did not appear. A fresh clone
+  has no cache: run one project before the full suite, and if the *first* project fails a client-island step,
+  re-run it warm before calling it a regression.
+- **The seeded suite's real size:** **146 tests across 24 projects**, taking roughly 25–30 minutes locally with
+  `workers: 1` (entries 8's "fifty tests, ~2 minutes" is from 2026-09-24). Budget for it, or narrow with
+  `--project=<name>` while iterating and run everything once before the PR.
+- **`playwright.local.config.ts` is already in `.gitignore`** (line 59), so the overlay can sit in the repo root
+  — `git check-ignore -v playwright.local.config.ts` confirms it, and it never appears in `git status`.
+- **The e2e server owns the directory:** `scripts/e2e-server.mts` runs `next dev` on 3100 (entry 12), so stop the
+  Playwright run before starting the acceptance preview (`next dev` on 3000). `ss -ltn | grep 3100` tells you
+  whether the webServer is still up; Playwright kills it when its run ends.
+- **A browser test can find a product bug the unit tests cannot:** the refund journey written for issue #57
+  found that the Purchases page's **Record refund** button had never sent its action the fields it parses. When
+  a spec needs a record the seed does not have, build it through the ordinary UI first — the wiring is part of
+  what is being tested.
+
 ---
 
+- **2026-10-15 (v1.20.0, session `arena/0ebb2691-simple-finance-multi-household`):** entry 23 added. Entry 8
+  re-proved in a fresh sandbox in ~5 seconds (`npm i @sparticuz/chromium`, `inflate(bin/al2023.tar.br)` →
+  `/tmp/al2023`, `LD_LIBRARY_PATH=/tmp/al2023/lib /tmp/chromium --version` → Chromium 153.0.8010.0), and the
+  Chromium path and the `.gitignore` line 59 for the throwaway overlay were confirmed. Entry 17 re-proved the
+  hard way: the **first** full-suite run lost its web server part-way through — 126 passed, 20 failed, from
+  `projects`/`admin` onward mostly `net::ERR_CONNECTION_REFUSED :3100` — because `npm test` (the 991-test unit
+  suite) was running **concurrently**; the honest full run is the solo one. Two of the failures were real spec
+  defects (the `settings` project clears the household's default purchase pot, so a later till save must name
+  its pot), and the rest were the dead-server cascade.
 - **2026-10-14 (v1.13.1, session `arena/c2cce040-simple-finance-multi-household`):** entry 22 added after a cold-`.next` run failed the Recurring filter step; entry 8 re-proved (`@sparticuz/chromium` Chromium 153.0.8010.0, the throwaway overlay, `LD_LIBRARY_PATH=/tmp/al2023/lib`) — the recurring, insights, mobile and desktop projects and a full-suite run were all used as evidence for v1.13.1.
 - **2026-10-14 (v1.9.0, session `arena/9001fee2-simple-finance-multi-household`):** entry 21 and `scripts/run-tests.mjs` added so `npm test` runs in 20-file sequential batches with `--test-concurrency=2`, avoiding Arena OOM warnings across the 885-test / 204-suite run.
 - **2026-10-12 (v1.5.0, session `arena/b3e92c4d-simple-finance-multi-household`):** entry 20 added while

@@ -70,6 +70,23 @@ export function entryDefaults({ people, vehicles, viewerEmail }: EntryDefaultsIn
   return { personId: person?.id ?? null, vehicleId: vehicle?.id ?? null };
 }
 
+/**
+ * The live leaf categories an entry or edit form offers, `Parent / Child`, in
+ * the tree's own order (SPEC §12). One builder: the till's category picker, the
+ * Purchases editor and the in-place purchase panel on All Transactions (decision
+ * 226) all read the household's declared tree the same way, so a category
+ * retired in Settings cannot appear in one and not another.
+ */
+export function leafCategoryOptions(
+  db: Db,
+): Array<{ id: number; parentName: string; childName: string }> {
+  return categoryTree(db).flatMap((parent) =>
+    parent.children
+      .filter((child) => child.retiredAt === null)
+      .map((child) => ({ id: child.id, parentName: parent.name, childName: child.name })),
+  );
+}
+
 export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | null): QuickEntryData {
   const now = nowArg ?? new Date();
   // The due pass runs inside the money snapshot (SPEC §11.2): converted
@@ -81,11 +98,7 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
   const vehicles = listVehicles(db);
   const debts = listDebts(db);
   const supplierRows = listSuppliersForEntry(db);
-  const categoryOptions = categoryTree(db).flatMap((parent) =>
-    parent.children
-      .filter((child) => child.retiredAt === null)
-      .map((child) => ({ id: child.id, parentName: parent.name, childName: child.name })),
-  );
+  const categoryOptions = leafCategoryOptions(db);
   const supplierOptions = supplierRows.map((supplier) => ({
     id: supplier.id,
     name: supplier.name,

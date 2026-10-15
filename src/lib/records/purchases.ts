@@ -538,11 +538,15 @@ export function voidPurchase(db: Db, input: VoidPurchaseInput): Purchase {
   });
 }
 
-export function getPurchaseWithLines(db: Db | DbTx, purchaseId: number): PurchaseWithLines {
+/**
+ * One purchase with its allocation lines, or null when the id names nothing —
+ * the lookup a page uses when a URL *may* name a record (`?purchase={id}` on
+ * All Transactions, decision 226). `getPurchaseWithLines` is the same read for
+ * callers that already know the record exists.
+ */
+export function findPurchaseWithLines(db: Db | DbTx, purchaseId: number): PurchaseWithLines | null {
   const purchase = db.select().from(purchases).where(eq(purchases.id, purchaseId)).get();
-  if (purchase === undefined) {
-    throw new PurchaseNotFoundError(purchaseId);
-  }
+  if (purchase === undefined) return null;
   const lines = db
     .select()
     .from(allocations)
@@ -550,6 +554,14 @@ export function getPurchaseWithLines(db: Db | DbTx, purchaseId: number): Purchas
     .orderBy(asc(allocations.id))
     .all();
   return { purchase, allocations: lines };
+}
+
+export function getPurchaseWithLines(db: Db | DbTx, purchaseId: number): PurchaseWithLines {
+  const found = findPurchaseWithLines(db, purchaseId);
+  if (found === null) {
+    throw new PurchaseNotFoundError(purchaseId);
+  }
+  return found;
 }
 
 export interface PurchaseFilters {

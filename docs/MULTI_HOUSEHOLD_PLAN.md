@@ -82,4 +82,6 @@ Target host/container layout:
 
 **v1.18.0-rc.1 acceptance candidate:** Recurring calendar day summaries show item counts and gross amounts, expand to per-schedule details, and link to the exact schedule's open Edit section (issue #53). This pre-release never moved `latest`; the household accepted it and it ships in stable `v1.19.0`. See `docs/RELEASE_NOTES_v1.18.0-rc.1.md`.
 
+**v1.20.0 stable feature:** A purchase opens in place on All Transactions for correction or void — `PUR`, `DD` and `SO` rows, through the Purchases page's own forms — while a refund keeps its link to Purchases (issue #57, decision 226); the Purchases page's **Record refund** button is repaired (decision 227). No schema, backup-format, household-isolation or deployment-boundary change. See `docs/RELEASE_NOTES_v1.20.0.md`.
+
 **v1.19.0 stable feature:** Internal transfers open in place on All Transactions for correction or void, and the pots page's transfer card is retired (issue #55, decision 225), with the accepted `v1.18.0-rc.1` Recurring calendar day summaries (issue #53). No schema, backup-format, household-isolation or deployment-boundary change. See `docs/RELEASE_NOTES_v1.19.0.md`.

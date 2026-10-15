@@ -495,18 +495,21 @@ describe('the pinned row is projected from the record, voided or not', () => {
   });
 });
 
-describe('the wiring: transfers open here, purchases keep their page', () => {
+describe('the wiring: transfers open here, purchases open here too, the rest keep their page', () => {
   it('renders internal transfers through the in-place row and nothing else', () => {
     const page = repoFile('src/app/transactions/page.tsx');
     assert.ok(page.includes("entry.row.family === 'transfer' ?"), 'transfer rows branch out');
     assert.ok(page.includes('<TransferActivityRow'), 'through the in-place row');
-    assert.ok(page.includes('<OpenTransferProvider>'), 'sharing one open transfer');
+    assert.ok(
+      page.includes('<ActivityOpenRowProvider>'),
+      'sharing one open record with the in-place purchase rows (decision 226)',
+    );
     assert.ok(page.includes('<ActivityTableRow'), 'every other family keeps its linked row');
   });
 
   it('removes the pots page’s transfer card and redirects its old deep link', () => {
     const pots = repoFile('src/app/pots/page.tsx');
-    assert.equal(pots.includes('transfers-heading'), false, 'no "Transfers between pots" card');
+    assert.equal(pots.includes('transfers-heading'), false, 'no \"Transfers between pots\" card');
     assert.equal(pots.includes('TransferEditForm'), false);
     assert.match(pots, /redirect\(\s*transferActivityHref\(/, 'old ?transfer= links redirect');
   });
@@ -517,13 +520,44 @@ describe('the wiring: transfers open here, purchases keep their page', () => {
     assert.ok(forms.includes('key={toPotId}'), 'To pot re-mounts on its saved value');
   });
 
-  it('opens and closes through the router without scrolling, one transfer at a time', () => {
+  it('opens and closes through the router without scrolling, one record at a time', () => {
+    // The open-record state is shared with the in-place purchase row
+    // (decision 226), so the mechanism lives in its own module and both rows
+    // read it; the ready signal and the disclosure stay on the row itself.
+    const provider = repoFile('src/components/activity-open-row.tsx');
+    assert.ok(provider.includes('router.replace('), 'the router owns the URL, so a save stays put');
+    assert.ok(provider.includes('scroll: false'));
+    assert.doesNotMatch(provider, /history\.replaceState\(/, 'never behind the router’s back');
+    assert.ok(provider.includes('useOptimistic'), 'a click opens at once');
+    assert.ok(provider.includes('ACTIVITY_TABLE_ID'), 'the table the close-focus returns to');
     const row = repoFile('src/components/transfer-activity-row.tsx');
-    assert.ok(row.includes('router.replace('), 'the router owns the URL, so a save stays put');
-    assert.ok(row.includes('scroll: false'));
-    assert.doesNotMatch(row, /history\.replaceState\(/, 'never behind the router’s back');
-    assert.ok(row.includes('useOptimistic'), 'a click opens at once');
     assert.ok(row.includes('data-transfer-ready'), 'the decision 131 ready signal');
     assert.ok(row.includes('aria-expanded'), 'a disclosure, announced as one');
+    assert.ok(row.includes("openRow('transfer'"), 'the shared state names the transfer it opens');
+    assert.ok(row.includes('useActivityRow'), 'and never a second source of truth for it');
+  });
+
+  it('brings a pinned panel back on screen, for both kinds, and only when it is off screen', () => {
+    // A re-date can sort the pinned row to the far end of the list, far from
+    // the part of the table the household was reading; a void cannot move the
+    // row at all. So the correction is deliberately narrow (decision 226):
+    // off screen entirely, once, and never for a panel they scrolled away from.
+    const shared = repoFile('src/components/activity-open-row.tsx');
+    assert.match(shared, /export function useKeepPinnedPanelInView/);
+    assert.ok(
+      shared.includes("panel.scrollIntoView({ block: 'center' })"),
+      'the panel, not the page top',
+    );
+    const offScreen = /box\.bottom <= 0 \|\| box\.top >= window\.innerHeight/;
+    assert.match(shared, offScreen, 'only when the panel is entirely out of view');
+    for (const row of [
+      'src/components/transfer-activity-row.tsx',
+      'src/components/purchase-activity-row.tsx',
+    ]) {
+      assert.ok(
+        repoFile(row).includes('useKeepPinnedPanelInView(pinned !== null, panelRef)'),
+        `${row} keeps the panel with the household`,
+      );
+    }
   });
 });

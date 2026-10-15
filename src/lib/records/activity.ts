@@ -126,6 +126,14 @@ export interface ActivityRow {
    * its correction and void forms start from. Null on every other family.
    */
   transfer: ActivityTransferFacts | null;
+  /**
+   * A purchase opens in place too (decision 226, GitHub issue #57): these are
+   * the facts its correction and void forms start from. Present on exactly the
+   * rows that open in place — a hand-recorded purchase (`PUR`) and a schedule
+   * conversion (`DD` / `SO`); null on every other family, **and on a refund**
+   * (`REF`), which keeps its link to the Purchases page beside its original.
+   */
+  purchase: ActivityPurchaseFacts | null;
 }
 
 /** What the in-place transfer panel needs beyond the row's own cells (decision 225). */
@@ -141,6 +149,28 @@ export interface ActivityTransferFacts {
   enteredBy: string;
   /** Null while the transfer stands; the reason ('' when none was given) once voided. */
   voidReason: string | null;
+}
+
+/** What the in-place purchase panel needs beyond the row's own cells (decision 226). */
+export interface ActivityPurchaseFacts {
+  /** The version the page rendered — the edit and void forms' stale-form guard. */
+  version: number;
+  /** The saved note as stored (the row's `note` is the display string). */
+  note: string | null;
+  /** Who recorded it, as the ledger stores them. */
+  enteredBy: string;
+  /** Null while the purchase stands; the reason ('' when none was given) once voided. */
+  voidReason: string | null;
+  /** The allocation lines the correction form starts from, in their stored order. */
+  lines: ActivityPurchaseLine[];
+}
+
+/** One allocation line, as the correction form wants it (no display labels). */
+export interface ActivityPurchaseLine {
+  amountPence: number;
+  categoryId: number;
+  targetKind: 'household' | 'person' | 'vehicle';
+  targetId: number | null;
 }
 
 export interface ActivityCheckpoint {
@@ -286,6 +316,10 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           purchaseRows.map((row) => row.id),
         ),
       )
+      // By allocation id, so the line the row names and the lines the
+      // correction form starts from are the household's own order — the same
+      // order the Purchases page reads them in (decision 226).
+      .orderBy(asc(allocations.id))
       .all();
     for (const line of lines) {
       const list = linesByPurchase.get(line.purchaseId) ?? [];
@@ -304,52 +338,24 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       purchase.scheduleInstanceId === null
         ? undefined
         : scheduleByInstance.get(purchase.scheduleInstanceId);
-    const isRefund = purchase.refundOfPurchaseId !== null;
-    const scheduleKind = schedule?.kind;
-    const code: ActivityCode = isRefund
-      ? 'REF'
-      : scheduleKind === 'dd'
-        ? 'DD'
-        : scheduleKind === 'so'
-          ? 'SO'
-          : 'PUR';
-    const lineSummary = purchaseLineSummary(lines, categoryNames, names);
     const sortAt = purchase.occurredAt.getTime();
     const signedPence = -purchase.totalPence;
     pending.push({
       sortAt,
       recordId: purchase.id,
       familyRank: 0,
-      row: {
-        key: `purchase-${purchase.id}`,
-        family: 'purchase',
-        recordId: purchase.id,
-        date: purchase.occurredDate,
-        code,
+      row: purchaseActivityRowFrom(purchase, lines, {
+        potId,
+        dateFrom,
+        dateTo,
         source:
           purchase.supplierId !== null
             ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
             : (schedule?.name ?? 'Unknown supplier'),
-        category: lineSummary.label,
-        extraLines: lineSummary.extraLines,
-        amountPence: Math.abs(purchase.totalPence),
-        direction: purchase.totalPence < 0 ? 'in' : 'out',
-        note: purchase.note ?? '',
-        link: {
-          href: `/purchases?potId=${potId}&from=${dateFrom}&to=${dateTo}#purchase-${purchase.id}`,
-          label: 'Open this purchase',
-        },
-        secondaryLink:
-          schedule === undefined
-            ? null
-            : {
-                href: `/recurring#schedule-${schedule.scheduleId}`,
-                label: 'Open the schedule',
-              },
-        badge: null,
-        runningBalancePence: null,
-        transfer: null,
-      },
+        code: purchaseActivityCode(purchase.refundOfPurchaseId !== null, schedule?.kind),
+        scheduleId: schedule?.scheduleId ?? null,
+        summary: purchaseLineSummary(lines, categoryNames, names),
+      }),
       movement: {
         key: `purchase-${purchase.id}`,
         recordId: purchase.id,
@@ -461,6 +467,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         badge: movement.kind === 'swap' ? (swapPartners.get(movement.id) ?? null) : null,
         runningBalancePence: null,
         transfer: null,
+        purchase: null,
       },
       movement: {
         key: `external-${movement.id}`,
@@ -526,6 +533,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         badge: scheduleName === null ? null : 'from schedule',
         runningBalancePence: null,
         transfer: null,
+        purchase: null,
       },
       movement: {
         key: `receipt-${receipt.id}`,
@@ -575,6 +583,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           badge: 'expected — not recorded yet',
           runningBalancePence: null,
           transfer: null,
+          purchase: null,
         },
         movement: null,
       });
@@ -933,6 +942,148 @@ export function transferActivityRow(
       enteredBy: transfer.enteredBy,
       voidReason: transfer.voidedAt === null ? null : (transfer.voidReason ?? ''),
     },
+    purchase: null,
+  };
+}
+
+/**
+ * One purchase as a row of `potId`'s activity (SPEC §15.3, decisions 101–108
+ * and 226): `PUR` for a record the household typed, `DD` / `SO` for one a
+ * schedule converted, `REF` for a refund. A purchase that opens in place
+ * carries the facts its correction and void forms start from — the transfer
+ * row's arrangement (`transferActivityRow` above), and the exact projection
+ * the live row goes through, so the panel's row reads the same before and
+ * after a save takes it out of the list.
+ *
+ * The classification is the record's own: a refund is `REF` whatever made it,
+ * a converted instance is `DD` or `SO` from its schedule's kind, and anything
+ * else is `PUR`. Refunds do **not** open in place, so their row carries no
+ * form facts and keeps its link to Purchases.
+ *
+ * Reads the record's own details (its lines, its supplier or schedule name and
+ * its schedule's kind) — used for the page's pinned row; the projection
+ * passes what it has already loaded instead of asking again.
+ */
+export function purchaseActivityRow(
+  db: Db,
+  purchase: typeof purchases.$inferSelect,
+  potId: number,
+  window: { dateFrom: string; dateTo: string },
+): ActivityRow {
+  const lines = db
+    .select()
+    .from(allocations)
+    .where(eq(allocations.purchaseId, purchase.id))
+    .orderBy(asc(allocations.id))
+    .all();
+  const schedule =
+    purchase.scheduleInstanceId === null
+      ? undefined
+      : scheduleKindByInstance(db, [purchase.scheduleInstanceId]).get(purchase.scheduleInstanceId);
+  const supplierNames = new Map(
+    listSuppliers(db).map((supplier) => [supplier.id, supplier.name] as const),
+  );
+  const categoryNames = new Map(
+    categoryTree(db).flatMap((parent) =>
+      parent.children.map((child) => [child.id, `${parent.name} / ${child.name}`] as const),
+    ),
+  );
+  const names = targetNames({ people: listPeople(db), vehicles: listVehicles(db) });
+  return purchaseActivityRowFrom(purchase, lines, {
+    potId,
+    dateFrom: window.dateFrom,
+    dateTo: window.dateTo,
+    source:
+      purchase.supplierId !== null
+        ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
+        : (schedule?.name ?? 'Unknown supplier'),
+    code: purchaseActivityCode(purchase.refundOfPurchaseId !== null, schedule?.kind),
+    scheduleId: schedule?.scheduleId ?? null,
+    summary: purchaseLineSummary(lines, categoryNames, names),
+  });
+}
+
+/** Where a purchase sorts among the rows — the same position whether it is live or pinned. */
+export function purchaseActivityOrder(purchase: typeof purchases.$inferSelect): ActivityOrder {
+  return {
+    at: purchase.occurredAt.getTime(),
+    familyRank: ACTIVITY_FAMILY_RANK.purchase,
+    recordId: purchase.id,
+    key: `purchase-${purchase.id}`,
+  };
+}
+
+/** `REF` for a refund, else `DD` / `SO` from the schedule that made it, else `PUR`. */
+function purchaseActivityCode(
+  isRefund: boolean,
+  scheduleKind: 'dd' | 'so' | 'receipt' | undefined,
+): ActivityCode {
+  if (isRefund) return 'REF';
+  if (scheduleKind === 'dd') return 'DD';
+  if (scheduleKind === 'so') return 'SO';
+  return 'PUR';
+}
+
+interface PurchaseRowDetail {
+  potId: number;
+  dateFrom: string;
+  dateTo: string;
+  /** The supplier's name, or the schedule's name when the record has no supplier. */
+  source: string;
+  code: ActivityCode;
+  /** The schedule this record was converted from, when there is one. */
+  scheduleId: number | null;
+  /** The first allocation's label, and how many lines follow it. */
+  summary: { label: string; extraLines: number };
+}
+
+/** One purchase row, from facts the caller already has (the projection and the pinned row both use it). */
+function purchaseActivityRowFrom(
+  purchase: typeof purchases.$inferSelect,
+  lines: ReadonlyArray<typeof allocations.$inferSelect>,
+  detail: PurchaseRowDetail,
+): ActivityRow {
+  return {
+    key: `purchase-${purchase.id}`,
+    family: 'purchase',
+    recordId: purchase.id,
+    date: purchase.occurredDate,
+    code: detail.code,
+    source: detail.source,
+    category: detail.summary.label,
+    extraLines: detail.summary.extraLines,
+    amountPence: Math.abs(purchase.totalPence),
+    direction: purchase.totalPence < 0 ? 'in' : 'out',
+    note: purchase.note ?? '',
+    link: {
+      href: `/purchases?potId=${detail.potId}&from=${detail.dateFrom}&to=${detail.dateTo}#purchase-${purchase.id}`,
+      label: 'Open this purchase',
+    },
+    secondaryLink:
+      detail.scheduleId === null
+        ? null
+        : {
+            href: `/recurring#schedule-${detail.scheduleId}`,
+            label: 'Open the schedule',
+          },
+    badge: null,
+    runningBalancePence: null,
+    transfer: null,
+    purchase:
+      detail.code === 'REF'
+        ? null
+        : {
+            version: purchase.version,
+            note: purchase.note,
+            enteredBy: purchase.enteredBy,
+            voidReason: purchase.voidedAt === null ? null : (purchase.voidReason ?? ''),
+            lines: lines.map((line) => ({
+              amountPence: line.amountPence,
+              categoryId: line.categoryId,
+              targetKind: line.targetKind,
+              targetId: line.targetId,
+            })),
+          },
   };
 }
 
