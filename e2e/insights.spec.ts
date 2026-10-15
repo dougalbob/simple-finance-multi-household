@@ -81,34 +81,57 @@ test.describe('annual vehicle payments', () => {
   });
 });
 
-test.describe('By Person month navigation (issue #26)', () => {
-  test('prev/next keep the panel in view, clear of the sticky header', async ({ page }) => {
-    await page.goto('/insights');
-    const panel = page.locator('section[aria-labelledby="panel-persons-heading"]');
-    const heading = panel.getByRole('heading', { name: /^By person/ });
-    const prev = panel.getByRole('link', { name: 'Prev' });
-    const next = panel.getByRole('link', { name: 'Next' });
-    // The anchor target clears the sticky header: scroll-hash scrolls to the
-    // heading itself, so the offset lives on it, not the section.
-    await expect(heading).toHaveClass(/sf-anchor/);
-    await expect(prev).toHaveAttribute('href', /#panel-persons-heading$/);
-    await expect(next).toHaveAttribute('href', /#panel-persons-heading$/);
+test.describe('By Person month navigation (issues #26 and #45)', () => {
+  test('prev/next preserve the current scroll position on phone and desktop', async ({ page }) => {
+    for (const width of [390, 1400]) {
+      await page.setViewportSize({ width, height: 950 });
+      await page.goto('/insights');
+      const panel = page.locator('section[aria-labelledby="panel-persons-heading"]');
+      const heading = panel.getByRole('heading', { name: /^By person/ });
+      const prev = panel.getByRole('link', { name: 'Prev' });
+      const next = panel.getByRole('link', { name: 'Next' });
+      // Keep a real fragment in each URL for direct/no-JavaScript navigation.
+      // A soft month change is an in-place choice and must not follow that hash.
+      await expect(heading).toHaveClass(/sf-anchor/);
+      await expect(prev).toHaveAttribute('href', /#panel-persons-heading$/);
+      await expect(next).toHaveAttribute('href', /#panel-persons-heading$/);
+      await page.waitForFunction(() =>
+        Boolean(document.documentElement.style.getPropertyValue('--sf-anchor-offset')),
+      );
 
-    // Paging months keeps the panel put: the heading lands in view, below
-    // the header — not at the top of the page.
-    await next.click();
-    await expect(page).toHaveURL(/#panel-persons-heading$/);
-    await expect(heading).toBeInViewport();
-    const headerBottom = (await page.locator('header.sticky').boundingBox())?.height ?? 0;
-    const headingTop = (await heading.boundingBox())?.y ?? -1;
-    expect(headingTop, 'the heading sits under the sticky header').toBeGreaterThanOrEqual(
-      headerBottom - 1,
-    );
+      await heading.evaluate((element) => {
+        window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 160);
+      });
+      const initialScrollY = await page.evaluate(() => window.scrollY);
+      expect(initialScrollY).toBeGreaterThan(100);
+      const initialMonthHeading = await heading.innerText();
 
-    // And back again: Prev returns to the starting month, still anchored.
-    await prev.click();
-    await expect(page).toHaveURL(/#panel-persons-heading$/);
-    await expect(heading).toBeInViewport();
+      await next.click();
+      await expect(page).toHaveURL(/month=.*#panel-persons-heading$/);
+      await expect(heading).not.toHaveText(initialMonthHeading);
+      await page.waitForTimeout(450);
+      const nextScrollY = await page.evaluate(() => window.scrollY);
+      expect(
+        Math.abs(nextScrollY - initialScrollY),
+        `${width}px: Next should leave the page at the same vertical position`,
+      ).toBeLessThan(8);
+      await expect(heading).toBeInViewport();
+      const headerBottom = (await page.locator('header.sticky').boundingBox())?.height ?? 0;
+      const headingTop = (await heading.boundingBox())?.y ?? -1;
+      expect(headingTop, 'the heading sits under the sticky header').toBeGreaterThanOrEqual(
+        headerBottom - 1,
+      );
+
+      await prev.click();
+      await expect(page).toHaveURL(/month=.*#panel-persons-heading$/);
+      await expect(heading).toHaveText(initialMonthHeading);
+      await page.waitForTimeout(450);
+      const prevScrollY = await page.evaluate(() => window.scrollY);
+      expect(
+        Math.abs(prevScrollY - initialScrollY),
+        `${width}px: Prev should leave the page at the same vertical position`,
+      ).toBeLessThan(8);
+    }
   });
 });
 

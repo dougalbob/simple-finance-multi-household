@@ -157,6 +157,7 @@ export default async function InsightsPage({
                   'panel-persons-heading',
                 )}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
+                scroll={false}
               >
                 ← Prev
               </Link>
@@ -166,6 +167,7 @@ export default async function InsightsPage({
                   'panel-persons-heading',
                 )}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
+                scroll={false}
               >
                 Next →
               </Link>
