@@ -1,3 +1,11 @@
+# Release v1.16.0 — Total same-category items on a split line (GitHub issue #46) (2026-10-15)
+
+**Release scope is prepared on this branch.** On Quick Entry, a split line that is not Line 1's auto remainder offers a **"+"** beside its amount. Tapping it opens **Add item**: each amount is added in whole pence to that line's running total (same category, same target, no extra split). Line 1 still follows the remainder. Empty or zero current starts the line at the first item; a half-typed amount is left alone. Enter in the item field adds and never saves the purchase. No financial data, schema, migration or backup format changes. See decision 221 and SPEC §15.1.
+
+The four fictional clothing amounts from the issue (£38.50 + £11.65 + £8.25 + £11.99) total **£70.39** in the unit tests. The new browser spec fills a £100 till total, proves Line 1 has no "+", then adds those four amounts into Line 2 via Enter and asserts Line 2 is £70.39 with Line 1 remainder £29.61, at 393px and 1400px. Existing remainder and mobile split specs still pass. Local gates passed: format, typecheck, themes, `npm test` (**946/946** across 218 suites), build, and production audit (0 vulnerabilities). Required PR CI and tagged Publish evidence remain pending; the local results are not a substitute. This is still a pre-merge record, not evidence that a tag or image exists.
+
+---
+
 # Release v1.15.1 — Keep By Person month navigation in place (GitHub issue #45) (2026-10-15)
 
 **Release scope is prepared on this branch.** On `/insights`, the By Person Prev/Next links keep the current scroll position during month changes, while retaining their `#panel-persons-heading` fragment for direct and no-JavaScript visits. Next's default hash scrolling followed that fragment on soft navigation; both links now use `scroll={false}`. No financial data, schema, migration or backup format changes. See decision 220 and SPEC §16.2.

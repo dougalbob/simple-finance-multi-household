@@ -2,9 +2,9 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-15):** this is the independent multi-household edition and **`v1.15.1` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.15.1.md`](docs/RELEASE_NOTES_v1.15.1.md).
-> It answers issue #45: By Person month paging keeps the current scroll position on soft navigation, while retaining the heading fragment for direct visits. `v1.15.0` before it answers issue #44: All Transactions can open on the household's chosen default pot, while a pot selected in the URL or Target filter still wins; clear the setting to keep the old fallback. `v1.14.0` before that answers issue #33: a saved transfer between your own pots is now **corrected in place** on Accounts, Pots & Checkpoints — its pots, its amount, its date and its note — instead of only being voidable, guarded by the record's version, refused for a read-only support view and audited before-and-after like every other correction. Earlier releases include the #34 anchored deep-link fix (`v1.13.1`), supplier schedule links and recurring search (`v1.13.0`), and the Recurring cancelled-schedule filter and All Transactions purchase-link offset (`v1.12.0`). The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
+> **Status (2026-10-15):** this is the independent multi-household edition and **`v1.16.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.16.0.md`](docs/RELEASE_NOTES_v1.16.0.md).
+> It answers issue #46: a split line at the till can total several same-category items in place via a "+" beside the amount, so a wider bill does not need a calculator. `v1.15.1` before it answers issue #45: By Person month paging keeps the current scroll position on soft navigation, while retaining the heading fragment for direct visits. `v1.15.0` before it answers issue #44: All Transactions can open on the household's chosen default pot, while a pot selected in the URL or Target filter still wins; clear the setting to keep the old fallback. `v1.14.0` before that answers issue #33: a saved transfer between your own pots is now **corrected in place** on Accounts, Pots & Checkpoints — its pots, its amount, its date and its note — instead of only being voidable, guarded by the record's version, refused for a read-only support view and audited before-and-after like every other correction. Earlier releases include the #34 anchored deep-link fix (`v1.13.1`), supplier schedule links and recurring search (`v1.13.0`), and the Recurring cancelled-schedule filter and All Transactions purchase-link offset (`v1.12.0`). The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
 > restore, and registry backup and restore in `/admin` are implemented. Importing the existing household
@@ -18,7 +18,7 @@ A private finance app for multiple independent households, self-hosted by the pr
 - **Only GHCR image:** `ghcr.io/dougalbob/simple-finance-multi-household`. This repository must never push to `ghcr.io/dougalbob/simple-finance`, including the `latest` tag. The publish workflow contains a repository/image guard.
 - **Original production app:** remains on bridge networking, host port `3007` → container port `3000`, using `/mnt/user/appdata/simple-finance`. Do not mount, alter or migrate that location.
 - **New app target:** bridge networking, host port `3009` → container port `3000`, with `/mnt/user/appdata/simple-finance-multi-household` mapped to `/data`. Use a separate Cloudflare hostname/route to the new container; leave the existing route untouched.
-- **Versioning:** `v1.15.1` is the current stable release and moves `latest` (issue #45: By Person month paging preserves the current scroll position on soft navigation). `v1.15.0` set the household's default All Transactions pot (issue #44); `v1.14.0` corrected saved transfers in place; `v1.13.1` fixed anchored deep links; `v1.13.0` added supplier schedule links, recurring search and remembered cancelled-schedule visibility. Earlier stable and candidate releases are documented in `docs/RELEASE_PROCESS.md`. Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged.
+- **Versioning:** `v1.16.0` is the current stable release and moves `latest` (issue #46: Quick Entry split lines total several same-category items in place). `v1.15.1` kept By Person month paging in place (issue #45); `v1.15.0` set the household's default All Transactions pot (issue #44); `v1.14.0` corrected saved transfers in place; `v1.13.1` fixed anchored deep links; `v1.13.0` added supplier schedule links, recurring search and remembered cancelled-schedule visibility. Earlier stable and candidate releases are documented in `docs/RELEASE_PROCESS.md`. Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged.
 
 ## Product and tenancy model
 
@@ -34,7 +34,7 @@ Fast mobile entry, checkpoints, payday projections, recurring schedules, insight
 
 ## Unraid installation
 
-**`v1.15.1` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
+**`v1.16.0` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
 
 ```text
 /mnt/user/appdata/simple-finance-multi-household/  →  /data/
@@ -158,7 +158,7 @@ Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.e
 
 ## Version and release line
 
-**`v1.15.1` is the current stable release** (package/app version `1.15.1`, badge `v1.15.1 · stable`), shipping issue #45: By Person month paging preserves the reader's current vertical scroll position during soft navigation, while the URL fragment remains for direct visits. `v1.15.0` set the default All Transactions pot (issue #44); `v1.14.0` corrected saved transfers between pots in place (issue #33); earlier releases are recorded in [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
+**`v1.16.0` is the current stable release** (package/app version `1.16.0`, badge `v1.16.0 · stable`), shipping issue #46: a split line at the till can total several same-category items in place. `v1.15.1` kept By Person month paging in place (issue #45); `v1.15.0` set the default All Transactions pot (issue #44); `v1.14.0` corrected saved transfers between pots in place (issue #33); earlier releases are recorded in [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
 
 A candidate is a SemVer prerelease with an `-rc.N` suffix, incrementing per build (`v1.0.0-rc.1`, `-rc.2`, …). A candidate gets its exact version tag and `sha-<short>` tag, **not `latest`**, and its GitHub release is marked pre-release. Accepted candidates become a distinct stable tag; never rename or retag one. The candidates so far: `v1.0.0-rc.1` and `v1.0.0-rc.2` exist as Git tags but their Publish runs failed before pushing, so **no image exists for either**; `v1.0.0-rc.3` published, was accepted on a real installation, and is the base `v1.0.0` was promoted from.
 

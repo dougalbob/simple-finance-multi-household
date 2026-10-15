@@ -850,6 +850,14 @@ Home = four big actions:
      zero-value lines still block Save. Empty Total clears Line 1; incomplete/invalid input holds the
      last valid remainder and cannot save. Editing Line 1 (including Assign remaining on it) takes
      control until a fresh entry. Adding a split no longer stops following (supersedes the old rule).
+   - **Add items into a split line (v1.16.0, decision 221, GitHub issue #46):** a receipt often
+     has several items of the same category (four clothing lines on one Amazon order). Each split
+     line that is not Line 1's auto remainder offers a **"+"** to the right of its amount. Tapping it
+     opens a small **Add item** field: each amount entered is added, in whole pence, to that line's
+     running total — same category, same target, no extra split. Line 1 still follows the remainder.
+     The household never leaves the till for a calculator. Empty or zero current starts the line at
+     the first item; a half-typed amount is left alone. Enter in the item field adds, it never saves
+     the purchase.
    - **"Add another" (decision 174)** sits next to Save while the confirmation is up **and the next
      entry has not begun** — it is offered when the form is still blank, and steps aside as soon as
      the household starts typing the next purchase, rather than wiping it under their thumb. It

@@ -3174,3 +3174,30 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     The report was a regression in the earlier issue #26 behavior: Prev/Next kept `#panel-persons-heading` in the URL, but Next's default link scrolling followed that fragment during a soft query-string navigation and moved the reader away from their current vertical position. Both links now pass `scroll={false}`. Their month and fragment remain shareable, direct/no-JavaScript visits still use native fragment navigation and the heading's `sf-anchor` offset, and in-place month paging leaves the live viewport where the reader put it. No financial data or schema is changed.
 
     The browser regression test positions the heading at a known scrolled location, then checks Next and Prev retain `window.scrollY` after delayed anchor checks settle, on both a 390px phone and a 1400px desktop. Run red against the prior code it moved **91px** on the phone; with the fix, both directions stay within **8px** of the starting position at both widths. No migration or backup-format change.
+
+221. **Add items into a split line at the till (2026-10-15, v1.16.0, GitHub issue #46).**
+
+    The household's report: a wider bill often has two or more items of the same parent/child
+    category (four clothing lines and three appliances on one fictional Amazon order). Today they
+    have to back out of the app and sum those items on a calculator before they can type the split
+    line. The asked-for shape is unobtrusive: a **"+"** to the right of the Line 2 amount, and when
+    they tap it they add another item of that category whose amount is added to the current line.
+
+    **Same allocation line, not a new split.** Several items of Personal / Clothing & Shoes for the
+    same person are one line. Creating a split per sock would fight §9.3 (lines must total the
+    payment exactly, each with one category and one target) and would make the remainder harder to
+    follow. So "+" is a running total on the line they already have: integer pence, `addToLineAmount`
+    in `src/lib/records/quick-entry.ts`. Empty or zero current starts the line at the addend; a
+    half-typed current, a non-positive addend or a sum past `MAX_ABS_PENCE` holds. Line 1's auto
+    remainder (decision 177) is untouched — the "+" is offered on every extra split line, and on
+    Line 1 only after it has been taken over, so adding never silently stops the following.
+
+    **Till rules that still hold.** The "+" is `type="button"` and 48×48px. Tapping it focuses the
+    item field because they tapped it (decision 151). Enter in that field adds and never submits
+    the purchase. A successful save and "Add another" close the adder. Removing a line closes it.
+    No schema, no migration, no change to what is stored.
+
+    Coverage: `tests/quick-entry.test.ts` walks the four clothing amounts to £70.39 and the hold
+    cases. `e2e/remainder.spec.ts` fills a £100 till total, adds a split, proves Line 1 has no "+",
+    then adds £38.50 + £11.65 + £8.25 + £11.99 into Line 2 via Enter and asserts Line 2 is £70.39
+    with Line 1 remainder £29.61, at 393px and 1400px.
