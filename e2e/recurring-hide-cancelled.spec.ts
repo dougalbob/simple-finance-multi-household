@@ -182,4 +182,83 @@ test.describe('recurring schedules: hide cancelled & navigation persistence', ()
     await expect(list.locator('li', { hasText: 'Phone plan' })).toHaveCount(1);
     await expect(list.locator('li', { hasText: 'BroadbandCo fibre' })).toHaveCount(1);
   });
+
+  test('supplier schedule link lands below the sticky header on a phone (issue #43)', async ({
+    page,
+  }) => {
+    test.slow();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/suppliers');
+    const broadbandCard = page.locator('article', { hasText: 'BroadbandCo' });
+    await expect(broadbandCard).toBeVisible();
+    await broadbandCard.getByRole('button', { name: /BroadbandCo/ }).click();
+    const scheduleLink = broadbandCard.getByRole('link', {
+      name: 'Linked to schedule "BroadbandCo fibre"',
+    });
+    await expect(scheduleLink).toBeVisible();
+    await scheduleLink.click();
+    await expect(page).toHaveURL(/\/recurring\?q=BroadbandCo\+fibre#schedule-\d+/);
+    await waitForScheduleFilter(page);
+    const list = page.locator('section[aria-labelledby="schedules-heading"] ul');
+    const row = list.locator('li', { hasText: 'BroadbandCo fibre' });
+    await expect(row).toHaveCount(1);
+    // Issue #43: on the phone the schedule section sits below the calendar,
+    // so the page really has to scroll — and the row must not end the scroll
+    // tucked behind the menu bar.
+    await expectRowClearsStickyHeader(page, row);
+    await expect(row.locator('summary', { hasText: 'Edit schedule' })).toBeInViewport();
+  });
+
+  test('schedule link still clears the header when the browser ignores scroll-margin (issue #43)', async ({
+    page,
+  }) => {
+    test.slow();
+    // Simulate a browser whose scrollIntoView / fragment scroll does not
+    // honour the target's `scroll-margin-top` (older WebKit is the known
+    // case: the household's production report, while Chromium — which does
+    // honour it — passed every check in v1.13.1). The app cannot rely on
+    // that honouring: with the margin stripped, only the app's own
+    // header-clearance guard can keep the row out from behind the menu.
+    await page.addInitScript(() => {
+      const apply = () => {
+        const root = document.head ?? document.documentElement;
+        if (root === null) return;
+        if (document.getElementById('probe-no-anchor-margin') !== null) return;
+        const style = document.createElement('style');
+        style.id = 'probe-no-anchor-margin';
+        style.textContent = '.sf-anchor { scroll-margin-top: 0px !important; }';
+        root.appendChild(style);
+      };
+      apply();
+      // The init script can run before <head> exists; keep re-applying so
+      // the sheet survives the parser and any soft navigation.
+      new MutationObserver(apply).observe(document, { childList: true, subtree: true });
+    });
+    await page.goto('/suppliers');
+    const broadbandCard = page.locator('article', { hasText: 'BroadbandCo' });
+    await expect(broadbandCard).toBeVisible();
+    await broadbandCard.getByRole('button', { name: /BroadbandCo/ }).click();
+    const scheduleLink = broadbandCard.getByRole('link', {
+      name: 'Linked to schedule "BroadbandCo fibre"',
+    });
+    await expect(scheduleLink).toBeVisible();
+    await scheduleLink.click();
+    await expect(page).toHaveURL(/\/recurring\?q=BroadbandCo\+fibre#schedule-\d+/);
+    await waitForScheduleFilter(page);
+    const list = page.locator('section[aria-labelledby="schedules-heading"] ul');
+    const row = list.locator('li', { hasText: 'BroadbandCo fibre' });
+    await expect(row).toHaveCount(1);
+    await expectRowClearsStickyHeader(page, row);
+    await expect(row.locator('summary', { hasText: 'Edit schedule' })).toBeInViewport();
+
+    // And the same at phone width, where the row is a full page of calendar
+    // below the top and the document itself has to travel.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const scheduleId = new URL(page.url()).hash.replace('#', '');
+    await page.goto('/suppliers');
+    await page.goto(`/recurring?q=BroadbandCo+fibre#${scheduleId}`);
+    await expect(page).toHaveURL(new RegExp(`#${scheduleId}$`));
+    await waitForScheduleFilter(page);
+    await expectRowClearsStickyHeader(page, list.locator(`li#${scheduleId}`));
+  });
 });

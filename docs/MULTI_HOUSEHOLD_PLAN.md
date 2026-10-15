@@ -75,3 +75,5 @@ Target host/container layout:
 9. Make a brand-new household usable on its own: the derived first-run setup path (`/start`, home card, repaired empty states, no "two people and a vehicle" nag) released as stable minor `v1.1.0`. The remaining onboarding slice in `docs/ONBOARDING_PLAN.md` (a worked example rendered from a fictional household, now two months of data) shipped as `v1.3.0`. Slice 2 (`/guide` and "what this page needs first") shipped as `v1.2.0`.
 
 **v1.16.1 stable patch:** Quick Entry split category, amount and Add item stack at every width, fixing the cramped laptop column without changing totalling. No schema or migration change. See `docs/RELEASE_NOTES_v1.16.1.md`.
+
+**v1.16.2 stable patch:** A Supplier card's "Linked to schedule" link (and every anchored deep link) is verified against the sticky menu after landing and corrected once if a browser left it behind the bar (issue #43, decision 222). No schema or migration change. See `docs/RELEASE_NOTES_v1.16.2.md`.

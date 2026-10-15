@@ -92,3 +92,5 @@ Include what changed; schema/data caveats; who is affected and what to do; valid
 After successful publication, verify the GitHub release type (pre-release vs stable), title, package link and digest. Report only verified facts. Add merge SHA, PR/check run IDs, Publish run and digest to the next working session's `docs/HANDOFF.md`; do not create a separate post-merge documentation PR. For an RC, gather acceptance feedback and publish a higher RC number for changes; only after acceptance prepare the separate stable `v1.0.0` release.
 
 **v1.16.1 stable patch:** Quick Entry split category, amount and Add item stack at every width, fixing the cramped laptop column without changing totalling. No schema or migration change. See `docs/RELEASE_NOTES_v1.16.1.md`.
+
+**v1.16.2 stable patch:** A Supplier card's "Linked to schedule" link (and every anchored deep link) is verified against the sticky menu after landing and corrected once if a browser left it behind the bar (issue #43, decision 222). No schema or migration change. See `docs/RELEASE_NOTES_v1.16.2.md`.
