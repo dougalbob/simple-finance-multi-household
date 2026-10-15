@@ -125,4 +125,44 @@ test.describe('quick entry settings', () => {
     await waitForTill(page);
     await expect(entry.getByLabel('Pot').locator('option:checked')).toHaveText('Choose…');
   });
+
+  test('the All Transactions default applies until a target is chosen (issue #44)', async ({
+    page,
+  }) => {
+    await page.goto('/settings');
+    const section = page.getByRole('region', { name: /^All Transactions$/i });
+    const defaultPot = section.getByLabel('Default pot for All Transactions');
+
+    await defaultPot.selectOption({ label: 'Salary account' });
+    await section.getByRole('button', { name: 'Save default pot' }).click();
+    await expect(section.getByRole('status')).toContainText(/All Transactions will open there/i, {
+      timeout: 30_000,
+    });
+
+    // No potId in the URL: open on the saved preference.
+    await page.goto('/transactions');
+    const filters = page.getByRole('form', { name: 'Activity filters' });
+    const target = filters.getByLabel('Target');
+    await expect(target.locator('option:checked')).toHaveText('Salary account');
+
+    // An invalid URL target is ignored, so the saved default still applies.
+    await page.goto('/transactions?potId=999999');
+    const invalidTarget = page.getByRole('form', { name: 'Activity filters' }).getByLabel('Target');
+    await expect(invalidTarget.locator('option:checked')).toHaveText('Salary account');
+
+    // An explicit target always wins over the saved default.
+    await invalidTarget.selectOption({ label: 'Main account' });
+    await filters.getByRole('button', { name: 'Show activity' }).click();
+    await expect(target.locator('option:checked')).toHaveText('Main account');
+
+    // Clearing the setting restores the page's existing fallback.
+    await page.goto('/settings');
+    await section.getByLabel('Default pot for All Transactions').selectOption('');
+    await section.getByRole('button', { name: 'Save default pot' }).click();
+    await expect(section.getByRole('status')).toContainText(/Default cleared/i, {
+      timeout: 30_000,
+    });
+    await page.goto('/transactions');
+    await expect(page.getByLabel('Target').locator('option:checked')).toHaveText('Main account');
+  });
 });

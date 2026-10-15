@@ -5,6 +5,7 @@ import { formatPence } from '@/lib/money';
 import { listPotActivity, type ActivityRow } from '@/lib/records/activity';
 import { ensureScheduleState } from '@/lib/records/money-view';
 import { latestCheckpointPerPot, listPots } from '@/lib/records/pots';
+import { getDefaultTransactionsPotId } from '@/lib/records/settings';
 import { addDaysLocal } from '@/lib/records/dates';
 import { isValidLocalDate, toLocalDateString } from '@/lib/time';
 
@@ -20,7 +21,8 @@ interface SearchParams {
  * All Transactions (SPEC §15.3, plan decisions 101–108): a read-only, one-pot
  * activity view. A pure projection of existing records — this page renders no
  * form and cannot create, edit or void anything. Every row links to the
- * canonical page that owns that behaviour.
+ * canonical page that owns that behaviour. Without a valid potId in the URL,
+ * the household's saved default is used before the existing fallback.
  *
  * Running balance (v0.33.0): far-right column shows balance after each
  * movement, anchored on checkpoints. Green = credit, red = debit. Drift is
@@ -42,8 +44,10 @@ export default async function TransactionsPage({
   const params = await searchParams;
   const today = toLocalDateString(now);
   const pots = listPots(db);
+  const defaultPotId = getDefaultTransactionsPotId(db);
   const pot =
     pots.find((candidate) => candidate.id === Number(params.potId)) ??
+    pots.find((candidate) => candidate.id === defaultPotId) ??
     pots.find((candidate) => candidate.label.toLowerCase() === 'main account') ??
     pots[0] ??
     null;

@@ -2,9 +2,9 @@
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-14):** this is the independent multi-household edition and **`v1.14.0` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.14.0.md`](docs/RELEASE_NOTES_v1.14.0.md).
-> It answers issue #33: a saved transfer between your own pots is now **corrected in place** on Accounts, Pots & Checkpoints — its pots, its amount, its date and its note — instead of only being voidable, guarded by the record's version, refused for a read-only support view and audited before-and-after like every other correction. `v1.13.1` before it was a patch for re-opened issue #34: an anchored deep link — a Supplier card's schedule link first of all — lands **below** the sticky header at every window width, because the offset is measured from the header itself instead of guessed. `v1.13.0` before that links Supplier cards to recurring schedules with deep links (and an explicit unlinked notice), provides an in-place filter search box on Recurring, and remembers the cancelled schedule visibility setting across navigations. `v1.12.0` before it lets the Recurring Schedules list hide cancelled schedules (with a count of those hidden) and makes All Transactions purchase links land below the sticky header. `v1.11.0` before it makes **Chart C (Personal spending)** count every line marked for a person whatever its category, keeps the **By person** panel in view when paging months, and gives the **honesty loop** a −15%…+10% tolerance band. `v1.10.0` before it striped the All Transactions rows and turned Chart E into "Where the money went". The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
+> **Status (2026-10-15):** this is the independent multi-household edition and **`v1.15.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.15.0.md`](docs/RELEASE_NOTES_v1.15.0.md).
+> It answers issue #44: All Transactions can open on the household's chosen default pot, while a pot selected in the URL or Target filter still wins; clear the setting to keep the old fallback. `v1.14.0` before it answers issue #33: a saved transfer between your own pots is now **corrected in place** on Accounts, Pots & Checkpoints — its pots, its amount, its date and its note — instead of only being voidable, guarded by the record's version, refused for a read-only support view and audited before-and-after like every other correction. Earlier releases include the #34 anchored deep-link fix (`v1.13.1`), supplier schedule links and recurring search (`v1.13.0`), and the Recurring cancelled-schedule filter and All Transactions purchase-link offset (`v1.12.0`). The first-run setup path for a brand-new household is in ([`docs/ONBOARDING_PLAN.md`](docs/ONBOARDING_PLAN.md), Slice 1).
 > Install `ghcr.io/dougalbob/simple-finance-multi-household:latest`. It does not import any existing
 > household data. Consent-based support access, the identity-to-`people` link, per-household backup and
 > restore, and registry backup and restore in `/admin` are implemented. Importing the existing household
@@ -18,7 +18,7 @@ A private finance app for multiple independent households, self-hosted by the pr
 - **Only GHCR image:** `ghcr.io/dougalbob/simple-finance-multi-household`. This repository must never push to `ghcr.io/dougalbob/simple-finance`, including the `latest` tag. The publish workflow contains a repository/image guard.
 - **Original production app:** remains on bridge networking, host port `3007` → container port `3000`, using `/mnt/user/appdata/simple-finance`. Do not mount, alter or migrate that location.
 - **New app target:** bridge networking, host port `3009` → container port `3000`, with `/mnt/user/appdata/simple-finance-multi-household` mapped to `/data`. Use a separate Cloudflare hostname/route to the new container; leave the existing route untouched.
-- **Versioning:** `v1.9.0` is the accepted stable release and moves `latest` (`v1.0.0` was the first stable, `v1.0.1` shipped registry backup/restore, `v1.0.2` fixed and hardened that restore, `v1.1.0` shipped first-run onboarding, `v1.2.0` shipped the guide, `v1.3.0` shipped the worked example, `v1.4.0` shipped the three-month comparison, line-item drill-downs and the months chart, `v1.5.0` shipped the link treatment, the one-control attachment form and the chart hatch fix, `v1.6.0` ships the Purchases show toggles, two-row line editor, striped rows and supplier-card links, `v1.7.0` ships the Recurring page cancel-inside-edit, double-confirm, restore with back-fill warning, trimmed label, and alternating Schedules rows, `v1.8.0-rc.1` shipped the Contracts & Renewals agreement register candidate, and `v1.9.0` promotes that accepted candidate to stable alongside the granular child-category Spending Mix selector and batched test runner). Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged. Any future stable release moves `latest` again.
+- **Versioning:** `v1.15.0` is the current stable release and moves `latest` (issue #44: a household setting selects the default All Transactions pot; an explicit URL target wins). `v1.14.0` corrected saved transfers in place; `v1.13.1` fixed anchored deep links; `v1.13.0` added supplier schedule links, recurring search and remembered cancelled-schedule visibility. Earlier stable and candidate releases are documented in `docs/RELEASE_PROCESS.md`. Candidates (`v1.0.0-rc.N`, SemVer prereleases) publish only their exact version and `sha-<short>` tags—never `latest`, and they are never retagged.
 
 ## Product and tenancy model
 
@@ -34,7 +34,7 @@ Fast mobile entry, checkpoints, payday projections, recurring schedules, insight
 
 ## Unraid installation
 
-**`v1.9.0` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
+**`v1.15.0` is released and the template is installable.** It uses its own data root, port and Cloudflare route, so it never touches the original app. The single data root is:
 
 ```text
 /mnt/user/appdata/simple-finance-multi-household/  →  /data/
@@ -95,7 +95,8 @@ Merging a pull request does not publish an image. A lower-case annotated tag on 
   account or cash pot between two dates: purchases, direct debits and standing orders, transfers,
   borrowing and repayments, swaps and other money, and **income** (`BAC`), in one amount column (green
   in, red out relative to that pot), with the original note, checkpoint dividers and a link from every
-  row to the page that can still edit or void it. Nothing on that page writes anything.
+  row to the page that can still edit or void it. Settings can pin its starting pot; an explicit target
+  in the URL still wins. Nothing on that page writes anything.
 - **Insights:** `/insights` — a three-month comparison (each month with its change against the month
   before it), per-person attribution, vehicle running costs, and the honesty loop that compares
   configured figures with recent complete periods. Every figure opens its line items inline — the
@@ -157,7 +158,7 @@ Real configuration lives in `/mnt/user/appdata/simple-finance-multi-household/.e
 
 ## Version and release line
 
-**`v1.9.0` is the accepted stable release** (package/app version `1.9.0`, badge `v1.9.0 · stable`). It is published as `v1.9.0`, `latest` and `sha-<short>`, all to one digest, and its GitHub release is marked Latest. `v1.0.0` was the first stable release, `v1.0.1` shipped registry backup/restore, `v1.0.2` fixed and hardened the restore, `v1.1.0` shipped first-run onboarding, `v1.2.0` shipped the guide, `v1.3.0` shipped the worked example, `v1.4.0` shipped the three-month comparison, `v1.5.0` the link treatment/one-control attachments/chart hatch fix, `v1.6.0` the Purchases page show toggles/two-row editor/striped rows/supplier links, `v1.7.0` the Recurring page changes, and `v1.8.0-rc.1` the Contracts & Renewals agreement register candidate (accepted and promoted in `v1.9.0` alongside the granular Spending Mix category tree selector and batched test runner); their own image tags stay on their own digests while `latest` has moved on.
+**`v1.15.0` is the current stable release** (package/app version `1.15.0`, badge `v1.15.0 · stable`), shipping issue #44: All Transactions opens on the household's chosen default pot when no valid pot is supplied, while an explicit target wins; clearing the setting restores the previous fallback. `v1.14.0` corrected saved transfers between pots in place (issue #33); earlier releases are recorded in [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
 
 A candidate is a SemVer prerelease with an `-rc.N` suffix, incrementing per build (`v1.0.0-rc.1`, `-rc.2`, …). A candidate gets its exact version tag and `sha-<short>` tag, **not `latest`**, and its GitHub release is marked pre-release. Accepted candidates become a distinct stable tag; never rename or retag one. The candidates so far: `v1.0.0-rc.1` and `v1.0.0-rc.2` exist as Git tags but their Publish runs failed before pushing, so **no image exists for either**; `v1.0.0-rc.3` published, was accepted on a real installation, and is the base `v1.0.0` was promoted from.
 

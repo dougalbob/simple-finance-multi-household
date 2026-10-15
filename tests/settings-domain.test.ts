@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { createHouseholdFixture, type HouseholdFixture } from './household';
 import {
+  archivePot,
   createPot,
   editPot,
   InvalidPotInputError,
@@ -29,10 +30,12 @@ import { renameVehicle, DuplicateVehicleLabelError } from '../src/lib/records/ve
 import {
   getContractEndWarningLeadDays,
   getDefaultPurchasePotId,
+  getDefaultTransactionsPotId,
   getRenewalWarningLeadDays,
   InvalidSettingValueError,
   setContractEndWarningLeadDays,
   setDefaultPurchasePotId,
+  setDefaultTransactionsPotId,
   setRenewalWarningLeadDays,
 } from '../src/lib/records/settings';
 import { createPurchase } from '../src/lib/records/purchases';
@@ -424,5 +427,79 @@ describe('settings: default pot for purchases', () => {
     assert.ok(last !== undefined);
     assert.equal(last.action, 'setting.update');
     assert.equal(last.actor, ACTOR);
+  });
+});
+
+describe('settings: default pot for All Transactions', () => {
+  let fixture: HouseholdFixture;
+  after(() => fixture.close());
+  before(async () => {
+    fixture = await createHouseholdFixture();
+  });
+
+  it('is unset until the household pins a pot', () => {
+    assert.equal(getDefaultTransactionsPotId(fixture.db), null);
+  });
+
+  it('stores, changes and clears the default', () => {
+    const { db, pots } = fixture;
+    setDefaultTransactionsPotId(db, pots.salary.id, ACTOR, NOW);
+    assert.equal(getDefaultTransactionsPotId(db), pots.salary.id);
+
+    setDefaultTransactionsPotId(db, pots.alexCash.id, ACTOR, NOW);
+    assert.equal(getDefaultTransactionsPotId(db), pots.alexCash.id);
+
+    setDefaultTransactionsPotId(db, null, ACTOR, NOW);
+    assert.equal(getDefaultTransactionsPotId(db), null);
+  });
+
+  it('rejects missing pots and clears a saved default when its pot is archived', () => {
+    const { db } = fixture;
+    assert.throws(
+      () => setDefaultTransactionsPotId(db, 9999, ACTOR, NOW),
+      InvalidSettingValueError,
+    );
+    assert.throws(() => setDefaultTransactionsPotId(db, 0, ACTOR, NOW), InvalidSettingValueError);
+
+    const temporary = createPot(db, {
+      label: 'Temporary transaction pot',
+      kind: 'bank',
+      actor: ACTOR,
+      now: NOW,
+    });
+    setDefaultTransactionsPotId(db, temporary.id, ACTOR, NOW);
+    archivePot(db, {
+      id: temporary.id,
+      expectedVersion: temporary.version,
+      actor: ACTOR,
+      now: NOW,
+    });
+    assert.equal(getDefaultTransactionsPotId(db), null);
+    assert.throws(
+      () => setDefaultTransactionsPotId(db, temporary.id, ACTOR, NOW),
+      InvalidSettingValueError,
+    );
+  });
+
+  it('audits each change against the setting key', () => {
+    const { db, pots } = fixture;
+    const previousCount = db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, 'default_transactions_pot_id'))
+      .all().length;
+    setDefaultTransactionsPotId(db, pots.salary.id, ACTOR, NOW);
+    setDefaultTransactionsPotId(db, pots.main.id, ACTOR, NOW);
+    const rows = db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, 'default_transactions_pot_id'))
+      .all();
+    assert.equal(rows.length, previousCount + 2);
+    assert.ok(
+      rows
+        .slice(previousCount)
+        .every((row) => row.action === 'setting.update' && row.actor === ACTOR),
+    );
   });
 });
