@@ -21,7 +21,20 @@
  * a magic number. The offset is spent as `scroll-margin-top` by the
  * `sf-anchor` utility, so the browser's own fragment scroll — and Next's
  * route-transition scroll — land correctly with no JavaScript of ours
- * involved; nothing re-aims the page afterwards.
+ * involved.
+ *
+ * **Issue #43 (decision 222): that honouring is not universal.** v1.13.1
+ * passed every Chromium check, yet the household still found the schedule
+ * behind the menu in production: a browser whose `scrollIntoView()` /
+ * fragment scroll ignores the target's `scroll-margin-top` (older WebKit
+ * is the known case) lands the row at the very top of the viewport, and
+ * nothing in v1.13.1 ever moved it. So the scroll pass now verifies the
+ * landing it can measure — target top against header bottom, the rule in
+ * {@link anchorCorrectionDelta} — and, only when the target has sat
+ * settled behind the bar, corrects the document once. The guards around
+ * that correction are the ones decision 216's removed attempt lacked:
+ * settled position, once per navigation, and disarmed by the household's
+ * first scroll or tap, so the page is never moved under a pointer.
  *
  * Pure by design — no DOM, no database — so the rules are unit-tested
  * (`tests/anchor-scroll.test.ts`) rather than only observed in a browser.
@@ -67,4 +80,34 @@ export const WRAPPED_HEADER_PX = 121;
 /** The `scroll-margin-top` the nav publishes — the measured header plus the gap, in px. */
 export function anchorScrollMargin(headerHeight: number, gap = ANCHOR_GAP_PX): number {
   return anchorLandingTop({ headerHeight, gap });
+}
+
+/**
+ * How long (ms) a hash target must sit unmoving behind the sticky header
+ * before the scroll pass may correct the landing itself (issue #43). The
+ * wait is what separates "the browser landed this wrong" from "this page
+ * is still growing into place": while content above the target is still
+ * rendering, the target keeps moving and no correction may fire.
+ */
+export const ANCHOR_CORRECTION_STABLE_MS = 100;
+
+/**
+ * The `window.scrollBy(0, delta)` that puts a landed hash target below the
+ * sticky header, or 0 when it is already clear of it (issue #43).
+ *
+ * Coordinates are viewport-relative, as `getBoundingClientRect()` reports
+ * them: the target is behind the bar exactly when its top is above the
+ * header's bottom edge. A correcting delta is therefore always negative
+ * (scroll up, content moves down) and lands the target where the
+ * `sf-anchor` margin would have put it — the header's bottom plus the
+ * gap. A target that merely sits closer than the gap, but clear of the
+ * bar, is the household's to keep: no delta.
+ */
+export function anchorCorrectionDelta(options: {
+  targetTop: number;
+  headerBottom: number;
+  gap?: number;
+}): number {
+  if (options.targetTop >= options.headerBottom) return 0;
+  return options.targetTop - (options.headerBottom + (options.gap ?? ANCHOR_GAP_PX));
 }
