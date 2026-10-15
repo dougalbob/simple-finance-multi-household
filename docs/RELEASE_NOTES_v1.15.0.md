@@ -32,8 +32,8 @@
 - `npm run format:check` (`prettier --check .`): passed.
 - `npm test` (`node scripts/run-tests.mjs`): **939/939 passed across 217 suites**.
 - `npm run themes:check`: passed; `npm run build`: passed; `npm audit --omit=dev`: **0 vulnerabilities**.
-- Local browser acceptance: the focused issue #44 Playwright test passed **1/1** with the sandbox Chromium overlay, covering the saved default, invalid and explicit URL targets, and clearing to the former fallback. The full local suite reached **124/138**; the admin/restore test timed out first, followed by connection-refused failures from the dev server. The required CI `browser` check remains the release gate and will be recorded before merge.
-- Required CI checks (`gates`, `browser`, `docker`) must all pass before the release PR is merged.
+- Local browser acceptance: the focused issue #44 Playwright test passed **1/1** with the sandbox Chromium overlay, covering the saved default, invalid and explicit URL targets, and clearing to the former fallback. The full local suite reached **124/138**; the admin/restore test timed out first, followed by connection-refused failures from the dev server.
+- Required PR checks all passed in GitHub Actions run **`38701556637`** on commit **`3ef9ad3`**: `Gates (format, types, tests, build, audit)`, `Browser acceptance (Playwright)` (seeded and fresh-household suites), and `Docker image build + entrypoint smoke`. The final release PR commit must also have all three checks green before merge.
 
 ## Image tags
 
