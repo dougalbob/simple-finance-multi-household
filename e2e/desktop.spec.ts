@@ -348,8 +348,9 @@ test.describe('desktop review', () => {
     // The fix is the schedule's own start date — move it earlier and the app
     // materialises the missed due date, which converts into a real DD record
     // instead of being typed in as a Purchase.
-    const scheduleName = 'Playwright backfilled DD';
-    const supplierName = 'Playwright Backfill Co';
+    const suffix = Date.now();
+    const scheduleName = `Playwright backfilled DD ${suffix}`;
+    const supplierName = `Playwright Backfill Co ${suffix}`;
     const today = londonToday();
     const missedDate = addDaysIso(today, -10); // already gone by, inside the default window
     const dueDayOfMonth = Number(missedDate.slice(8));
@@ -406,7 +407,16 @@ test.describe('desktop review', () => {
     const calendar = page.locator('section[aria-labelledby="calendar-heading"]');
     const cell = calendar.locator(`[data-date="${missedDate}"]`);
     await expect(cell).toHaveCount(1);
-    await expect(cell.locator('a[href^="#schedule-"]', { hasText: scheduleName })).toHaveCount(1);
+    const daySummary = cell.getByRole('button');
+    await expect(daySummary).toContainText('1 item');
+    await expect(daySummary).toContainText('£44.40');
+    await daySummary.click();
+    const dayDetails = calendar.getByRole('region', { name: /Scheduled items for/ });
+    await expect(dayDetails.getByText(scheduleName, { exact: true })).toBeVisible();
+    await expect(dayDetails).toContainText('£44.40');
+    await expect(
+      dayDetails.getByRole('link', { name: `Edit schedule: ${scheduleName}`, exact: true }),
+    ).toBeVisible();
 
     // The money pass runs on All Transactions (§11.2), and the row it makes is
     // a direct debit — code DD, linked back to its schedule — not a PUR.
