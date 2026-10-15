@@ -72,6 +72,7 @@ export interface RecurringScheduleSectionProps {
   month: string;
   initialHideCancelled: boolean;
   initialQuery?: string;
+  initialFocusedScheduleId?: number | null;
   today: string;
 }
 
@@ -86,10 +87,14 @@ export function RecurringScheduleSection({
   month,
   initialHideCancelled,
   initialQuery = '',
+  initialFocusedScheduleId = null,
   today,
 }: RecurringScheduleSectionProps) {
   const [query, setQuery] = useState(initialQuery);
   const [hideCancelled, setHideCancelled] = useState(initialHideCancelled);
+  const [focusedScheduleId, setFocusedScheduleId] = useState<number | null>(
+    initialFocusedScheduleId,
+  );
   /**
    * SPEC §15.1 (decision 131, the rule the till, the Purchases filters, the
    * theme gallery and the category editor all follow): the filter box is
@@ -117,9 +122,44 @@ export function RecurringScheduleSection({
     setQuery(initialQuery);
   }, [initialQuery]);
 
+  useEffect(() => {
+    setFocusedScheduleId(initialFocusedScheduleId);
+  }, [initialFocusedScheduleId]);
+
+  // `#schedule-edit-*` is also used by Contracts, key-date alerts and the
+  // calendar. The fragment names the disclosure so it can be opened before
+  // the global hash pass positions it below the sticky header.
+  useEffect(() => {
+    const openEditorFromHash = () => {
+      let id: string;
+      try {
+        id = decodeURIComponent(window.location.hash.slice(1));
+      } catch {
+        return;
+      }
+      if (!/^schedule-edit-\d+$/.test(id)) return;
+      const target = document.getElementById(id);
+      if (target instanceof HTMLDetailsElement) target.open = true;
+    };
+
+    openEditorFromHash();
+    window.addEventListener('hashchange', openEditorFromHash);
+    return () => window.removeEventListener('hashchange', openEditorFromHash);
+  }, [initialQuery, initialFocusedScheduleId]);
+
   const visibility = useMemo(() => {
-    return filterScheduleVisibility(schedules, (row) => row.isCancelled, hideCancelled, query);
-  }, [schedules, hideCancelled, query]);
+    const result = filterScheduleVisibility(
+      schedules,
+      (row) => row.isCancelled,
+      hideCancelled,
+      query,
+    );
+    if (focusedScheduleId === null) return result;
+    return {
+      ...result,
+      visible: result.visible.filter((row) => row.id === focusedScheduleId),
+    };
+  }, [schedules, hideCancelled, query, focusedScheduleId]);
 
   return (
     <section
@@ -137,6 +177,7 @@ export function RecurringScheduleSection({
                 month,
                 hideCancelled: !hideCancelled,
                 q: query.trim() !== '' ? query.trim() : undefined,
+                scheduleId: focusedScheduleId ?? undefined,
               })}
               onClick={() => updateHideCancelled(!hideCancelled)}
               className="inline-flex items-center gap-1.5 rounded border border-border-strong px-2.5 py-1 text-xs font-medium text-ink-body hover:bg-canvas"
@@ -168,7 +209,10 @@ export function RecurringScheduleSection({
           <input
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setFocusedScheduleId(null);
+            }}
             placeholder="Filter schedules…"
             aria-label="Filter schedules"
             className="w-full rounded border border-border-strong bg-surface px-2.5 py-1 text-xs text-ink placeholder:text-ink-muted focus:border-border-emphasis focus:outline-none"
@@ -177,7 +221,10 @@ export function RecurringScheduleSection({
         {query.trim() !== '' ? (
           <button
             type="button"
-            onClick={() => setQuery('')}
+            onClick={() => {
+              setQuery('');
+              setFocusedScheduleId(null);
+            }}
             className="shrink-0 rounded border border-border-strong px-2.5 py-1 text-xs font-medium text-ink-body hover:bg-canvas"
           >
             Clear filter
@@ -308,7 +355,7 @@ export function RecurringScheduleSection({
                     </>
                   ) : null}
                 </p>
-                <details className="mt-1.5">
+                <details id={`schedule-edit-${schedule.id}`} className="sf-anchor mt-1.5">
                   <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
                     {schedule.isCancelled ? 'Schedule options' : 'Edit schedule'}
                   </summary>

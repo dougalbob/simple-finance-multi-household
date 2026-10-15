@@ -6,15 +6,15 @@ import {
   RecurringScheduleSection,
   type ScheduleListRow,
 } from '@/components/recurring-schedule-list';
+import { RecurringCalendarGrid } from '@/components/recurring-calendar';
 import { householdContextFromRequest } from '@/lib/auth/next';
-import { formatPence } from '@/lib/money';
 import { categoryTree } from '@/lib/records/categories';
 import { addDaysLocal, daysInMonth } from '@/lib/records/dates';
-import { startOfWeekLocal } from '@/lib/records/insights';
 import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
 import { listAgreements } from '@/lib/records/agreements';
 import { listInstances, listSchedules } from '@/lib/records/schedules';
+import { buildRecurringCalendar } from '@/lib/records/recurring-calendar';
 import {
   recurringHref,
   resolveHideCancelled,
@@ -41,7 +41,6 @@ const MONTH_NAMES = [
   'November',
   'December',
 ];
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 interface MonthRef {
   year: number;
@@ -61,74 +60,26 @@ function parseMonthParam(raw: string | undefined, fallback: MonthRef): MonthRef 
   return { year, month };
 }
 
+function parseScheduleId(raw: string | undefined): number | null {
+  if (raw === undefined || !/^[1-9]\d*$/.test(raw)) return null;
+  const id = Number(raw);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
 function shiftMonth(ref: MonthRef, delta: number): MonthRef {
   const index = ref.year * 12 + (ref.month - 1) + delta;
   return { year: Math.floor(index / 12), month: (index % 12) + 1 };
 }
 
-interface CalendarInstance {
-  instanceId: number;
-  scheduleId: number;
-  scheduleName: string;
-  kind: string;
-  amountPence: number;
-  state: 'upcoming' | 'converted';
-  dueDate: string;
-}
-
-interface CalendarDay {
-  date: string;
-  inMonth: boolean;
-  isToday: boolean;
-  instances: CalendarInstance[];
-}
-
-function buildCalendar(
-  ref: MonthRef,
-  today: string,
-  instances: Array<{
-    instance: { id: number; scheduleId: number; dueDate: string; state: 'upcoming' | 'converted' };
-    scheduleName: string;
-    scheduleKind: string;
-    amountPence: number;
-  }>,
-): CalendarDay[] {
-  const first = `${ref.year}-${String(ref.month).padStart(2, '0')}-01`;
-  const last = addDaysLocal(first, daysInMonth(ref.year, ref.month) - 1);
-  const gridStart = startOfWeekLocal(first);
-  const byDate = new Map<string, CalendarInstance[]>();
-  for (const row of instances) {
-    const list = byDate.get(row.instance.dueDate) ?? [];
-    list.push({
-      instanceId: row.instance.id,
-      scheduleId: row.instance.scheduleId,
-      scheduleName: row.scheduleName,
-      kind: row.scheduleKind,
-      amountPence: row.amountPence,
-      state: row.instance.state,
-      dueDate: row.instance.dueDate,
-    });
-    byDate.set(row.instance.dueDate, list);
-  }
-  const days: CalendarDay[] = [];
-  for (let i = 0; i < 42; i++) {
-    const date = addDaysLocal(gridStart, i);
-    days.push({
-      date,
-      inMonth: date >= first && date <= last,
-      isToday: date === today,
-      instances: (byDate.get(date) ?? []).sort((a, b) =>
-        a.scheduleName.localeCompare(b.scheduleName),
-      ),
-    });
-  }
-  return days;
-}
-
 export default async function RecurringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; hideCancelled?: string; q?: string }>;
+  searchParams: Promise<{
+    month?: string;
+    hideCancelled?: string;
+    q?: string;
+    scheduleId?: string;
+  }>;
 }) {
   const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
@@ -142,6 +93,7 @@ export default async function RecurringPage({
   const cookieValue = cookieJar.get(SCHEDULE_HIDE_CANCELLED_COOKIE)?.value;
   const hideCancelled = resolveHideCancelled(params.hideCancelled, cookieValue);
   const initialQuery = params.q?.trim() ?? '';
+  const focusedScheduleId = parseScheduleId(params.scheduleId);
 
   const thisMonth = {
     year: Number(today.slice(0, 4)),
@@ -155,7 +107,7 @@ export default async function RecurringPage({
   // month window — same rows as the lists below (decision 70), so the two can
   // never disagree.
   const monthInstances = listInstances(db, { from: first, through: last });
-  const days = buildCalendar(ref, today, monthInstances);
+  const days = buildRecurringCalendar(ref, today, monthInstances);
 
   const schedules = listSchedules(db, now);
   const agreements = listAgreements(db);
@@ -281,6 +233,7 @@ export default async function RecurringPage({
                   month: monthParam(shiftMonth(ref, -1)),
                   hideCancelled,
                   q: initialQuery !== '' ? initialQuery : undefined,
+                  scheduleId: focusedScheduleId ?? undefined,
                 })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
@@ -290,6 +243,7 @@ export default async function RecurringPage({
                 href={recurringHref({
                   hideCancelled,
                   q: initialQuery !== '' ? initialQuery : undefined,
+                  scheduleId: focusedScheduleId ?? undefined,
                 })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
@@ -300,6 +254,7 @@ export default async function RecurringPage({
                   month: monthParam(shiftMonth(ref, 1)),
                   hideCancelled,
                   q: initialQuery !== '' ? initialQuery : undefined,
+                  scheduleId: focusedScheduleId ?? undefined,
                 })}
                 className="rounded border border-border-strong px-2.5 py-1 text-sm font-medium text-ink-body hover:bg-canvas"
               >
@@ -307,7 +262,12 @@ export default async function RecurringPage({
               </Link>
             </div>
           </div>
-          <CalendarGrid days={days} />
+          <RecurringCalendarGrid
+            days={days}
+            month={monthParam(ref)}
+            today={today}
+            hideCancelled={hideCancelled}
+          />
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
             <span>
               <span className="mr-1 inline-block h-2 w-2 rounded-full bg-marker-muted" />
@@ -335,6 +295,7 @@ export default async function RecurringPage({
           month={monthParam(ref)}
           initialHideCancelled={hideCancelled}
           initialQuery={initialQuery}
+          initialFocusedScheduleId={focusedScheduleId}
           today={today}
         />
 
@@ -373,73 +334,5 @@ export default async function RecurringPage({
         </section>
       </div>
     </main>
-  );
-}
-
-function CalendarGrid({ days }: { days: CalendarDay[] }) {
-  return (
-    <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-border">
-      {WEEKDAYS.map((name) => (
-        <div
-          key={name}
-          className="bg-canvas py-1.5 text-center text-xs font-semibold text-ink-muted"
-        >
-          {name}
-        </div>
-      ))}
-      {days.map((day) => (
-        <div
-          key={day.date}
-          data-date={day.date}
-          className={`min-h-[70px] p-1.5 transition-colors sm:min-h-[85px] ${
-            day.inMonth ? 'bg-surface' : 'bg-surface-faint text-ink-faint'
-          } ${day.isToday ? 'ring-2 ring-accent ring-inset' : ''}`}
-        >
-          <div className="flex items-center justify-between">
-            <span
-              className={`text-xs ${
-                day.isToday
-                  ? 'flex h-5 w-5 items-center justify-center rounded-full bg-accent font-semibold text-accent-ink'
-                  : 'font-medium'
-              }`}
-            >
-              {Number(day.date.slice(8, 10))}
-            </span>
-          </div>
-          <div className="mt-1 space-y-1">
-            {day.instances.map((instance) => {
-              const isOutgo = instance.kind !== 'receipt';
-              const dotClass = isOutgo ? 'bg-marker-muted' : 'bg-positive-500';
-              return (
-                <Link
-                  key={instance.instanceId}
-                  href={`#schedule-${instance.scheduleId}`}
-                  title={`${instance.scheduleName}: £${(instance.amountPence / 100).toFixed(2)} (${
-                    instance.state
-                  })`}
-                  className={`block truncate rounded px-1 py-0.5 text-[11px] leading-tight transition-colors hover:bg-canvas ${
-                    instance.state === 'converted' ? 'text-ink-body' : 'text-ink-muted font-normal'
-                  }`}
-                >
-                  <span className="flex items-center gap-1">
-                    <span
-                      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                        instance.state === 'converted'
-                          ? dotClass
-                          : 'border border-marker-muted bg-surface'
-                      }`}
-                    />
-                    <span className="truncate">{instance.scheduleName}</span>
-                    <span className="ml-auto font-mono text-[10px] tabular-nums text-ink-muted">
-                      {formatPence(instance.amountPence)}
-                    </span>
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }

@@ -119,6 +119,7 @@ export function recurringHref(options: {
   month?: string;
   hideCancelled?: boolean;
   q?: string;
+  scheduleId?: number;
   hash?: string;
 }): string {
   const params = new URLSearchParams();
@@ -127,6 +128,7 @@ export function recurringHref(options: {
   if (options.q !== undefined && options.q.trim() !== '') {
     params.set('q', options.q.trim());
   }
+  if (options.scheduleId !== undefined) params.set('scheduleId', String(options.scheduleId));
   const query = params.toString();
   const base = query === '' ? '/recurring' : `/recurring?${query}`;
   return options.hash !== undefined && options.hash !== '' ? `${base}#${options.hash}` : base;
@@ -138,4 +140,20 @@ export function recurringHref(options: {
  */
 export function scheduleRecurringHref(schedule: { id: number; name: string }): string {
   return recurringHref({ q: schedule.name, hash: `schedule-${schedule.id}` });
+}
+
+/**
+ * Opens a specific schedule from a calendar detail. The name query is human-readable,
+ * while scheduleId keeps similarly named schedules out of the filtered list (issue #53).
+ */
+export function scheduleEditorHref(
+  schedule: { id: number; name: string },
+  options: { month?: string; hideCancelled?: boolean } = {},
+): string {
+  return recurringHref({
+    ...options,
+    q: schedule.name,
+    scheduleId: schedule.id,
+    hash: `schedule-edit-${schedule.id}`,
+  });
 }

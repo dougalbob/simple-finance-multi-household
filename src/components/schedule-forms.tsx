@@ -163,7 +163,6 @@ export function ScheduleEditForm(props: ScheduleEditFormProps) {
         formAction(formData);
       }}
       className="flex flex-col gap-2"
-      id={`schedule-edit-${props.scheduleId}`}
     >
       <input type="hidden" name="scheduleId" value={props.scheduleId} />
       <input type="hidden" name="version" value={props.version} />

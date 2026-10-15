@@ -1,3 +1,37 @@
+# Current session — Recurring calendar crowding (GitHub issue #53) (2026-10-15)
+
+**Release candidate `v1.18.0-rc.1` is being prepared for Unraid acceptance.** PR checks, main CI and
+tagged Publish are still pending; the candidate is not yet published. Stable `v1.17.0` and `latest` remain
+unchanged. The Recurring month grid
+now keeps populated day cells compact: each shows an item count and the gross combined amount. Selecting
+a day opens a full-width details panel below the grid with each schedule's name, amount, type and
+conversion state. Receipts are included in the gross amount, never netted against outgoings. Each
+“Edit schedule” link keeps the schedule name in the filter, adds an exact `scheduleId` constraint, and
+opens the matching Edit disclosure through `#schedule-edit-<id>` on direct or soft navigation. Similar
+schedule names therefore cannot widen the result. No financial-data, schema, migration or backup-format
+change. The exact total remains visible at 320px and 390px phone widths.
+
+**Verified locally:** `npm run format:check`, `npm run typecheck`, `npm run themes:check`, `npm test`
+(**955/955 across 221 suites**), `npm run build`, and `npm audit --omit=dev` (**0 vulnerabilities**).
+Browser: the full recurring project **5/5** and the desktop calendar/edit journey **1/1** pass. A live
+browser smoke on the preview confirmed the six-item `£1546.60` summary, all six detail rows and no
+browser errors.
+
+**Live preview:** port **3000**, Next development mode bound to `0.0.0.0`, using only fictional records
+in ignored `.preview-data` and the development-only `alex@example.com` identity. Open
+`/recurring?month=2026-10` and select **22 October** to see the six illustrative standing orders
+(Mortgage payment, Council tax, Energy bill, Broadband, Gym membership and Car finance; gross total
+£1546.60). No real household data was accessed. The browser overlay and preview database are ignored
+local artifacts. Recreate the household seed with:
+
+```bash
+DATA_DIR=.preview-data node --import tsx scripts/seed-example-household.mts
+```
+
+Then add the six illustrative schedules if the sandbox has reset.
+
+---
+
 # Release v1.17.0 — Spending trends (issue #40) (2026-10-15)
 
 **Release scope is prepared on this branch.** The household accepted the Arena preview, requested the

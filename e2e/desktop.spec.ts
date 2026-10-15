@@ -317,15 +317,21 @@ test.describe('desktop review', () => {
     await expect(dueLine).not.toHaveText(originalDueText, { timeout: 30_000 });
     const dueDate = /(\d{4}-\d{2}-\d{2})/.exec(await dueLine.innerText())?.[1] ?? '';
 
-    // ...and the calendar agrees: the cell for that exact date carries the
-    // schedule's own instance, linked back to the schedule it came from. The
-    // grid and the lists render from one instance list, so they cannot drift;
-    // this observes it in a browser.
+    // ...and the calendar agrees: the cell for that exact date has a compact
+    // summary which expands to a full-width list with an edit link for this
+    // schedule. The grid and the lists render from one instance list, so they
+    // cannot drift; this observes it in a browser.
     await page.goto(`/recurring?month=${dueDate.slice(0, 7)}`);
     const calendar = page.locator('section[aria-labelledby="calendar-heading"]');
     const cell = calendar.locator(`[data-date="${dueDate}"]`);
     await expect(cell).toHaveCount(1);
-    await expect(cell.locator('a[href^="#schedule-"]', { hasText: 'Phone plan' })).toHaveCount(1);
+    const daySummary = cell.getByRole('button');
+    await expect(daySummary).toBeVisible();
+    await daySummary.click();
+    const dayDetails = calendar.getByRole('region', { name: /Scheduled items for/ });
+    await expect(dayDetails.getByText('Phone plan')).toBeVisible();
+    const scheduleEditLink = dayDetails.getByRole('link', { name: 'Edit schedule: Phone plan' });
+    await expect(scheduleEditLink).toHaveAttribute('href', /scheduleId=\d+#schedule-edit-\d+$/);
 
     // Month navigation keeps working.
     const heading = await calendar.getByRole('heading', { level: 2 }).innerText();
@@ -342,8 +348,9 @@ test.describe('desktop review', () => {
     // The fix is the schedule's own start date — move it earlier and the app
     // materialises the missed due date, which converts into a real DD record
     // instead of being typed in as a Purchase.
-    const scheduleName = 'Playwright backfilled DD';
-    const supplierName = 'Playwright Backfill Co';
+    const suffix = Date.now();
+    const scheduleName = `Playwright backfilled DD ${suffix}`;
+    const supplierName = `Playwright Backfill Co ${suffix}`;
     const today = londonToday();
     const missedDate = addDaysIso(today, -10); // already gone by, inside the default window
     const dueDayOfMonth = Number(missedDate.slice(8));
@@ -400,7 +407,16 @@ test.describe('desktop review', () => {
     const calendar = page.locator('section[aria-labelledby="calendar-heading"]');
     const cell = calendar.locator(`[data-date="${missedDate}"]`);
     await expect(cell).toHaveCount(1);
-    await expect(cell.locator('a[href^="#schedule-"]', { hasText: scheduleName })).toHaveCount(1);
+    const daySummary = cell.getByRole('button');
+    await expect(daySummary).toContainText('1 item');
+    await expect(daySummary).toContainText('£44.40');
+    await daySummary.click();
+    const dayDetails = calendar.getByRole('region', { name: /Scheduled items for/ });
+    await expect(dayDetails.getByText(scheduleName, { exact: true })).toBeVisible();
+    await expect(dayDetails).toContainText('£44.40');
+    await expect(
+      dayDetails.getByRole('link', { name: `Edit schedule: ${scheduleName}`, exact: true }),
+    ).toBeVisible();
 
     // The money pass runs on All Transactions (§11.2), and the row it makes is
     // a direct debit — code DD, linked back to its schedule — not a PUR.

@@ -996,9 +996,13 @@ Menu pages:
 | **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; legacy default warning leads for standalone renewal rows/unlinked schedule ends; agreement reminders have per-date leads; **the default pot for purchases** (v0.9.0 — an explicit choice, never a guess from a pot's label); **the default pot for All Transactions** (issue #44 — an explicit household preference for the activity page's initial target, with the normal fallback available by clearing it); **"Signs in as"** per person (the verified identity assigned to that household in the app registry; drives the till's Paid by and Fuel vehicle defaults; audited and unique across household membership); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
 
 **Calendar (agreed: read-only month view).** A month grid on Recurring Payments showing due DD/SO instances and
-expected receipts — another view of the same schedule data, never a second database. Clicking a day shows that
-day's instances and opens the ordinary schedule editor. **No drag-and-drop**, and the UI states plainly that
-changing a date in the app changes only the app's expectation, never a bank instruction.
+expected receipts — another view of the same schedule data, never a second database. Each populated day keeps
+the date visible and summarizes the count of scheduled items plus their combined amount; this is the gross sum
+of listed amounts, so expected receipts are not netted against outgoings. Selecting that summary expands a
+full-width day-details panel with each schedule name, amount, kind and conversion state. Its Edit schedule link
+filters the list to that exact schedule ID and opens the ordinary Edit section, while keeping the schedule name
+in the visible filter. **No drag-and-drop**, and the UI states plainly that changing a date in the app changes
+only the app's expectation, never a bank instruction.
 
 **Version display:** the app version is visible unobtrusively on desktop and mobile (blueprint §1).
 
