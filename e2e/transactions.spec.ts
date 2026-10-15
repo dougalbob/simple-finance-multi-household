@@ -97,7 +97,7 @@ test.describe('all transactions', () => {
 
     // Red on Main, from the selected pot's point of view.
     await page.goto('/transactions');
-    const outRow = activityRows(page).filter({ hasText: '£7.77' });
+    const outRow = transferRows(page).filter({ hasText: '£7.77' });
     await expect(outRow.getByRole('cell', { name: /^TX>/ })).toBeVisible();
     await expect(outRow).toContainText("Alex's cash");
     await expect(outRow).toContainText('−£7.77');
@@ -106,7 +106,7 @@ test.describe('all transactions', () => {
     const filters = page.getByRole('form', { name: 'Activity filters' });
     await filters.getByLabel('Target').selectOption({ label: "Alex's cash" });
     await filters.getByRole('button', { name: 'Show activity' }).click();
-    const inRow = activityRows(page).filter({ hasText: '£7.77' });
+    const inRow = transferRows(page).filter({ hasText: '£7.77' });
     await expect(inRow.getByRole('cell', { name: /^TX</ })).toBeVisible();
     await expect(inRow).toContainText('Main account');
     await expect(inRow).toContainText('+£7.77');
@@ -148,7 +148,7 @@ test.describe('all transactions', () => {
     await expect(page.locator(`#${rowId}`)).toHaveCount(0);
     await expect(page).not.toHaveURL(/transfer=/);
     await page.reload();
-    await expect(activityRows(page).filter({ hasText: '£7.77' })).toHaveCount(0);
+    await expect(transferRows(page).filter({ hasText: '£7.77' })).toHaveCount(0);
   });
 
   test('a saved transfer is corrected in place — pots, amount and note (issues #33, #55)', async ({
@@ -193,7 +193,9 @@ test.describe('all transactions', () => {
     expect(await selectedLabel(editor.getByLabel('To pot'))).toBe("Sam's cash");
     expect(await selectedLabel(editor.getByLabel('From pot'))).toBe('Main account');
     await expect(editor.getByLabel('Amount')).toHaveValue('12.99');
-    await expect(activityRows(page).filter({ hasText: '£12.34' })).toHaveCount(0);
+    // Scoped to transfer rows: the `mobile` project's till purchase is also
+    // £12.34 on Main account today, and it is not this test's business.
+    await expect(transferRows(page).filter({ hasText: '£12.34' })).toHaveCount(0);
 
     // Void it from the same panel — the correction bumped the version, and
     // the panel carries the new one — so the seed's estimates end where they
@@ -243,7 +245,7 @@ test.describe('all transactions', () => {
     const row = page.locator(`#transfer-${transferId}`);
     await expect(row).toContainText('saved first');
     await expect(row).toContainText('£21.21');
-    await expect(activityRows(page).filter({ hasText: '£99.99' })).toHaveCount(0);
+    await expect(transferRows(page).filter({ hasText: '£99.99' })).toHaveCount(0);
 
     await waitForTransferToggle(row);
     await row.getByRole('button', { name: /Open this transfer/ }).click();
@@ -517,14 +519,20 @@ async function selectedLabel(select: Locator): Promise<string> {
   return select.evaluate((el) => (el as HTMLSelectElement).selectedOptions[0]?.textContent ?? '');
 }
 
-/** The activity table's rows — movements, checkpoint dividers and any open transfer panel. */
-function activityRows(page: Page): Locator {
-  return page.locator('section[aria-labelledby="activity-heading"] table tbody > tr');
+/**
+ * The activity table's internal-transfer rows (decision 225) — never a
+ * purchase or other record that happens to share an amount with the
+ * transfer under test, and never the open panel's own row.
+ */
+function transferRows(page: Page): Locator {
+  return page.locator(
+    'section[aria-labelledby="activity-heading"] table tbody > tr[id^="transfer-"]',
+  );
 }
 
 /** A transfer row by its amount, once its in-place toggle is listening. */
 async function transferRowByAmount(page: Page, amount: string): Promise<Locator> {
-  const row = activityRows(page).filter({ hasText: amount }).and(page.locator('[id^="transfer-"]'));
+  const row = transferRows(page).filter({ hasText: amount });
   await expect(row).toHaveCount(1);
   const rowId = await row.getAttribute('id');
   const pinnedRow = page.locator(`#${rowId}`);

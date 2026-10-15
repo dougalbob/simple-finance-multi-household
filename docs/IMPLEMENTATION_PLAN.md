@@ -3252,7 +3252,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     deleted-ID fallback, query preservation and scroll preservation in both directions at 390/1400px).
     Local browser execution uses SANDBOX entry 8. The household accepted the preview, requested the final label “Create/Edit preset”, and authorised a stable release.
 
-224. **The Recurring calendar summarizes crowded days, then opens the exact schedule (2026-10-15, GitHub issue #53).**
+224. **The Recurring calendar summarizes crowded days, then opens the exact schedule (2026-10-15, GitHub issue #53, v1.18.0-rc.1; accepted and stable in v1.19.0).**
 
     The report: listing every schedule name and amount inside a calendar cell makes a busy day
     unreadable. Each populated day now shows only its item count and combined amount beside the day
@@ -3267,7 +3267,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     The day grid and detail list still use the same `listInstances` rows. This is presentation and
     navigation only: no financial data, schema, migration or backup-format change.
 
-225. **A transfer between the household's own pots opens in place on All Transactions; the pots page's transfer card is retired (2026-10-15, GitHub issue #55).**
+225. **A transfer between the household's own pots opens in place on All Transactions; the pots page's transfer card is retired (2026-10-15, GitHub issue #55, v1.19.0).**
 
     The household's report: Accounts, Pots & Checkpoints is the least intuitive page, and its
     "Transfers between pots" card the worst of it — a layout that degraded as transfers accumulated,
@@ -3336,4 +3336,8 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     the three card specs for the panel (open beneath the row, void → pinned → close; correct pots, amount
     and note with the pickers holding the saved pots; the stale-version refusal) and adds the moved-transfer
     spec (pinned with links, panel within 60px across the save, put right in place, `/pots` has no card,
-    the old link redirects and opens it).
+    the old link redirects and opens it). The specs look a transfer up only among transfer rows
+    (`tr[id^="transfer-"]`), never by amount across the whole table. The first PR browser run failed
+    because of that: the `mobile` project, which runs earlier in CI, records a £12.34 till purchase on
+    the same pot and day as the corrected transfer's old amount. When checking an e2e change locally,
+    run the projects that precede it in CI as well, not just its own project.
