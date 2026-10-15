@@ -91,12 +91,13 @@ Merging a pull request does not publish an image. A lower-case annotated tag on 
   Suppliers; that removal is in the purchase's History, the file leaves `documents/`, and an older backup
   is the only way to get it back. `/recurring` shows the month calendar and the schedule list,
   `/contracts` shows contract ends and renewals with the follow-ups you promised.
-- **All activity in one pot:** `/transactions` — a read-only list of everything that touched a chosen
-  account or cash pot between two dates: purchases, direct debits and standing orders, transfers,
-  borrowing and repayments, swaps and other money, and **income** (`BAC`), in one amount column (green
-  in, red out relative to that pot), with the original note, checkpoint dividers and a link from every
-  row to the page that can still edit or void it. Settings can pin its starting pot; an explicit target
-  in the URL still wins. Nothing on that page writes anything.
+- **All activity in one pot:** `/transactions` — everything that touched a chosen account or cash pot
+  between two dates: purchases, direct debits and standing orders, transfers, borrowing and repayments,
+  swaps and other money, and **income** (`BAC`), in one amount column (green in, red out relative to that
+  pot), with the original note, checkpoint dividers and a link from every row to the page that can still
+  edit or void it. A transfer between your own pots is the exception: select its pot name and its
+  correction and void forms open right there, beneath the row (issue #55) — the pots page no longer keeps
+  a separate transfer list. Settings can pin its starting pot; an explicit target in the URL still wins.
 - **Insights:** `/insights` — a three-month comparison (each month with its change against the month
   before it), per-person attribution, vehicle running costs, and the honesty loop that compares
   configured figures with recent complete periods. Every figure opens its line items inline — the

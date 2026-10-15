@@ -415,12 +415,30 @@ describe('All Transactions projection (SPEC §15.3)', () => {
         `/recurring#schedule-${seeded.salaryScheduleId}`,
       );
 
-      // Every row links to the canonical form that owns edit/void.
+      // Every row links to the canonical form that owns edit/void — and an
+      // internal transfer's canonical form is this page itself (decision 225,
+      // issue #55): its link reopens this pot and window with the transfer
+      // open in place, and it carries the facts its editor starts from.
       for (const row of list) {
         if (row.family === 'purchase') {
           assert.match(row.link.href, new RegExp(`^/purchases\\?.*#purchase-${row.recordId}$`));
+          assert.equal(row.transfer, null);
         } else if (row.family === 'transfer') {
-          assert.equal(row.link.href, `/pots?transfer=${row.recordId}#transfer-${row.recordId}`);
+          assert.equal(
+            row.link.href,
+            `/transactions?potId=${seeded.fx.pots.main.id}&from=${WINDOW.dateFrom}&to=${WINDOW.dateTo}&transfer=${row.recordId}#transfer-${row.recordId}`,
+          );
+          assert.equal(row.link.label, 'Open this transfer');
+          assert.deepEqual(row.transfer, {
+            version: 1,
+            fromPotId: seeded.fx.pots.main.id,
+            toPotId: seeded.fx.pots.alexCash.id,
+            fromLabel: 'Main account',
+            toLabel: "Alex's cash",
+            note: 'Son wages',
+            enteredBy: ACTOR,
+            voidReason: null,
+          });
         } else if (row.family === 'receipt') {
           assert.equal(row.link.href, `/income?receipt=${row.recordId}#receipt-${row.recordId}`);
         } else {

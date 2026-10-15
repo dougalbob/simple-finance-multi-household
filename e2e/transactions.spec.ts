@@ -1,14 +1,17 @@
-import { expect, test, type Locator } from '@playwright/test';
-import { waitForTill } from './support';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { waitForTill, waitForTransferToggle } from './support';
 
 /**
- * All Transactions (SPEC §15.3, plan decisions 101–108): a read-only,
- * one-pot activity view. The page renders no forms, so these specs check the
- * projection itself — codes, the pot-relative sign, the checkpoint divider,
- * the honest "movements shown" total — and that every row's deep link lands
- * on the record in the page that can still edit or void it.
+ * All Transactions (SPEC §15.3, plan decisions 101–108): a one-pot activity
+ * view. These specs check the projection itself — codes, the pot-relative
+ * sign, the checkpoint divider, the honest "movements shown" total — and that
+ * every row's deep link lands on the record in the page that can edit or
+ * void it. The one exception is an internal transfer (decision 225, GitHub
+ * issue #55): it opens in place, its correction and void forms beneath its
+ * own row, and the pots page no longer lists transfers at all.
  *
- * Runs after `checkpoint`; all writes remain inside the isolated E2E seed.
+ * Runs after `checkpoint`; all writes remain inside the isolated E2E seed,
+ * and every transfer a spec records is voided before it ends.
  */
 
 test.describe('all transactions', () => {
@@ -30,6 +33,9 @@ test.describe('all transactions', () => {
     // Anchored: the source cell's name ("Corner Foods — Open this purchase")
     // contains "pur" too, so an unanchored match is not unique.
     await expect(corner.getByRole('cell', { name: /^PUR\b/ })).toBeVisible();
+    // Purchases keep their link to Purchases (issue #55 changes transfers only):
+    // no in-place toggle on a purchase row.
+    await expect(corner.locator('button[aria-expanded]')).toHaveCount(0);
     await expect(corner).toContainText('Groceries / Weekly Shop (household)');
     await expect(corner).toContainText('+1 more');
     await expect(corner).toContainText('−£63.47');
@@ -83,26 +89,15 @@ test.describe('all transactions', () => {
     await expect(page.getByText(/Green is in credit, red is overdrawn/).first()).toBeVisible();
   });
 
-  test('one transfer is red on the pot it left and green on the pot it reached', async ({
+  test('one transfer is red on the pot it left, green on the pot it reached, and opens in place', async ({
     page,
   }) => {
-    // Transfers are recorded where they always were: the Move tab. This page
-    // only reads.
-    await page.goto('/');
-    await waitForTill(page);
-    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
-    await entry.getByRole('tab', { name: 'Move' }).click();
-    await entry.getByLabel('From pot').selectOption({ label: 'Main account' });
-    await entry.getByLabel('To pot').selectOption({ label: "Alex's cash" });
-    await entry.getByLabel('Amount').fill('7.77');
-    await entry.getByRole('button', { name: 'Record transfer' }).click();
-    await expect(entry.getByRole('status')).toContainText(/recorded/i, { timeout: 30_000 });
+    // Transfers are recorded where they always were: the Move tab.
+    await recordTransfer(page, { to: "Alex's cash", amount: '7.77' });
 
     // Red on Main, from the selected pot's point of view.
     await page.goto('/transactions');
-    const outRow = page
-      .locator('section[aria-labelledby="activity-heading"] table tr')
-      .filter({ hasText: '£7.77' });
+    const outRow = activityRows(page).filter({ hasText: '£7.77' });
     await expect(outRow.getByRole('cell', { name: /^TX>/ })).toBeVisible();
     await expect(outRow).toContainText("Alex's cash");
     await expect(outRow).toContainText('−£7.77');
@@ -111,56 +106,68 @@ test.describe('all transactions', () => {
     const filters = page.getByRole('form', { name: 'Activity filters' });
     await filters.getByLabel('Target').selectOption({ label: "Alex's cash" });
     await filters.getByRole('button', { name: 'Show activity' }).click();
-    const inRow = page
-      .locator('section[aria-labelledby="activity-heading"] table tr')
-      .filter({ hasText: '£7.77' });
+    const inRow = activityRows(page).filter({ hasText: '£7.77' });
     await expect(inRow.getByRole('cell', { name: /^TX</ })).toBeVisible();
     await expect(inRow).toContainText('Main account');
     await expect(inRow).toContainText('+£7.77');
 
-    // The deep link lands on the record itself, not just its section.
-    await inRow.getByRole('link', { name: /Open this transfer/ }).click();
-    await expect(page).toHaveURL(/\/pots\?transfer=\d+#transfer-\d+/);
-    const transfers = page.locator('section[aria-labelledby="transfers-heading"]');
-    await expect(transfers).toContainText(/Main account\s*→\s*Alex's cash/);
-    const row = transfers.locator('li').filter({ hasText: '£7.77' });
-    await row.getByText('Void', { exact: true }).click();
-    await row.getByLabel(/Why are you voiding this/).fill('Typed the wrong pots');
-    await row.getByRole('button', { name: 'Void transfer' }).click();
-    await expect(row).toContainText(/voided/i, { timeout: 30_000 });
+    // Issue #55: the transfer opens right here, directly beneath its row — the
+    // household never leaves the list they were reading (decision 225).
+    const rowId = await inRow.getAttribute('id');
+    expect(rowId).toMatch(/^transfer-\d+$/);
+    const transferId = Number(rowId?.slice('transfer-'.length));
+    const row = page.locator(`#${rowId}`);
+    await waitForTransferToggle(row);
+    const toggle = row.getByRole('button', { name: /Main account — Open this transfer/ });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    const panel = page.locator(`#${rowId}-panel`);
+    await expect(
+      row.locator('xpath=following-sibling::tr[1]').locator(`#${rowId}-panel`),
+    ).toBeVisible();
+    await expect(
+      row.getByRole('button', { name: /Main account — Close this transfer/ }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel.getByRole('heading', { name: /Main account → Alex's cash/ })).toBeVisible();
+    await expect(page).toHaveURL(
+      new RegExp(`^[^?]+/transactions\\?.*transfer=${transferId}#transfer-${transferId}$`),
+    );
+
+    // Void it in place. A void takes the transfer out of the list — voided
+    // records are never movements — but the open transfer stays on screen,
+    // pinned and struck through, saying so, until the household closes it.
+    await panel.getByLabel(/Why are you voiding this/).fill('Typed the wrong pots');
+    await panel.getByRole('button', { name: 'Void transfer' }).click();
+    await expect(panel).toContainText('Voided — “Typed the wrong pots”', { timeout: 30_000 });
+    await expect(row).toContainText('voided — not counted');
+    await expect(row.getByRole('cell').last()).toHaveText('—');
+    await expect(panel.getByRole('button', { name: 'Void transfer' })).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: 'Save transfer' })).toHaveCount(0);
+
+    await panel.getByRole('button', { name: 'Close' }).click();
+    await expect(page.locator(`#${rowId}`)).toHaveCount(0);
+    await expect(page).not.toHaveURL(/transfer=/);
+    await page.reload();
+    await expect(activityRows(page).filter({ hasText: '£7.77' })).toHaveCount(0);
   });
 
-  test('a saved transfer is corrected in place — pots, amount and note (issue #33)', async ({
+  test('a saved transfer is corrected in place — pots, amount and note (issues #33, #55)', async ({
     page,
   }) => {
     // The issue as the household hit it: a transfer recorded with the wrong
-    // destination and no note, with only a Void to reach for. It is now
-    // corrected on the page that reviews it.
-    await page.goto('/');
-    await waitForTill(page);
-    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
-    await entry.getByRole('tab', { name: 'Move' }).click();
-    await entry.getByLabel('From pot').selectOption({ label: 'Main account' });
-    await entry.getByLabel('To pot').selectOption({ label: "Alex's cash" });
-    await entry.getByLabel('Amount').fill('12.34');
-    await entry.getByRole('button', { name: 'Record transfer' }).click();
-    await expect(entry.getByRole('status')).toContainText(/recorded/i, { timeout: 30_000 });
+    // destination and no note. It is corrected beneath its own row.
+    await recordTransfer(page, { to: "Alex's cash", amount: '12.34' });
 
-    await page.goto('/pots');
-    const transfers = page.locator('section[aria-labelledby="transfers-heading"]');
-    const row = transfers.locator('li').filter({ hasText: '£12.34' });
-    await expect(row).toBeVisible();
+    await page.goto('/transactions');
+    const row = await transferRowByAmount(page, '£12.34');
     // The row's own anchor survives the correction; its amount does not.
-    const anchor = await row.getAttribute('id');
-    expect(anchor).toMatch(/^transfer-\d+$/);
+    const rowId = await row.getAttribute('id');
+    await row.getByRole('button', { name: /Open this transfer/ }).click();
+    const editor = page.locator(`#${rowId}-panel`);
 
     // The editor opens holding the record as saved — the amount, the date
     // and both pots — instead of blanks the household must retype. The date
     // can never be later than today, because the record never is.
-    const editor = row
-      .getByText('Edit', { exact: true })
-      .locator('xpath=ancestor-or-self::details[1]');
-    await editor.locator(':scope > summary').click();
     await expect(editor.getByLabel('Amount')).toHaveValue('12.34');
     await expect(editor.getByLabel('Note (blank keeps the current note)')).toHaveValue('');
     await expect(editor.getByLabel('When')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
@@ -173,85 +180,143 @@ test.describe('all transactions', () => {
     await editor.getByLabel('Amount').fill('12.99');
     await editor.getByLabel('Note (blank keeps the current note)').fill('Wrong pot — put right');
     await editor.getByRole('button', { name: 'Save transfer' }).click();
-    // Re-locate by the anchor, not by the amount the correction just changed.
-    const savedRow = transfers.locator(`#${anchor}`);
-    await expect(savedRow.getByRole('status')).toContainText(/corrected/i, { timeout: 30_000 });
+    await expect(editor.getByText(/Transfer #\d+ corrected/)).toBeVisible({ timeout: 30_000 });
 
-    // The row reads the corrected record, and only the corrected record:
-    // one movement, moved, not a void plus a second entry.
-    await page.goto('/pots');
-    const corrected = page.locator(`#${anchor}`);
-    await expect(corrected).toContainText(/Main account\s*→\s*Sam's cash/);
-    await expect(corrected).toContainText('£12.99');
+    // The row reads the corrected record — one movement, moved, not a void
+    // plus a second entry — and the editor still holds what was saved: React
+    // resets a form after its action, and the pickers must not snap back to
+    // the pot the household just corrected.
+    const corrected = page.locator(`#${rowId}`);
+    await expect(corrected).toContainText("Sam's cash");
+    await expect(corrected).toContainText('−£12.99');
     await expect(corrected).toContainText('Wrong pot — put right');
-    await expect(transfers.locator('li').filter({ hasText: '£12.34' })).toHaveCount(0);
+    expect(await selectedLabel(editor.getByLabel('To pot'))).toBe("Sam's cash");
+    expect(await selectedLabel(editor.getByLabel('From pot'))).toBe('Main account');
+    await expect(editor.getByLabel('Amount')).toHaveValue('12.99');
+    await expect(activityRows(page).filter({ hasText: '£12.34' })).toHaveCount(0);
 
-    // Void it (after a fresh load, because a correction bumps the version and
-    // the app refuses a stale form) so the shared seed's estimates end where
-    // they started.
-    await corrected.getByText('Void', { exact: true }).click();
-    await corrected
+    // Void it from the same panel — the correction bumped the version, and
+    // the panel carries the new one — so the seed's estimates end where they
+    // started.
+    await editor
       .getByLabel(/Why are you voiding this/)
       .fill('Corrected, then voided by the browser test');
-    await corrected.getByRole('button', { name: 'Void transfer' }).click();
-    await expect(corrected).toContainText(/voided/i, { timeout: 30_000 });
+    await editor.getByRole('button', { name: 'Void transfer' }).click();
+    await expect(editor).toContainText('Voided', { timeout: 30_000 });
   });
 
   test('a stale transfer editor saves nothing and says why (issue #33)', async ({
     page,
     context,
   }) => {
-    await page.goto('/');
-    await waitForTill(page);
-    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
-    await entry.getByRole('tab', { name: 'Move' }).click();
-    await entry.getByLabel('From pot').selectOption({ label: 'Main account' });
-    await entry.getByLabel('To pot').selectOption({ label: "Alex's cash" });
-    await entry.getByLabel('Amount').fill('21.21');
-    await entry.getByRole('button', { name: 'Record transfer' }).click();
-    await expect(entry.getByRole('status')).toContainText(/recorded/i, { timeout: 30_000 });
+    await recordTransfer(page, { to: "Alex's cash", amount: '21.21' });
+    await page.goto('/transactions');
+    const transferId = Number(
+      (await (await transferRowByAmount(page, '£21.21')).getAttribute('id'))?.slice(
+        'transfer-'.length,
+      ),
+    );
 
-    // Two readers of the same row: the second is loaded before the first
+    // Two readers of the same transfer: the second is loaded before the first
     // saves, so its editor carries the version the row had when it opened.
-    await page.goto('/pots');
+    const openUrl = `/transactions?transfer=${transferId}#transfer-${transferId}`;
+    await page.goto(openUrl);
     const stalePage = await context.newPage();
-    await stalePage.goto('/pots');
-    const transfersOn = (p: typeof page) =>
-      p.locator('section[aria-labelledby="transfers-heading"]');
-    const freshRow = transfersOn(page).locator('li').filter({ hasText: '£21.21' });
-    const staleRow = transfersOn(stalePage).locator('li').filter({ hasText: '£21.21' });
-    await expect(staleRow).toBeVisible();
+    await stalePage.goto(openUrl);
+    const panelOn = (p: Page) => p.locator(`#transfer-${transferId}-panel`);
+    await expect(panelOn(stalePage)).toBeVisible();
 
-    const freshEditor = freshRow
-      .getByText('Edit', { exact: true })
-      .locator('xpath=ancestor-or-self::details[1]');
-    await freshEditor.locator(':scope > summary').click();
-    await freshEditor.getByLabel('Note (blank keeps the current note)').fill('saved first');
-    await freshEditor.getByRole('button', { name: 'Save transfer' }).click();
-    await expect(freshEditor.getByRole('status')).toContainText(/corrected/i, { timeout: 30_000 });
+    const fresh = panelOn(page);
+    await fresh.getByLabel('Note (blank keeps the current note)').fill('saved first');
+    await fresh.getByRole('button', { name: 'Save transfer' }).click();
+    await expect(fresh.getByText(/corrected/)).toBeVisible({ timeout: 30_000 });
 
     // The stale editor's save is refused by the domain's version guard, with
     // the domain's own message, and the amount it tried to write is not saved.
-    const staleEditor = staleRow
-      .getByText('Edit', { exact: true })
-      .locator('xpath=ancestor-or-self::details[1]');
-    await staleEditor.locator(':scope > summary').click();
-    await staleEditor.getByLabel('Amount').fill('99.99');
-    await staleEditor.getByRole('button', { name: 'Save transfer' }).click();
-    await expect(staleEditor.getByRole('status')).toContainText(/changed by someone else/i, {
-      timeout: 30_000,
-    });
+    const stale = panelOn(stalePage);
+    await stale.getByLabel('Amount').fill('99.99');
+    await stale.getByRole('button', { name: 'Save transfer' }).click();
+    await expect(stale.getByText(/changed by someone else/i)).toBeVisible({ timeout: 30_000 });
     await stalePage.close();
 
-    await page.goto('/pots');
-    const row = transfersOn(page).locator('li').filter({ hasText: '£21.21' });
+    await page.goto('/transactions');
+    const row = page.locator(`#transfer-${transferId}`);
     await expect(row).toContainText('saved first');
-    await expect(transfersOn(page).locator('li').filter({ hasText: '£99.99' })).toHaveCount(0);
+    await expect(row).toContainText('£21.21');
+    await expect(activityRows(page).filter({ hasText: '£99.99' })).toHaveCount(0);
 
-    await row.getByText('Void', { exact: true }).click();
-    await row.getByLabel(/Why are you voiding this/).fill('Voided by the browser test');
-    await row.getByRole('button', { name: 'Void transfer' }).click();
-    await expect(row).toContainText(/voided/i, { timeout: 30_000 });
+    await waitForTransferToggle(row);
+    await row.getByRole('button', { name: /Open this transfer/ }).click();
+    const panel = panelOn(page);
+    await panel.getByLabel(/Why are you voiding this/).fill('Voided by the browser test');
+    await panel.getByRole('button', { name: 'Void transfer' }).click();
+    await expect(panel).toContainText('Voided', { timeout: 30_000 });
+  });
+
+  test('a transfer moved onto other pots stays pinned under the pointer; old links redirect (issue #55)', async ({
+    page,
+  }) => {
+    await recordTransfer(page, { to: "Alex's cash", amount: '31.13' });
+    await page.goto('/transactions');
+    const row = await transferRowByAmount(page, '£31.13');
+    const rowId = await row.getAttribute('id');
+    const transferId = Number(rowId?.slice('transfer-'.length));
+
+    await row.getByRole('button', { name: /Open this transfer/ }).click();
+    const panel = page.locator(`#${rowId}-panel`);
+    await expect(panel).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`transfer=${transferId}`));
+
+    // Correct it onto two other pots. It no longer touches Main account, so
+    // it leaves this list — but the household is mid-task, so the open
+    // transfer stays where it was, pinned, outside the totals, and says
+    // where it went. The save must not scroll the panel away from them (the
+    // row is held well down the screen first, so a jump would show): a
+    // router that still held the pre-open URL once treated the save as a new
+    // page and scrolled the row to the top.
+    await page.evaluate((id) => {
+      const target = document.getElementById(id);
+      if (target !== null) window.scrollBy(0, target.getBoundingClientRect().top - 450);
+    }, rowId ?? '');
+    const panelTop = async () => Math.round((await panel.boundingBox())?.y ?? -1);
+    const topBefore = await panelTop();
+    await panel.getByLabel('From pot').selectOption({ label: 'Salary account' });
+    await panel.getByRole('button', { name: 'Save transfer' }).click();
+    await expect(panel).toContainText('no longer touches Main account', { timeout: 30_000 });
+    await expect(page.locator(`#${rowId}`)).toContainText('moved to other pots — not counted');
+    await expect(page.locator(`#${rowId}`)).toContainText("Salary account → Alex's cash");
+    await expect(panel.getByText(/Transfer #\d+ corrected/)).toBeVisible();
+    await expect(panel.getByRole('link', { name: "See it in Alex's cash →" })).toHaveAttribute(
+      'href',
+      new RegExp(`potId=\\d+&from=.*&transfer=${transferId}#transfer-${transferId}$`),
+    );
+    // Settled after the delayed anchor passes (0/150/350ms) have had their turn.
+    await page.waitForTimeout(600);
+    expect(Math.abs((await panelTop()) - topBefore)).toBeLessThanOrEqual(60);
+
+    // The forms are still there, so the mistake is put right in place — and
+    // it is a live row again.
+    expect(await selectedLabel(panel.getByLabel('From pot'))).toBe('Salary account');
+    await panel.getByLabel('From pot').selectOption({ label: 'Main account' });
+    await panel.getByRole('button', { name: 'Save transfer' }).click();
+    await expect(page.locator(`#${rowId}`)).not.toContainText('not counted', { timeout: 30_000 });
+    await expect(page.locator(`#${rowId}`)).toContainText('−£31.13');
+
+    // The pots page no longer lists transfers; a link from before decision
+    // 225 opens the transfer here instead.
+    await page.goto('/pots');
+    await expect(page.getByRole('heading', { name: 'Transfers between pots' })).toHaveCount(0);
+    await page.goto(`/pots?transfer=${transferId}#transfer-${transferId}`);
+    await expect(page).toHaveURL(
+      new RegExp(`/transactions\\?potId=\\d+&from=[\\d-]+&to=[\\d-]+&transfer=${transferId}`),
+    );
+    const linked = page.locator(`#transfer-${transferId}-panel`);
+    await expect(linked).toBeVisible();
+    await linked
+      .getByLabel(/Why are you voiding this/)
+      .fill('Moved and voided by the browser test');
+    await linked.getByRole('button', { name: 'Void transfer' }).click();
+    await expect(linked).toContainText('Voided', { timeout: 30_000 });
   });
 
   test('income renders as BAC and deep-links to the Income page', async ({ page }) => {
@@ -450,4 +515,32 @@ function minusDays(isoDate: string, days: number): string {
 /** The visible option text of a <select> — what the household sees selected. */
 async function selectedLabel(select: Locator): Promise<string> {
   return select.evaluate((el) => (el as HTMLSelectElement).selectedOptions[0]?.textContent ?? '');
+}
+
+/** The activity table's rows — movements, checkpoint dividers and any open transfer panel. */
+function activityRows(page: Page): Locator {
+  return page.locator('section[aria-labelledby="activity-heading"] table tbody > tr');
+}
+
+/** A transfer row by its amount, once its in-place toggle is listening. */
+async function transferRowByAmount(page: Page, amount: string): Promise<Locator> {
+  const row = activityRows(page).filter({ hasText: amount }).and(page.locator('[id^="transfer-"]'));
+  await expect(row).toHaveCount(1);
+  const rowId = await row.getAttribute('id');
+  const pinnedRow = page.locator(`#${rowId}`);
+  await waitForTransferToggle(pinnedRow);
+  return pinnedRow;
+}
+
+/** Record a transfer out of Main account from the till's Move tab, as the household does. */
+async function recordTransfer(page: Page, { to, amount }: { to: string; amount: string }) {
+  await page.goto('/');
+  await waitForTill(page);
+  const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+  await entry.getByRole('tab', { name: 'Move' }).click();
+  await entry.getByLabel('From pot').selectOption({ label: 'Main account' });
+  await entry.getByLabel('To pot').selectOption({ label: to });
+  await entry.getByLabel('Amount').fill(amount);
+  await entry.getByRole('button', { name: 'Record transfer' }).click();
+  await expect(entry.getByRole('status')).toContainText(/recorded/i, { timeout: 30_000 });
 }

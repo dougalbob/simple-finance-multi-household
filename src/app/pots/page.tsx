@@ -11,7 +11,7 @@ import {
   VoidSwapPairForm,
 } from '@/components/external-forms';
 import { AddCheckpointForm, CreatePotForm } from '@/components/pot-forms';
-import { TransferEditForm, VoidForm } from '@/components/record-forms';
+import { VoidForm } from '@/components/record-forms';
 import { PotEditForm } from '@/components/settings-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import type { Db } from '@/lib/db/client';
@@ -25,6 +25,7 @@ import {
   listExternalMovements,
   type ExternalMovement,
 } from '@/lib/records/external-movements';
+import { defaultActivityPot } from '@/lib/records/activity';
 import { getMoneySnapshot } from '@/lib/records/money-view';
 import { listPeople } from '@/lib/records/people';
 import {
@@ -33,12 +34,13 @@ import {
   listPots,
   potEstimateLabel,
 } from '@/lib/records/pots';
+import { getDefaultTransactionsPotId } from '@/lib/records/settings';
 import {
-  getTransfer,
-  listTransfers,
-  TransferNotFoundError,
-  type Transfer,
-} from '@/lib/records/transfers';
+  parseOpenTransferId,
+  transferActivityHref,
+  transferViewPotId,
+} from '@/lib/records/transfer-activity';
+import { findTransfer } from '@/lib/records/transfers';
 import { formatInstantLocal, formatRelativeAge, toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -55,8 +57,12 @@ export const dynamic = 'force-dynamic';
  *
  * Also home to the household boundary (SPEC §10.2): informal debts with
  * their derived balances, and the borrowing/repayment/swap/other movements
- * that move money across it. Internal pot-to-pot transfers are reviewed and
- * voided here too (decision 164) — they are recorded in Quick Entry → Move.
+ * that move money across it.
+ *
+ * Internal pot-to-pot transfers no longer have a list here (decision 225,
+ * GitHub issue #55): they are recorded in Quick Entry → Move, and corrected
+ * or voided in place on All Transactions, beneath their own row. An old
+ * `/pots?transfer={id}` link redirects there, opening that transfer.
  */
 export default async function PotsPage({
   searchParams,
@@ -71,6 +77,23 @@ export default async function PotsPage({
   const today = toLocalDateString(now);
   const params = await searchParams;
   const pots = listPots(db);
+  // A bookmarked transfer link from before decision 225: the transfer now
+  // opens in place on All Transactions — on the pot the household usually
+  // reviews there when the transfer touches it, else on the pot the money
+  // left — over a window that contains its date. An id that names no
+  // transfer is ignored.
+  const linkedTransferId = parseOpenTransferId(params.transfer);
+  const linkedTransfer = linkedTransferId === null ? null : findTransfer(db, linkedTransferId);
+  if (linkedTransfer !== null) {
+    const usualPot = defaultActivityPot(pots, getDefaultTransactionsPotId(db));
+    redirect(
+      transferActivityHref(
+        linkedTransfer,
+        transferViewPotId(linkedTransfer, usualPot?.id ?? null),
+        today,
+      ),
+    );
+  }
   const people = listPeople(db);
   const peopleById = new Map(people.map((person) => [person.id, person.label]));
   const money = getMoneySnapshot(db, now);
@@ -87,18 +110,6 @@ export default async function PotsPage({
       : null;
   const externalRows =
     linkedExternal === null ? recentExternal : [linkedExternal, ...recentExternal];
-  const recentTransfers = listTransfers(db, { includeVoided: true, limit: 20 });
-  // A deep link from All Transactions (SPEC §15.3) must land on the record it
-  // names, even after that transfer has fallen out of the recent twenty.
-  const linkedTransferId = Number(params.transfer);
-  const linkedTransfer =
-    Number.isInteger(linkedTransferId) &&
-    linkedTransferId > 0 &&
-    recentTransfers.every((transfer) => transfer.id !== linkedTransferId)
-      ? findTransfer(db, linkedTransferId)
-      : null;
-  const transferRows =
-    linkedTransfer === null ? recentTransfers : [linkedTransfer, ...recentTransfers];
   // Swaps grouped as pairs (SPEC §10.2) for the management list: the
   // household records a swap and then looks for it next to the pot cards —
   // this is where that list lives, with edit and void-both-legs.
@@ -367,91 +378,6 @@ export default async function PotsPage({
           })}
         </div>
       )}
-
-      <section
-        aria-labelledby="transfers-heading"
-        className="mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm"
-      >
-        <h2 id="transfers-heading" className="text-lg font-semibold">
-          Transfers between pots
-        </h2>
-        <p className="mb-3 mt-1 text-sm text-ink-soft">
-          Money moving between your own pots — transfers never enter Insights. Record a transfer in
-          Quick Entry → Move → Between pots; correct one here if its pots, amount, date or note were
-          wrong. Voiding keeps the history.
-        </p>
-        {linkedTransfer !== null ? (
-          <p className="mb-2 rounded-lg bg-accent-50 px-3 py-2 text-xs text-accent-900">
-            Showing the transfer you linked to — it is older than the twenty most recent.
-          </p>
-        ) : null}
-        {transferRows.length === 0 ? (
-          <p className="text-sm text-ink-muted">No transfers recorded yet.</p>
-        ) : (
-          <ul className="divide-y divide-border-hairline">
-            {transferRows.map((transfer) => (
-              <li key={transfer.id} id={`transfer-${transfer.id}`} className="py-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                  <span
-                    className={
-                      transfer.voidedAt !== null ? 'text-ink-faint line-through' : 'text-ink-body'
-                    }
-                  >
-                    {potNames.get(transfer.fromPotId) ?? 'Pot'} →{' '}
-                    {potNames.get(transfer.toPotId) ?? 'Pot'}
-                    {transfer.voidedAt !== null ? ` (voided: ${transfer.voidReason ?? '—'})` : ''}
-                    <span className="ml-2 text-xs font-normal text-ink-muted">
-                      {transfer.occurredDate} · {transfer.enteredBy}
-                      {transfer.note !== null && transfer.note !== '' ? ` — ${transfer.note}` : ''}
-                    </span>
-                  </span>
-                  <span className="font-semibold tabular-nums">
-                    {formatPence(transfer.amountPence)}
-                  </span>
-                </div>
-                {transfer.voidedAt === null ? (
-                  <>
-                    <details className="mt-1">
-                      <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
-                        Edit
-                      </summary>
-                      <div className="mt-2 max-w-md">
-                        <TransferEditForm
-                          idPrefix={`transfer-edit-${transfer.id}`}
-                          transferId={transfer.id}
-                          expectedVersion={transfer.version}
-                          fromPotId={transfer.fromPotId}
-                          toPotId={transfer.toPotId}
-                          amountPence={transfer.amountPence}
-                          occurredDate={transfer.occurredDate}
-                          note={transfer.note}
-                          pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-                          today={today}
-                        />
-                      </div>
-                    </details>
-                    <details className="mt-1">
-                      <summary className="cursor-pointer text-xs font-medium text-ink-soft hover:text-ink">
-                        Void
-                      </summary>
-                      <div className="mt-2 max-w-md">
-                        <VoidForm
-                          kind="transfer"
-                          recordId={transfer.id}
-                          expectedVersion={transfer.version}
-                          summary={`${potNames.get(transfer.fromPotId) ?? 'a pot'} → ${
-                            potNames.get(transfer.toPotId) ?? 'a pot'
-                          }, ${formatPence(transfer.amountPence)}`}
-                        />
-                      </div>
-                    </details>
-                  </>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section
@@ -836,16 +762,6 @@ function findExternalMovement(db: Db, movementId: number): ExternalMovement | nu
     return getExternalMovement(db, movementId);
   } catch (error) {
     if (error instanceof ExternalMovementNotFoundError) return null;
-    throw error;
-  }
-}
-
-/** The transfer a deep link names, or null when that id is not a transfer. */
-function findTransfer(db: Db, transferId: number): Transfer | null {
-  try {
-    return getTransfer(db, transferId);
-  } catch (error) {
-    if (error instanceof TransferNotFoundError) return null;
     throw error;
   }
 }
