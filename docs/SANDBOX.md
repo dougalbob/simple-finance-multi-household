@@ -650,3 +650,22 @@ empty — the fetch was blocked.
   and `next build` flipped `next-env.d.ts` again — reverted with `git checkout -- next-env.d.ts` as entry 8's
   history already advises.
 - **2026-10-09 (v0.38.0 release, session `arena/9d0d4627-simple-finance`):** PDF.js adopted for in-page PDF reading after the household's approval (decision 192), and annual road tax confirmed as built (decision 193). Entry 16 rewritten: pdf.js draws onto a canvas, which this Chromium can read. The full local run (`npx playwright test --config playwright.local.config.ts`, 119 tests) gave **119 passed**, with no flaky failures this time. `npm test` 723/723, typecheck, format, themes, build and `npm audit --omit=dev` (0) pass. The production build emits `pdf.worker.min.*.mjs`, and `next start` serves it as `application/javascript`.
+
+## 23. The local Playwright web server dies at the `projects`/`admin` DB-heavy specs (2026-10-16)
+
+**Symptom:** a full `playwright.local.config.ts` run loses `next dev` (the e2e server on 3100)
+part-way through — every test from `projects`/`admin` onward gets `ERR_CONNECTION_REFUSED`, and
+Playwright reports the tail as **"N interrupted"** (a bare `tail` of the summary looks like
+"132 passed" — read the whole summary block before claiming a green run). Re-running just those
+projects reproduces it: `admin.spec.ts`'s "registry backup, then a roster change, then restore"
+is the usual death point. There is no crash marker in the server log — it simply stops answering.
+
+**Not your change.** The same code runs green in CI (ubuntu runner, `retries: 1`), including the
+admin/backup/insights/recurring specs. The sandbox's dev server does not survive the registry
+restore's burst of DB writes (watcher/inotify or memory pressure is the working guess). Verify the
+vulnerable projects against CI rather than burning a session on it: push and read the browser job.
+
+**Workaround that does work locally:** run the suite in two halves (everything before `projects`,
+then the late block) against a fresh server each time, or accept CI as the proof for the late
+block. And when a run's tail looks too green, count the results — `PLAYWRIGHT_JSON_OUTPUT_NAME=…
+--reporter=json` gives exact per-test statuses (one worker, no retries locally).

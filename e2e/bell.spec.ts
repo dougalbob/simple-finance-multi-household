@@ -225,12 +225,12 @@ test.describe('bell — phone layout', () => {
     const drawerNav = page.locator('nav[aria-label="Pages"]');
     await expect(drawerNav.getByRole('button', { name: /Needs attention|Nothing/ })).toHaveCount(0);
 
-    // Open drawer and check the link list (10 links in More + 6 in Daily = 16)
+    // Open drawer and check the link list (11 links in More + 6 in Daily = 17)
     await page.getByRole('button', { name: 'Open navigation menu' }).click();
     await expect(drawerNav).toBeVisible();
     const links = drawerNav.getByRole('link');
-    // There should be 16 links (6 Daily + 10 More)
-    await expect(links).toHaveCount(16);
+    // There should be 17 links (6 Daily + 11 More) — 10 until Borrowing arrived (issue #60).
+    await expect(links).toHaveCount(17);
     // Bell should still be visible in top bar even when drawer open
     await expect(button).toBeVisible();
   });
