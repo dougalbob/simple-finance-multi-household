@@ -769,6 +769,7 @@ export async function addPurchaseAction(
   try {
     const result = createPurchase(db, {
       supplierName: raw.data.supplierName,
+      paidVia: raw.data.paidVia,
       potId: raw.data.potId,
       totalPence: raw.data.totalPence,
       paidByPersonId,
@@ -996,6 +997,7 @@ function parsePurchaseForm(
   }
   const parsed = purchaseEntrySchema.safeParse({
     supplierName: textOrNull(formData.get('supplierName')),
+    paidVia: textOrNull(formData.get('paidVia')),
     potId: numberOrNull(formData.get('potId')),
     totalPence: amount,
     paidByPersonId: numberOrNull(formData.get('paidByPersonId')),
@@ -1660,6 +1662,7 @@ export async function editPurchaseAction(
     expectedVersion: numberOrNull(formData.get('expectedVersion')),
     occurredDate: textOrNull(formData.get('occurredDate')),
     note: typeof formData.get('note') === 'string' ? formData.get('note') : '',
+    paidVia: textOrNull(formData.get('paidVia')),
     lines,
   });
   if (!parsed.success) {
@@ -1676,6 +1679,7 @@ export async function editPurchaseAction(
         // Blank = unchanged (a correction should not silently re-date the record).
         ...(parsed.data.occurredDate === null ? {} : { occurredDate: parsed.data.occurredDate }),
         note: parsed.data.note,
+        paidVia: parsed.data.paidVia,
         lines: parsed.data.lines,
       },
     });

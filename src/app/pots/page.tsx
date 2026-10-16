@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArchivePotForm, OtherMovementForm, SwapForm } from '@/components/external-forms';
 import { BorrowingMovedRedirect } from '@/components/borrowing-moved-redirect';
@@ -446,8 +447,21 @@ export default async function PotsPage({
           <h2 id="other-money-heading" className="text-lg font-semibold">
             Other money in &amp; out
           </h2>
-          <p className="mb-3 mt-1 text-sm text-ink-soft">
-            Anything else across the household boundary — always with a note saying what it was.
+          <p className="mb-1 mt-1 text-sm text-ink-soft">
+            One-off cash or transfers outside your normal budget with no expectation of repayment
+            (e.g. selling personal secondhand items like an old bike, or non-budgeted goodwill
+            gifts).
+          </p>
+          <p className="mb-3 text-xs text-ink-muted">
+            Not for loans or repayments (use{' '}
+            <Link href="/borrowing" className="sf-link">
+              Borrowing
+            </Link>
+            ), and not for categorised household spending (use{' '}
+            <Link href="/purchases" className="sf-link">
+              Purchases
+            </Link>
+            ).
           </p>
           <OtherMovementForm
             idPrefix="pots-other"

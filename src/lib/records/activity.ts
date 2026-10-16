@@ -158,6 +158,8 @@ export interface ActivityPurchaseFacts {
   version: number;
   /** The saved note as stored (the row's `note` is the display string). */
   note: string | null;
+  /** Optional secondary payee / route (matches bank statement). */
+  paidVia: string | null;
   /** Who recorded it, as the ledger stores them. */
   enteredBy: string;
   /** Null while the purchase stands; the reason ('' when none was given) once voided. */
@@ -349,10 +351,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         potId,
         dateFrom,
         dateTo,
-        source:
-          purchase.supplierId !== null
-            ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
-            : (schedule?.name ?? 'Unknown supplier'),
+        source: purchaseActivitySource(purchase, supplierNames, schedule?.name),
         code: purchaseActivityCode(purchase.refundOfPurchaseId !== null, schedule?.kind),
         scheduleId: schedule?.scheduleId ?? null,
         summary: purchaseLineSummary(lines, categoryNames, names),
@@ -1001,14 +1000,26 @@ export function purchaseActivityRow(
     potId,
     dateFrom: window.dateFrom,
     dateTo: window.dateTo,
-    source:
-      purchase.supplierId !== null
-        ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
-        : (schedule?.name ?? 'Unknown supplier'),
+    source: purchaseActivitySource(purchase, supplierNames, schedule?.name),
     code: purchaseActivityCode(purchase.refundOfPurchaseId !== null, schedule?.kind),
     scheduleId: schedule?.scheduleId ?? null,
     summary: purchaseLineSummary(lines, categoryNames, names),
   });
+}
+
+export function purchaseActivitySource(
+  purchase: Pick<typeof purchases.$inferSelect, 'supplierId' | 'paidVia'>,
+  supplierNames: Map<number, string>,
+  scheduleName?: string | null,
+): string {
+  const base =
+    purchase.supplierId !== null
+      ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
+      : (scheduleName ?? null);
+  if (base !== null) {
+    return purchase.paidVia ? `${base} · via ${purchase.paidVia}` : base;
+  }
+  return purchase.paidVia ? `via ${purchase.paidVia}` : 'Unknown supplier';
 }
 
 /** Where a purchase sorts among the rows — the same position whether it is live or pinned. */
@@ -1083,6 +1094,7 @@ function purchaseActivityRowFrom(
         : {
             version: purchase.version,
             note: purchase.note,
+            paidVia: purchase.paidVia ?? null,
             enteredBy: purchase.enteredBy,
             voidReason: purchase.voidedAt === null ? null : (purchase.voidReason ?? ''),
             lines: lines.map((line) => ({

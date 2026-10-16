@@ -118,6 +118,7 @@ export const entryAllocationLineSchema = z
 /** Parsed, server-authoritative shape for the Add Purchase flow. */
 export const purchaseEntrySchema = z.object({
   supplierName: nullableText(120, 'Supplier name'),
+  paidVia: nullableText(120, 'Paid via'),
   potId: positiveIdSchema,
   totalPence: positivePenceSchema,
   paidByPersonId: positiveIdSchema.nullable().default(null),
@@ -401,6 +402,7 @@ export const editPurchaseEntrySchema = z.object({
   expectedVersion: positiveIdSchema,
   occurredDate: localDateSchema.nullable().default(null),
   note: nullableText(280, 'Note'),
+  paidVia: nullableText(120, 'Paid via'),
   lines: z.array(entryAllocationLineSchema).min(1, 'Add at least one allocation line.'),
 });
 

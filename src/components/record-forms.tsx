@@ -224,6 +224,7 @@ export interface PurchaseEditFormProps {
   expectedVersion: number;
   occurredDate: string;
   note: string;
+  paidVia?: string | null;
   lines: EntryLineState[];
   categories: CategoryOption[];
   people: TargetOption[];
@@ -280,6 +281,20 @@ export function PurchaseEditForm(props: PurchaseEditFormProps) {
           type="text"
           maxLength={280}
           defaultValue={props.note}
+          className={inputClass}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`edit-purchase-${props.purchaseId}-paid-via`} className={labelClass}>
+          Paid via / Bank payee (optional)
+        </label>
+        <input
+          id={`edit-purchase-${props.purchaseId}-paid-via`}
+          name="paidVia"
+          type="text"
+          maxLength={120}
+          defaultValue={props.paidVia ?? ''}
+          placeholder="e.g. James, PayPal (matches bank statement)"
           className={inputClass}
         />
       </div>
@@ -461,6 +476,7 @@ export interface RecentEntryActionsProps {
   expectedVersion: number;
   occurredDate: string;
   note: string;
+  paidVia?: string | null;
   lines: EntryLineAmounts[];
   categories: CategoryOption[];
   people: TargetOption[];
@@ -524,6 +540,7 @@ export function RecentEntryActions(props: RecentEntryActionsProps) {
           expectedVersion={props.expectedVersion}
           occurredDate={props.occurredDate}
           note={props.note}
+          paidVia={props.paidVia}
           lines={editLines}
           categories={props.categories}
           people={props.people}

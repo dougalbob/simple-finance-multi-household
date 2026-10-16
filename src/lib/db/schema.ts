@@ -196,6 +196,12 @@ export const purchases = sqliteTable(
     paidByPersonId: integer('paid_by_person_id').references(() => people.id),
     enteredBy: text('entered_by').notNull(),
     note: text('note'),
+    /**
+     * Optional secondary payee or payment route (e.g. "James", "PayPal")
+     * when the bank statement payee differs from the merchant/supplier.
+     * Keeps statement reconciliation clear without polluting the suppliers directory.
+     */
+    paidVia: text('paid_via'),
     refundOfPurchaseId: integer('refund_of_purchase_id').references(
       (): AnySQLiteColumn => purchases.id,
     ),

@@ -254,6 +254,7 @@ export default async function PurchasesPage({
                     totalPence={purchase.totalPence}
                     occurredAt={purchase.occurredAt}
                     occurredDate={toLocalDateString(new Date(purchase.occurredAt))}
+                    paidVia={purchase.paidVia}
                     supplierLabel={
                       purchase.supplierId !== null
                         ? (supplierNames.get(purchase.supplierId) ?? 'Unknown supplier')
@@ -323,6 +324,7 @@ interface PurchaseRowProps {
   voidedAt: Date | null;
   voidReason: string | null;
   note: string;
+  paidVia: string | null;
   version: number;
   attachments: StoredAttachment[];
   /** Odometer, litres and mpg — fuel purchases only (v0.10.0). */
@@ -371,9 +373,12 @@ function PurchaseRow(props: PurchaseRowProps) {
           <span
             className={props.voidedAt !== null ? 'line-through' : 'font-medium text-ink-emphasis'}
           >
-            {props.supplierLabel}
+            {props.paidVia ? `via ${props.paidVia}` : props.supplierLabel}
           </span>
         )}
+        {props.supplierId !== null && props.paidVia ? (
+          <span className="ml-1.5 text-xs text-ink-soft">· via {props.paidVia}</span>
+        ) : null}
         {props.note !== '' ? <p className="mt-0.5 text-xs text-ink-muted">{props.note}</p> : null}
         {props.fuel !== null ? <FuelDetailsForm {...props.fuel} /> : null}
         <AttachmentForm purchaseId={props.purchaseId} attachments={props.attachments} />
@@ -451,6 +456,7 @@ function PurchaseRow(props: PurchaseRowProps) {
                 expectedVersion={props.version}
                 occurredDate={props.occurredDate}
                 note={props.note}
+                paidVia={props.paidVia}
                 lines={props.lines.map((line) => ({
                   amountPence: line.amountPence,
                   categoryId: line.categoryId,

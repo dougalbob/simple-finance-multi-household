@@ -531,7 +531,7 @@ export function OtherMovementForm({
             type="text"
             required
             maxLength={120}
-            placeholder="e.g. neighbour"
+            placeholder="e.g. buyer or friend"
             className={inputClass}
           />
         </div>
@@ -561,7 +561,7 @@ export function OtherMovementForm({
             type="text"
             required
             maxLength={280}
-            placeholder="e.g. sold the old bike"
+            placeholder="e.g. sold the old bike, gift to friend"
             className={inputClass}
           />
         </div>

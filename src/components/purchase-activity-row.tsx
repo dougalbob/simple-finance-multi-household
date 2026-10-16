@@ -262,6 +262,7 @@ export function PurchaseActivityRow({
                   expectedVersion={facts.version}
                   occurredDate={row.date}
                   note={facts.note ?? ''}
+                  paidVia={facts.paidVia ?? ''}
                   lines={lines}
                   categories={categories}
                   people={people}
