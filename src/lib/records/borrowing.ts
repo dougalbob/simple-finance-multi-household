@@ -29,12 +29,16 @@ import { listExternalMovements, type ExternalMovement } from './external-movemen
 const EXPECTED_LOOKAHEAD_DAYS = 365;
 
 /**
- * How many expected rows a single plan previews. A finite plan (the
- * "£1,000 on the 13th for 5 months" story) shows every remaining payment; an
- * open-ended one previews the next six rather than a year of identical
- * greyed rows.
+ * How many expected rows a single plan previews in the ledger.
+ *
+ * **One** (issue #68): a plan on a cadence shows only its **next** expected
+ * occurrence — "expected — not yet recorded" — because the ledger is a
+ * history of what happened, and a wall of identical greyed future rows says
+ * nothing the person's card does not already say ("Expecting £1,000.00 on
+ * day 12 of each month"). The plan itself is unchanged: every occurrence
+ * still projects into the money views, exactly as before.
  */
-const EXPECTED_ROWS_PER_DEBT = 6;
+const EXPECTED_ROWS_PER_DEBT = 1;
 
 export interface BorrowingExpected {
   debtId: number;
@@ -51,7 +55,7 @@ export interface BorrowingDebtLine {
   balancePence: number;
   movementCount: number;
   totalMovementCount: number;
-  /** Honest words (decisions 167/168): awaiting / settled / overpaid / we owe … */
+  /** Honest words (decisions 167/168): awaiting / Nothing owing / overpaid / we owe … */
   statusLabel: string;
   /** Ledger convention: **negative = we owe, positive = owed to us**. */
   signedBalancePence: number;
@@ -113,7 +117,7 @@ export interface BorrowingLedger {
 export interface BorrowingLedgerOptions {
   /** From/To filter: the exact counterparty shown on the rows, or undefined for all. */
   who?: string | undefined;
-  /** Oldest first (a bank statement, as the issue's tables draw it) or newest first. */
+  /** Newest first (the default since issue #68) or oldest first. */
   order?: 'oldest' | 'newest';
   /** Ledger `today` — expected rows project strictly after it. Tests pass a fixed date. */
   today?: string;
@@ -122,6 +126,16 @@ export interface BorrowingLedgerOptions {
 /** Signed ledger balance: `we_owe` outstanding reads negative (we owe), `they_owe` positive. */
 export function signedBalancePence(direction: DebtDirection, outstandingPence: number): number {
   return direction === 'we_owe' ? -outstandingPence : outstandingPence;
+}
+
+/**
+ * True when the arrangement owes nothing at all (issue #68): the balance is
+ * zero, or overpaid. A repayment then has nothing to repay, so the page
+ * greys the repayment action out rather than offering a form that can only
+ * be refused. Borrowing more is always allowed.
+ */
+export function nothingOwed(balancePence: number): boolean {
+  return balancePence <= 0;
 }
 
 /** The balance cell, in the ledger's own convention: "−£1,000" / "£75 (owed)" / "—". */
@@ -194,16 +208,17 @@ function expectedForDebt(db: Db, debt: Debt, today: string): BorrowingExpected[]
 
 /**
  * The combined ledger: every loan movement (live and voided — history keeps)
- * plus each plan's expected rows, oldest first by default. A row's running
- * balance is its **debt's** balance after it (never netted across the two
- * IOUs one person may hold), signed as the household's tables draw it.
+ * plus each plan's **next** expected row, newest first by default (issue
+ * #68). A row's running balance is its **debt's** balance after it (never
+ * netted across the two IOUs one person may hold), signed as the household's
+ * tables draw it.
  */
 export function buildBorrowingLedger(
   db: Db,
   options: BorrowingLedgerOptions = {},
 ): BorrowingLedger {
   const today = options.today ?? toLocalDateString(new Date());
-  const order = options.order ?? 'oldest';
+  const order = options.order ?? 'newest';
   const who = options.who;
 
   const debtLines: BorrowingDebtLine[] = listDebtsWithBalances(db).map(

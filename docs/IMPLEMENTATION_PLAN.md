@@ -3622,3 +3622,54 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     format or domain change — this is presentation and navigation only. Reviewed and approved by the
     household on the Arena preview (both judgement calls: the arrow marks the nested leg, and each leg
     keeps its own Edit/Void with the pair-level void in the footer) before stable `v1.23.0` was cut.
+
+232. **The ledger tells the truth in plain words, keeps the reader in place, and the line items open
+    where they were asked for (2026-10-16, GitHub issue #68, v1.25.0).** The household's report: the
+    Borrowing page and the Insights page both "lose your place" — a sort order change threw the reader
+    back to the top of the page, and on Insights the line items opened *below the whole card*, so
+    closing them stranded the reader in the middle of nowhere. Alongside it, a visual pass: the word
+    "Settled" was legal-sounding where the household wanted plain English, and a ledger on a cadence
+    showed three future rows it had already told them about.
+
+    - **"Nothing owing", and nothing to repay.** An arrangement whose balance has been brought to zero
+      (or below) now reads **"Nothing owing"** on the person's card and in the ledger's status chip —
+      the label the household asked for, in place of "Settled" (`src/lib/records/debts.ts`). While
+      nothing is owed, the repayment action on the card is **greyed out** (`src/components/borrowing-forms.tsx`):
+      a `<span aria-disabled="true">`, not a disabled `<button>`, so it is skipped by the keyboard and
+      screen readers instead of inviting an action that the server would refuse. A balance that is
+      negative is still "Nothing owing" — the household is ahead, and there is nothing to repay.
+    - **The ledger is a history, so it shows history.** A plan on a cadence used to print three
+      "expected — not recorded yet" rows in the ledger; now it prints **only the next one**
+      (`EXPECTED_ROWS_PER_DEBT = 1` in `src/lib/records/borrowing.ts`) — the plan in full is already on
+      the person's card, and the ledger's job is what has happened plus the one nudge for what is next.
+    - **Newest first, and the reader stays where they were.** The ledger's default order is now
+      **newest first** (`?order=oldest` asks for the old way round; the default is left out of the URL
+      so a plain `/borrowing` is the short, honest link). The sort and filter links are `<Link
+      scroll={false}>`, so changing the order or the person filter **keeps the vertical scroll
+      position** instead of jumping to the top (`src/app/borrowing/page.tsx`).
+    - **The line items open where they were clicked.** On Insights, a **category cell** now opens its
+      line items in a table row **immediately below the category line that was clicked** — a
+      `<tr colSpan={columnCount}>` inside the same table, pinned to the visible width
+      (`sticky left-0 w-[min(calc(100vw-4rem),100%)]`) so it stays on screen on a phone — instead of
+      below the whole card, which is what made closing it a small act of navigation (`src/app/insights/page.tsx`).
+    - **Closing puts the reader back where they started.** Every close link now carries a **return
+      anchor** (`insightsHref(state, anchor)`): a month total closes to the **top of the page** (a
+      fragment-less URL lands at `scrollY 0`, so the month totals are showing again); a category cell
+      closes to **its own row** (`#month-category-{parentId}`); a By-person figure closes to **that
+      person's card** (`#person-{id}`); a vehicle figure closes to **that vehicle's card**
+      (`#vehicle-{id}`), whose top then sits just below the sticky menu — the position the household
+      asked for. The mechanics: an existing fragment target is scrolled to just below the 85px sticky
+      header (12px gap, `sf-anchor`); a missing target leaves the browser where it was; a URL with no
+      fragment lands at the top.
+    - **A zero figure opens nothing.** A **£0.00** amount on the Insights month table is a muted
+      non-link, not a link to an empty panel: there is nothing behind a zero figure.
+
+    Coverage: `tests/borrowing-ledger.test.ts` (the newest-first default, the single expected row, the
+    nothing-owing balance); `tests/debt-status.test.ts` and `tests/external-money.test.ts` (the new
+    status word); `tests/guide.test.ts` (the guide's own wording);
+    `e2e/borrowing.spec.ts` (newest-first rows, the order change keeping the scroll position, the
+    "Nothing owing" card and its greyed repayment); `e2e/debt-lifecycle.spec.ts` (the honest status of a
+    settled arrangement); `e2e/insights.spec.ts` (the month close returning to the top, the category
+    drill opening and closing on its own row, the vehicle close landing just below the menu, the
+    greyed £0.00). No schema, migration or domain change — this is presentation, copy and navigation
+    only.

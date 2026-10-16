@@ -351,18 +351,22 @@ export function debtsSummary(db: Db): DebtsSummary {
 
 /**
  * Honest one-line label for a debt balance, e.g. "we owe £200.00" /
- * "settled" / "overpaid £5.00" / "Awaiting first payment".
+ * "Nothing owing" / "overpaid £5.00" / "Awaiting first payment".
  *
  * A zero balance with no effective movements is not settled — it is a loan
  * that has not started yet (decision 168). Voided-only history counts as
  * unstarted for display, but still blocks permanent deletion (decision 167).
+ *
+ * A zero balance with movements reads **"Nothing owing"** (issue #68): the
+ * arrangement is finished, and the words say what the household asked for —
+ * nothing is owed either way, rather than the legal-sounding "settled".
  */
 export function debtBalanceLabel(debt: Debt, balancePence: number, movementCount?: number): string {
   if (balancePence === 0) {
     if (movementCount !== undefined && movementCount === 0) {
       return debt.direction === 'we_owe' ? 'Awaiting first payment' : 'Awaiting first loan';
     }
-    return 'settled';
+    return 'Nothing owing';
   }
   if (balancePence < 0) return `overpaid ${formatPence(-balancePence)}`;
   return debt.direction === 'we_owe'

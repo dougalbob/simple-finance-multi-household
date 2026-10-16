@@ -6,6 +6,7 @@ import { useActionState, useEffect, useRef, useState } from 'react';
 import { addExternalMovementAction, startBorrowingAction } from '@/app/actions';
 import { initialActionState } from '@/lib/action-state';
 import { formatPence, parsePence, penceInput } from '@/lib/money';
+import { nothingOwed } from '@/lib/records/borrowing';
 import { lastOccurrenceDate } from '@/lib/records/dates';
 import type { PotKind } from '@/lib/records/pots';
 
@@ -129,6 +130,10 @@ function actionHeading(direction: 'we_owe' | 'they_owe', movementDirection: 'in'
  * row's "Record this month's £…" link) expands a compact inline section with
  * only the fields needed for that movement (Pot, Amount, When, Note), then
  * collapses after a brief 2000ms confirmation on save.
+ *
+ * When the arrangement owes nothing, the **repayment** action is greyed out
+ * (issue #68): there is nothing to repay, and the offer would only be
+ * refused.
  */
 export function PersonDebtRecord({
   debtId,
@@ -226,22 +231,39 @@ export function PersonDebtRecord({
     }, AUTO_COLLAPSE_MS);
   };
 
-  const actions: ReadonlyArray<{ what: 'in' | 'out'; label: string }> =
+  const actions: ReadonlyArray<{ what: 'in' | 'out'; label: string; repayment: boolean }> =
     direction === 'we_owe'
       ? [
-          { what: 'in', label: 'Record borrowing' },
-          { what: 'out', label: 'Record a repayment' },
+          { what: 'in', label: 'Record borrowing', repayment: false },
+          { what: 'out', label: 'Record a repayment', repayment: true },
         ]
       : [
-          { what: 'out', label: 'Record a loan out' },
-          { what: 'in', label: 'Record what they repaid' },
+          { what: 'out', label: 'Record a loan out', repayment: false },
+          { what: 'in', label: 'Record what they repaid', repayment: true },
         ];
+
+  // Nothing is owed, so there is nothing to repay: the repayment action is
+  // greyed out rather than offering a form the server would only refuse
+  // (issue #68). Borrowing or lending more is always allowed.
+  const repayDisabled = nothingOwed(balancePence);
 
   return (
     <div>
       <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
         {actions.map((action) => {
           const isOpen = activeDirection === action.what;
+          if (action.repayment && repayDisabled) {
+            return (
+              <span
+                key={action.what}
+                aria-disabled="true"
+                title="Nothing is owed on this arrangement, so there is nothing to repay yet."
+                className="text-ink-faint"
+              >
+                {action.label}
+              </span>
+            );
+          }
           return (
             <a
               key={action.what}

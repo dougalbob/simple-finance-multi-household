@@ -140,8 +140,10 @@ test.describe('Borrowing page — the ledger and inline recording (issues #60, #
 
     await expect(card.locator('li').getByText('owed to us £50.00')).toBeVisible();
     const after = page.locator('tbody tr', { hasText: counterparty });
-    await expect(after.nth(0).getByText('£75.00 (owed)')).toBeVisible();
-    await expect(after.nth(1).getByText('£50.00 (owed)')).toBeVisible();
+    // The ledger is newest first (issue #68), so the newer repayment reads
+    // first — the running balance on each row is still that row's own.
+    await expect(after.nth(0).getByText('£50.00 (owed)')).toBeVisible();
+    await expect(after.nth(1).getByText('£75.00 (owed)')).toBeVisible();
 
     // The From/To filter groups the ledger to this person and personalises
     // the column captions; everyone stays on the chips.
@@ -303,5 +305,81 @@ test.describe('Borrowing page — the ledger and inline recording (issues #60, #
     // An old `/pots#debt-{id}` bookmark is forwarded to the summary strip.
     await page.goto(`/pots#debt-${debtId}`);
     await expect(page).toHaveURL(new RegExp(`/borrowing#debt-${debtId}`));
+  });
+
+  test('the ledger is newest first, shows only the next expected payment, and keeps the reader in place when the order changes (issue #68)', async ({
+    page,
+  }) => {
+    const counterparty = `Order ${Date.now()}`;
+    await page.goto('/borrowing');
+    const setup = await openSetup(page);
+    await setup.getByLabel('Their name').fill(counterparty);
+    await setup.getByLabel('Is this a recurring arrangement?').selectOption('recurring');
+    await setup.getByLabel('Expected each month').fill('120.00');
+    await setup.getByLabel('On day').fill('15');
+    await setup.getByRole('button', { name: 'Start tracking' }).click();
+    await expect(setup.getByRole('status')).toContainText(/expecting £120\.00 on day/i);
+
+    const ledger = page.locator('section[aria-labelledby="ledger-heading"]');
+    // A plan on a cadence shows only its **next** expected payment in the
+    // ledger — the rest of the plan is on the person's card.
+    const expectedRows = page
+      .locator('tbody tr', { hasText: counterparty })
+      .filter({ hasText: 'expected — not recorded yet' });
+    await expect(expectedRows).toHaveCount(1);
+
+    // Newest first is the default, so the toggle offers the other order.
+    const toggle = ledger.getByRole('link', { name: /first$/ });
+    await expect(toggle).toHaveText('Oldest first');
+
+    // Changing the order is a choice about the rows, not a new page: the
+    // reader stays exactly where they were.
+    await toggle.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(200);
+    const before = await page.evaluate(() => window.scrollY);
+    expect(before).toBeGreaterThan(100);
+    await toggle.click();
+    await expect(page).toHaveURL(/order=oldest/);
+    await page.waitForTimeout(500);
+    const after = await page.evaluate(() => window.scrollY);
+    expect(Math.abs(after - before), 'the page must not jump to the top').toBeLessThan(8);
+    await expect(ledger.getByRole('link', { name: /first$/ })).toHaveText('Newest first');
+  });
+
+  test('an arrangement that owes nothing says so and greys the repayment out (issue #68)', async ({
+    page,
+  }) => {
+    const counterparty = `Nothing ${Date.now()}`;
+    await page.goto('/borrowing');
+    const setup = await openSetup(page);
+    await setup.getByLabel('Their name').fill(counterparty);
+    await setup.getByLabel('Which way round?').selectOption('they_owe');
+    await setup.getByLabel('Is this a recurring arrangement?').selectOption('one-off');
+    await setup.getByLabel('What happened?').selectOption({ label: 'Lent — money out' });
+    await setup.getByLabel('Which pot?').selectOption({ label: 'Main account' });
+    await setup.getByLabel('Amount').fill('60.00');
+    await setup.getByRole('button', { name: 'Start tracking and record it' }).click();
+    await expect(setup.getByRole('status')).toContainText(/lent £60\.00/i);
+
+    const card = personCard(page, counterparty);
+    await expect(card.locator('li').getByText('owed to us £60.00')).toBeVisible();
+
+    // Repay it in full.
+    await card.getByRole('link', { name: 'Record what they repaid' }).click();
+    const inlinePanel = card.locator('[data-inline-record]');
+    await inlinePanel.getByLabel('Amount').fill('60.00');
+    await inlinePanel.getByRole('button', { name: 'Record it' }).click();
+    await expect(inlinePanel.getByRole('status')).toContainText(/repaid £60\.00/i);
+
+    // Nothing is owed, so the card says so and the repayment is greyed out.
+    await expect(card.locator('li').getByText('Nothing owing')).toBeVisible();
+    await expect(card.getByRole('link', { name: 'Record what they repaid' })).toHaveCount(0);
+    await expect(card.locator('span[aria-disabled="true"]')).toHaveText('Record what they repaid');
+    // The ledger's chip for that person carries the same honest words.
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Filter by person' })
+        .getByRole('link', { name: counterparty }),
+    ).toContainText('Nothing owing');
   });
 });

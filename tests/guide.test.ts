@@ -95,10 +95,10 @@ describe('the guide: eight anchored ideas, pinned to what the app really does', 
       'the pots page no longer lists transfers',
     );
     // Borrowing is owed, never income; informal IOUs only; awaiting, never
-    // falsely settled (decision 168).
+    // falsely nothing owing (decision 168, re-worded by issue #68).
     assert.match(text('borrowing'), /expected — never received/);
     assert.match(text('borrowing'), /informal IOUs/);
-    assert.match(text('borrowing'), /awaiting its first payment, never “settled”/);
+    assert.match(text('borrowing'), /awaiting its first payment, never “nothing owing”/);
     // Schedules convert on the due date; edits apply from the next instance;
     // the one backfill exception (decision 162); the category of a
     // converted payment is forward-only (tests/schedule-category-correction.test.ts).

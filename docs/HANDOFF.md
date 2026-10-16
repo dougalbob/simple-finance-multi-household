@@ -1,3 +1,47 @@
+# Release v1.25.0 — "Nothing owing" on Borrowing, and line items that open and close where you were (GitHub issue #68) (2026-10-16)
+
+**Release scope is prepared on this branch.** The household's report was a list of small annoyances
+on the two pages they use most for reading: the Borrowing page's legal-sounding "Settled", a ledger
+that printed three identical future rows and threw the reader back to the top when the order
+changed, and Insights line items that opened below the whole card — so closing them stranded the
+reader. All of it is fixed in one slice. Version files are aligned at **v1.25.0 stable**, moving
+`latest` on `ghcr.io/dougalbob/simple-finance-multi-household` only. No schema, migration or
+backup-format change. Required PR CI, main CI and tagged Publish evidence are still pending at
+preparation time; this is a pre-merge record, not proof that a tag or image exists.
+
+**#68 (decision 232).** On **Borrowing**: an arrangement that owes nothing now reads **"Nothing
+owing"** on the person's card and in the ledger's status chip (never the legal-sounding "Settled"),
+and while nothing is owed its **repayment** action is greyed out — a muted
+`<span aria-disabled="true">`, skipped by the keyboard, instead of an offer the server would
+refuse. The ledger is **newest first** by default (`?order=oldest` asks for the old order, and the
+default is left out of the URL), prints **only the next** "expected — not yet recorded" row instead
+of three, and the sort and person-filter links are `<Link scroll={false}>` so **the reader's scroll
+position is kept** when the order or the filter changes. On **Insights**: a **category cell** opens
+its line items in a full-width table row **immediately below the category line that was clicked**
+(pinned to the visible width on a phone), and every close link carries a **return anchor** — a
+month total closes to the **top of the page** (a fragment-less URL lands at `scrollY 0`), a
+category closes to **its own row** (`#month-category-{parentId}`), a By-person figure closes to
+**that person's card** (`#person-{id}`), and a vehicle figure closes to **that vehicle's card**
+(`#vehicle-{id}`), whose top then sits just below the sticky menu. A **£0.00** figure is a muted
+non-link: there is nothing behind a zero.
+
+**Where the code lives.** `src/lib/records/debts.ts` — the "Nothing owing" status word.
+`src/lib/records/borrowing.ts` — `EXPECTED_ROWS_PER_DEBT = 1`, the `newest` default order and the
+`nothingOwed()` helper. `src/app/borrowing/page.tsx` — newest-first default, `scroll={false}` on the
+sort/filter links, `buildLedgerHref` leaving the default order out of the URL.
+`src/components/borrowing-forms.tsx` — the greyed repayment action. `src/app/insights/page.tsx` —
+`toggleShow(selection, openAnchor, closeAnchor)`, `insightsHref(state, anchor)` (a `null` anchor
+means no fragment at all, which is what lands the reader at the top of the page), the inline
+category drill `<tr colSpan={columnCount}>` and the `MONTH_PANEL_ANCHOR` fallback. `src/lib/guide.ts`
+— the guide's own wording, so the app never contradicts itself.
+
+**Verified locally:** Gates: `npm run format:check`, `npm run typecheck`, `npm test`
+(**1,012/1,012 across 233 suites**), `npm run build`. Browser (Playwright via SANDBOX entry 8, fresh
+seed): `borrowing` (5/5), `debt-lifecycle` (8/8) and `insights` (7/7) — 20/20, including the seven
+new issue-#68 journeys. See `docs/RELEASE_NOTES_v1.25.0.md`.
+
+---
+
 # Release v1.24.0 — Statement payee on purchases and Other money signposting (2026-10-16)
 
 **Release scope is prepared on this branch.** Version files are aligned at **v1.24.0 stable**, moving `latest` on

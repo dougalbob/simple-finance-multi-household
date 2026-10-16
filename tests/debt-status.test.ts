@@ -189,7 +189,7 @@ describe('a loan awaiting its first payment must not say settled (decision 168)'
       bal = debtBalance(fx.db, debt);
       assert.equal(bal.balancePence, 0);
       assert.equal(bal.movementCount, 3);
-      assert.equal(debtBalanceLabel(debt, bal.balancePence, bal.movementCount), 'settled');
+      assert.equal(debtBalanceLabel(debt, bal.balancePence, bal.movementCount), 'Nothing owing');
 
       createExternalMovement(fx.db, {
         potId: fx.pots.main.id,
