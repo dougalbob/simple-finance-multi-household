@@ -38,11 +38,16 @@ category drill `<tr colSpan={columnCount}>` and the `MONTH_PANEL_ANCHOR` fallbac
 **Verified locally:** Gates: `npm run format:check`, `npm run typecheck`, `npm test`
 (**1,012/1,012 across 233 suites**), `npm run build`. Browser (Playwright via SANDBOX entry 8, fresh
 seed): `borrowing` (5/5), `debt-lifecycle` (8/8) and `insights` (7/7) — 20/20, including the seven
-new issue-#68 journeys. Two sandbox lessons from this slice are recorded as **SANDBOX entry 24**:
+new issue-#68 journeys. Three sandbox lessons from this slice are recorded as **SANDBOX entry 24**:
 a scroll assertion must call `scrollIntoViewIfNeeded()` before it measures (Playwright's click
-scrolls the target into view), and a dirty e2e database is fixed by **restarting the server**
+scrolls the target into view); a dirty e2e database is fixed by **restarting the server**
 (`scripts/e2e-server.mts` re-seeds its data directory on every start) rather than by editing the
-spec. See `docs/RELEASE_NOTES_v1.25.0.md`.
+spec; and a spec that moves money must leave the shared seed's pot balances as it found them — a
+same-day debit always counts against a pot's estimate (the same-day credit is absorbed by its
+checkpoint), so the new "Nothing owing" journey records its £60 **dated yesterday** and returns it
+to Main account. Without that, the payday project (which runs last and reads those balances) named
+Main account instead of Natwest as the worst bills-only shortfall, and its spec failed. See
+`docs/RELEASE_NOTES_v1.25.0.md`.
 
 ---
 

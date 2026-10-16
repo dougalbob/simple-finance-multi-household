@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { londonToday } from './support';
+import { addDaysIso, londonToday } from './support';
 
 /**
  * The Borrowing page (GitHub issues #60 and #63, decision 228): the per-person
@@ -350,6 +350,13 @@ test.describe('Borrowing page — the ledger and inline recording (issues #60, #
     page,
   }) => {
     const counterparty = `Nothing ${Date.now()}`;
+    // Yesterday, not today. A pot's estimate counts a same-day debit even when
+    // the money comes straight back (the same-day credit is absorbed by the
+    // pot's checkpoint), so a journey that spends from Main account today
+    // leaves the shared seed's balances changed for the payday fixture, which
+    // runs last and reads them. Dated yesterday, this journey leaves them
+    // exactly as it found them (docs/SANDBOX.md entry 24).
+    const yesterday = addDaysIso(londonToday(), -1);
     await page.goto('/borrowing');
     const setup = await openSetup(page);
     await setup.getByLabel('Their name').fill(counterparty);
@@ -358,15 +365,18 @@ test.describe('Borrowing page — the ledger and inline recording (issues #60, #
     await setup.getByLabel('What happened?').selectOption({ label: 'Lent — money out' });
     await setup.getByLabel('Which pot?').selectOption({ label: 'Main account' });
     await setup.getByLabel('Amount').fill('60.00');
+    await setup.getByLabel('When').fill(yesterday);
     await setup.getByRole('button', { name: 'Start tracking and record it' }).click();
     await expect(setup.getByRole('status')).toContainText(/lent £60\.00/i);
 
     const card = personCard(page, counterparty);
     await expect(card.locator('li').getByText('owed to us £60.00')).toBeVisible();
 
-    // Repay it in full.
+    // Repay it in full, into the pot the money left from.
     await card.getByRole('link', { name: 'Record what they repaid' }).click();
     const inlinePanel = card.locator('[data-inline-record]');
+    await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await inlinePanel.getByLabel('When').fill(yesterday);
     await inlinePanel.getByLabel('Amount').fill('60.00');
     await inlinePanel.getByRole('button', { name: 'Record it' }).click();
     await expect(inlinePanel.getByRole('status')).toContainText(/repaid £60\.00/i);

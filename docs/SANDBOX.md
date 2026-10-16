@@ -688,6 +688,20 @@ editing the spec or the expectation. A one-line `node -e` with `better-sqlite3` 
 `.e2e-data/households/<id>/simple-finance.sqlite` is the quickest way to see what the run left
 behind.
 
+**Symptom 3 — a spec that spends money today can break a spec that runs last.** A pot's estimate
+counts a **same-day debit** even when the money comes straight back (the same-day *credit* is
+absorbed by the pot's checkpoint — `recordIsAfterCheckpoint`, SPEC §7.1), so a journey that lends
+£60 out of Main account and repays £60 today leaves Main account's estimate £60 lower for the rest
+of the run. The **payday** project runs last and reads those balances: its fixture adjusts the
+Scenario Energy direct debit so the household low lands on −£96.35, which ties the bills to the
+household's total, and the card then names the pot with the *worst* bills-only shortfall. £60 of
+extra spending in Main account flips that from Natwest to Main account and the payday spec fails
+with *"Main account has the worst bills-only shortfall: £68.77. It is already £68.77 overdrawn,
+with no bills left in this window."* A journey that moves money should therefore leave the shared
+seed's balances as it found them: record the legs **dated before today** (they are then absorbed
+by the payday fixture's checkpoint) and return the money to the pot it left. The same rule
+protects the fixture from any spec that spends from a liquid pot.
+
 **The local Playwright config's import shape.** `import { defineConfig } from '@playwright/test/index.js'`
 throws *"does not provide an export named 'defineConfig'"* here; use a default import and
 destructure (`import playwright from '@playwright/test/index.js'; const { defineConfig } =
