@@ -3568,7 +3568,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
          balance while still allowing submission.
 
 231. **The boundary history nests each swap into one object, and the redundant Owed & owing card is
-    gone (2026-10-16, GitHub issue #65, prepared for review on the Arena preview).** The household's
+    gone (2026-10-16, GitHub issue #65, v1.23.0).** The household's
     report: on Accounts, Pots & Checkpoints, *"Recent swaps & other money is not particularly
     intuitive at first glance"* — a swap appeared as two unrelated-looking rows, and a swap could be
     edited in two different places. Asked for: the related legs **nested** and re-worded so the pair
@@ -3619,4 +3619,6 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     leg → single-leg void → the pot-card link; and record → void both legs with one reason, both legs
     struck through and their controls gone); `e2e/borrowing.spec.ts`'s pots-page test now asserts the
     signpost is gone and the history panel's link to Borrowing works. No schema, migration, backup
-    format or domain change — this is presentation and navigation only.
+    format or domain change — this is presentation and navigation only. Reviewed and approved by the
+    household on the Arena preview (both judgement calls: the arrow marks the nested leg, and each leg
+    keeps its own Edit/Void with the pair-level void in the footer) before stable `v1.23.0` was cut.
