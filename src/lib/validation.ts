@@ -796,6 +796,106 @@ export const editExternalMovementEntrySchema = z.object({
 });
 
 /**
+ * Setting up informal borrowing in one flow (GitHub issue #60, the Borrowing
+ * page's setup card): either record a movement against a debt already tracked
+ * (`trackMode: 'existing'`), or track someone new (`'new'`) — with either a
+ * recurring support plan (£X on day N, until D or for N payments) or a
+ * one-off first movement (amount, pot, date, note). The action composes the
+ * existing domain calls (`createDebt`, `editDebt`, `createExternalMovement`).
+ */
+export const borrowingStartEntrySchema = z
+  .object({
+    trackMode: z.enum(['new', 'existing']),
+    /** Required for 'new' — the person the money is owed to or by. */
+    counterparty: z
+      .string()
+      .trim()
+      .max(120, 'Keep the name to 120 characters or fewer.')
+      .nullable()
+      .default(null),
+    /** Required for 'new' — which way round the IOU runs (immutable afterwards). */
+    direction: z.enum(['we_owe', 'they_owe']).nullable().default(null),
+    /** Optional "what is it for" note on a new debt. */
+    debtNote: nullableText(280, 'Note'),
+    /**
+     * Required for 'new': 'recurring' (the plan), 'one-off' (the first
+     * movement) or 'none' (just track the person — the deletable empty
+     * setup of decision 167, "awaiting first payment").
+     */
+    plan: z.enum(['recurring', 'one-off', 'none']).nullable().default(null),
+    /** The recurring plan (the amount/day pair rides together, until optional). */
+    expectedInflow: expectedInflowFieldSchema.nullable().default(null),
+    /** Required for 'existing' — the debt the movement belongs to. */
+    debtId: positiveIdSchema.nullable().default(null),
+    /** Required whenever a movement is recorded ('existing', or 'new' + 'one-off'). */
+    movementDirection: z.enum(['in', 'out']).nullable().default(null),
+    potId: positiveIdSchema.nullable().default(null),
+    amountPence: positivePenceSchema.nullable().default(null),
+    occurredDate: localDateSchema.nullable().default(null),
+    /** The movement's own note — e.g. "cash handed over — banked 16th". */
+    note: nullableText(280, 'Note'),
+  })
+  .superRefine((value, context) => {
+    const needMovement = () => {
+      if (value.movementDirection === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['movementDirection'],
+          message: 'Say whether the money came in or went out.',
+        });
+      }
+      if (value.potId === null) {
+        context.addIssue({ code: 'custom', path: ['potId'], message: 'Choose the pot.' });
+      }
+      if (value.amountPence === null) {
+        context.addIssue({ code: 'custom', path: ['amountPence'], message: 'Enter the amount.' });
+      }
+    };
+    if (value.trackMode === 'existing') {
+      if (value.debtId === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['debtId'],
+          message: 'Choose who this is with.',
+        });
+      }
+      needMovement();
+      return;
+    }
+    if (value.counterparty === null || value.counterparty === '') {
+      context.addIssue({
+        code: 'custom',
+        path: ['counterparty'],
+        message: 'Say who the money is owed to or by.',
+      });
+    }
+    if (value.direction === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['direction'],
+        message: 'Choose whether we owe them or they owe us.',
+      });
+    }
+    if (value.plan === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['plan'],
+        message: 'Choose whether this is a recurring arrangement, a one-off, or neither yet.',
+      });
+    } else if (value.plan === 'recurring') {
+      if (value.expectedInflow === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['expectedInflow'],
+          message: 'Fill in the expected amount and day.',
+        });
+      }
+    } else if (value.plan === 'one-off') {
+      needMovement();
+    }
+  });
+
+/**
  * One-off income (SPEC §6, §11.3, plan decision 110): money that arrived in
  * one pot on one day — a sold bicycle, a third-party refund, a gift. A
  * positive amount, an optional free-text `source` saying what or who it came

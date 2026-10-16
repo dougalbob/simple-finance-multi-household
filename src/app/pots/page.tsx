@@ -1,22 +1,19 @@
 import { redirect } from 'next/navigation';
 import {
   ArchivePotForm,
-  DebtEditForm,
-  DebtForm,
-  DeleteDebtForm,
   ExternalMovementEditForm,
-  LoanMovementForm,
   OtherMovementForm,
   SwapForm,
   VoidSwapPairForm,
 } from '@/components/external-forms';
+import { BorrowingMovedRedirect } from '@/components/borrowing-moved-redirect';
 import { AddCheckpointForm, CreatePotForm } from '@/components/pot-forms';
 import { VoidForm } from '@/components/record-forms';
 import { PotEditForm } from '@/components/settings-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import type { Db } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
-import { debtBalanceLabel, listDebtsWithBalances } from '@/lib/records/debts';
+import { debtsSummary } from '@/lib/records/debts';
 import {
   describeExternalMovement,
   getExternalMovement,
@@ -55,9 +52,12 @@ export const dynamic = 'force-dynamic';
  * cards show no overdraft or warning threshold — those datapoints describe
  * a bank facility or a credit line, not counted notes.
  *
- * Also home to the household boundary (SPEC §10.2): informal debts with
- * their derived balances, and the borrowing/repayment/swap/other movements
- * that move money across it.
+ * Also home to the household boundary (SPEC §10.2) that is **not**
+ * borrowing: swap pairs and other money in & out, with their edit and void
+ * controls. Informal debts — Owed & owing, borrowing, repayments and their
+ * ledger — moved to their own **Borrowing** page (GitHub issue #60, decision
+ * 228); a signpost card carries the running owed figures and a link. An old
+ * `/pots?external={id}` deep link to a loan movement redirects there.
  *
  * Internal pot-to-pot transfers no longer have a list here (decision 225,
  * GitHub issue #55): they are recorded in Quick Entry → Move, and corrected
@@ -97,10 +97,14 @@ export default async function PotsPage({
   const people = listPeople(db);
   const peopleById = new Map(people.map((person) => [person.id, person.label]));
   const money = getMoneySnapshot(db, now);
-  const debts = listDebtsWithBalances(db);
-  const recentExternal = listExternalMovements(db, { includeVoided: true, limit: 20 });
-  // A deep link from All Transactions (SPEC §15.3) must land on the record it
-  // names, even after that movement has fallen out of the recent twenty.
+  const owed = debtsSummary(db);
+  // Swaps and other money stay here (issue #60); borrowing history lives on
+  // the Borrowing page. A deep link from All Transactions (SPEC §15.3) must
+  // land on the record it names, even after it has fallen out of the recent
+  // twenty — unless it names a loan, which redirects to Borrowing.
+  const recentExternal = listExternalMovements(db, { includeVoided: true, limit: 20 }).filter(
+    (movement) => movement.kind !== 'loan',
+  );
   const linkedExternalId = Number(params.external);
   const linkedExternal =
     Number.isInteger(linkedExternalId) &&
@@ -108,6 +112,9 @@ export default async function PotsPage({
     recentExternal.every((movement) => movement.id !== linkedExternalId)
       ? findExternalMovement(db, linkedExternalId)
       : null;
+  if (linkedExternal !== null && linkedExternal.kind === 'loan') {
+    redirect(`/borrowing?external=${linkedExternal.id}#external-${linkedExternal.id}`);
+  }
   const externalRows =
     linkedExternal === null ? recentExternal : [linkedExternal, ...recentExternal];
   // Swaps grouped as pairs (SPEC §10.2) for the management list: the
@@ -380,130 +387,39 @@ export default async function PotsPage({
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        {/* Issue #60: informal borrowing moved to its own page. The signpost
+            keeps this page's overview role — the running owed figures — and
+            old `#debt-{id}` bookmarks are forwarded there (client-side: a
+            fragment never reaches the server). */}
+        <BorrowingMovedRedirect />
         <section
-          aria-labelledby="debts-heading"
+          aria-labelledby="borrowing-signpost-heading"
           className="rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
-          <h2 id="debts-heading" className="text-lg font-semibold">
+          <h2 id="borrowing-signpost-heading" className="text-lg font-semibold">
             Owed &amp; owing
           </h2>
           <p className="mb-3 mt-1 text-sm text-ink-soft">
-            Informal debts — money borrowed or lent outside the household. Balances derive from the
-            movements below, so they can never drift.
+            Informal debts — money borrowed or lent outside the household — now live on their own
+            page, with the setup flow, the repay panel and the full ledger.
           </p>
-          {debts.length === 0 ? (
-            <p className="mb-3 text-sm text-ink-muted">No debts tracked.</p>
-          ) : (
-            <ul className="mb-4 divide-y divide-border-hairline">
-              {debts.map(({ debt, balancePence, movementCount, totalMovementCount }) => (
-                <li key={debt.id} id={`debt-${debt.id}`} className="py-2">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                    <span className="font-medium">
-                      {debt.counterparty}{' '}
-                      <span className="font-normal text-ink-muted">
-                        ({debt.direction === 'we_owe' ? 'we owe' : 'owed to us'})
-                      </span>
-                    </span>
-                    <span
-                      className={`tabular-nums ${balancePence === 0 && movementCount === 0 ? 'text-ink-muted' : balancePence === 0 ? 'text-ink-muted' : 'font-semibold text-ink'}`}
-                    >
-                      {debtBalanceLabel(debt, balancePence, movementCount)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-ink-muted">
-                    {movementCount === 0
-                      ? totalMovementCount === 0
-                        ? 'no movements yet'
-                        : 'no effective movements — all voided'
-                      : `${movementCount} movement${movementCount === 1 ? '' : 's'}`}
-                    {debt.note !== null && debt.note !== '' ? ` — ${debt.note}` : ''}
-                  </p>
-                  {debt.expectedInflowAmountPence !== null &&
-                  debt.expectedInflowDayOfMonth !== null ? (
-                    movementCount > 0 && balancePence <= 0 ? (
-                      <p className="mt-1 text-xs text-ink-muted">
-                        Settled — nothing is outstanding, so the expected support is ignored even
-                        though it is still set. Clear it when the arrangement is over.
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-xs text-accent-800">
-                        Expecting {formatPence(debt.expectedInflowAmountPence)} on day{' '}
-                        {debt.expectedInflowDayOfMonth} of each month (a weekend day lands on the
-                        Friday before)
-                        {debt.expectedInflowUntilDate === null
-                          ? ', until you stop it'
-                          : `, until ${debt.expectedInflowUntilDate} inclusive`}
-                        . Expected, never received: it shows in the projections and in All
-                        Transactions, and the pot moves only when you record the borrowing.
-                      </p>
-                    )
-                  ) : null}
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-xs font-medium text-ink-soft">
-                      Edit
-                    </summary>
-                    <div className="mt-2">
-                      <DebtEditForm
-                        idPrefix={`debt-edit-${debt.id}`}
-                        debtId={debt.id}
-                        version={debt.version}
-                        counterparty={debt.counterparty}
-                        note={debt.note}
-                        expectedInflowAmountPence={debt.expectedInflowAmountPence}
-                        expectedInflowDayOfMonth={debt.expectedInflowDayOfMonth}
-                        expectedInflowUntilDate={debt.expectedInflowUntilDate}
-                        today={today}
-                      />
-                    </div>
-                  </details>
-                  {totalMovementCount === 0 ? (
-                    <details className="mt-1">
-                      <summary className="cursor-pointer text-xs font-medium text-danger">
-                        Delete
-                      </summary>
-                      <div className="mt-2">
-                        <DeleteDebtForm
-                          debtId={debt.id}
-                          version={debt.version}
-                          counterparty={debt.counterparty}
-                          direction={debt.direction}
-                          hasExpectedInflow={
-                            debt.expectedInflowAmountPence !== null &&
-                            debt.expectedInflowDayOfMonth !== null
-                          }
-                        />
-                      </div>
-                    </details>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-          <h3 className="mb-2 text-sm font-semibold">Track someone new</h3>
-          <DebtForm idPrefix="pots-debt" />
-        </section>
-
-        <section
-          aria-labelledby="borrow-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <h2 id="borrow-heading" className="text-lg font-semibold">
-            Borrow &amp; repay
-          </h2>
-          <p className="mb-3 mt-1 text-sm text-ink-soft">
-            Borrowing raises the pot estimate and what you owe together — never income. Repayments
-            reduce what you owe — never spending.
+          <p className="text-sm">
+            <span className="font-semibold tabular-nums">
+              we owe {formatPence(owed.owedByHouseholdPence)}
+            </span>
+            <span className="mx-2 text-ink-muted">·</span>
+            <span className="font-semibold tabular-nums">
+              owed to us {formatPence(owed.owedToHouseholdPence)}
+            </span>
+            <span className="ml-2 text-xs text-ink-muted">
+              ({owed.debtCount} arrangement{owed.debtCount === 1 ? '' : 's'})
+            </span>
           </p>
-          <LoanMovementForm
-            idPrefix="pots-loan"
-            pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-            debts={debts.map(({ debt }) => ({
-              id: debt.id,
-              counterparty: debt.counterparty,
-              direction: debt.direction,
-            }))}
-            today={today}
-          />
+          <p className="mt-3">
+            <a href="/borrowing" className="sf-link-arrow">
+              Open Borrowing
+            </a>
+          </p>
         </section>
 
         <section
@@ -695,10 +611,15 @@ export default async function PotsPage({
         className="mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm"
       >
         <h2 id="external-history-heading" className="text-lg font-semibold">
-          Recent money across the boundary
+          Recent swaps &amp; other money
         </h2>
         <p className="mb-3 mt-1 text-sm text-ink-soft">
-          Borrowing, repayments, swaps and other money — newest first. Voiding keeps the history.
+          Swaps and other money across the boundary — newest first. Voiding keeps the history.
+          Borrowing and repayments live on{' '}
+          <a href="/borrowing" className="sf-link">
+            Borrowing
+          </a>
+          .
         </p>
         {linkedExternal !== null ? (
           <p className="mb-2 rounded-lg bg-accent-50 px-3 py-2 text-xs text-accent-900">

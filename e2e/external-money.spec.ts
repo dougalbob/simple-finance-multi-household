@@ -22,27 +22,33 @@ function parsePounds(text: string): number {
 
 test.describe('external money', () => {
   test('borrowing raises the owed balance beside available now', async ({ page }) => {
-    await page.goto('/pots');
-    const debts = page.locator('section[aria-labelledby="debts-heading"]');
-    // Scope to the "Track someone new" form: the seeded "Mum" debt's own edit
-    // form (inside its collapsed <details>) carries the same label.
-    const trackForm = debts
-      .locator('form')
-      .filter({ has: page.getByRole('button', { name: 'Track this debt' }) });
-    await trackForm.getByLabel('Who is it owed to or by?').fill('E2E Lender');
-    await trackForm.getByRole('button', { name: 'Track this debt' }).click();
-    await expect(trackForm.getByRole('status')).toContainText(/now tracking/i);
+    // Debts live on the Borrowing page since issue #60 (decision 228).
+    await page.goto('/borrowing');
+    const setup = page.locator('section[aria-labelledby="setup-heading"]');
+    await setup.getByLabel('Who is this with?').selectOption('new');
+    await setup.getByLabel('Their name').fill('E2E Lender');
+    await setup.getByLabel('Is this a recurring arrangement?').selectOption('none');
+    await setup.getByRole('button', { name: 'Start tracking' }).click();
+    await expect(setup.getByRole('status')).toContainText(/now tracking/i);
 
-    const borrow = page.locator('section[aria-labelledby="borrow-heading"]');
-    await borrow.getByLabel('Debt').selectOption({ label: 'E2E Lender (we owe)' });
-    await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await borrow.getByLabel('Amount').fill('50.00');
-    await borrow.getByRole('button', { name: 'Record it' }).click();
-    await expect(borrow.getByRole('status')).toContainText(/borrowed £50\.00/i);
+    const record = page.locator('section[aria-labelledby="record-heading"]');
+    await record.getByLabel('Debt').selectOption({ label: 'E2E Lender (we owe)' });
+    await record.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await record.getByLabel('Amount').fill('50.00');
+    await record.getByRole('button', { name: 'Record it' }).click();
+    await expect(record.getByRole('status')).toContainText(/borrowed £50\.00/i);
 
-    // The new debt's own row reads £50.00 (the seeded "Mum" row keeps its
-    // £1,000.00 beside it — both are owed, never income).
-    await expect(debts.getByText('we owe £50.00')).toBeVisible();
+    // The new debt's own card reads £50.00 (the seeded "Mum" card keeps its
+    // £1,000.00 beside it — both are owed, never income). Scoped to the
+    // debt line: the person header repeats the same figure.
+    const lenderCard = page.locator('section', {
+      has: page.getByRole('heading', { name: 'E2E Lender', exact: true }),
+    });
+    await expect(lenderCard.locator('li').getByText('we owe £50.00')).toBeVisible();
+    const mumCard = page.locator('section', {
+      has: page.getByRole('heading', { name: 'Mum', exact: true }),
+    });
+    await expect(mumCard.locator('li').getByText('we owe £1,000.00')).toBeVisible();
     await page.goto('/');
     await waitForTill(page);
     // The household now owes Mum's £1,000 plus the £50 just borrowed.
@@ -54,17 +60,19 @@ test.describe('external money', () => {
   test('repayments reduce the balance; a swap recorded after the checkpoint is net zero', async ({
     page,
   }) => {
-    await page.goto('/pots');
-    const borrow = page.locator('section[aria-labelledby="borrow-heading"]');
-    await borrow.getByLabel('Debt').selectOption({ label: 'E2E Lender (we owe)' });
-    await borrow.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
-    await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await borrow.getByLabel('Amount').fill('20.00');
-    await borrow.getByRole('button', { name: 'Record it' }).click();
-    await expect(borrow.getByRole('status')).toContainText(/repaid £20\.00/i);
+    await page.goto('/borrowing');
+    const record = page.locator('section[aria-labelledby="record-heading"]');
+    await record.getByLabel('Debt').selectOption({ label: 'E2E Lender (we owe)' });
+    await record.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
+    await record.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await record.getByLabel('Amount').fill('20.00');
+    await record.getByRole('button', { name: 'Record it' }).click();
+    await expect(record.getByRole('status')).toContainText(/repaid £20\.00/i);
 
-    const debts = page.locator('section[aria-labelledby="debts-heading"]');
-    await expect(debts.getByText('we owe £30.00')).toBeVisible();
+    const lenderCard = page.locator('section', {
+      has: page.getByRole('heading', { name: 'E2E Lender', exact: true }),
+    });
+    await expect(lenderCard.locator('li').getByText('we owe £30.00')).toBeVisible();
 
     await page.goto('/');
     await waitForTill(page);
