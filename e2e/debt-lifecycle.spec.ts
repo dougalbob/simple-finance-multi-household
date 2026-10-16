@@ -12,7 +12,17 @@ function personCard(page: Page, counterparty: string) {
   });
 }
 
-/** The setup card's new-person flow: select "Someone new…", name, direction, plan. */
+async function openSetup(page: Page) {
+  const setup = page.locator('section[aria-labelledby="setup-heading"]');
+  const toggle = setup.getByRole('button', { name: 'Setup new Borrowing or lending' });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click();
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  return setup;
+}
+
+/** The setup card's new-person flow: name, direction, plan. */
 async function startTracking(
   page: Page,
   counterparty: string,
@@ -22,8 +32,7 @@ async function startTracking(
     note?: string;
   } = {},
 ) {
-  const setup = page.locator('section[aria-labelledby="setup-heading"]');
-  await setup.getByLabel('Who is this with?').selectOption('new');
+  const setup = await openSetup(page);
   await setup.getByLabel('Their name').fill(counterparty);
   if (options.direction !== undefined) {
     await setup.getByLabel('Which way round?').selectOption(options.direction);
@@ -68,13 +77,9 @@ test.describe('debt deletion — empty mistaken setup', () => {
     await expect(outerDelete.getByText(/no movements at all — not even voided/)).toBeVisible();
     await outerDelete.getByRole('button', { name: 'Yes, permanently delete it' }).click();
     // After successful delete the row is removed, so status may disappear with it.
-    // Assert the persisted result: debt no longer in list and not in selectors.
+    // Assert the persisted result: debt card no longer in list.
     await expect(debtRow).toHaveCount(0, { timeout: 30_000 });
-
-    const record = page.locator('section[aria-labelledby="record-heading"]');
-    await expect(
-      record.getByLabel('Debt').locator(`option:has-text("${counterparty}")`),
-    ).toHaveCount(0);
+    await expect(personCard(page, counterparty)).toHaveCount(0);
   });
 
   test('debt with expected-support plan but no movements can be deleted; projected expectations disappear', async ({
@@ -83,8 +88,7 @@ test.describe('debt deletion — empty mistaken setup', () => {
     const counterparty = `Support Parents ${Date.now()}`;
     await page.goto('/borrowing');
     // The setup card's recurring branch builds the plan in one flow (issue #60).
-    const setup = page.locator('section[aria-labelledby="setup-heading"]');
-    await setup.getByLabel('Who is this with?').selectOption('new');
+    const setup = await openSetup(page);
     await setup.getByLabel('Their name').fill(counterparty);
     await setup.getByLabel('Is this a recurring arrangement?').selectOption('recurring');
     await setup.getByLabel('Expected each month').fill('100.00');
@@ -117,14 +121,15 @@ test.describe('debt deletion — empty mistaken setup', () => {
     await page.goto('/borrowing');
     await startTracking(page, counterparty);
 
-    const record = page.locator('section[aria-labelledby="record-heading"]');
-    await record.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
-    await record.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await record.getByLabel('Amount').fill('10.00');
-    await record.getByRole('button', { name: 'Record it' }).click();
-    await expect(record.getByRole('status')).toContainText(/borrowed £10.00/i);
+    const card = personCard(page, counterparty);
+    const debtRow = card.locator('li');
+    await debtRow.getByRole('link', { name: 'Record borrowing' }).click();
+    const inlinePanel = debtRow.locator('[data-inline-record]');
+    await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await inlinePanel.getByLabel('Amount').fill('10.00');
+    await inlinePanel.getByRole('button', { name: 'Record it' }).click();
+    await expect(inlinePanel.getByRole('status')).toContainText(/borrowed £10.00/i);
 
-    const debtRow = personCard(page, counterparty).locator('li');
     await expect(debtRow.getByText('we owe £10.00')).toBeVisible();
     await expect(debtRow.locator('details', { hasText: 'Delete' })).toHaveCount(0);
 
@@ -164,47 +169,44 @@ test.describe('honest loan status — awaiting vs settled', () => {
     await expect(debtRow.getByText('bridging pending estate settlement')).toBeVisible();
   });
 
-  test('first borrowing moves status to outstanding, full repayment to settled, overpayment distinguishable', async ({
+  test('first borrowing moves status to outstanding, full repayment to settled, and overpayment is blocked', async ({
     page,
   }) => {
     const counterparty = `Lifecycle ${Date.now()}`;
     await page.goto('/borrowing');
     await startTracking(page, counterparty);
 
-    const record = page.locator('section[aria-labelledby="record-heading"]');
     const debtRow = personCard(page, counterparty).locator('li');
+    const inlinePanel = debtRow.locator('[data-inline-record]');
 
-    await record.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
-    await record.getByLabel('What happened?').selectOption({ label: 'Borrowed — money in' });
-    await record.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await record.getByLabel('Amount').fill('100.00');
-    await record.getByRole('button', { name: 'Record it' }).click();
-    await expect(record.getByRole('status')).toContainText(/borrowed £100.00/i);
+    await debtRow.getByRole('link', { name: 'Record borrowing' }).click();
+    await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await inlinePanel.getByLabel('Amount').fill('100.00');
+    await inlinePanel.getByRole('button', { name: 'Record it' }).click();
+    await expect(inlinePanel.getByRole('status')).toContainText(/borrowed £100.00/i);
     await expect(debtRow.getByText('we owe £100.00')).toBeVisible();
 
-    await record.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
-    await record.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
-    await record.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await record.getByLabel('Amount').fill('40.00');
-    await record.getByRole('button', { name: 'Record it' }).click();
-    await expect(record.getByRole('status')).toContainText(/repaid £40.00/i);
+    await debtRow.getByRole('link', { name: 'Record a repayment' }).click();
+    await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await inlinePanel.getByLabel('Amount').fill('40.00');
+    await inlinePanel.getByRole('button', { name: 'Record it' }).click();
+    await expect(inlinePanel.getByRole('status')).toContainText(/repaid £40.00/i);
     await expect(debtRow.getByText('we owe £60.00')).toBeVisible();
 
-    await record.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
-    await record.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
-    await record.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await record.getByLabel('Amount').fill('60.00');
-    await record.getByRole('button', { name: 'Record it' }).click();
-    await expect(record.getByRole('status')).toContainText(/repaid £60.00/i);
+    await debtRow.getByRole('link', { name: 'Record a repayment' }).click();
+    await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await inlinePanel.getByLabel('Amount').fill('60.00');
+    await inlinePanel.getByRole('button', { name: 'Record it' }).click();
+    await expect(inlinePanel.getByRole('status')).toContainText(/repaid £60.00/i);
     await expect(debtRow.getByText('settled')).toBeVisible();
 
-    await record.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
-    await record.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
-    await record.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await record.getByLabel('Amount').fill('10.00');
-    await record.getByRole('button', { name: 'Record it' }).click();
-    await expect(record.getByRole('status')).toContainText(/repaid £10.00/i);
-    await expect(debtRow.getByText('overpaid £10.00')).toBeVisible();
+    await debtRow.getByRole('link', { name: 'Record a repayment' }).click();
+    await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await inlinePanel.getByLabel('Amount').fill('10.00');
+    await expect(inlinePanel.getByRole('alert')).toContainText(
+      /Nothing is currently owed on this arrangement/i,
+    );
+    await expect(inlinePanel.getByRole('button', { name: 'Record it' })).toBeDisabled();
   });
 
   test('they_owe awaiting status uses Awaiting first loan wording', async ({ page }) => {

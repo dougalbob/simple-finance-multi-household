@@ -1,3 +1,49 @@
+# Release v1.22.0 — Chart E in-card scopes and Borrowing inline recording with repayment guards (GitHub issues #61 and #63) (2026-10-16)
+
+**Release scope is prepared on this branch.** The household reviewed and approved the Arena preview of
+issues #61 and #63 (including the cash-pot shortfall block, bank-account below-zero warning, and debt
+overpayment block on `/borrowing`) and asked to publish a new stable tag for Unraid testing. Version
+files are aligned at **v1.22.0 stable**, moving `latest` on
+`ghcr.io/dougalbob/simple-finance-multi-household` only. No schema, migration or backup-format change.
+
+**#61 (decision 229).** Chart E (**Where the money went**) folds its selector (`#mix-controls`) inside
+the Chart E (`#mix`) card behind a top-right **Change chart scopes** disclosure button (`MixScopes` in
+`src/components/charts/mix-category-tree.tsx`), removing the old boilerplate selector headings
+(*"Selector"*, *"Choose what to count"*, *"By default this is since last payday…"* and *"Time
+window"*). Clicking a quick-window pill (**Since last payday**, **Last full payday cycle**, **Month to
+date**) updates the `From` and `To` date inputs in place without auto-submitting so category-tree
+ticks made alongside the window change ride with **Show**; pressing **Show** updates the chart and
+keeps the scopes panel open until closed or navigated away from. Chart D and Chart E sit side by side
+in a two-column grid while keeping the pie SVG large, and `ChartFigure`'s `collapseCaption` prop hides
+both the `Reported` badge and caption text behind a compact `i` (`aria-label="Chart information"`)
+summary button.
+
+**#63 (decision 230).** On `/borrowing`, clicking **Record borrowing** / **Record a repayment** (or
+**Record a loan out** / **Record what they repaid**) on a person's summary card opens a compact inline
+recording form (`PersonDebtRecord` in `src/components/borrowing-forms.tsx`) with only Pot, Amount,
+When and Note, auto-collapsing `2000ms` after a save; clicking **Record this month's £X** on an
+expected row in the ledger opens that person's inline form at `#debt-{id}` pre-filled with the
+expected amount. The standalone **Record money in or out** card at the bottom of the page is removed.
+**Setup new Borrowing or lending** (`BorrowSetupSection`) moves below the ledger panel, starts
+collapsed with a down-arrow disclosure icon, is dedicated to new people only, and auto-collapses
+`2000ms` after save. Repayments and outflows carry three sanity checks (`evaluateOutflowSanityCheck`,
+`checkLoanCashPotBalance`, and `addExternalMovementAction`):
+1. **Overpayment block:** repayments (`we_owe` + `out` or `they_owe` + `in`) exceeding the
+   arrangement's current outstanding balance (`balancePence`) are hard-blocked both in the live form
+   and server-side.
+2. **Cash pot shortfall block:** outflows from a cash pot whose estimated balance is less than the
+   payment are hard-blocked both in the live form and server-side.
+3. **Bank account below-zero warning:** outflows from a bank account that take its estimated balance
+   below zero show an amber warning while still allowing submission.
+
+**Verified locally:**
+- Gates: `npm run format:check`, `npm run typecheck`, `npm run themes:check`, `npm test` (**999/999
+  across 231 suites**), `npm run build`, and `npm audit --omit=dev` (**0 vulnerabilities**).
+- Browser (Playwright via SANDBOX entry 8): `charts` (**11/11**), `borrowing` (**5/5**),
+  `debt-lifecycle` (**6/6**), `external` (**3/3**), and `transactions` (**2/2** expectation journeys).
+
+---
+
 # Release v1.21.0 — Borrowing gets its own page (GitHub issue #60) (2026-10-16)
 
 **Released and verified.** The household reviewed the Arena preview of issue #60 and authorised a

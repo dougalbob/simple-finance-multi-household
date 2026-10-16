@@ -141,7 +141,7 @@ function LedgerRow({
         <td className="px-3 py-2.5 text-right tabular-nums">
           {formatPence(row.amountPence)}
           <Link
-            href={`?debt=${row.debtId}&what=in&amountPence=${row.amountPence}#record`}
+            href={`?debt=${row.debtId}&what=in&amountPence=${row.amountPence}#debt-${row.debtId}`}
             className="mt-0.5 block text-xs sf-link"
           >
             Record this month&apos;s {formatPence(row.amountPence)}

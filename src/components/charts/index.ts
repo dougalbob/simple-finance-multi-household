@@ -21,8 +21,8 @@ export type {
   GroupedSeries,
 } from './grouped-bar-chart';
 export { ChartScroller } from './chart-scroller';
-export { MixCategoryTree } from './mix-category-tree';
-export type { MixCategoryTreeProps } from './mix-category-tree';
+export { MixCategoryTree, MixScopes } from './mix-category-tree';
+export type { MixCategoryTreeProps, MixScopesProps } from './mix-category-tree';
 export { abbrevCategory } from './abbrev';
 export { StackedBarChart } from './stacked-bar-chart';
 export type {

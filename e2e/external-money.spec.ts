@@ -25,14 +25,17 @@ test.describe('external money', () => {
     // Debts live on the Borrowing page since issue #60 (decision 228).
     await page.goto('/borrowing');
     const setup = page.locator('section[aria-labelledby="setup-heading"]');
-    await setup.getByLabel('Who is this with?').selectOption('new');
+    await setup.getByRole('button', { name: 'Setup new Borrowing or lending' }).click();
     await setup.getByLabel('Their name').fill('E2E Lender');
     await setup.getByLabel('Is this a recurring arrangement?').selectOption('none');
     await setup.getByRole('button', { name: 'Start tracking' }).click();
     await expect(setup.getByRole('status')).toContainText(/now tracking/i);
 
-    const record = page.locator('section[aria-labelledby="record-heading"]');
-    await record.getByLabel('Debt').selectOption({ label: 'E2E Lender (we owe)' });
+    const lenderCard = page.locator('section', {
+      has: page.getByRole('heading', { name: 'E2E Lender', exact: true }),
+    });
+    await lenderCard.getByRole('link', { name: 'Record borrowing' }).click();
+    const record = lenderCard.locator('[data-inline-record]');
     await record.getByLabel('Pot').selectOption({ label: 'Main account' });
     await record.getByLabel('Amount').fill('50.00');
     await record.getByRole('button', { name: 'Record it' }).click();
@@ -41,9 +44,6 @@ test.describe('external money', () => {
     // The new debt's own card reads £50.00 (the seeded "Mum" card keeps its
     // £1,000.00 beside it — both are owed, never income). Scoped to the
     // debt line: the person header repeats the same figure.
-    const lenderCard = page.locator('section', {
-      has: page.getByRole('heading', { name: 'E2E Lender', exact: true }),
-    });
     await expect(lenderCard.locator('li').getByText('we owe £50.00')).toBeVisible();
     const mumCard = page.locator('section', {
       has: page.getByRole('heading', { name: 'Mum', exact: true }),
@@ -61,17 +61,16 @@ test.describe('external money', () => {
     page,
   }) => {
     await page.goto('/borrowing');
-    const record = page.locator('section[aria-labelledby="record-heading"]');
-    await record.getByLabel('Debt').selectOption({ label: 'E2E Lender (we owe)' });
-    await record.getByLabel('What happened?').selectOption({ label: 'Repaid — money out' });
+    const lenderCard = page.locator('section', {
+      has: page.getByRole('heading', { name: 'E2E Lender', exact: true }),
+    });
+    await lenderCard.getByRole('link', { name: 'Record a repayment' }).click();
+    const record = lenderCard.locator('[data-inline-record]');
     await record.getByLabel('Pot').selectOption({ label: 'Main account' });
     await record.getByLabel('Amount').fill('20.00');
     await record.getByRole('button', { name: 'Record it' }).click();
     await expect(record.getByRole('status')).toContainText(/repaid £20\.00/i);
 
-    const lenderCard = page.locator('section', {
-      has: page.getByRole('heading', { name: 'E2E Lender', exact: true }),
-    });
     await expect(lenderCard.locator('li').getByText('we owe £30.00')).toBeVisible();
 
     await page.goto('/');

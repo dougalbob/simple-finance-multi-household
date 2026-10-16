@@ -3515,3 +3515,54 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     suite's expectation journey re-runs end-to-end through it. The full unit suite (998 tests) and
     the full browser suite (132) are green locally (SANDBOX entry 8). Awaiting the household's
     review on the Arena preview before release.
+229. **Chart E ("Where the money went") folds its selector inside the chart card and tucks its
+    caption behind an `i` button (2026-10-16, GitHub issue #61, v1.22.0).** The household noted
+    that Chart E's "Selector" card sat beside the chart as a separate visual panel with four
+    lines of boilerplate (*"Selector"*, *"Choose what to count"*, *"By default this is since last
+    payday…"* and *"Time window"*), and that the long `Reported: Net spending by parent category…`
+    caption consumed vertical space under the figure.
+
+    - **In-card scopes disclosure:** `MixScopes` (`src/components/charts/mix-category-tree.tsx`)
+      lives inside the Chart E (`#mix`) card via `ChartFigure`'s `headerAction` and `topSlot`
+      props. A top-right **Change chart scopes** button toggles `#mix-controls` open and closed
+      (collapsed by default).
+    - **Explicit Show submission & persistent panel:** clicking a quick-window pill (**Since last
+      payday**, **Last full payday cycle**, **Month to date**) updates the `From` and `To` date
+      inputs in place without auto-navigating, so any category-tree changes made alongside the
+      window selection are preserved until **Show** is pressed. Pressing **Show** navigates via
+      `router.push(\`/charts?\${params.toString()}#mix\`, { scroll: false })` and keeps the scopes
+      panel open until the user closes it or navigates away.
+    - **Two-column layout & `i` caption:** Chart D and Chart E share a two-column grid while keeping
+      the pie SVG large, and `ChartFigure`'s `collapseCaption` prop hides both the `Reported` badge
+      and caption text behind a compact `i` (`aria-label="Chart information"`) summary button.
+230. **Borrowing inline per-person recording, collapsed new-person setup, and repayment/outflow
+    sanity checks (2026-10-16, GitHub issue #63, v1.22.0).** Reviewing `v1.21.0`, the household
+    pointed out that the standalone **Record money in or out** card at the bottom of `/borrowing`
+    was redundant with the action links on each person's card at the top, and asked for three
+    refinements plus three guardrails:
+
+    - **Inline recording on each person's card (`PersonDebtRecord`):** clicking **Record
+      borrowing** / **Record a repayment** (or **Record a loan out** / **Record what they repaid**)
+      opens a compact inline form inside `#debt-{id}` with only the four necessary fields (`Which
+      pot did it touch?`, `Amount (£)`, `When`, `Note`) and auto-collapses `2000ms` after a
+      successful save. Expected rows in the ledger link to
+      `?debt={id}&what=in&amountPence={pence}#debt-{id}` so clicking **Record this month's £X**
+      opens that person's inline form pre-filled with the expected amount. The standalone bottom
+      **Record money in or out** card is removed.
+    - **Collapsed new-person setup below the ledger (`BorrowSetupSection`):** moved below the
+      ledger panel, renamed **Setup new Borrowing or lending**, collapsed by default with a
+      down-arrow disclosure icon, dedicated strictly to new people (no existing-person dropdown),
+      and auto-collapsing `2000ms` after a successful save.
+    - **Repayment and outflow sanity checks (`evaluateOutflowSanityCheck`, `checkLoanCashPotBalance`
+      and `addExternalMovementAction`):**
+      1. **Debt overpayment block:** repayments (`we_owe` + `out` or `they_owe` + `in`) cannot
+         exceed the arrangement's current outstanding balance (`debtBalance(db, debt).balancePence`).
+         Entering more than is owed (or any repayment on a settled £0 arrangement) renders a red
+         `role="alert"` explaining the excess, disables **Record it**, and is refused server-side.
+      2. **Cash pot shortfall block:** any borrowing outflow (`we_owe` repayment or `they_owe`
+         loan out) from a **cash pot** whose estimated balance (`getMoneySnapshot`) is less than
+         the payment renders a red `role="alert"` naming the shortfall, disables submission, and
+         is refused server-side by `startBorrowingAction` and `addExternalMovementAction`.
+      3. **Bank account below-zero warning:** any outflow from a **bank account** that will take
+         its estimated balance below zero renders an amber warning showing the projected negative
+         balance while still allowing submission.
