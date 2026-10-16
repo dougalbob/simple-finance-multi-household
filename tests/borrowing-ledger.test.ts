@@ -9,6 +9,7 @@ import {
   type BorrowingExpectedRow,
   type BorrowingMovementRow,
 } from '../src/lib/records/borrowing';
+import { evaluateOutflowSanityCheck } from '../src/components/borrowing-forms';
 import { createDebt, editDebt } from '../src/lib/records/debts';
 import {
   createExternalMovement,
@@ -355,5 +356,62 @@ describe('the borrowing ledger reshape (GitHub issue #60)', () => {
       potLandingPhrase({ label: 'Cash pot', kind: 'cash' }, 'out'),
       'Went out as cash from Cash pot.',
     );
+  });
+
+  it('evaluates repayment and outflow sanity checks (overpayment block, cash pot block, bank below-zero warning)', () => {
+    const cashPot = { id: 1, label: "Alex's cash", kind: 'cash' as const, estimatePence: 5000 };
+    const bankPot = { id: 2, label: 'Main account', kind: 'bank' as const, estimatePence: 75000 };
+
+    // Overpayment on a we_owe repayment (£1,000 against £750 owed) is blocked.
+    const overpayWeOwe = evaluateOutflowSanityCheck(bankPot, 'out', '1000.00', {
+      debtDirection: 'we_owe',
+      balancePence: 75000,
+    });
+    assert.equal(overpayWeOwe.blocked, true);
+    assert.equal(overpayWeOwe.kind, 'overpay-blocked');
+    assert.match(overpayWeOwe.message ?? '', /exceeds the £750\.00 currently owed/);
+
+    // Overpayment on a settled debt (£0 owed) is blocked.
+    const overpaySettled = evaluateOutflowSanityCheck(bankPot, 'out', '10.00', {
+      debtDirection: 'we_owe',
+      balancePence: 0,
+    });
+    assert.equal(overpaySettled.blocked, true);
+    assert.equal(overpaySettled.kind, 'overpay-blocked');
+    assert.match(overpaySettled.message ?? '', /Nothing is currently owed/);
+
+    // Overpayment on a they_owe repayment (£100 against £50 owed to us) is blocked.
+    const overpayTheyOwe = evaluateOutflowSanityCheck(bankPot, 'in', '100.00', {
+      debtDirection: 'they_owe',
+      balancePence: 5000,
+    });
+    assert.equal(overpayTheyOwe.blocked, true);
+    assert.equal(overpayTheyOwe.kind, 'overpay-blocked');
+
+    // Borrowing more on a we_owe arrangement (direction: 'in') is never an overpayment.
+    const borrowMore = evaluateOutflowSanityCheck(bankPot, 'in', '1000.00', {
+      debtDirection: 'we_owe',
+      balancePence: 75000,
+    });
+    assert.equal(borrowMore.blocked, false);
+    assert.equal(borrowMore.kind, null);
+
+    // Cash pot outflow exceeding estimated cash balance is blocked.
+    const cashShortfall = evaluateOutflowSanityCheck(cashPot, 'out', '500.00', {
+      debtDirection: 'we_owe',
+      balancePence: 75000,
+    });
+    assert.equal(cashShortfall.blocked, true);
+    assert.equal(cashShortfall.kind, 'cash-blocked');
+    assert.match(cashShortfall.message ?? '', /only has £50\.00 available — £450\.00 short/);
+
+    // Bank account outflow exceeding estimated bank balance warns without blocking.
+    const bankBelowZero = evaluateOutflowSanityCheck(bankPot, 'out', '800.00', {
+      debtDirection: 'we_owe',
+      balancePence: 100000,
+    });
+    assert.equal(bankBelowZero.blocked, false);
+    assert.equal(bankBelowZero.kind, 'bank-warning');
+    assert.match(bankBelowZero.message ?? '', /will take Main account.*below zero to −£50\.00/);
   });
 });

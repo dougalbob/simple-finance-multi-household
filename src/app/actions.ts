@@ -18,6 +18,7 @@ import { revalidatePath } from 'next/cache';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import type { Db } from '@/lib/db/client';
 import { formatPence, parsePence } from '@/lib/money';
+import { getMoneySnapshot } from '@/lib/records/money-view';
 import {
   AttachmentInputError,
   AttachmentNotFoundError,
@@ -101,6 +102,7 @@ import {
 } from '@/lib/records/transfers';
 import {
   createDebt,
+  debtBalance,
   DebtHasMovementsError,
   DebtNotFoundError,
   deleteDebt,
@@ -2216,6 +2218,13 @@ export async function startBorrowingAction(
     return { status: 'error', message: firstIssue(parsed.error, 'Check the borrowing fields.') };
   }
   const input = parsed.data;
+  const wantsMovement = input.trackMode === 'existing' || input.plan === 'one-off';
+  if (wantsMovement && input.movementDirection === 'out' && input.potId !== null) {
+    const cashError = checkLoanCashPotBalance(user.db, input.potId, input.amountPence ?? 0);
+    if (cashError !== null) {
+      return { status: 'error', message: cashError };
+    }
+  }
   const movementMessage = (
     movement: { direction: 'in' | 'out'; amountPence: number; counterparty: string },
     debtDirection: 'we_owe' | 'they_owe',
@@ -2268,7 +2277,6 @@ export async function startBorrowingAction(
     if (debt === null) {
       return { status: 'error', message: 'Check the borrowing fields.' };
     }
-    const wantsMovement = input.trackMode === 'existing' || input.plan === 'one-off';
     if (wantsMovement) {
       const movement = createExternalMovement(user.db, {
         potId: input.potId ?? -1,
@@ -2297,6 +2305,18 @@ export async function startBorrowingAction(
   }
 }
 
+function checkLoanCashPotBalance(db: Db, potId: number, amountPence: number): string | null {
+  const potView = getMoneySnapshot(db, new Date()).pots.find((entry) => entry.pot.id === potId);
+  if (potView === undefined || potView.pot.kind !== 'cash') {
+    return null;
+  }
+  const availablePence = potView.estimatePence ?? 0;
+  if (amountPence > availablePence) {
+    return `${potView.pot.label} only has ${formatPence(availablePence)} available — ${formatPence(amountPence - availablePence)} short of this ${formatPence(amountPence)} payment. Choose another pot, or record a transfer or checkpoint on Accounts, Pots & Checkpoints first.`;
+  }
+  return null;
+}
+
 export async function addExternalMovementAction(
   _previous: ActionState,
   formData: FormData,
@@ -2320,7 +2340,31 @@ export async function addExternalMovementAction(
   if (!parsed.success) {
     return { status: 'error', message: firstIssue(parsed.error, 'Check the money fields.') };
   }
+  if (parsed.data.kind === 'loan' && parsed.data.direction === 'out') {
+    const cashError = checkLoanCashPotBalance(user.db, parsed.data.potId, parsed.data.amountPence);
+    if (cashError !== null) {
+      return { status: 'error', message: cashError };
+    }
+  }
   try {
+    if (parsed.data.kind === 'loan' && parsed.data.debtId !== null) {
+      const debt = getDebt(user.db, parsed.data.debtId);
+      const isRepayment =
+        (debt.direction === 'we_owe' && parsed.data.direction === 'out') ||
+        (debt.direction === 'they_owe' && parsed.data.direction === 'in');
+      if (isRepayment) {
+        const outstandingPence = Math.max(0, debtBalance(user.db, debt).balancePence);
+        if (parsed.data.amountPence > outstandingPence) {
+          return {
+            status: 'error',
+            message:
+              outstandingPence === 0
+                ? `Nothing is currently owed on this arrangement, so a repayment of ${formatPence(parsed.data.amountPence)} cannot be recorded.`
+                : `This ${formatPence(parsed.data.amountPence)} repayment exceeds the ${formatPence(outstandingPence)} currently owed (by ${formatPence(parsed.data.amountPence - outstandingPence)}). Enter at most ${formatPence(outstandingPence)}.`,
+          };
+        }
+      }
+    }
     const movement = createExternalMovement(user.db, {
       potId: parsed.data.potId,
       direction: parsed.data.direction,

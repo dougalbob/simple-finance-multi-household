@@ -1,15 +1,35 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import type { MixParentChoice } from '@/lib/records/charts-view';
+import { useRouter } from 'next/navigation';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
+import type { MixParentChoice, MixWindow, MixWindowKind } from '@/lib/records/charts-view';
 
 export interface MixCategoryTreeProps {
   parents: readonly MixParentChoice[];
   includedParentIds: readonly number[];
   includedCategoryIds: readonly number[];
+  allCategoriesIncluded?: boolean;
+  resetHref?: string;
+}
+
+export interface MixScopesProps {
+  today: string;
+  window: MixWindow;
+  presets: {
+    payday: MixWindow | null;
+    previousPayday: MixWindow | null;
+    month: MixWindow;
+  };
+  parents: readonly MixParentChoice[];
+  includedParentIds: readonly number[];
+  includedCategoryIds: readonly number[];
   allCategoriesIncluded: boolean;
-  resetHref: string;
+}
+
+interface PresetOption {
+  key: MixWindowKind;
+  label: string;
+  window: MixWindow;
 }
 
 function ParentCheckbox({
@@ -56,8 +76,6 @@ export function MixCategoryTree({
   parents,
   includedParentIds,
   includedCategoryIds,
-  allCategoriesIncluded,
-  resetHref,
 }: MixCategoryTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
   const [tickedChildIds, setTickedChildIds] = useState<Set<number>>(
@@ -137,25 +155,41 @@ export function MixCategoryTree({
     });
   };
 
+  const checkAllCategories = (): void => {
+    setTickedChildIds(new Set(parents.flatMap((parent) => parent.children.map((c) => c.id))));
+    setTickedChildlessParentIds(
+      new Set(parents.filter((parent) => parent.children.length === 0).map((parent) => parent.id)),
+    );
+  };
+
   const totalChildren = parents.reduce((sum, parent) => sum + parent.children.length, 0);
+  const childlessParents = parents.filter((parent) => parent.children.length === 0);
+  const countedParentCount = parents.filter((parent) =>
+    parent.children.length === 0
+      ? tickedChildlessParentIds.has(parent.id)
+      : parent.children.some((child) => tickedChildIds.has(child.id)),
+  ).length;
   const hasPartialParent = parents.some((parent) => {
     if (parent.children.length === 0) return false;
-    const count = parent.children.filter((child) => includedCategoryIds.includes(child.id)).length;
+    const count = parent.children.filter((child) => tickedChildIds.has(child.id)).length;
     return count > 0 && count < parent.children.length;
   });
+  const liveAllIncluded =
+    tickedChildIds.size === totalChildren &&
+    tickedChildlessParentIds.size === childlessParents.length;
 
-  const summaryText = allCategoriesIncluded
+  const summaryText = liveAllIncluded
     ? 'Every category counts.'
     : hasPartialParent
-      ? `${includedCategoryIds.length} of ${totalChildren} child categories counted.`
-      : `${includedParentIds.length} of ${parents.length} counted.`;
+      ? `${tickedChildIds.size} of ${totalChildren} child categories counted.`
+      : `${countedParentCount} of ${parents.length} counted.`;
 
   return (
     <fieldset>
       <legend className="mb-1 text-xs font-medium text-ink-soft">
         Which categories count? <span className="font-normal text-ink-faint">{summaryText}</span>
       </legend>
-      <ul className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1">
+      <ul className="grid gap-1 sm:grid-cols-2">
         {parents.map((parent) => {
           const hasChildren = parent.children.length > 0;
           const tickedCount = hasChildren
@@ -249,11 +283,219 @@ export function MixCategoryTree({
           );
         })}
       </ul>
-      {allCategoriesIncluded ? null : (
-        <Link href={resetHref} className="mt-2 inline-block text-xs sf-link">
+      {liveAllIncluded ? null : (
+        <button
+          type="button"
+          onClick={checkAllCategories}
+          className="mt-2 inline-block text-xs sf-link"
+        >
           Count every category
-        </Link>
+        </button>
       )}
     </fieldset>
+  );
+}
+
+/**
+ * Header and collapsible scope selector for Chart E ("Where the money went",
+ * issue #61). Hidden by default behind the top-right "Change chart scopes"
+ * button; quick-window pills and category ticks update the form in place and
+ * only refresh the chart when the user explicitly presses Show, keeping the
+ * panel open across Show submissions until the user closes it or leaves the
+ * page.
+ */
+export function MixScopes({
+  today,
+  window,
+  presets,
+  parents,
+  includedParentIds,
+  includedCategoryIds,
+  allCategoriesIncluded,
+}: MixScopesProps) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [fromDate, setFromDate] = useState(window.from);
+  const [toDate, setToDate] = useState(window.to);
+  const [activePresetKey, setActivePresetKey] = useState<MixWindowKind>(window.kind);
+
+  const presetOptions: PresetOption[] = [];
+  if (presets.payday !== null) {
+    presetOptions.push({ key: 'payday', label: 'Since last payday', window: presets.payday });
+  }
+  if (presets.previousPayday !== null) {
+    presetOptions.push({
+      key: 'previous-payday',
+      label: 'Last full payday cycle',
+      window: presets.previousPayday,
+    });
+  }
+  presetOptions.push({ key: 'month', label: 'Month to date', window: presets.month });
+
+  useEffect(() => {
+    setFromDate(window.from);
+    setToDate(window.to);
+    setActivePresetKey(window.kind);
+  }, [window.from, window.to, window.kind]);
+
+  const matchPreset = (nextFrom: string, nextTo: string): MixWindowKind => {
+    const matched = presetOptions.find(
+      (preset) => preset.window.from === nextFrom && preset.window.to === nextTo,
+    );
+    return matched?.key ?? 'custom';
+  };
+
+  const handleFromChange = (nextFrom: string): void => {
+    setFromDate(nextFrom);
+    setActivePresetKey(matchPreset(nextFrom, toDate));
+  };
+
+  const handleToChange = (nextTo: string): void => {
+    setToDate(nextTo);
+    setActivePresetKey(matchPreset(fromDate, nextTo));
+  };
+
+  const handlePresetClick = (preset: PresetOption): void => {
+    setFromDate(preset.window.from);
+    setToDate(preset.window.to);
+    setActivePresetKey(preset.key);
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const from = String(formData.get('from') ?? fromDate);
+    const to = String(formData.get('to') ?? toDate);
+    const query = new URLSearchParams();
+    query.set('from', from);
+    query.set('to', to);
+
+    const catValues = formData.getAll('cat').map((value) => String(value));
+    const totalSelectable = parents.reduce(
+      (sum, parent) => sum + (parent.children.length === 0 ? 1 : parent.children.length),
+      0,
+    );
+    if (catValues.length < totalSelectable) {
+      query.set('catset', '1');
+      for (const cat of catValues) {
+        query.append('cat', cat);
+      }
+    }
+    router.push(`/charts?${query.toString()}#mix`, { scroll: false });
+  };
+
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+            E · Spending mix
+          </p>
+          <h2 id="mix-heading" className="text-lg font-semibold sm:text-xl">
+            Where the money went
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-expanded={open}
+          aria-controls="mix-controls"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-body hover:bg-canvas"
+        >
+          <span>Change chart scopes</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          >
+            <path d="M2.5 4.5L6 8L9.5 4.5" />
+          </svg>
+        </button>
+      </div>
+
+      <div
+        id="mix-controls"
+        role="region"
+        aria-label="Change chart scopes"
+        hidden={!open}
+        className="mb-4 rounded-lg border border-border bg-canvas p-3"
+      >
+        <form method="get" action="/charts#mix" onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1 text-xs text-ink-soft">
+              From
+              <input
+                type="date"
+                name="from"
+                required
+                max={today}
+                value={fromDate}
+                onChange={(event) => handleFromChange(event.target.value)}
+                className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-ink-soft">
+              To
+              <input
+                type="date"
+                name="to"
+                required
+                max={today}
+                value={toDate}
+                onChange={(event) => handleToChange(event.target.value)}
+                className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
+              />
+            </label>
+            <div className="col-span-2">
+              <button
+                type="submit"
+                className="rounded bg-till px-3 py-1.5 text-sm font-medium text-till-ink"
+              >
+                Show
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick windows">
+            {presetOptions.map((preset) => {
+              const on = activePresetKey === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => handlePresetClick(preset)}
+                  aria-pressed={on}
+                  aria-current={on ? 'true' : undefined}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    on
+                      ? 'border-till bg-till text-till-ink'
+                      : 'border-border-strong bg-surface text-ink-soft hover:bg-canvas'
+                  }`}
+                >
+                  {on ? '✓ ' : ''}
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <input type="hidden" name="catset" value="1" />
+
+          <MixCategoryTree
+            parents={parents}
+            includedParentIds={includedParentIds}
+            includedCategoryIds={includedCategoryIds}
+            allCategoriesIncluded={allCategoriesIncluded}
+          />
+        </form>
+      </div>
+    </>
   );
 }

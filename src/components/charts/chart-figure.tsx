@@ -44,6 +44,8 @@ export interface ChartFigureProps {
   totals?: ReactNode[];
   /** Anything extra under the chart — a legend, a link, a toggle. */
   footer?: ReactNode;
+  /** When true, hide the basis badge and caption behind an "i" summary icon. */
+  collapseCaption?: boolean;
 }
 
 export function ChartFigure({
@@ -57,7 +59,22 @@ export function ChartFigure({
   rows,
   totals,
   footer,
+  collapseCaption = false,
 }: ChartFigureProps) {
+  const basisBadge = (
+    <span
+      className={`mr-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        basis === 'Reported'
+          ? 'bg-positive-50 text-positive-800'
+          : basis === 'Projected'
+            ? 'bg-warning-50 text-warning-900'
+            : 'bg-accent-50 text-accent-900'
+      }`}
+    >
+      {basis}
+    </span>
+  );
+
   return (
     <figure data-chart={chart} data-variant={variant} className="m-0">
       <p data-chart-headline className="text-sm font-semibold text-ink sm:text-base">
@@ -65,20 +82,28 @@ export function ChartFigure({
       </p>
       <div className="mt-2">{children}</div>
       {footer !== undefined ? <div className="mt-2">{footer}</div> : null}
-      <figcaption className="mt-2 text-xs leading-5 text-ink-muted">
-        <span
-          className={`mr-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-            basis === 'Reported'
-              ? 'bg-positive-50 text-positive-800'
-              : basis === 'Projected'
-                ? 'bg-warning-50 text-warning-900'
-                : 'bg-accent-50 text-accent-900'
-          }`}
-        >
-          {basis}
-        </span>
-        {caption}
-      </figcaption>
+      {collapseCaption ? (
+        <figcaption className="mt-2 text-xs leading-5 text-ink-muted">
+          <details>
+            <summary
+              aria-label="Chart information"
+              title="Chart information"
+              className="inline-flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded-full border border-border-strong bg-surface text-[11px] font-semibold italic text-ink-soft hover:bg-canvas hover:text-ink-body [&::-webkit-details-marker]:hidden"
+            >
+              <span aria-hidden="true">i</span>
+            </summary>
+            <div className="mt-1.5">
+              {basisBadge}
+              {caption}
+            </div>
+          </details>
+        </figcaption>
+      ) : (
+        <figcaption className="mt-2 text-xs leading-5 text-ink-muted">
+          {basisBadge}
+          {caption}
+        </figcaption>
+      )}
       <details className="mt-2">
         <summary className="cursor-pointer text-xs font-medium text-ink-soft">
           Show the numbers ({rows.length} {rows.length === 1 ? 'row' : 'rows'})

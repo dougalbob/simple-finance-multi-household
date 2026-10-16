@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { DebtEditForm, DeleteDebtForm, LoanMovementForm } from '@/components/external-forms';
-import { BorrowSetupForm } from '@/components/borrowing-forms';
+import { DebtEditForm, DeleteDebtForm } from '@/components/external-forms';
+import { BorrowSetupSection, PersonDebtRecord } from '@/components/borrowing-forms';
 import { BorrowingLedger } from '@/components/borrowing-ledger';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
@@ -12,21 +12,19 @@ import {
   type ExternalMovement,
 } from '@/lib/records/external-movements';
 import { parseOpenRecordId } from '@/lib/records/in-place-activity';
-import { listPots } from '@/lib/records/pots';
+import { getMoneySnapshot } from '@/lib/records/money-view';
+import { listPots, type PotKind } from '@/lib/records/pots';
 import { toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * The Borrowing page (GitHub issue #60, decision 228,
+ * The Borrowing page (GitHub issues #60 and #63, decision 228,
  * docs/BORROWING_PAGE_PLAN.md): everything informal borrowing lives here —
- * the per-person summary with each IOU's honest status, one setup flow
- * (select or create the person, recurring plan or one-off), the combined
- * transaction-style ledger with its From/To filter and per-person running
- * balance, and the record panel for repayments and further borrowing. The
- * cards moved here from Accounts, Pots & Checkpoints, which keeps swaps and
- * other money across the boundary. Formal borrowing — loan agreements,
- * credit cards — is not this page; the footer says where it is.
+ * the per-person summary with each IOU's honest status and inline movement
+ * recording, the combined transaction-style ledger with its From/To filter
+ * and per-person running balance, and the collapsible setup flow below the
+ * ledger for adding new people.
  */
 export default async function BorrowingPage({
   searchParams,
@@ -63,10 +61,19 @@ export default async function BorrowingPage({
   const order = params.order === 'newest' ? ('newest' as const) : ('oldest' as const);
   const ledger = buildBorrowingLedger(db, { who, order, today });
   const pots = listPots(db);
-  const allDebts = ledger.people.flatMap((person) => person.lines);
+  const money = getMoneySnapshot(db, now);
+  const estimateByPotId = new Map<number, number | null>(
+    money.pots.map((entry) => [entry.pot.id, entry.estimatePence]),
+  );
+  const potOptions = pots.map((pot) => ({
+    id: pot.id,
+    label: pot.label,
+    kind: pot.kind,
+    estimatePence: estimateByPotId.get(pot.id) ?? null,
+  }));
 
-  // The record panel arrives pre-filled from a summary chip or an expected
-  // row's "Record this month's" link (`?debt=&what=&amountPence=#record`).
+  // Inline record panel arrives pre-filled when linked from an expected row's
+  // "Record this month's" link (`?debt=&what=&amountPence=#debt-{id}`).
   const presetDebtId = parseOpenRecordId(params.debt);
   const presetDirection =
     params.what === 'in' || params.what === 'out' ? (params.what as 'in' | 'out') : null;
@@ -101,131 +108,84 @@ export default async function BorrowingPage({
 
       <div className="grid gap-4 md:grid-cols-2">
         {ledger.people.map((person) => (
-          <PersonCard key={person.label} person={person} today={today} />
+          <PersonCard
+            key={person.label}
+            person={person}
+            pots={potOptions}
+            today={today}
+            presetDebtId={presetDebtId}
+            presetDirection={presetDirection}
+            presetAmountPence={presetAmountPence}
+          />
         ))}
         {ledger.people.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
-            No debts tracked. Set up the first arrangement beside this card — a recurring support
-            payment, or a one-off borrow or loan.
+            No debts tracked. Set up the first arrangement below — a recurring support payment, or a
+            one-off borrow or loan.
           </p>
         ) : null}
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <section
-          aria-labelledby="setup-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <h2 id="setup-heading" className="text-lg font-semibold">
-            Set up borrowing or lending
+      <section
+        aria-labelledby="ledger-heading"
+        className="mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="ledger-heading" className="text-lg font-semibold">
+            The ledger
           </h2>
-          <p className="mb-3 mt-1 text-sm text-ink-soft">
-            Select the person — or create them if they are new — then say whether this is a
-            recurring arrangement or a one-off.
-          </p>
-          <BorrowSetupForm
-            idPrefix="borrowing-setup"
-            debts={allDebts.map((line) => ({
-              id: line.debt.id,
-              counterparty: line.debt.counterparty,
-              direction: line.debt.direction,
-            }))}
-            pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-            today={today}
-          />
-        </section>
-
-        <section
-          aria-labelledby="ledger-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="ledger-heading" className="text-lg font-semibold">
-              The ledger
-            </h2>
+          <Link
+            href={
+              order === 'oldest'
+                ? buildLedgerHref({ who: who ?? null, order: 'newest' })
+                : buildLedgerHref({ who: who ?? null, order: 'oldest' })
+            }
+            className="text-xs sf-link"
+          >
+            {order === 'oldest' ? 'Newest first' : 'Oldest first'}
+          </Link>
+        </div>
+        <p className="mb-2 mt-1 text-sm text-ink-soft">
+          Every borrowing, repayment, loan and expected payment in date order. The balance is that
+          person&apos;s arrangement after each row:{' '}
+          <span className="font-medium">− we owe · + owed to us</span>. Click an amount for the
+          detail, correction and void.
+        </p>
+        <nav aria-label="Filter by person" className="mb-2 flex flex-wrap items-center gap-2">
+          <Link
+            href={buildLedgerHref({ who: null, order })}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              who === undefined
+                ? 'bg-accent text-accent-contrast'
+                : 'bg-surface-muted text-ink-body hover:bg-canvas'
+            }`}
+          >
+            All
+          </Link>
+          {ledger.people.map((person) => (
             <Link
-              href={
-                order === 'oldest'
-                  ? buildLedgerHref({ who: who ?? null, order: 'newest' })
-                  : buildLedgerHref({ who: who ?? null, order: 'oldest' })
-              }
-              className="text-xs sf-link"
-            >
-              {order === 'oldest' ? 'Newest first' : 'Oldest first'}
-            </Link>
-          </div>
-          <p className="mb-2 mt-1 text-sm text-ink-soft">
-            Every borrowing, repayment, loan and expected payment in date order. The balance is that
-            person&apos;s arrangement after each row:{' '}
-            <span className="font-medium">− we owe · + owed to us</span>. Click an amount for the
-            detail, correction and void.
-          </p>
-          <nav aria-label="Filter by person" className="mb-2 flex flex-wrap items-center gap-2">
-            <Link
-              href={buildLedgerHref({ who: null, order })}
+              key={person.label}
+              href={buildLedgerHref({ who: person.label, order })}
               className={`rounded-full px-3 py-1 text-xs font-medium ${
-                who === undefined
+                who === person.label
                   ? 'bg-accent text-accent-contrast'
                   : 'bg-surface-muted text-ink-body hover:bg-canvas'
               }`}
             >
-              All
+              {person.label} · {person.positionLabel}
             </Link>
-            {ledger.people.map((person) => (
-              <Link
-                key={person.label}
-                href={buildLedgerHref({ who: person.label, order })}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  who === person.label
-                    ? 'bg-accent text-accent-contrast'
-                    : 'bg-surface-muted text-ink-body hover:bg-canvas'
-                }`}
-              >
-                {person.label} · {person.positionLabel}
-              </Link>
-            ))}
-          </nav>
-          <BorrowingLedger
-            rows={ledger.rows}
-            pots={pots.map((pot) => ({ id: pot.id, label: pot.label, kind: pot.kind }))}
-            today={today}
-            inLabel={inLabel}
-            outLabel={outLabel}
-          />
-        </section>
-      </div>
-
-      <section
-        id="record"
-        aria-labelledby="record-heading"
-        className="sf-anchor mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm"
-      >
-        <h2 id="record-heading" className="text-lg font-semibold">
-          Record money in or out
-        </h2>
-        <p className="mb-3 mt-1 text-sm text-ink-soft">
-          A repayment brings what is owed down — it is never spending. More borrowing is owed —
-          never income. A payment that was cash and later banked is two records: this one into the
-          pot the money landed in, then Move → Between pots when you deposit it.
-        </p>
-        <LoanMovementForm
-          // Keyed on the presets: `useState` initial values only apply at
-          // mount, so a prefill link must remount the form (the decision 208
-          // fix for the quick-window date pickers).
-          key={`record-${presetDebtId ?? 'none'}-${presetDirection ?? 'none'}-${presetAmountPence ?? 'none'}`}
-          idPrefix="borrowing-record"
-          pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-          debts={allDebts.map((line) => ({
-            id: line.debt.id,
-            counterparty: line.debt.counterparty,
-            direction: line.debt.direction,
-          }))}
+          ))}
+        </nav>
+        <BorrowingLedger
+          rows={ledger.rows}
+          pots={pots.map((pot) => ({ id: pot.id, label: pot.label, kind: pot.kind }))}
           today={today}
-          presetDebtId={presetDebtId}
-          presetDirection={presetDirection}
-          presetAmountPence={presetAmountPence}
+          inLabel={inLabel}
+          outLabel={outLabel}
         />
       </section>
+
+      <BorrowSetupSection idPrefix="borrowing-setup" pots={potOptions} today={today} />
 
       <p className="mt-6 rounded-xl border border-border-hairline bg-canvas px-4 py-3 text-sm text-ink-soft">
         Not this page: <strong className="font-medium text-ink-body">formal borrowing</strong> — a
@@ -244,7 +204,21 @@ export default async function BorrowingPage({
   );
 }
 
-function PersonCard({ person, today }: { person: BorrowingPerson; today: string }) {
+function PersonCard({
+  person,
+  pots,
+  today,
+  presetDebtId,
+  presetDirection,
+  presetAmountPence,
+}: {
+  person: BorrowingPerson;
+  pots: Array<{ id: number; label: string; kind: PotKind; estimatePence: number | null }>;
+  today: string;
+  presetDebtId: number | null;
+  presetDirection: 'in' | 'out' | null;
+  presetAmountPence: number | null;
+}) {
   return (
     <section
       aria-labelledby={`person-${person.label.replace(/\s+/g, '-').toLowerCase()}-heading`}
@@ -287,27 +261,15 @@ function PersonCard({ person, today }: { person: BorrowingPerson; today: string 
             {line.debt.note !== null && line.debt.note !== '' ? (
               <p className="text-xs text-ink-muted">{line.debt.note}</p>
             ) : null}
-            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
-              {line.debt.direction === 'we_owe' ? (
-                <>
-                  <Link href={`?debt=${line.debt.id}&what=in#record`} className="sf-link">
-                    Record borrowing
-                  </Link>
-                  <Link href={`?debt=${line.debt.id}&what=out#record`} className="sf-link">
-                    Record a repayment
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Link href={`?debt=${line.debt.id}&what=out#record`} className="sf-link">
-                    Record a loan out
-                  </Link>
-                  <Link href={`?debt=${line.debt.id}&what=in#record`} className="sf-link">
-                    Record what they repaid
-                  </Link>
-                </>
-              )}
-            </div>
+            <PersonDebtRecord
+              debtId={line.debt.id}
+              direction={line.debt.direction}
+              balancePence={line.balancePence}
+              pots={pots}
+              today={today}
+              presetDirection={presetDebtId === line.debt.id ? presetDirection : null}
+              presetAmountPence={presetDebtId === line.debt.id ? presetAmountPence : null}
+            />
             <details className="mt-1">
               <summary className="cursor-pointer text-xs font-medium text-ink-soft">Edit</summary>
               <div className="mt-2">

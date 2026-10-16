@@ -8,7 +8,7 @@ import {
   ChartLegend,
   ChartScroller,
   GroupedBarChart,
-  MixCategoryTree,
+  MixScopes,
   abbrevCategory,
   PieChart,
   StackedBarChart,
@@ -36,7 +36,6 @@ import {
   type SpendingTrendsView,
   type ForecastChartView,
   type GroceriesChartView,
-  type MixWindow,
   type PersonalChartView,
   type SpendingMixView,
 } from '@/lib/records/charts-view';
@@ -155,7 +154,7 @@ export default async function ChartsPage({
               params={params}
             />
             <CommitmentsSection view={commitments} />
-            <MixLayout view={mixView} selectedKey={sliceKey} />
+            <MixSection view={mixView} selectedKey={sliceKey} />
             <MonthsSection view={monthsView} params={params} />
           </>
         ) : (
@@ -885,20 +884,6 @@ function CommitmentsSection({ view }: { view: SpendingTrendsView }) {
 /* ------------------------------------------------------------------ */
 
 /**
- * The selector and the pie side by side on a laptop, stacked on a phone. The
- * selector is a plain GET form, so the choices live in the URL and the page
- * works with JavaScript switched off.
- */
-function MixLayout({ view, selectedKey }: { view: SpendingMixView; selectedKey: string | null }) {
-  return (
-    <div className="grid min-w-0 gap-6 lg:col-span-2 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-      <MixSelector view={view} />
-      <MixSection view={view} selectedKey={selectedKey} />
-    </div>
-  );
-}
-
-/**
  * Which parent ids the selector counted. The form always sends `catset`, so
  * an unticked category is an exclusion rather than a missing field; without
  * `catset` (a fresh visit) every category counts.
@@ -928,134 +913,12 @@ function mixHref(
   return `/charts?${query.toString()}#mix`;
 }
 
-interface PresetLink {
-  key: string;
-  label: string;
-  window: MixWindow;
-}
-
 function selectedMixCategoryIds(view: SpendingMixView): number[] | null {
   if (view.allCategoriesIncluded) return null;
   const childlessIncluded = view.parents
     .filter((parent) => parent.children.length === 0 && view.includedParentIds.includes(parent.id))
     .map((parent) => parent.id);
   return [...view.includedCategoryIds, ...childlessIncluded];
-}
-
-function MixSelector({ view }: { view: SpendingMixView }) {
-  const {
-    window,
-    presets,
-    parents,
-    includedParentIds,
-    includedCategoryIds,
-    allCategoriesIncluded,
-  } = view;
-  const cats = selectedMixCategoryIds(view);
-  // Quick windows (issue #24). None runs past today: this chart counts money
-  // already spent, never a projection.
-  const presetLinks: PresetLink[] = [];
-  if (presets.payday !== null) {
-    presetLinks.push({ key: 'payday', label: 'Since last payday', window: presets.payday });
-  }
-  if (presets.previousPayday !== null) {
-    presetLinks.push({
-      key: 'previous-payday',
-      label: 'Last full payday cycle',
-      window: presets.previousPayday,
-    });
-  }
-  presetLinks.push({ key: 'month', label: 'Month to date', window: presets.month });
-  // The date pickers are uncontrolled, and a quick-window link is a soft
-  // navigation that keeps this form mounted, so `defaultValue` alone would
-  // leave the pickers showing the old dates. Keying them on the window
-  // remounts them, so the pickers always show the dates the pie is drawn for.
-  const windowKey = `${window.from}:${window.to}`;
-
-  return (
-    <section
-      id="mix-controls"
-      aria-labelledby="mix-controls-heading"
-      className="min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm"
-    >
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">Selector</p>
-      <h2 id="mix-controls-heading" className="text-lg font-semibold">
-        Choose what to count
-      </h2>
-      <p className="mt-1 text-xs text-ink-muted">
-        By default this is since last payday: from the last payday up to today. This chart counts
-        money already spent, so no window runs past today. Press Show after changing anything.
-      </p>
-
-      <form method="get" action="/charts#mix" className="mt-4 space-y-4">
-        <input type="hidden" name="catset" value="1" />
-        <fieldset className="grid grid-cols-2 gap-2">
-          <legend className="mb-1 text-xs font-medium text-ink-soft">Time window</legend>
-          <label className="flex flex-col gap-1 text-xs text-ink-soft">
-            From
-            <input
-              key={`from:${windowKey}`}
-              type="date"
-              name="from"
-              required
-              max={view.today}
-              defaultValue={window.from}
-              className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-ink-soft">
-            To
-            <input
-              key={`to:${windowKey}`}
-              type="date"
-              name="to"
-              required
-              max={view.today}
-              defaultValue={window.to}
-              className="w-full min-w-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-ink-body"
-            />
-          </label>
-          <div className="col-span-2">
-            <button
-              type="submit"
-              className="rounded bg-till px-3 py-1.5 text-sm font-medium text-till-ink"
-            >
-              Show
-            </button>
-          </div>
-        </fieldset>
-
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick windows">
-          {presetLinks.map((preset) => {
-            const on = window.kind === preset.window.kind;
-            return (
-              <Link
-                key={preset.key}
-                href={mixHref(preset.window, { cats })}
-                aria-current={on ? 'true' : undefined}
-                className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                  on
-                    ? 'border-till bg-till text-till-ink'
-                    : 'border-border-strong bg-surface text-ink-soft hover:bg-canvas'
-                }`}
-              >
-                {on ? '✓ ' : ''}
-                {preset.label}
-              </Link>
-            );
-          })}
-        </div>
-
-        <MixCategoryTree
-          parents={parents}
-          includedParentIds={includedParentIds}
-          includedCategoryIds={includedCategoryIds}
-          allCategoriesIncluded={allCategoriesIncluded}
-          resetHref={mixHref(window, { cats: null })}
-        />
-      </form>
-    </section>
-  );
 }
 
 /** Colour slots are fixed by the category tree, so a slice keeps its colour. */
@@ -1134,9 +997,9 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
     key: slice.key,
     muted: !slice.drawn,
     cells: [
-      <a key="link" href={sliceHref(slice)} className="sf-link">
+      <Link key="link" href={sliceHref(slice)} className="sf-link">
         {slice.label}
-      </a>,
+      </Link>,
       formatPence(slice.amountPence),
       slice.drawn ? sharePercent(slice.share) : 'not drawn',
     ],
@@ -1149,6 +1012,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
       headline={headline}
       basis="Reported"
       caption={caption}
+      collapseCaption
       columns={columns}
       rows={rows}
       totals={['Total', formatPence(mix.totalPence), '']}
@@ -1196,7 +1060,20 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
   );
 
   return (
-    <ChartCard id="mix" eyebrow="E · Spending mix" title="Where the money went" className="min-w-0">
+    <section
+      id="mix"
+      aria-labelledby="mix-heading"
+      className="sf-anchor min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm"
+    >
+      <MixScopes
+        today={view.today}
+        window={window}
+        presets={view.presets}
+        parents={view.parents}
+        includedParentIds={view.includedParentIds}
+        includedCategoryIds={view.includedCategoryIds}
+        allCategoriesIncluded={view.allCategoriesIncluded}
+      />
       {notice === null ? null : (
         <p className="mb-3 rounded-lg border border-dashed border-border-strong bg-canvas p-3 text-xs text-ink-soft">
           {notice}
@@ -1212,7 +1089,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
       ) : (
         <MixLineItems view={view} slice={selected} closeHref={mixHref(window, { cats })} />
       )}
-    </ChartCard>
+    </section>
   );
 }
 

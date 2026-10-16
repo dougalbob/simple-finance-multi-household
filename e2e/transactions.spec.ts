@@ -583,7 +583,7 @@ test.describe('all transactions', () => {
     await page.goto('/borrowing');
     const setup = page.locator('section[aria-labelledby="setup-heading"]');
     const counterparty = `E2E Expectant ${Date.now()}`;
-    await setup.getByLabel('Who is this with?').selectOption('new');
+    await setup.getByRole('button', { name: 'Setup new Borrowing or lending' }).click();
     await setup.getByLabel('Their name').fill(counterparty);
     await setup.getByLabel('Is this a recurring arrangement?').selectOption('none');
     await setup.getByRole('button', { name: 'Start tracking' }).click();
@@ -635,8 +635,11 @@ test.describe('all transactions', () => {
     // The money lands and is recorded that day: the expectation gives way to
     // the real borrowing, on the same window.
     await page.goto('/borrowing');
-    const borrow = page.locator('section[aria-labelledby="record-heading"]');
-    await borrow.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
+    const expectantCard = page.locator('section', {
+      has: page.getByRole('heading', { name: counterparty, exact: true }),
+    });
+    await expectantCard.getByRole('link', { name: 'Record borrowing' }).click();
+    const borrow = expectantCard.locator('[data-inline-record]');
     await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
     await borrow.getByLabel('Amount').fill('250.00');
     await borrow.getByRole('button', { name: 'Record it' }).click();

@@ -498,7 +498,7 @@ test.describe('charts', () => {
     ).toContain(average);
   });
 
-  test('the spending mix is where the money went: no date after today, and the pickers follow the quick windows (issue #24)', async ({
+  test('the spending mix is where the money went: scopes expand in place, quick windows wait for Show, and info opens on i (issues #24, #61)', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1400, height: 950 });
@@ -507,52 +507,92 @@ test.describe('charts', () => {
     await expect(card.getByRole('heading', { name: 'Where the money went' })).toBeVisible();
     await expect(page.getByText('Where the money goes')).toHaveCount(0);
 
-    const controls = page.locator('#mix-controls');
+    // Removed selector headings/blurb text are gone.
+    await expect(card.getByText('Choose what to count')).toHaveCount(0);
+    await expect(card.getByText('Time window')).toHaveCount(0);
+
+    // The long Reported caption is hidden behind the "i" summary icon by default.
+    const laptopMix = figure(page, 'mix', 'laptop');
+    const captionText = laptopMix.getByText(/Net spending by parent category/);
+    await expect(captionText).toBeHidden();
+    await laptopMix.locator('figcaption summary[aria-label="Chart information"]').click();
+    await expect(captionText).toBeVisible();
+    await expect(laptopMix.locator('figcaption')).toContainText('Reported');
+
+    // The scopes panel lives inside Chart E and starts collapsed.
+    const controls = card.locator('#mix-controls');
+    const scopesButton = card.getByRole('button', { name: 'Change chart scopes' });
+    await expect(scopesButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(controls).toBeHidden();
+
+    await scopesButton.click();
+    await expect(scopesButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(controls).toBeVisible();
+
     const from = controls.getByLabel('From', { exact: true });
     const to = controls.getByLabel('To', { exact: true });
+    const showButton = controls.getByRole('button', { name: 'Show', exact: true });
     // Both pickers stop at today: the chart counts money already spent.
     const today = await to.getAttribute('max');
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     await expect(from).toHaveAttribute('max', today as string);
 
-    const quick = page.getByRole('group', { name: 'Quick windows' });
-    const sinceLastPayday = quick.getByRole('link', { name: /Since last payday$/ });
-    const lastFullCycle = quick.getByRole('link', { name: /Last full payday cycle$/ });
-    const monthToDate = quick.getByRole('link', { name: /Month to date$/ });
+    const quick = controls.getByRole('group', { name: 'Quick windows' });
+    const sinceLastPayday = quick.getByRole('button', { name: /Since last payday$/ });
+    const lastFullCycle = quick.getByRole('button', { name: /Last full payday cycle$/ });
+    const monthToDate = quick.getByRole('button', { name: /Month to date$/ });
     await expect(sinceLastPayday).toBeVisible();
     await expect(lastFullCycle).toBeVisible();
     await expect(monthToDate).toBeVisible();
-    await expect(quick.getByRole('link')).toHaveCount(3);
+    await expect(quick.getByRole('button')).toHaveCount(3);
 
     // The default window is since last payday, ending today.
     await expect(sinceLastPayday).toHaveAttribute('aria-current', 'true');
     await expect(to).toHaveValue(today as string);
 
-    // Each quick window ends by today, and pressing one puts its dates in the
-    // pickers. The pickers are edited by hand first: once a date input has been
-    // touched the browser stops following its default value, so a soft
-    // navigation alone would leave the hand-typed dates showing beside a chart
-    // drawn for different ones.
+    // Clicking a quick-window pill updates the From/To pickers in place without
+    // refreshing the chart or discarding category changes; the chart only
+    // updates when the user explicitly presses Show, and the scopes panel stays
+    // open after Show.
+    const firstParentCheckbox = controls
+      .locator('fieldset ul > li > div input[type="checkbox"]')
+      .first();
+    await expect(firstParentCheckbox).toBeChecked();
+    await firstParentCheckbox.uncheck();
+    await expect(firstParentCheckbox).not.toBeChecked();
+
     for (const button of [monthToDate, lastFullCycle, sinceLastPayday]) {
       await from.fill('2020-01-01');
       await to.fill('2020-01-02');
-      const href = (await button.getAttribute('href')) ?? '';
-      const query = new URL(href, 'http://local').searchParams;
-      const windowFrom = query.get('from') ?? '';
-      const windowTo = query.get('to') ?? '';
-      expect(windowTo <= (today as string), `${href} ends ${windowTo}`).toBe(true);
       await button.click();
-      await expect(page).toHaveURL(new RegExp(`from=${windowFrom}&to=${windowTo}`));
       await expect(button).toHaveAttribute('aria-current', 'true');
+      const windowFrom = await from.inputValue();
+      const windowTo = await to.inputValue();
+      expect(windowFrom).not.toBe('2020-01-01');
+      expect(windowTo <= (today as string), `ends ${windowTo}`).toBe(true);
+      // Category change is still intact before pressing Show.
+      await expect(firstParentCheckbox).not.toBeChecked();
+
+      await showButton.click();
+      await expect(page).toHaveURL(new RegExp(`from=${windowFrom}&to=${windowTo}.*catset=1`));
+      // Panel remains open after pressing Show.
+      await expect(controls).toBeVisible();
+      await expect(scopesButton).toHaveAttribute('aria-expanded', 'true');
       await expect(from).toHaveValue(windowFrom);
       await expect(to).toHaveValue(windowTo);
+      await expect(firstParentCheckbox).not.toBeChecked();
     }
-    expect((await monthToDate.getAttribute('href')) ?? '').toContain(
-      `from=${(today as string).slice(0, 7)}-01&to=${today}`,
-    );
+
+    // Navigating to another page and returning starts with the scopes panel collapsed again.
+    await page.getByRole('link', { name: 'Insights', exact: true }).first().click();
+    await expect(page).toHaveURL(/\/insights$/);
+    await page.getByRole('link', { name: 'Charts', exact: true }).first().click();
+    await expect(page).toHaveURL(/\/charts$/);
+    await expect(card.locator('#mix-controls')).toBeHidden();
 
     // An end date after today typed into the URL is brought back to today.
     await page.goto(`/charts?from=${(today as string).slice(0, 7)}-01&to=2999-12-31#mix`);
+    await card.getByRole('button', { name: 'Change chart scopes' }).click();
     await expect(to).toHaveValue(today as string);
     await expect(card.getByText(/window stops at today/)).toBeVisible();
   });
