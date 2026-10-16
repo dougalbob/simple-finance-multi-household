@@ -9,9 +9,9 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.20.0 is the stable production release and moves :latest (a purchase opens
-  in place on All Transactions for correction or void, GitHub issue #57, and
-  the Purchases page's Refund button works again).
+  v1.21.0 is the stable production release and moves :latest (everything
+  informal borrowing on its own Borrowing page — the combined ledger, the
+  setup flow and the repay panel, GitHub issue #60).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.20.0 is the stable production release and moves :latest.
+    v1.21.0 is the stable production release and moves :latest.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

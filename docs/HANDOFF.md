@@ -1,7 +1,7 @@
-# Release v1.20.0 — Purchases open in place on All Transactions, and Record refund works again (GitHub issue #57) (2026-10-15)
+# Release v1.21.0 — Borrowing gets its own page (GitHub issue #60) (2026-10-16)
 
 **Release scope is prepared on this branch.** The household accepted the Arena preview of issue #57 and
-authorised a stable release in the same session. Version files are aligned at **v1.20.0 stable**, moving
+authorised a stable release in the same session. Version files are aligned at **v1.21.0 stable**, moving
 `latest` on `ghcr.io/dougalbob/simple-finance-multi-household` only. No schema, migration or
 backup-format change. Required PR CI, main CI and tagged Publish evidence are still pending at
 preparation time; this is a pre-merge record, not proof that a tag or image exists.
