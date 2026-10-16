@@ -39,6 +39,12 @@ interface MonthRef {
 
 const monthParam = (ref: MonthRef) => `${ref.year}-${String(ref.month).padStart(2, '0')}`;
 
+/**
+ * The month card's own heading — the anchor a drill falls back to when the
+ * figure it came from has no row of its own to return to.
+ */
+const MONTH_PANEL_ANCHOR = 'panel-month-heading';
+
 function parseMonthParam(raw: string | undefined, fallback: MonthRef): MonthRef {
   if (raw === undefined) return fallback;
   const match = /^(\d{4})-(\d{2})$/.exec(raw);
@@ -54,12 +60,23 @@ function shiftMonth(ref: MonthRef, delta: number): MonthRef {
   return { year: Math.floor(index / 12), month: (index % 12) + 1 };
 }
 
-/** The page's own URL for the person-card month and an optional drill selection. */
-function insightsHref(state: { month: string; show: string | null }, anchor: string): string {
+/**
+ * The page's own URL for the person-card month and an optional drill
+ * selection.
+ *
+ * The anchor is where the browser lands: the drill's own line items when it
+ * opens, and the place the reader came from when it closes. `null` means no
+ * fragment at all — the page then opens at its very top, which is what the
+ * month card's figures close to (issue #68).
+ */
+function insightsHref(
+  state: { month: string; show: string | null },
+  anchor: string | null,
+): string {
   const query = new URLSearchParams();
   query.set('month', state.month);
   if (state.show !== null) query.set('show', state.show);
-  return `/insights?${query.toString()}#${anchor}`;
+  return `/insights?${query.toString()}${anchor === null ? '' : `#${anchor}`}`;
 }
 
 /**
@@ -102,9 +119,32 @@ export default async function InsightsPage({
   const names = targetNames({ people: listPeople(db), vehicles: listVehicles(db) });
 
   const state = { month: monthParam(personal.month), show: parseDrillKey(params.show) };
-  const toggleShow = (selection: DrillSelection, anchor: string): string => {
+  /**
+   * The URL a figure's link points at: the drill opens (`?show=…`) with the
+   * **open** anchor, and the same link closes it again with the **close**
+   * anchor — the place the reader came from, so closing puts them back
+   * exactly where they started (issue #68).
+   *
+   * - The month totals open at their line items and close with **no
+   *   fragment**, which lands the reader at the very top of the page, where
+   *   the month totals are again.
+   * - The category rows open their line items immediately below the row and
+   *   close back onto that row.
+   * - A person's figure closes back to that person's card.
+   * - A vehicle's figure closes back to that vehicle's card, whose top then
+   *   sits just below the sticky menu.
+   */
+  const toggleShow = (
+    selection: DrillSelection,
+    openAnchor: string,
+    closeAnchor: string | null,
+  ): string => {
     const key = drillKey(selection);
-    return insightsHref({ month: state.month, show: params.show === key ? null : key }, anchor);
+    const isOpen = params.show === key;
+    return insightsHref(
+      { month: state.month, show: isOpen ? null : key },
+      isOpen ? closeAnchor : openAnchor,
+    );
   };
 
   return (
@@ -200,7 +240,11 @@ export default async function InsightsPage({
                     ? drill
                     : null;
                 return (
-                  <div key={person.personId} className="rounded-lg bg-canvas p-3">
+                  <div
+                    key={person.personId}
+                    id={`person-${person.personId}`}
+                    className="sf-anchor rounded-lg bg-canvas p-3"
+                  >
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="font-semibold">{person.person}</p>
                       <p className="text-lg font-semibold tabular-nums">
@@ -213,6 +257,7 @@ export default async function InsightsPage({
                               parentId: null,
                             },
                             'person-drill',
+                            `person-${person.personId}`,
                           )}
                           className="sf-link"
                           aria-current={open !== null ? 'true' : undefined}
@@ -255,6 +300,7 @@ export default async function InsightsPage({
                                         parentId,
                                       },
                                       'person-drill',
+                                      `person-${person.personId}`,
                                     )}
                                     className="sf-link"
                                     aria-current={
@@ -341,6 +387,7 @@ export default async function InsightsPage({
                               childCategoryId: null,
                             },
                             'vehicle-drill',
+                            `vehicle-${vehicle.vehicleId}`,
                           )}
                           className="sf-link"
                           aria-current={isShown(
@@ -370,6 +417,7 @@ export default async function InsightsPage({
                             childCategoryId: null,
                           },
                           'vehicle-drill',
+                          `vehicle-${vehicle.vehicleId}`,
                         )}
                         className="tabular-nums sf-link"
                         aria-current={isShown(
@@ -393,6 +441,7 @@ export default async function InsightsPage({
                             childCategoryId: null,
                           },
                           'vehicle-drill',
+                          `vehicle-${vehicle.vehicleId}`,
                         )}
                         className="tabular-nums sf-link"
                         aria-current={isShown(
@@ -435,6 +484,7 @@ export default async function InsightsPage({
                                     childCategoryId: row.categoryId,
                                   },
                                   'vehicle-drill',
+                                  `vehicle-${vehicle.vehicleId}`,
                                 )}
                                 className="sf-link"
                                 aria-current={isShown(
@@ -650,7 +700,12 @@ function MonthPanel({
   comparison: ReturnType<typeof getMonthComparisonView>;
   today: string;
   state: { month: string; show: DrillSelection | null };
-  toggleShow: (selection: DrillSelection, anchor: string) => string;
+  /**
+   * The link a figure points at: it opens the drill at `openAnchor` and
+   * closes it again at `closeAnchor` — the place the reader came from. A
+   * `null` close anchor means no fragment: the page lands at its very top.
+   */
+  toggleShow: (selection: DrillSelection, openAnchor: string, closeAnchor: string | null) => string;
   names: TargetNames;
 }) {
   const { months, byParent, lines } = comparison;
@@ -664,8 +719,15 @@ function MonthPanel({
     show?.kind === 'month' && months.some((month) => monthParam(month.month) === show.month)
       ? show
       : null;
+  // A **month total** opens its line items at the foot of the card, and the
+  // page scrolls to them. A **category** opens them immediately below the row
+  // that was clicked, so the reader never loses the line they read
+  // (issue #68).
+  const monthDrill = drill !== null && drill.parentId === null ? drill : null;
   const parentIdOf = (parent: string): number | undefined =>
     lines.find((line) => line.parentName === parent)?.parentId;
+  // The table's column count, so an inline line-items row spans all of them.
+  const columnCount = 1 + months.length + Math.max(0, months.length - 1);
 
   return (
     <section
@@ -707,13 +769,20 @@ function MonthPanel({
                 {month.inProgress ? ' (in progress)' : ' (complete)'}
               </p>
               <p className="text-2xl font-semibold tabular-nums">
-                <a
-                  href={toggleShow(selection, 'month-drill')}
-                  className="sf-link"
-                  aria-current={selectionIsShown(state.show, selection)}
-                >
-                  {formatPence(month.summary.totalPence)}
-                </a>
+                {month.summary.totalPence === 0 ? (
+                  // Nothing was spent in this month, so there is nothing to
+                  // open: the figure is greyed out, not a dead link
+                  // (issue #68).
+                  <span className="text-ink-muted">{formatPence(0)}</span>
+                ) : (
+                  <a
+                    href={toggleShow(selection, 'month-drill', null)}
+                    className="sf-link"
+                    aria-current={selectionIsShown(state.show, selection)}
+                  >
+                    {formatPence(month.summary.totalPence)}
+                  </a>
+                )}
               </p>
             </div>
           );
@@ -737,74 +806,124 @@ function MonthPanel({
               </tr>
             </thead>
             <tbody>
-              {byParent.map((row) => (
-                <tr key={row.parent} className="border-t border-border-hairline">
-                  <td className="py-1.5 pr-4 font-medium">{row.parent}</td>
-                  {months.map((month, index) => {
-                    const amount = row.amountsPence[index] ?? 0;
-                    const delta = row.deltasPence[index] ?? null;
-                    const parentId = parentIdOf(row.parent);
-                    const selection: DrillSelection | null =
-                      parentId === undefined
-                        ? null
-                        : {
-                            kind: 'month',
-                            month: monthParam(month.month),
-                            parentId,
-                          };
-                    return (
-                      <Fragment key={month.label}>
-                        <td className="py-1.5 pr-4 text-right tabular-nums">
-                          {selection === null ? (
-                            formatPence(amount)
-                          ) : (
-                            <a
-                              href={toggleShow(selection, 'month-drill')}
-                              className="sf-link"
-                              aria-current={selectionIsShown(state.show, selection)}
-                            >
-                              {formatPence(amount)}
-                            </a>
-                          )}
+              {byParent.map((row) => {
+                const parentId = parentIdOf(row.parent);
+                // The row's own anchor: closing its line items puts the
+                // reader back on the line they read (issue #68).
+                const rowAnchor = parentId === undefined ? null : `month-category-${parentId}`;
+                const rowDrill =
+                  drill !== null && drill.parentId !== null && drill.parentId === parentId
+                    ? drill
+                    : null;
+                return (
+                  <Fragment key={row.parent}>
+                    <tr
+                      id={rowAnchor ?? undefined}
+                      className="border-t border-border-hairline sf-anchor"
+                    >
+                      <td className="py-1.5 pr-4 font-medium">{row.parent}</td>
+                      {months.map((month, index) => {
+                        const amount = row.amountsPence[index] ?? 0;
+                        const delta = row.deltasPence[index] ?? null;
+                        const selection: DrillSelection | null =
+                          parentId === undefined
+                            ? null
+                            : {
+                                kind: 'month',
+                                month: monthParam(month.month),
+                                parentId,
+                              };
+                        return (
+                          <Fragment key={month.label}>
+                            <td className="py-1.5 pr-4 text-right tabular-nums">
+                              {selection === null || amount === 0 ? (
+                                // Nothing was spent in this category in this
+                                // month: greyed out, with nothing to open
+                                // behind it (issue #68).
+                                <span className="text-ink-muted">{formatPence(amount)}</span>
+                              ) : (
+                                <a
+                                  href={toggleShow(
+                                    selection,
+                                    rowAnchor ?? MONTH_PANEL_ANCHOR,
+                                    rowAnchor ?? MONTH_PANEL_ANCHOR,
+                                  )}
+                                  className="sf-link"
+                                  aria-current={selectionIsShown(state.show, selection)}
+                                >
+                                  {formatPence(amount)}
+                                </a>
+                              )}
+                            </td>
+                            {index === 0 ? null : (
+                              <td
+                                className={`py-1.5 pr-4 text-right font-medium tabular-nums ${
+                                  (delta ?? 0) > 0
+                                    ? 'text-danger'
+                                    : (delta ?? 0) < 0
+                                      ? 'text-positive'
+                                      : 'text-ink-muted'
+                                }`}
+                              >
+                                {delta === null
+                                  ? ''
+                                  : delta === 0
+                                    ? '±0'
+                                    : `${delta > 0 ? '+' : '−'}${formatPence(Math.abs(delta))}`}
+                              </td>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tr>
+                    {rowDrill !== null ? (
+                      // The line items open immediately below the category
+                      // line that was clicked (issue #68).
+                      <tr>
+                        <td colSpan={columnCount} className="py-2">
+                          {/* Pinned to the visible width, as every in-place
+                              panel in a scrolling table is (decision 185). */}
+                          <div className="sticky left-0 w-[min(calc(100vw-4rem),100%)]">
+                            <LineItemsCard
+                              id="month-drill"
+                              heading={monthDrillHeading(rowDrill, comparison)}
+                              table={drillMonth(lines, rowDrill.month, rowDrill.parentId)}
+                              openHref={purchasesHref({
+                                ...monthHrefRange(rowDrill.month, today),
+                                ...(rowDrill.parentId === null
+                                  ? {}
+                                  : { categoryIds: [rowDrill.parentId] }),
+                              })}
+                              closeHref={toggleShow(
+                                rowDrill,
+                                rowAnchor ?? MONTH_PANEL_ANCHOR,
+                                rowAnchor ?? MONTH_PANEL_ANCHOR,
+                              )}
+                              names={names}
+                            />
+                          </div>
                         </td>
-                        {index === 0 ? null : (
-                          <td
-                            className={`py-1.5 pr-4 text-right font-medium tabular-nums ${
-                              (delta ?? 0) > 0
-                                ? 'text-danger'
-                                : (delta ?? 0) < 0
-                                  ? 'text-positive'
-                                  : 'text-ink-muted'
-                            }`}
-                          >
-                            {delta === null
-                              ? ''
-                              : delta === 0
-                                ? '±0'
-                                : `${delta > 0 ? '+' : '−'}${formatPence(Math.abs(delta))}`}
-                          </td>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tr>
-              ))}
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
       ) : (
         <p className="mt-4 text-sm text-ink-muted">No spending recorded in either month yet.</p>
       )}
-      {drill !== null ? (
+      {monthDrill !== null ? (
         <LineItemsCard
           id="month-drill"
-          heading={monthDrillHeading(drill, comparison)}
-          table={drillMonth(lines, drill.month, drill.parentId)}
+          heading={monthDrillHeading(monthDrill, comparison)}
+          table={drillMonth(lines, monthDrill.month, monthDrill.parentId)}
           openHref={purchasesHref({
-            ...monthHrefRange(drill.month, today),
-            ...(drill.parentId === null ? {} : { categoryIds: [drill.parentId] }),
+            ...monthHrefRange(monthDrill.month, today),
+            ...(monthDrill.parentId === null ? {} : { categoryIds: [monthDrill.parentId] }),
           })}
-          closeHref={toggleShow(drill, 'month-drill')}
+          closeHref={toggleShow(monthDrill, 'month-drill', null)}
           names={names}
         />
       ) : null}
@@ -978,7 +1097,12 @@ function PersonDrillCard({
   personLabel: string;
   monthLabel: string;
   parentName: string | null;
-  toggleShow: (selection: DrillSelection, anchor: string) => string;
+  /**
+   * The link a figure points at: it opens the drill at `openAnchor` and
+   * closes it again at `closeAnchor` — the place the reader came from. A
+   * `null` close anchor means no fragment: the page lands at its very top.
+   */
+  toggleShow: (selection: DrillSelection, openAnchor: string, closeAnchor: string | null) => string;
   names: TargetNames;
   today: string;
 }) {
@@ -993,7 +1117,7 @@ function PersonDrillCard({
         targetId: selection.personId,
         ...(selection.parentId === null ? {} : { categoryIds: [selection.parentId] }),
       })}
-      closeHref={toggleShow(selection, 'person-drill')}
+      closeHref={toggleShow(selection, 'person-drill', `person-${selection.personId}`)}
       names={names}
     />
   );
@@ -1012,7 +1136,12 @@ function VehicleDrillCard({
   table: DrillTable;
   vehicleLabel: string;
   childName: string | null;
-  toggleShow: (selection: DrillSelection, anchor: string) => string;
+  /**
+   * The link a figure points at: it opens the drill at `openAnchor` and
+   * closes it again at `closeAnchor` — the place the reader came from. A
+   * `null` close anchor means no fragment: the page lands at its very top.
+   */
+  toggleShow: (selection: DrillSelection, openAnchor: string, closeAnchor: string | null) => string;
   names: TargetNames;
   today: string;
 }) {
@@ -1035,7 +1164,7 @@ function VehicleDrillCard({
         targetId: selection.vehicleId,
         ...(selection.childCategoryId === null ? {} : { categoryIds: [selection.childCategoryId] }),
       })}
-      closeHref={toggleShow(selection, 'vehicle-drill')}
+      closeHref={toggleShow(selection, 'vehicle-drill', `vehicle-${selection.vehicleId}`)}
       names={names}
     />
   );

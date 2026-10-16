@@ -5,9 +5,10 @@ Arena preview** (decision 228 in `docs/IMPLEMENTATION_PLAN.md` records it as bui
 Designed first at the household's request ("offer any other suggestions before we begin changing any
 existing code"), with the added requirement the same day: borrowing gets its **own page in the menu**
 so everything borrowing-related lives together. The decisions are recorded in §8 — they drove the
-implementation unchanged, with two build refinements: the ledger previews at most six expected rows
-per plan (a finite plan still shows every remaining payment), and the setup card offers a third
-outcome — "just track the person", decision 167's deletable empty setup.
+implementation unchanged, with two build refinements: the ledger previews the plan's **next** expected
+row only, and the setup card offers a third outcome — "just track the person", decision 167's
+deletable empty setup. Both refinements were sharpened by the household's follow-up, GitHub issue
+#68 — see §9.
 
 ## 1. What the issue describes
 
@@ -197,3 +198,27 @@ Date        From/To          Amt in     Amt out    Balance
    the banking date, and it would need a database and backup-format change. Polish inside A: the
    detail panel's plain-words pot line, the "Show <pot> around <date> →" link, and a note
    placeholder suggesting "e.g. cash handed over — banked 16th".
+
+## 9. Follow-up — issue #68 (v1.25.0): the ledger tells the truth and keeps the reader in place
+
+The household's report after using the page: the status word was legal-sounding, the ledger printed
+three identical future rows, changing the sort order threw the reader back to the top of the page,
+and "Record what they paid" was still offered when there was nothing to repay. Decision 232 records
+the thinking; the changes to the contract in §4 are:
+
+- **§3.1, the summary strip — "Nothing owing".** The honest labels are now *awaiting / we owe £X /
+  owed to us £X / **Nothing owing** / overpaid*. "Settled" was legal-sounding where the household
+  wanted plain English, and a balance below zero (overpaid) is still "Nothing owing".
+- **§3.4, the repay panel — nothing to repay means no offer.** While an arrangement owes nothing, the
+  repayment action on the card is greyed out (a `<span aria-disabled="true">`, skipped by the
+  keyboard) rather than inviting an action the server would refuse.
+- **§4, the ledger contract — newest first, and the order keeps the reader in place.** The ledger now
+  opens **newest first** (the design record proposed oldest first with a newest-first toggle; the
+  household's own report settled it the other way round). `?order=oldest` asks for the old order, and
+  the default is left out of the URL, so a plain `/borrowing` is the short link. The sort and filter
+  links are `<Link scroll={false}>`: changing the order or the person filter **keeps the vertical
+  scroll position**.
+- **§4, expected rows — one, not three.** The ledger is a history of what happened plus the one nudge
+  for what is next: a plan on a cadence shows **only its next** "expected — not yet recorded" row.
+  The plan itself is untouched — every occurrence still projects into the money views, and the
+  person's card still shows the plan in full.

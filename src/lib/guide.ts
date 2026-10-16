@@ -101,7 +101,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     lead: 'Money that crosses the household boundary is tracked as what it is: owed.',
     paragraphs: [
       'A loan from family, an expected-support plan, a swap with someone outside the household — these move your estimates honestly, but they are never income and never spending. In the projection they appear flagged “expected — never received”, and they land only if the money is actually borrowed and recorded.',
-      'Debts are informal IOUs: who, which way round, and what is still owed. There is no interest, no repayment schedule and no credit agreement anywhere in the app — a repayment is recorded when it happens, and the balance derives from the movements. A loan with no movements yet is awaiting its first payment, never “settled”.',
+      'Debts are informal IOUs: who, which way round, and what is still owed. There is no interest, no repayment schedule and no credit agreement anywhere in the app — a repayment is recorded when it happens, and the balance derives from the movements. A loan with no movements yet is awaiting its first payment, never “nothing owing”.',
     ],
     seeAlso: [
       { href: '/borrowing', label: 'Everything owed, on the Borrowing page' },

@@ -152,8 +152,8 @@ test.describe('debt deletion — empty mistaken setup', () => {
   });
 });
 
-test.describe('honest loan status — awaiting vs settled', () => {
-  test('Martin & Sue with no effective movements displays Awaiting first payment, not Settled', async ({
+test.describe('honest loan status — awaiting vs nothing owing', () => {
+  test('Martin & Sue with no effective movements displays Awaiting first payment, not Nothing owing', async ({
     page,
   }) => {
     const counterparty = `Martin & Sue ${Date.now()}`;
@@ -164,12 +164,12 @@ test.describe('honest loan status — awaiting vs settled', () => {
 
     const debtRow = personCard(page, counterparty).locator('li');
     await expect(debtRow.getByText('Awaiting first payment')).toBeVisible();
-    await expect(debtRow.getByText('settled')).toHaveCount(0);
+    await expect(debtRow.getByText('Nothing owing')).toHaveCount(0);
     await expect(debtRow.getByText('no movements yet')).toBeVisible();
     await expect(debtRow.getByText('bridging pending estate settlement')).toBeVisible();
   });
 
-  test('first borrowing moves status to outstanding, full repayment to settled, and overpayment is blocked', async ({
+  test('first borrowing moves status to outstanding, full repayment leaves nothing owing and greys the repayment out, and an overpayment is blocked', async ({
     page,
   }) => {
     const counterparty = `Lifecycle ${Date.now()}`;
@@ -193,20 +193,23 @@ test.describe('honest loan status — awaiting vs settled', () => {
     await expect(inlinePanel.getByRole('status')).toContainText(/repaid £40.00/i);
     await expect(debtRow.getByText('we owe £60.00')).toBeVisible();
 
+    // Still £60.00 owing: a bigger repayment is refused, with the figure.
     await debtRow.getByRole('link', { name: 'Record a repayment' }).click();
     await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await inlinePanel.getByLabel('Amount').fill('100.00');
+    await expect(inlinePanel.getByRole('alert')).toContainText(
+      /exceeds the £60\.00 currently owed/i,
+    );
+    await expect(inlinePanel.getByRole('button', { name: 'Record it' })).toBeDisabled();
+
+    // Repaying the rest leaves nothing owing (issue #68): the card says so,
+    // and the repayment action is greyed out — there is nothing to repay.
     await inlinePanel.getByLabel('Amount').fill('60.00');
     await inlinePanel.getByRole('button', { name: 'Record it' }).click();
     await expect(inlinePanel.getByRole('status')).toContainText(/repaid £60.00/i);
-    await expect(debtRow.getByText('settled')).toBeVisible();
-
-    await debtRow.getByRole('link', { name: 'Record a repayment' }).click();
-    await inlinePanel.getByLabel('Pot').selectOption({ label: 'Main account' });
-    await inlinePanel.getByLabel('Amount').fill('10.00');
-    await expect(inlinePanel.getByRole('alert')).toContainText(
-      /Nothing is currently owed on this arrangement/i,
-    );
-    await expect(inlinePanel.getByRole('button', { name: 'Record it' })).toBeDisabled();
+    await expect(debtRow.getByText('Nothing owing')).toBeVisible();
+    await expect(debtRow.getByRole('link', { name: 'Record a repayment' })).toHaveCount(0);
+    await expect(debtRow.locator('span[aria-disabled="true"]')).toHaveText('Record a repayment');
   });
 
   test('they_owe awaiting status uses Awaiting first loan wording', async ({ page }) => {

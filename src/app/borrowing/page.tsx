@@ -58,7 +58,10 @@ export default async function BorrowingPage({
   }
 
   const who = typeof params.who === 'string' && params.who !== '' ? params.who : undefined;
-  const order = params.order === 'newest' ? ('newest' as const) : ('oldest' as const);
+  // Newest first is the default (issue #68): the household reads the ledger
+  // for what just happened, and the old-first bank-statement order is one
+  // click away.
+  const order = params.order === 'oldest' ? ('oldest' as const) : ('newest' as const);
   const ledger = buildBorrowingLedger(db, { who, order, today });
   const pots = listPots(db);
   const money = getMoneySnapshot(db, now);
@@ -136,20 +139,26 @@ export default async function BorrowingPage({
           </h2>
           <Link
             href={
-              order === 'oldest'
-                ? buildLedgerHref({ who: who ?? null, order: 'newest' })
-                : buildLedgerHref({ who: who ?? null, order: 'oldest' })
+              order === 'newest'
+                ? buildLedgerHref({ who: who ?? null, order: 'oldest' })
+                : buildLedgerHref({ who: who ?? null, order: 'newest' })
             }
             className="text-xs sf-link"
+            // Re-ordering the ledger is a choice about the rows, not a new
+            // page: the reader keeps their place (issue #68). Without this the
+            // router scrolls to the top and the household loses the row they
+            // were reading.
+            scroll={false}
           >
-            {order === 'oldest' ? 'Newest first' : 'Oldest first'}
+            {order === 'newest' ? 'Oldest first' : 'Newest first'}
           </Link>
         </div>
         <p className="mb-2 mt-1 text-sm text-ink-soft">
-          Every borrowing, repayment, loan and expected payment in date order. The balance is that
-          person&apos;s arrangement after each row:{' '}
-          <span className="font-medium">− we owe · + owed to us</span>. Click an amount for the
-          detail, correction and void.
+          Every borrowing, repayment, loan and expected payment, newest first. A plan on a cadence
+          shows only its <span className="font-medium">next</span> expected payment here — the rest
+          of the plan is on the person&apos;s card. The balance is that person&apos;s arrangement
+          after each row: <span className="font-medium">− we owe · + owed to us</span>. Click an
+          amount for the detail, correction and void.
         </p>
         <nav aria-label="Filter by person" className="mb-2 flex flex-wrap items-center gap-2">
           <Link
@@ -159,6 +168,9 @@ export default async function BorrowingPage({
                 ? 'bg-accent text-accent-contrast'
                 : 'bg-surface-muted text-ink-body hover:bg-canvas'
             }`}
+            // Filtering the ledger is a choice about the rows, not a new
+            // page: the reader keeps their place (issue #68).
+            scroll={false}
           >
             All
           </Link>
@@ -171,6 +183,7 @@ export default async function BorrowingPage({
                   ? 'bg-accent text-accent-contrast'
                   : 'bg-surface-muted text-ink-body hover:bg-canvas'
               }`}
+              scroll={false}
             >
               {person.label} · {person.positionLabel}
             </Link>
@@ -310,11 +323,15 @@ function PersonCard({
   );
 }
 
-/** The ledger's own URL: the From/To filter and the order, nothing else. */
+/**
+ * The ledger's own URL: the From/To filter and the order, nothing else. The
+ * default order (newest first, issue #68) is left out of the URL, so the
+ * plain `/borrowing` link is the default view.
+ */
 function buildLedgerHref(options: { who: string | null; order: 'oldest' | 'newest' }): string {
   const params = new URLSearchParams();
   if (options.who !== null) params.set('who', options.who);
-  if (options.order !== 'oldest') params.set('order', options.order);
+  if (options.order !== 'newest') params.set('order', options.order);
   const query = params.toString();
   return query === '' ? '/borrowing' : `/borrowing?${query}`;
 }

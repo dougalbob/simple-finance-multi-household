@@ -90,7 +90,7 @@ describe('the borrowing ledger reshape (GitHub issue #60)', () => {
         now: RECORD_NOW,
       });
 
-      const { rows } = buildBorrowingLedger(fx.db, { today: '2026-10-27' });
+      const { rows } = buildBorrowingLedger(fx.db, { today: '2026-10-27', order: 'oldest' });
       assert.deepEqual(
         movementRows(rows).map((row) => [row.date, row.counterparty, row.runningBalancePence]),
         [
@@ -101,8 +101,9 @@ describe('the borrowing ledger reshape (GitHub issue #60)', () => {
           ['2026-10-26', 'Our son', 5000],
         ],
       );
-      // Newest first reverses the display order, never the balances.
-      const newest = buildBorrowingLedger(fx.db, { today: '2026-10-27', order: 'newest' });
+      // Newest first is the default (issue #68) and reverses the display
+      // order, never the balances.
+      const newest = buildBorrowingLedger(fx.db, { today: '2026-10-27' });
       assert.deepEqual(
         movementRows(newest.rows).map((row) => row.date),
         ['2026-10-26', '2026-10-25', '2026-09-15', '2026-08-22', '2026-08-15'],
@@ -208,7 +209,7 @@ describe('the borrowing ledger reshape (GitHub issue #60)', () => {
     }
   });
 
-  it('projects a plan’s expected rows strictly after today, silenced by the real Borrow and ended by settling', async () => {
+  it('projects a plan’s next expected row strictly after today, silenced by the real Borrow and ended by settling', async () => {
     const fx = await createHouseholdFixture();
     try {
       const mum = createDebt(fx.db, {
@@ -226,11 +227,13 @@ describe('the borrowing ledger reshape (GitHub issue #60)', () => {
           expectedInflow: { amountPence: 100000, dayOfMonth: 13, untilDate: '2026-12-31' },
         },
       });
-      // Today is the 27.10: November and December project; October does not.
+      // Today is the 27.10: November projects; October does not. The ledger
+      // shows only the **next** expected occurrence (issue #68) — the plan
+      // itself still projects every remaining payment into the money views.
       const before = buildBorrowingLedger(fx.db, { today: '2026-10-27' });
       assert.deepEqual(
         expectedRows(before.rows).map((row) => row.date),
-        ['2026-11-13', '2026-12-11'],
+        ['2026-11-13'],
       );
       assert.equal(before.people[0]?.nextExpected?.dueDate, '2026-11-13');
 
@@ -315,7 +318,8 @@ describe('the borrowing ledger reshape (GitHub issue #60)', () => {
       // "we owe £1,000.00 · owed to us £400.00" — two promises, never £600.
       assert.equal(people[0]?.positionLabel, 'we owe £1,000.00 · owed to us £400.00');
       const balances = movementRows(rows).map((row) => row.runningBalancePence);
-      assert.deepEqual(balances, [-100000, 40000]);
+      // Newest first is the default (issue #68), so the newer leg reads first.
+      assert.deepEqual(balances, [40000, -100000]);
     } finally {
       fx.close();
     }

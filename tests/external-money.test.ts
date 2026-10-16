@@ -172,7 +172,7 @@ describe('debts: tracking who owes whom (SPEC §10.2)', () => {
         totalMovementCount: 0,
       });
       assert.equal(debtBalanceLabel(owe, 0, 0), 'Awaiting first payment');
-      assert.equal(debtBalanceLabel(owe, 0, 1), 'settled');
+      assert.equal(debtBalanceLabel(owe, 0, 1), 'Nothing owing');
 
       createExternalMovement(fx.db, {
         potId: fx.pots.alexCash.id,

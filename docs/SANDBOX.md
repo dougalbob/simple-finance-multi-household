@@ -669,3 +669,42 @@ vulnerable projects against CI rather than burning a session on it: push and rea
 then the late block) against a fresh server each time, or accept CI as the proof for the late
 block. And when a run's tail looks too green, count the results — `PLAYWRIGHT_JSON_OUTPUT_NAME=…
 --reporter=json` gives exact per-test statuses (one worker, no retries locally).
+
+## 24. Scroll assertions need `scrollIntoViewIfNeeded()` first, and a dirty e2e database is fixed by restarting the server (2026-10-16)
+
+**Symptom 1 — a scroll-position assertion fails by a page height.** `locator.click()` scrolls its
+target into view before clicking, so measuring `window.scrollY` *after* the click measures where the
+browser put the target, not where the reader was. A test that says "the reader stayed in place"
+must call `await toggle.scrollIntoViewIfNeeded()` **first**, then read `scrollY`, then click, then
+read `scrollY` again. Playwright's own auto-scroll is the difference between "kept the scroll
+position" (206 → 206) and "jumped 2,463px".
+
+**Symptom 2 — an unrelated assertion fails because of leftover data.** The e2e server
+(`scripts/e2e-server.mts`) **re-seeds its data directory on every start** (`rmSync(DATA_DIR)` then
+`seed()`), so a spec that adds a vehicle named "Playwright Estate" fails the *next* run with
+"already exists", and repeated runs quietly move a pot's balance across an alert threshold
+("Alex's cash only has £…"). Neither is a code bug: **restart the server to re-seed** rather than
+editing the spec or the expectation. A one-line `node -e` with `better-sqlite3` against
+`.e2e-data/households/<id>/simple-finance.sqlite` is the quickest way to see what the run left
+behind.
+
+**Symptom 3 — a spec that spends money today can break a spec that runs last.** A pot's estimate
+counts a **same-day debit** even when the money comes straight back (the same-day *credit* is
+absorbed by the pot's checkpoint — `recordIsAfterCheckpoint`, SPEC §7.1), so a journey that lends
+£60 out of Main account and repays £60 today leaves Main account's estimate £60 lower for the rest
+of the run. The **payday** project runs last and reads those balances: its fixture adjusts the
+Scenario Energy direct debit so the household low lands on −£96.35, which ties the bills to the
+household's total, and the card then names the pot with the *worst* bills-only shortfall. £60 of
+extra spending in Main account flips that from Natwest to Main account and the payday spec fails
+with *"Main account has the worst bills-only shortfall: £68.77. It is already £68.77 overdrawn,
+with no bills left in this window."* A journey that moves money should therefore leave the shared
+seed's balances as it found them: record the legs **dated before today** (they are then absorbed
+by the payday fixture's checkpoint) and return the money to the pot it left. The same rule
+protects the fixture from any spec that spends from a liquid pot.
+
+**The local Playwright config's import shape.** `import { defineConfig } from '@playwright/test/index.js'`
+throws *"does not provide an export named 'defineConfig'"* here; use a default import and
+destructure (`import playwright from '@playwright/test/index.js'; const { defineConfig } =
+playwright;`). The override config lives **outside** the repo (`/home/user/pw.local.config.mts`),
+points `executablePath` at the `@sparticuz/chromium` binary (entry 8) and sets `baseURL` to the
+e2e server on port 3100.

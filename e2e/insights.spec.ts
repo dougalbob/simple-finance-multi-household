@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 /**
  * Annual vehicle payments on Insights (SPEC §16.3, decision 190). A yearly
@@ -152,5 +152,104 @@ test.describe('honesty loop tolerance band (issue #27)', () => {
     // …while the configured and actual figures the charts agree on stay put.
     await expect(groceries).toContainText('Configured weekly');
     await expect(groceries).toContainText('Actual average weekly');
+  });
+});
+
+/**
+ * The Insights line-item drill (issue #68): the household reads a figure, the
+ * line items open, and closing them puts the reader back exactly where they
+ * started — the top of the page for the month card, the row they read for a
+ * category, and the card they read for a vehicle.
+ */
+test.describe('the Insights line-item drill (issue #68)', () => {
+  const headerHeight = async (page: Page): Promise<number> =>
+    (await page.locator('header.sticky').boundingBox())?.height ?? 0;
+
+  test('a month total opens its line items, and closing them returns to the top of the page', async ({
+    page,
+  }) => {
+    await page.goto('/insights');
+    const panel = page.locator('section[aria-labelledby="panel-month-heading"]');
+    const card = panel.locator('div.grid > div.rounded-lg').first();
+    await card.locator('a.sf-link').click();
+
+    // The line items open in view, clear of the sticky menu.
+    const drill = page.locator('#month-drill');
+    await expect(drill).toBeVisible();
+    const drillBox = await drill.boundingBox();
+    expect(drillBox?.y ?? 0).toBeGreaterThanOrEqual((await headerHeight(page)) - 1);
+
+    // Closing them returns to the top of the page, where the month totals are.
+    await page.getByRole('link', { name: 'Close line items' }).click();
+    await expect(page).not.toHaveURL(/show=/);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(8);
+    await expect(card).toBeInViewport();
+  });
+
+  test('a category opens its line items immediately below its own row, and closing returns to that row', async ({
+    page,
+  }) => {
+    await page.goto('/insights');
+    const panel = page.locator('section[aria-labelledby="panel-month-heading"]');
+    const row = panel
+      .locator('tbody tr')
+      .filter({ has: page.locator('a.sf-link') })
+      .first();
+    const category = (await row.locator('td').first().innerText()).trim();
+    await row.locator('a.sf-link').first().click();
+
+    // The line items are inside the table, in the row directly after the
+    // category line that was clicked.
+    await expect(page.locator('#month-drill')).toBeVisible();
+    const placement = await page.evaluate((name) => {
+      const panelElement = document.querySelector('section[aria-labelledby="panel-month-heading"]');
+      const rows = Array.from(panelElement?.querySelectorAll('tbody > tr') ?? []);
+      const drillRow = document.getElementById('month-drill')?.closest('tr') ?? null;
+      const categoryRow = rows.find(
+        (candidate) => candidate.querySelector('td')?.textContent?.trim() === name,
+      );
+      return {
+        drillIndex: rows.indexOf(drillRow as HTMLTableRowElement),
+        categoryIndex: rows.indexOf(categoryRow as HTMLTableRowElement),
+      };
+    }, category);
+    expect(placement.drillIndex).toBe(placement.categoryIndex + 1);
+
+    // Closing puts the reader back on the row they read.
+    await page.getByRole('link', { name: 'Close line items' }).click();
+    await page.waitForTimeout(500);
+    const rowBox = await row.boundingBox();
+    const bar = await headerHeight(page);
+    expect(rowBox?.y ?? 0).toBeGreaterThanOrEqual(bar - 1);
+    expect(rowBox?.y ?? 0).toBeLessThan(bar + 120);
+  });
+
+  test('a vehicle card closes its line items with the card just below the menu', async ({
+    page,
+  }) => {
+    await page.goto('/insights');
+    const card = page.locator('div[id^="vehicle-"]').first();
+    await card.scrollIntoViewIfNeeded();
+    await card.locator('a.sf-link').first().click();
+    await expect(page.locator('#vehicle-drill')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Close line items' }).click();
+    await page.waitForTimeout(500);
+    const cardBox = await card.boundingBox();
+    const bar = await headerHeight(page);
+    // The card's top sits just below the menu — not behind it.
+    expect(cardBox?.y ?? 0).toBeGreaterThanOrEqual(bar - 1);
+    expect(cardBox?.y ?? 0).toBeLessThan(bar + 40);
+  });
+
+  test('a £0.00 figure is greyed out and opens nothing', async ({ page }) => {
+    await page.goto('/insights');
+    const panel = page.locator('section[aria-labelledby="panel-month-heading"]');
+    const zero = panel.locator('tbody td span.text-ink-muted', { hasText: '£0.00' }).first();
+    await expect(zero).toBeVisible();
+    // Plain muted text, never a link: there is nothing behind a zero figure.
+    expect(await zero.evaluate((element) => element.tagName)).toBe('SPAN');
+    expect(await zero.evaluate((element) => element.closest('a'))).toBeNull();
   });
 });
