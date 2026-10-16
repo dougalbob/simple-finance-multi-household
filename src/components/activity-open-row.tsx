@@ -164,6 +164,7 @@ export function ActivityPanel({
   onClose,
   muted = false,
   panelRef,
+  columnCount = ACTIVITY_COLUMN_COUNT,
   children,
 }: {
   /** The panel's DOM id — `{record}-{id}-panel`, the toggle's `aria-controls`. */
@@ -175,11 +176,13 @@ export function ActivityPanel({
   /** A pinned row's panel is tinted as its muted row is. */
   muted?: boolean;
   panelRef?: RefObject<HTMLElement | null>;
+  /** The host table's column count (the Borrowing ledger draws five). */
+  columnCount?: number;
   children: ReactNode;
 }) {
   return (
     <tr className={muted ? 'bg-surface-muted/60' : 'bg-accent-50/40'}>
-      <td colSpan={ACTIVITY_COLUMN_COUNT} className="px-3 pb-4 pt-1">
+      <td colSpan={columnCount} className="px-3 pb-4 pt-1">
         <div className="sticky left-0 w-[min(calc(100vw-4rem),100%)]">
           <section
             ref={panelRef}

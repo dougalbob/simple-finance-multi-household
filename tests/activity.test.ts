@@ -442,7 +442,14 @@ describe('All Transactions projection (SPEC §15.3)', () => {
         } else if (row.family === 'receipt') {
           assert.equal(row.link.href, `/income?receipt=${row.recordId}#receipt-${row.recordId}`);
         } else {
-          assert.equal(row.link.href, `/pots?external=${row.recordId}#external-${row.recordId}`);
+          // Loans live on the Borrowing page (issue #60); swaps and other
+          // boundary money stay on Accounts, Pots & Checkpoints.
+          assert.equal(
+            row.link.href,
+            row.code.startsWith('LN')
+              ? `/borrowing?external=${row.recordId}#external-${row.recordId}`
+              : `/pots?external=${row.recordId}#external-${row.recordId}`,
+          );
         }
       }
     } finally {
@@ -726,7 +733,7 @@ describe('All Transactions: expected support (v0.7.0)', () => {
       assert.equal(expected[0]?.amountPence, 100000);
       assert.equal(expected[0]?.note, 'Bridging loan');
       assert.equal(expected[0]?.badge, 'expected — not recorded yet');
-      assert.equal(expected[0]?.link.href, `/pots#debt-${debt.id}`);
+      assert.equal(expected[0]?.link.href, `/borrowing#debt-${debt.id}`);
       // Not a movement: the recorded totals stay empty, and the expectation
       // is reported separately so the page can say exactly what it excludes.
       assert.equal(october.totals.rowCount, 0);

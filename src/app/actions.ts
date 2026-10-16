@@ -105,6 +105,7 @@ import {
   DebtNotFoundError,
   deleteDebt,
   editDebt,
+  getDebt,
   InvalidDebtInputError,
   type EditDebtPatch,
 } from '@/lib/records/debts';
@@ -157,6 +158,7 @@ import {
 } from '@/lib/projects/projects';
 import {
   archivePotEntrySchema,
+  borrowingStartEntrySchema,
   cancelScheduleEntrySchema,
   restoreScheduleEntrySchema,
   categoryEntrySchema,
@@ -2162,6 +2164,139 @@ export async function deleteDebtAction(
   }
 }
 
+/**
+ * The Borrowing page's setup card (GitHub issue #60, decision 228): one flow
+ * that either records a movement against a debt already tracked, or tracks
+ * someone new — with a recurring support plan (£X on day N until D or for N
+ * payments) or a one-off first movement (amount, pot, date, note). It
+ * composes the domain calls the old cards made separately (`createDebt`,
+ * `editDebt` for the plan, `createExternalMovement`); each remains its own
+ * audited record exactly as when the household used the old cards in
+ * sequence.
+ */
+export async function startBorrowingAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const inflowAmountRaw = formData.get('expectedInflowAmount');
+  const inflowDayRaw = formData.get('expectedInflowDay');
+  const inflowUntilRaw = formData.get('expectedInflowUntil');
+  const inflowAmountText = typeof inflowAmountRaw === 'string' ? inflowAmountRaw.trim() : '';
+  const inflowDayText = typeof inflowDayRaw === 'string' ? inflowDayRaw.trim() : '';
+  const inflowUntilText = typeof inflowUntilRaw === 'string' ? inflowUntilRaw.trim() : '';
+  const movementAmountRaw = formData.get('amount');
+  const movementAmountText = typeof movementAmountRaw === 'string' ? movementAmountRaw.trim() : '';
+  const parsed = borrowingStartEntrySchema.safeParse({
+    trackMode: String(formData.get('trackMode') ?? ''),
+    counterparty: textOrNull(formData.get('counterparty')),
+    direction: textOrNull(formData.get('direction')),
+    debtNote: typeof formData.get('debtNote') === 'string' ? formData.get('debtNote') : '',
+    plan: textOrNull(formData.get('plan')),
+    // The amount and day ride as a pair or not at all (as on DebtEditForm):
+    // both blank means no plan; a half-set pair fails the schema.
+    expectedInflow:
+      inflowAmountText === '' && inflowDayText === ''
+        ? null
+        : {
+            amountPence: parsePence(inflowAmountText),
+            dayOfMonth: Number(inflowDayText),
+            untilDate: inflowUntilText === '' ? null : inflowUntilText,
+          },
+    debtId: numberOrNull(formData.get('debtId')),
+    movementDirection: textOrNull(formData.get('movementDirection')),
+    potId: numberOrNull(formData.get('potId')),
+    amountPence: movementAmountText === '' ? null : parsePence(movementAmountText),
+    occurredDate: textOrNull(formData.get('occurredDate')),
+    note: typeof formData.get('note') === 'string' ? formData.get('note') : '',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the borrowing fields.') };
+  }
+  const input = parsed.data;
+  const movementMessage = (
+    movement: { direction: 'in' | 'out'; amountPence: number; counterparty: string },
+    debtDirection: 'we_owe' | 'they_owe',
+  ): string => {
+    if (debtDirection === 'we_owe') {
+      return movement.direction === 'in'
+        ? `Borrowed ${formatPence(movement.amountPence)} from ${movement.counterparty} — owed, never income.`
+        : `Repaid ${formatPence(movement.amountPence)} to ${movement.counterparty} — the balance is reduced.`;
+    }
+    return movement.direction === 'out'
+      ? `Lent ${formatPence(movement.amountPence)} to ${movement.counterparty} — it is owed to us.`
+      : `${movement.counterparty} repaid ${formatPence(movement.amountPence)} — the balance is reduced.`;
+  };
+  try {
+    let debt = input.trackMode === 'existing' ? getDebt(user.db, input.debtId ?? -1) : null;
+    let message = '';
+    if (input.trackMode === 'new') {
+      const counterparty = input.counterparty ?? '';
+      const direction = input.direction ?? 'we_owe';
+      debt = createDebt(user.db, {
+        counterparty,
+        direction,
+        note: input.debtNote,
+        actor: user.email,
+      });
+      message =
+        direction === 'we_owe'
+          ? `Now tracking what we owe ${counterparty}.`
+          : `Now tracking what ${counterparty} owes us.`;
+      if (input.plan === 'recurring' && input.expectedInflow !== null) {
+        debt = editDebt(user.db, {
+          id: debt.id,
+          expectedVersion: debt.version,
+          actor: user.email,
+          patch: {
+            expectedInflow: {
+              amountPence: input.expectedInflow.amountPence,
+              dayOfMonth: input.expectedInflow.dayOfMonth,
+              untilDate: input.expectedInflow.untilDate,
+            },
+          },
+        });
+        const plan = input.expectedInflow;
+        message =
+          direction === 'we_owe'
+            ? `Now tracking what we owe ${counterparty} — expecting ${formatPence(plan.amountPence)} on day ${plan.dayOfMonth} of each month${plan.untilDate === null ? '' : ` until ${plan.untilDate} inclusive`}. Expected, never received: the pot moves only when you record the borrowing.`
+            : `Now tracking what ${counterparty} owes us — expecting ${formatPence(plan.amountPence)} on day ${plan.dayOfMonth} of each month${plan.untilDate === null ? '' : ` until ${plan.untilDate} inclusive`}. Expected, never received: the pot moves only when the repayment lands.`;
+      }
+    }
+    if (debt === null) {
+      return { status: 'error', message: 'Check the borrowing fields.' };
+    }
+    const wantsMovement = input.trackMode === 'existing' || input.plan === 'one-off';
+    if (wantsMovement) {
+      const movement = createExternalMovement(user.db, {
+        potId: input.potId ?? -1,
+        direction: input.movementDirection ?? 'in',
+        kind: 'loan',
+        amountPence: input.amountPence ?? 0,
+        debtId: debt.id,
+        occurredDate: input.occurredDate ?? undefined,
+        note: input.note,
+        actor: user.email,
+      });
+      message = movementMessage(movement, debt.direction);
+    }
+    revalidatePages();
+    return { status: 'ok', message };
+  } catch (err) {
+    if (
+      err instanceof InvalidDebtInputError ||
+      err instanceof DebtNotFoundError ||
+      err instanceof InvalidExternalMovementInputError ||
+      err instanceof PotNotFoundError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The borrowing could not be saved. Please try again.' };
+  }
+}
+
 export async function addExternalMovementAction(
   _previous: ActionState,
   formData: FormData,
@@ -2200,9 +2335,22 @@ export async function addExternalMovementAction(
     revalidatePages();
     const what =
       parsed.data.kind === 'loan'
-        ? parsed.data.direction === 'in'
-          ? `Borrowed ${formatPence(movement.amountPence)} from ${movement.counterparty} — owed, never income.`
-          : `Repaid ${formatPence(movement.amountPence)} to ${movement.counterparty} — the balance is reduced.`
+        ? (() => {
+            // The wording follows the debt's direction — a money-in on a
+            // "they owe us" arrangement is a repayment to us, not borrowing
+            // (issue #60: both directions, honestly named).
+            const debtDirection =
+              parsed.data.debtId === null
+                ? 'we_owe'
+                : getDebt(user.db, parsed.data.debtId).direction;
+            return debtDirection === 'we_owe'
+              ? parsed.data.direction === 'in'
+                ? `Borrowed ${formatPence(movement.amountPence)} from ${movement.counterparty} — owed, never income.`
+                : `Repaid ${formatPence(movement.amountPence)} to ${movement.counterparty} — the balance is reduced.`
+              : parsed.data.direction === 'out'
+                ? `Lent ${formatPence(movement.amountPence)} to ${movement.counterparty} — it is owed to us.`
+                : `${movement.counterparty} repaid ${formatPence(movement.amountPence)} — the balance is reduced.`;
+          })()
         : parsed.data.direction === 'in'
           ? `${formatPence(movement.amountPence)} received from ${movement.counterparty} recorded.`
           : `${formatPence(movement.amountPence)} paid to ${movement.counterparty} recorded.`;

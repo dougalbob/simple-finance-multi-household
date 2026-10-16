@@ -283,24 +283,39 @@ export function DebtEditForm({
 /**
  * Borrow or repay against a tracked debt (SPEC §10.2). Borrowing raises the
  * pot estimate and the owed balance together — it is never income, and
- * repaying is never spending.
+ * repaying is never spending. The Borrowing page's record panel uses the
+ * presets to arrive pre-filled — a summary chip's "Record a repayment", or an
+ * expected row's "Record this month's £1,000".
  */
 export function LoanMovementForm({
   idPrefix,
   pots,
   debts,
   today,
+  presetDebtId = null,
+  presetDirection = null,
+  presetAmountPence = null,
 }: {
   idPrefix: string;
   pots: PotOption[];
   debts: DebtOption[];
   today: string;
+  presetDebtId?: number | null;
+  presetDirection?: 'in' | 'out' | null;
+  presetAmountPence?: number | null;
 }) {
   const [state, formAction, pending] = useActionState(
     addExternalMovementAction,
     initialActionState,
   );
-  const [debtId, setDebtId] = useState(debts[0] !== undefined ? String(debts[0].id) : '');
+  const [debtId, setDebtId] = useState(
+    presetDebtId !== null && debts.some((debt) => debt.id === presetDebtId)
+      ? String(presetDebtId)
+      : debts[0] !== undefined
+        ? String(debts[0].id)
+        : '',
+  );
+  const [direction, setDirection] = useState<'in' | 'out' | null>(presetDirection);
   if (pots.length === 0) {
     return (
       <p className="text-sm text-ink-soft">
@@ -334,7 +349,10 @@ export function LoanMovementForm({
             name="debtId"
             required
             value={debtId}
-            onChange={(event) => setDebtId(event.target.value)}
+            onChange={(event) => {
+              setDebtId(event.target.value);
+              setDirection(null);
+            }}
             className={inputClass}
           >
             {debts.map((debt) => (
@@ -348,7 +366,13 @@ export function LoanMovementForm({
           <label htmlFor={`${idPrefix}-direction`} className={labelClass}>
             What happened?
           </label>
-          <select id={`${idPrefix}-direction`} name="direction" className={inputClass}>
+          <select
+            id={`${idPrefix}-direction`}
+            name="direction"
+            className={inputClass}
+            value={direction ?? (weOwe ? 'in' : 'out')}
+            onChange={(event) => setDirection(event.target.value as 'in' | 'out')}
+          >
             {weOwe ? (
               <>
                 <option value="in">Borrowed — money in</option>
@@ -387,6 +411,7 @@ export function LoanMovementForm({
             inputMode="decimal"
             required
             placeholder="e.g. 200.00"
+            defaultValue={presetAmountPence === null ? '' : penceInput(presetAmountPence)}
             className={inputClass}
           />
         </div>

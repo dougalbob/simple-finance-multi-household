@@ -579,17 +579,20 @@ test.describe('all transactions', () => {
     const dayOfMonth = Number(serverToday.slice(8, 10));
 
     // A brand-new IOU with no movements at all, then the expectation on it.
-    await page.goto('/pots');
-    const debts = page.locator('section[aria-labelledby="debts-heading"]');
-    const trackForm = debts
-      .locator('form')
-      .filter({ has: page.getByRole('button', { name: 'Track this debt' }) });
+    // Both live on the Borrowing page since issue #60 (decision 228).
+    await page.goto('/borrowing');
+    const setup = page.locator('section[aria-labelledby="setup-heading"]');
     const counterparty = `E2E Expectant ${Date.now()}`;
-    await trackForm.getByLabel('Who is it owed to or by?').fill(counterparty);
-    await trackForm.getByRole('button', { name: 'Track this debt' }).click();
-    await expect(trackForm.getByRole('status')).toContainText(/now tracking/i);
+    await setup.getByLabel('Who is this with?').selectOption('new');
+    await setup.getByLabel('Their name').fill(counterparty);
+    await setup.getByLabel('Is this a recurring arrangement?').selectOption('none');
+    await setup.getByRole('button', { name: 'Start tracking' }).click();
+    await expect(setup.getByRole('status')).toContainText(/now tracking/i);
 
-    const row = debts.locator('li').filter({ hasText: counterparty }).first();
+    const card = page.locator('section', {
+      has: page.getByRole('heading', { name: counterparty, exact: true }),
+    });
+    const row = card.locator('li').first();
     await expect(row.getByText('no movements yet')).toBeVisible();
     await row.getByText('Edit', { exact: true }).click();
     const editForm = row.locator('form');
@@ -626,13 +629,13 @@ test.describe('all transactions', () => {
     // The row links to the loan panel that owns it.
     await expect(expectedRow.getByRole('link', { name: /Open the loan panel/ })).toHaveAttribute(
       'href',
-      /\/pots#debt-\d+$/,
+      /\/borrowing#debt-\d+$/,
     );
 
     // The money lands and is recorded that day: the expectation gives way to
     // the real borrowing, on the same window.
-    await page.goto('/pots');
-    const borrow = page.locator('section[aria-labelledby="borrow-heading"]');
+    await page.goto('/borrowing');
+    const borrow = page.locator('section[aria-labelledby="record-heading"]');
     await borrow.getByLabel('Debt').selectOption({ label: `${counterparty} (we owe)` });
     await borrow.getByLabel('Pot').selectOption({ label: 'Main account' });
     await borrow.getByLabel('Amount').fill('250.00');
@@ -650,9 +653,14 @@ test.describe('all transactions', () => {
     await expect(borrowRow.getByRole('cell', { name: /^LN</ })).toBeVisible();
     await expect(borrowRow).toContainText('+£250.00');
     // The loan panel now carries the real balance.
-    await page.goto('/pots');
+    await page.goto('/borrowing');
     await expect(
-      page.locator('section[aria-labelledby="debts-heading"]').getByText('we owe £250.00'),
+      page
+        .locator('section', {
+          has: page.getByRole('heading', { name: counterparty, exact: true }),
+        })
+        .locator('li')
+        .getByText('we owe £250.00'),
     ).toBeVisible();
   });
 

@@ -3434,3 +3434,84 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     Purchases page, reads its `REF` row in All Transactions, follows its link back to Purchases, checks
     the anchored landing below the sticky header (issue #30) and voids it, leaving the ledger as it
     found it. Reported to the household as a separate, independently reviewable repair.
+228. **Borrowing gets its own page: the Owed & owing / Borrow & repay cards are reshaped into one
+    combined ledger (2026-10-16, GitHub issue #60; design written up in `docs/BORROWING_PAGE_PLAN.md`
+    and worked through with the household before any code).** The household's report: informal
+    borrowing is laid out unintuitively — Owed & owing, Borrow & repay and the boundary history are
+    three disconnected cards on Accounts, Pots & Checkpoints. Three shapes of borrowing must be
+    supported: scheduled informal support ("£1,000 on the 13th for 5 months", which must keep
+    projecting as *expected, never received*), one-off IOUs in both directions (borrow £50 from a
+    friend; lend £75 to a son with partial repayments), and formal borrowing (loan agreements and
+    credit cards — out of scope, already elsewhere). Asked for: a transaction-style history per
+    arrangement (Date recorded / From-To / Amt in / Amt repaid / running balance), an amount that
+    opens an inline detail beneath its row with Edit/Void/note and which pot the money landed in, a
+    From/To filter, a setup card (select-or-create person → recurring vs one-off), a repay panel for
+    both directions — and **everything on a new Borrowing page in the menu**.
+
+    **What moved and what stayed.** Loans only move: the summary strip (each IOU's honest status
+    word), the setup and edit/delete controls, borrow/repay entry and the boundary history's loan
+    rows. Swaps and Other money stay on Accounts, Pots & Checkpoints, whose history panel is now
+    "Recent swaps & other money"; a signpost card carries the running owed figures and an **Open
+    Borrowing** link. Old links keep working: `/pots?external={id}` for a loan redirects to
+    `/borrowing?external={id}` with that row's panel open; `/pots#debt-{id}` bookmarks are forwarded
+    client-side (a fragment never reaches the server — `BorrowingMovedRedirect`) to the summary
+    strip's identically-named anchors; All Transactions' `LN` rows now open the borrowing panel and
+    `EXP<` rows link `/borrowing#debt-{id}` ("Open the loan panel"). **No schema, migration,
+    backup-format or domain change** — loans remain external movements of kind `loan` bound to a
+    debt (§10.2), and `createDebt` / `editDebt` / `deleteDebt` / `createExternalMovement` /
+    `editExternalMovement` / `voidExternalMovement` are reused untouched.
+
+    **The ledger** (`src/lib/records/borrowing.ts`, pure view over the records layer; rows typed and
+    tested like a table sheet): one combined history, Date / From-To / Money in / Money out /
+    Balance, oldest first with a newest-first toggle. The balance is **per arrangement** and signed
+    the way the household's tables already are: **− we owe, + owed to us** ("−£1,000.00"; "£50.00
+    (owed)"; "—" for a voided row, which stays struck through with its reason and moves no balance).
+    Two IOUs with one person are never netted — the chip reads `we owe £1,000.00 · owed to us
+    £400.00`, never £600. A person's expected payments are **greyed rows at their expected dates**,
+    badged `expected — not recorded yet`, each with a one-click **Record this month's £1,000** that
+    prefills the record panel (`?debt=&what=in&amountPence=#record`) — the recording is the real
+    movement and the expectation-silencing matches it (the amount and day ride as a pair, decision
+    219's model unchanged). Expected rows project strictly after today through a 365-day lookahead
+    (weekend days landing on the Friday before), capped at six per plan so an open-ended one does
+    not flood the ledger; a finite plan shows every remaining payment.
+
+    **Clicking an amount opens the detail beneath its row** — the shared in-place contract of
+    decisions 225/226 (`ActivityPanel`, extended with an optional `columnCount` for this five-column
+    table; open record in `?external=`, `router.replace` + `useOptimistic`, never
+    `history.replaceState`; `data-borrowing-ready` + `inert` until hydrated, decision 131; one row
+    open at a time). The panel speaks in plain words (which pot the money landed in — "Came in as
+    cash to Alex's cash." / "Went out from Main account." — the note, who entered it and when), links
+    **Show {pot} around {date}** into All Transactions, and puts **Correct it** (pot, amount, date,
+    note) and **Void it** side by side from `md` up. It finally closes the gap the old cards left:
+    loan movements were voidable but not editable through any UI.
+
+    **The setup card** is one flow (`BorrowSetupForm` → `startBorrowingAction`, which composes
+    `createDebt` → `editDebt(expectedInflow)` → `createExternalMovement`, each still its own audited
+    record): select a person already tracked — the card becomes a movement form for their
+    arrangement — or "Someone new…", then **recurring** (the expectation fields DebtEditForm already
+    had, surfaced at creation: £X on day N, until D or for N payments with Fill the end date) or
+    **one-off** (person, amount, pot, note) or **just tracking** (decision 167's deletable empty
+    setup). "Cash or bank transfer" stayed with the household's choice: pot plus note (Borrow into
+    the Cash pot, note "cash handed over — banked 18th", then an ordinary pot-to-pot Move when it is
+    banked) — no "How did it move?" field. The **record panel** is `LoanMovementForm` with presets
+    (keyed remount, the decision 208 lesson) for both directions; the repay panel is never more than
+    one tap away.
+
+    **The From/To filter** (`?who=`) groups the ledger to one person and personalises the column
+    captions ("Amt in (borrowed) / Amt repaid" for a we-owe arrangement, "Amt in (repaid to us) / Amt
+    out (lent)" for a they-owe one). The summary strip keeps Edit (expected support, amounts, notes)
+    and Delete (an empty mistaken setup only, decision 167 — a debt with voided-only history still
+    cannot be deleted). Along the way `addExternalMovementAction`'s confirmation wording was made
+    direction-honest (a money-in on a "they owe us" arrangement now reads "…repaid £25.00 — the
+    balance is reduced", never "Borrowed…"), matching `describeLoanMovement`'s four phrases.
+
+    Coverage: `tests/borrowing-ledger.test.ts` (6: the signed running balance and its rows, the
+    filter's grouping and chips, voided history, the expectation's projection and silencing, two
+    IOUs under one person never netted, the panel's phrases); `tests/activity.test.ts` re-pointed;
+    the field-name pins of `tests/purchases.test.ts` extended by `e2e/borrowing.spec.ts`'s four
+    journeys (recurring setup → expected row → prefilled record; one-off lend + repayment running
+    the balance under the filter; the inline panel's correction and void; the pots signpost and the
+    two old-link forwards). `e2e/debt-lifecycle.spec.ts` moves to the new page; the transactions
+    suite's expectation journey re-runs end-to-end through it. The full unit suite (998 tests) and
+    the full browser suite (132) are green locally (SANDBOX entry 8). Awaiting the household's
+    review on the Arena preview before release.

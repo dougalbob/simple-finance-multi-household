@@ -459,7 +459,12 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         direction: incoming ? 'in' : 'out',
         note: movement.note ?? '',
         link: {
-          href: `/pots?external=${movement.id}#external-${movement.id}`,
+          // Loans live on the Borrowing page (issue #60); swaps and other
+          // boundary money stay on Accounts, Pots & Checkpoints.
+          href:
+            movement.kind === 'loan'
+              ? `/borrowing?external=${movement.id}#external-${movement.id}`
+              : `/pots?external=${movement.id}#external-${movement.id}`,
           label: 'Open this record',
         },
         secondaryLink:
@@ -578,7 +583,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           amountPence: occurrence.amountPence,
           direction: 'in',
           note: debt.note ?? '',
-          link: { href: `/pots#debt-${debt.id}`, label: 'Open the loan panel' },
+          link: { href: `/borrowing#debt-${debt.id}`, label: 'Open the loan panel' },
           secondaryLink: null,
           badge: 'expected — not recorded yet',
           runningBalancePence: null,
