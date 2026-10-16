@@ -1,7 +1,36 @@
 # Release v1.21.0 — Borrowing gets its own page (GitHub issue #60) (2026-10-16)
 
+**Released and verified.** The household reviewed the Arena preview of issue #60 and authorised a
+stable release in the same session ("merge and publish new stage tag and latest"). Version files are
+aligned at **v1.21.0 stable**; `latest` on `ghcr.io/dougalbob/simple-finance-multi-household` moved
+with it. No schema, migration or backup-format change.
+
+**Delivery facts.** PR #62 (`arena/6b0acf6d-simple-finance-multi-household` → `main`) merged as merge
+commit `872fa1b` after `gates`, `browser` and `docker` passed on the branch (run `38886184711`) and
+again on the merge commit. Annotated tag `v1.21.0` on `872fa1b`; **Publish run `38888180733`** built
+the image, ran the upgrade smoke against `v1.20.0`, pushed and verified `v1.21.0`, `latest` and
+`sha-872fa1b` to one digest **`sha256:cec5f2bb3d50148dc946f7070dc6d6403d1b1e106de010380fe661faa8925353`**;
+the GitHub release `v1.21.0 — Borrowing gets its own page` is marked **Latest**. The branch's one CI
+failure along the way was the bell spec's drawer link count — Borrowing is the seventeenth nav link —
+and the registry-heavy `admin` projects fail only in this sandbox (SANDBOX entry 23), never in CI.
+
+**#60 (decision 228, `docs/BORROWING_PAGE_PLAN.md`).** Everything informal borrowing lives on its own
+**Borrowing** page: a per-person summary with each IOU's honest, never-netted position and its
+expected-support plan in plain words; one setup flow (select-or-create the person, recurring plan with
+Fill the end date / one-off / just tracking); one combined ledger (Date / From-To / Money in / Money
+out / Balance, signed − we owe, + owed to us per arrangement) with greyed expected rows and one-click
+prefilled recording, newest-first toggle, and a From/To filter; and a row detail panel beneath its row
+with plain-words pot landing, correction and void. Swaps and other boundary money stay on Accounts,
+Pots & Checkpoints beside a signpost card; `/pots#debt-` bookmarks and `/pots?external=` loan links
+forward to the new anchors. Loans are still external movements of kind `loan` bound to a debt — no
+schema, migration or backup-format change. Next work: see below and the plan doc's §8.
+
+---
+
+# Release v1.20.0 — Purchases open in place on All Transactions, and Record refund works again (GitHub issue #57) (2026-10-15)
+
 **Release scope is prepared on this branch.** The household accepted the Arena preview of issue #57 and
-authorised a stable release in the same session. Version files are aligned at **v1.21.0 stable**, moving
+authorised a stable release in the same session. Version files are aligned at **v1.20.0 stable**, moving
 `latest` on `ghcr.io/dougalbob/simple-finance-multi-household` only. No schema, migration or
 backup-format change. Required PR CI, main CI and tagged Publish evidence are still pending at
 preparation time; this is a pre-merge record, not proof that a tag or image exists.
