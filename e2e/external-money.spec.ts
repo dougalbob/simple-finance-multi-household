@@ -81,9 +81,8 @@ test.describe('external money', () => {
 
     await page.goto('/pots');
     const swap = page.locator('section[aria-labelledby="swap-heading"]');
-    // The section also holds the "Recent swaps" list once any swap exists,
-    // and each pair's edit form has its own "Amount" label — scope to the
-    // SwapForm itself (the form with the "Record swap" button).
+    // The record card holds the SwapForm and nothing else since issue #65
+    // moved the swap list into the nested history panel below.
     const swapForm = swap
       .locator('form')
       .filter({ has: page.getByRole('button', { name: 'Record swap' }) });
@@ -105,11 +104,11 @@ test.describe('external money', () => {
     expect(Math.round(parsePounds(after) * 100)).toBe(beforePence);
   });
 
-  test('recent swaps are findable, editable and voidable as a pair', async ({ page }) => {
+  test('a swap reads as one nested object, editable and voidable in place', async ({ page }) => {
     await page.goto('/pots');
     const swap = page.locator('section[aria-labelledby="swap-heading"]');
-    // The "Recent swaps" list (with its per-leg edit forms, each labelled
-    // "Amount") is in the same section — scope to the SwapForm itself.
+    // The record card holds the SwapForm and nothing else since issue #65
+    // moved the swap list into the nested history panel below.
     const swapForm = swap
       .locator('form')
       .filter({ has: page.getByRole('button', { name: 'Record swap' }) });
@@ -123,47 +122,76 @@ test.describe('external money', () => {
     await swapForm.getByRole('button', { name: 'Record swap' }).click();
     await expect(swapForm.getByRole('status')).toContainText(/swapped £30\.00/i);
 
-    // Findable where the household looks: the paired "Recent swaps" list in
-    // the same section, grouped with its net-zero total — and linked from
-    // the pot card.
-    const pair = swap.locator('ul li').filter({ hasText: counterparty });
+    // Findable where the household looks: one object in the history panel,
+    // its two legs nested and worded as the swap's two halves (issue #65) —
+    // and linked from the pot card.
+    const history = page.locator('section[aria-labelledby="external-history-heading"]');
+    const pair = history.locator('[data-swap-pair]').filter({ hasText: counterparty });
+    await expect(pair).toBeVisible();
     await expect(pair.getByText('net £0.00')).toBeVisible();
-    await expect(pair.getByText(/In \+£30\.00 → Alex's cash/)).toBeVisible();
-    await expect(pair.getByText(/Out −£30\.00 ← Main account/)).toBeVisible();
+    await expect(pair.getByText(/Swap in £30\.00 from .* · into Alex's cash/)).toBeVisible();
+    await expect(pair.getByText(/Swap out £30\.00 to .* · from Main account/)).toBeVisible();
+    // The nested leg carries the pointer arrow; the leading leg does not.
+    await expect(pair.locator('svg')).toHaveCount(1);
+    const legs = pair.locator('div[id^="external-"]');
+    await expect(legs).toHaveCount(2);
     const mainCard = page
       .locator('section')
       .filter({ has: page.getByRole('heading', { name: 'Main account', exact: true }) });
     await expect(mainCard.getByText(/Recent swaps involving Main account/)).toBeVisible();
 
-    // Edit the in-leg's note through the paired list. The in-leg details is
-    // nested inside the pair's "Correct or void one leg" details — open the
-    // outer one first. Each is targeted via its summary's nearest <details>
-    // ancestor (the outer details also contains the inner texts, transitively).
-    const correct = pair
-      .getByText('Correct or void one leg')
-      .locator('xpath=ancestor-or-self::details[1]');
-    await correct.locator(':scope > summary').click();
-    const inLeg = pair.getByText('In-leg — to').locator('xpath=ancestor-or-self::details[1]');
-    await inLeg.locator(':scope > summary').click();
-    await inLeg.getByLabel('Note (blank keeps the current note)').fill('edited at the table');
-    await inLeg.getByRole('button', { name: 'Save changes' }).click();
-    await expect(inLeg.getByRole('status')).toContainText(/saved: £30\.00/);
+    // Edit the in-leg's note straight from its own row — the same inline
+    // editing the retired "Recent swaps" list offered, now in the one place
+    // a swap can be corrected.
+    const inLeg = legs.first();
+    await expect(inLeg.getByText(/Swap in £30\.00/)).toBeVisible();
+    await inLeg.getByRole('button', { name: 'Edit' }).click();
+    await pair.getByLabel('Note (blank keeps the current note)').fill('edited at the table');
+    await pair.getByRole('button', { name: 'Save changes' }).click();
     await expect(pair.getByText('— edited at the table')).toBeVisible();
 
-    // Void both legs in one step, with one shared reason. The pair's
-    // durable confirmation is the "voided" badge and the shared reason
-    // (the confirm form unmounts when the pair leaves the live state).
+    // Void the out-leg alone from its own row: the pair stays visible and
+    // says so honestly.
+    const outLeg = legs.nth(1);
+    await expect(outLeg.getByText(/Swap out £30\.00/)).toBeVisible();
+    await outLeg.getByRole('button', { name: 'Void' }).click();
+    await pair.getByLabel(/Why are you voiding this\?/).fill('the transfer never left');
+    await pair.getByRole('button', { name: 'Void external' }).click();
+    await expect(pair.getByText('one leg voided · net +£30.00')).toBeVisible();
+    await expect(outLeg.getByText(/voided — the transfer never left/)).toBeVisible();
+
+    // The pot-card link lands on the history panel that now holds every swap.
+    await mainCard.getByRole('link', { name: /Recent swaps involving Main account/ }).click();
+    await expect(history).toBeInViewport();
+    await expect(pair).toBeInViewport();
+  });
+
+  test('a swap that never happened is voided as a pair, with one reason', async ({ page }) => {
+    await page.goto('/pots');
+    const swapForm = page
+      .locator('section[aria-labelledby="swap-heading"] form')
+      .filter({ has: page.getByRole('button', { name: 'Record swap' }) });
+    const counterparty = `E2E Pair ${Date.now()}`;
+    await swapForm.getByLabel('Who did you swap with?').fill(counterparty);
+    await swapForm.getByLabel('Money arrived in').selectOption({ label: "Sam's cash" });
+    await swapForm.getByLabel('Money left from').selectOption({ label: 'Salary account' });
+    await swapForm.getByLabel('Amount').fill('12.00');
+    await swapForm.getByRole('button', { name: 'Record swap' }).click();
+    await expect(swapForm.getByRole('status')).toContainText(/swapped £12\.00/i);
+
+    const history = page.locator('section[aria-labelledby="external-history-heading"]');
+    const pair = history.locator('[data-swap-pair]').filter({ hasText: counterparty });
     await pair.getByRole('button', { name: 'Void both legs' }).click();
     await pair.getByLabel('Why are you voiding both legs?').fill('the swap never happened');
     await pair.getByRole('button', { name: 'Yes, void both legs' }).click();
-    await expect(pair.getByText('voided', { exact: true })).toBeVisible();
-    await expect(pair.getByText('Voided — the swap never happened')).toBeVisible();
-    // Both legs are struck through.
-    await expect(pair.getByText(/In \+£30\.00 → Alex's cash/)).toHaveClass(/line-through/);
-    await expect(pair.getByText(/Out −£30\.00 ← Main account/)).toHaveClass(/line-through/);
 
-    // The pot-card link lands on the swaps section.
-    await mainCard.getByRole('link', { name: /Recent swaps involving Main account/ }).click();
-    await expect(swap).toBeInViewport();
+    // The pair's durable confirmation is the "voided" badge and the shared
+    // reason; both legs are struck through but stay visible.
+    await expect(pair.getByText('voided', { exact: true })).toBeVisible();
+    await expect(pair.getByText(/voided — the swap never happened/).first()).toBeVisible();
+    await expect(pair.getByText(/Swap in £12\.00/)).toHaveClass(/line-through/);
+    await expect(pair.getByText(/Swap out £12\.00/)).toHaveClass(/line-through/);
+    await expect(pair.getByRole('button', { name: 'Void both legs' })).toHaveCount(0);
+    await expect(pair.getByRole('button', { name: 'Edit' })).toHaveCount(0);
   });
 });

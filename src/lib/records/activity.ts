@@ -15,6 +15,7 @@ import { endOfLocalDate, isValidLocalDate, toLocalDateString } from '../time';
 import { categoryTree } from './categories';
 import { addDaysLocal } from './dates';
 import { expectedInflowOccurrences, expectedInflowPotId, listDebts } from './debts';
+import { SWAP_HISTORY_ANCHOR } from './external-history';
 import { listPeople } from './people';
 import { listPotsIncludingArchived } from './pots';
 import { listSuppliers } from './suppliers';
@@ -468,7 +469,9 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
           label: 'Open this record',
         },
         secondaryLink:
-          movement.kind === 'swap' ? { href: '/pots#swaps', label: 'Open the swap list' } : null,
+          movement.kind === 'swap'
+            ? { href: `/pots#${SWAP_HISTORY_ANCHOR}`, label: 'Open the swap list' }
+            : null,
         badge: movement.kind === 'swap' ? (swapPartners.get(movement.id) ?? null) : null,
         runningBalancePence: null,
         transfer: null,

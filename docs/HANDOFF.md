@@ -1,3 +1,36 @@
+# In progress — GitHub issue #65: nested swap objects in the boundary history (2026-10-16)
+
+**Work is on the session branch, awaiting the household's review on the Arena preview.** Issue #65
+asked for two things on Accounts, Pots & Checkpoints, both done (decision 231):
+
+1. **One nested swap object.** "Recent swaps & other money" is still one newest-first feed, but a
+   swap's two legs are now grouped into a single card: `Swap in £40.00 from Sam · into Cash - Alex`
+   on top, `Swap out £40.00 to Sam · from Main account` indented beneath it behind a small inline-SVG
+   pointer arrow and on the alternate row shade, then the pair's badge (`net £0.00` / `legs differ · net
+   +£2.50` / `one leg voided · net …` / `voided`) beside **Void both legs**. Each leg has its own
+   **Edit** and **Void**, opening inline beneath that leg. The old "Recent swaps" list inside the
+   **Swap with someone outside** card is **removed**, so a swap is corrected in exactly one place.
+2. **The "Owed & owing" panel is removed** from the page (its `<BorrowingMovedRedirect>` helper stays,
+   now just for legacy `#debt-{id}` bookmarks).
+
+**Where the code lives.** `src/lib/records/external-history.ts` (pure: grouping, ordering, the honest
+half-pair, the four badge states, the wording) and `src/components/external-history.tsx` (draws it,
+holds which leg's panel is open). The page fetches 60 rows and draws 20 entries so a pair is never
+split by the limit; `?external={id}` still pins the linked record, and a pinned swap leg brings its
+partner with it. The panel carries `id="swap-history"` — the pot cards' "Recent swaps involving …"
+links and All Transactions' "Open the swap list" now point there (they used to point at `#swaps`,
+which only names the recording card now).
+
+**Verified locally (this session):** `npm run format:check`, `npm run typecheck`, `npm test`
+(**1010/1010 across 233 suites**, including the new `tests/external-history.test.ts`), `npm run
+build`, plus the browser suite through SANDBOX entry 8 — `external` (4/4) and `borrowing` (5/5) green,
+and the seventeen failures a full local run reports (admin, backup, credit-card-pots, insights,
+recurring, payday-summary) all pass when re-run in their own batch, i.e. they are the sandbox's
+mid-run web-server loss of SANDBOX entry 17, not this change. No schema, migration or backup-format
+change. **Next: the household's review, then release per `docs/RELEASE_PROCESS.md`.**
+
+---
+
 # Release v1.22.0 — Chart E in-card scopes and Borrowing inline recording with repayment guards (GitHub issues #61 and #63) (2026-10-16)
 
 **Release scope is prepared on this branch.** The household reviewed and approved the Arena preview of

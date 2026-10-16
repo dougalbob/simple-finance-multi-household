@@ -104,7 +104,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       'Debts are informal IOUs: who, which way round, and what is still owed. There is no interest, no repayment schedule and no credit agreement anywhere in the app — a repayment is recorded when it happens, and the balance derives from the movements. A loan with no movements yet is awaiting its first payment, never “settled”.',
     ],
     seeAlso: [
-      { href: '/borrowing', label: 'Owed and Owing on the Borrowing page' },
+      { href: '/borrowing', label: 'Everything owed, on the Borrowing page' },
       { href: '/horizon', label: 'Horizon' },
     ],
   },

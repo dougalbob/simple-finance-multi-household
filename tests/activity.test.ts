@@ -391,7 +391,7 @@ describe('All Transactions projection (SPEC §15.3)', () => {
       assert.equal(byCode('TX<')?.source, 'Acme Windows');
       assert.equal(byCode('TX<')?.note, 'Window refund');
       assert.equal(byCode('SW>')?.badge, "swap (paired, £50.00 with Alex's cash)");
-      assert.equal(byCode('SW>')?.secondaryLink?.href, '/pots#swaps');
+      assert.equal(byCode('SW>')?.secondaryLink?.href, '/pots#swap-history');
 
       // Internal transfers name the other pot, not a counterparty.
       assert.equal(byCode('TX>')?.source, "Alex's cash");

@@ -3566,3 +3566,57 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       3. **Bank account below-zero warning:** any outflow from a **bank account** that will take
          its estimated balance below zero renders an amber warning showing the projected negative
          balance while still allowing submission.
+
+231. **The boundary history nests each swap into one object, and the redundant Owed & owing card is
+    gone (2026-10-16, GitHub issue #65, prepared for review on the Arena preview).** The household's
+    report: on Accounts, Pots & Checkpoints, *"Recent swaps & other money is not particularly
+    intuitive at first glance"* — a swap appeared as two unrelated-looking rows, and a swap could be
+    edited in two different places. Asked for: the related legs **nested** and re-worded so the pair
+    reads as one record, a small pointer arrow (a vertical leg joining a short horizontal leg with a
+    right-pointing arrowhead) before the **Swap in** line, alternate row formatting inside each pair,
+    an **Edit** that opens inline as the "Recent swaps" list already did — and the removal of the
+    "Recent swaps" list from the **Swap with someone outside** card so there is only one place in the
+    page to edit a swap. Separately: *"remove redundant 'Owed and owing' panel. It's no longer
+    needed."*
+
+    - **One nested object per swap** (`src/lib/records/external-history.ts` +
+      `src/components/external-history.tsx`). The panel keeps ONE newest-first feed, but the two legs
+      of a swap are grouped by their exchange key into a single `.sf-…`-free `<div data-swap-pair>`
+      showing, in order: the **in** leg (`Swap in £40.00 from Sam · into Cash - Alex`, its note, who
+      entered it, `+£40.00`, Edit and Void); the nested **out** leg on the panel's alternate shade,
+      indented behind an inline SVG pointer (vertical leg → short horizontal leg → right-pointing
+      arrowhead) and worded the same way (`Swap out £40.00 to Sam · from Main account`, `−£40.00`);
+      and a footer carrying the pair's badge plus **Void both legs**. `describeSwapLeg` and
+      `describeBoundaryMovement` replace the bare `describeExternalMovement` labels here, so the pot
+      and its preposition are always spelled out.
+    - **The pair's badge is the old list's honesty, unchanged:** `net £0.00` (green) when both legs
+      are live and balanced; `legs differ · net +£2.50` (amber) after a one-leg correction;
+      `one leg voided · net −£15.00` (amber) when one leg was voided alone; `voided` (grey) when both
+      went. The net counts live legs only, so a half-voided pair reads the difference rather than
+      pretending to balance — pinned by `tests/external-history.test.ts`.
+    - **One place to fix a swap.** The "Recent swaps" list inside the swap card is gone; each leg's
+      Edit/Void is a real button (`aria-expanded`/`aria-controls` on the leg's own `#external-{id}`)
+      that opens that leg's `ExternalMovementEditForm` or `VoidForm` inline beneath it, one panel at
+      a time. Other money gets the identical two controls, in the same feed.
+    - **Wording and layout choices worth recording:** the fetch window is deliberately wider than the
+      list it feeds (`EXTERNAL_HISTORY_FETCH_LIMIT` 60 rows → `EXTERNAL_HISTORY_DISPLAY_LIMIT` 20
+      entries), because two rows now make one entry — a pair is never split by the limit; a
+      `?external={id}` deep link still pins its record to the top with the "showing the record you
+      linked to" note, and a pinned swap leg brings its partner with it so the object is whole; the
+      history panel carries `id="swap-history"` and the pot cards' "Recent swaps involving …" links
+      plus All Transactions' "Open the swap list" secondary link point at it (they pointed at `#swaps`
+      before, which now only names the recording card).
+    - **The "Owed & owing" signpost is removed** from Accounts, Pots & Checkpoints (component and its
+      section), and the borrowing `<BorrowingMovedRedirect>` now lives in the swap card's grid slot
+      alone. An old `/pots?external={id}` loan link still redirects to `/borrowing?external={id}` and a
+      `#debt-{id}` bookmark is still forwarded client-side, so nothing the household had bookmarked
+      breaks. The history panel's own copy says where borrowing lives.
+
+    Coverage: `tests/external-history.test.ts` (11: grouping and ordering, the honest half-pair, the
+    pinned deep link, all four badge states, the wording, and the fetch/draw ratio that protects a
+    pair from the limit); `tests/activity.test.ts` re-pointed to `/pots#swap-history`;
+    `e2e/external-money.spec.ts` rewritten as two journeys (record → nested object → inline edit of a
+    leg → single-leg void → the pot-card link; and record → void both legs with one reason, both legs
+    struck through and their controls gone); `e2e/borrowing.spec.ts`'s pots-page test now asserts the
+    signpost is gone and the history panel's link to Borrowing works. No schema, migration, backup
+    format or domain change — this is presentation and navigation only.
