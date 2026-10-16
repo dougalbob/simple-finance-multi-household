@@ -1990,10 +1990,19 @@ src/components/recurring.tsx  — Phase 3 client forms: Add/Cancel schedule, Add
                                 (slim props, decision 73)
 src/components/record-forms.tsx — Phase 4a: line editor, PurchaseEditForm, RefundForm, generic VoidForm,
                                 TransferForm, RecentEntryActions (edit/refund/void switcher)
-src/components/transfer-activity-row.tsx — decision 225: All Transactions' in-place transfer row + panel,
-                                OpenTransferProvider (one open transfer, `?transfer=` via router.replace)
+src/components/activity-open-row.tsx — decisions 225/226: the shared in-place contract — the open row the
+                                URL names (`?transfer=` / `?purchase=`), ActivityOpenRowProvider (one panel
+                                at a time, via router.replace with scroll:false + useOptimistic), the
+                                decision 131 ready hook and the shared panel frame
+src/components/transfer-activity-row.tsx — decision 225: All Transactions' in-place transfer row + panel
 src/lib/records/transfer-activity.ts — decision 225 (pure): open-transfer URL/windows, the usual pot,
                                 pinned-row reasons, links and placement
+src/components/purchase-activity-row.tsx — decision 226: All Transactions' in-place purchase row + panel
+                                (PUR / DD / SO; a refund keeps its Purchases link)
+src/lib/records/purchase-activity.ts — decision 226 (pure): open-purchase URL/windows, pinned-row reasons
+                                and links
+src/lib/records/in-place-activity.ts — decisions 225/226 (pure): what both kinds share — the open-row
+                                parameter contract, date windows, the pinned entry and its placement
 src/lib/records/activity-order.ts — the newest-first comparator shared by the projection and the pin
 src/components/schedule-forms.tsx — Phase 4a: ScheduleEditForm (composite target picker), RenewalEditForm
 src/components/settings-forms.tsx — Phase 4a: TargetRenameForm, PotEditForm, CategoryTreeEditor, WarningLeadsForm;
@@ -3341,3 +3350,87 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     because of that: the `mobile` project, which runs earlier in CI, records a £12.34 till purchase on
     the same pot and day as the corrected transfer's old amount. When checking an e2e change locally,
     run the projects that precede it in CI as well, not just its own project.
+
+226. **A purchase opens in place on All Transactions; a refund keeps its link to Purchases (2026-10-15,
+    GitHub issue #57, v1.20.0).** The household asked to replicate decision 225's in-place editing for
+    "PUR" and "DD" rows. Asked and answered: `PUR`, `DD` **and** `SO` open in place (they are the same
+    record with the same canonical editor — a standing order is a schedule conversion like a direct
+    debit, not a different kind of thing), the panel offers the transfer panel's own two actions
+    (**Correct it** + **Void it**; a Refund action was declined, because recording a refund belongs
+    beside the original it came back from), and a **refund** (`REF`) keeps its link to Purchases —
+    its amount lives in the negative and its form belongs where the refund rules are taught.
+
+    **The row and the panel.** `PurchaseActivityRow` (`src/components/purchase-activity-row.tsx`) makes
+    the supplier's name — or the schedule's name when the record has none, as a standing order may — a
+    disclosure button (`aria-expanded`, Horizon's dotted underline, decision 203; `data-purchase-ready`
+    + `inert` until hydrated, decision 131). The panel is the transfer panel: a `<tr><td colSpan={7}>`
+    straight after the row, the record named in full (`Purchase / Direct debit / Standing order #{id} ·
+    {supplier}`, amount, date, who recorded it, and whether the schedule made it or it was hand-recorded),
+    the Purchases page's **own** `PurchaseEditForm` and `VoidForm`, and Close. Correcting a converted
+    `DD`/`SO` never touches the schedule that produced it (§11.1) and the schedule link stays beside the
+    code. The editor's options are the Purchases page's own: the live declared leaf categories in tree
+    order (`leafCategoryOptions`, extracted from `buildEntryData` so the two pages cannot drift), people
+    and vehicles.
+
+    **One open record, two URLs.** `?purchase={id}#purchase-{id}` joins `?transfer={id}` in the shared
+    contract (`src/lib/records/in-place-activity.ts`, `src/components/activity-open-row.tsx`): the two
+    parameters are alternatives, so opening one closes the other, and a URL carrying both resolves to the
+    transfer (the older contract, so an old link keeps its meaning; a nonsense `transfer` does not shadow
+    a valid `purchase`). Both rows keep the URL the same way — `router.replace(…, { scroll: false })`
+    plus `useOptimistic`, never `history.replaceState` (decision 225's measured lesson) — and the
+    provider, the ready hook, the panel frame and the pinned-entry placement now live in one module
+    rather than in the transfer row.
+
+    **A save never pulls the panel out from under the household.** `purchase-activity.ts` (pure) mirrors
+    the transfer rules: `pinnedPurchaseReason` names why the open purchase is pinned instead of listed
+    (`voided` › `outside-window` › `hidden` past the row cap — never `elsewhere`, because the correction
+    form cannot move a purchase to another pot), `purchaseActivityRow` projects it exactly as the live
+    row (the same `purchaseActivityRowFrom` the projection uses, so the two cannot drift), and
+    `withPinnedPurchase` places it with the shared `compareActivityOrder` at the index the projection
+    would list it. Pinned purchases are muted, outside totals, stripe and running balance; a voided one
+    keeps its reason and shows **See it on Purchases →** (`/purchases?voidedOnly=1#purchase-{id}`, the one
+    page where a voided record is readable) and no forms; a re-dated one keeps its forms and links to
+    "Show <pot> around <date>". Closing the panel lets the pinned row go.
+
+    Placement is by the record's own date, so a re-date that takes it out of the window moves the pinned
+    row to where the projection would list it (the bottom, for an older date) — **not** to the pixel it
+    held while live. A void, which cannot change the date, keeps the row exactly where the household was
+    reading it, and the spec measures the page for that case (**≤ 4px**; the abandoned
+    `history.replaceState` moved it 439px and ran red at 333px). Because a re-dated row can move far
+    from the part of the table the household is looking at, both rows call the shared
+    `useKeepPinnedPanelInView` (`activity-open-row.tsx`): when a record becomes pinned and its panel is
+    **entirely** off screen, the panel comes back to the middle of the view once — never a general scroll
+    rule, so an in-view panel, a panel the household scrolled away from, and a hash landing are untouched
+    and the page never moves under a pointer (SANDBOX 22). The transaction spec's first draft asserted the
+    panel stayed within 60px of its old position for the re-date; it ran red at 931px because the row had
+    legitimately moved, so the spec now asserts the panel is in the viewport instead.
+
+    Coverage: `tests/purchase-activity.test.ts` (16: URL parsing and the transfer/purchase precedence,
+    windows, reasons in order, links, placement, DB-backed hand-recorded / converted / refunded / voided
+    / re-dated projections and rows, wiring), `tests/transfer-activity.test.ts` (18, with the wiring
+    suite now pointed at the shared provider), `tests/activity.test.ts`, `tests/guide.test.ts`.
+    `e2e/transactions.spec.ts` adds three journeys — correcting at the till and voiding in place, a
+    re-date out of the window (pinned, honest, no page scroll) and a refund recorded on Purchases that
+    keeps its link and still lands below the sticky header (issue #30) — and rewrites the projection
+    spec, whose purchase row is no longer a link. **Supersedes** decision 101's "no forms on this page"
+    for purchases, alongside decision 225's exception for transfers.
+
+227. **The Purchases page's Record refund button is repaired (2026-10-15, found while testing issue #57,
+    v1.20.0).** Writing the browser journey that proves a `REF` row keeps its link to Purchases meant
+    recording a real refund through the UI — and the browser found that **no refund could ever be
+    recorded there**. `RefundForm` and `addRefundAction` were never wired to each other: the form sent
+    `purchaseId` where the action parses `refundOfPurchaseId`, and it sent neither the `potId` nor the
+    `amount`, so every attempt failed with `Invalid input: expected number, received null`; it also sent
+    its lines in the editor's typed-text shape (`{amount: '12.50'}`) where the action's schema reads
+    whole pence (`amountPence`). The action, for its part, passed the parsed `null` supplier and payer
+    straight through, which reads to `createRefund` as "no supplier" rather than "inherit the original's"
+    (SPEC §9.5) and would have left the refund unlinked from the shop it came back from.
+
+    The form and the action now share one contract, named field by field (`refundOfPurchaseId`, `potId`,
+    `amount` — the sum of the lines, computed once — and `amountPence` lines, positive magnitudes that
+    the action flips), the original's supplier and payer are inherited when the form provides neither,
+    and `tests/purchases.test.ts` pins every field name in both halves so a silent drift cannot happen
+    again. A browser journey in `e2e/transactions.spec.ts` records a refund of a seeded shop from the
+    Purchases page, reads its `REF` row in All Transactions, follows its link back to Purchases, checks
+    the anchored landing below the sticky header (issue #30) and voids it, leaving the ledger as it
+    found it. Reported to the household as a separate, independently reviewable repair.

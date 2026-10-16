@@ -1,6 +1,12 @@
 import type { ActivityEntry, ActivityLink, ActivityRow } from './activity';
-import { compareActivityOrder, type ActivityOrder } from './activity-order';
-import { addDaysLocal } from './dates';
+import type { ActivityOrder } from './activity-order';
+import {
+  activityWindowContaining,
+  parseOpenRecordId,
+  withPinnedEntry,
+  type ActivityWindow,
+  type PinnedActivityEntry,
+} from './in-place-activity';
 import type { Transfer } from './transfers';
 
 /**
@@ -23,6 +29,13 @@ import type { Transfer } from './transfers';
  * Everything here is pure: the page reads the records, these decide.
  */
 
+/**
+ * A date window that contains `date` — re-exported from the shared in-place
+ * contract (`in-place-activity.ts`): a transfer and a purchase are reached the
+ * same way, and the two must not drift.
+ */
+export { activityWindowContaining, type ActivityWindow } from './in-place-activity';
+
 /** The query parameter that names the open transfer. */
 export const OPEN_TRANSFER_PARAM = 'transfer';
 
@@ -37,31 +50,20 @@ export type PinnedTransferReason =
   /** Inside the window, but past the page's row cap. */
   | 'hidden';
 
-export interface PinnedTransferEntry {
+export interface PinnedTransferEntry extends PinnedActivityEntry {
   kind: 'pinned-transfer';
-  row: ActivityRow;
-  /** Where it sorts — `transferActivityOrder`, the position it held while live. */
-  order: ActivityOrder;
   reason: PinnedTransferReason;
 }
 
-/** What the All Transactions table renders: the projection, plus at most one pinned transfer. */
+/** What the All Transactions table renders: the projection, plus at most one pinned record. */
 export type DisplayEntry = ActivityEntry | PinnedTransferEntry;
 
-export interface ActivityWindow {
-  dateFrom: string;
-  dateTo: string;
-}
-
 /**
- * `?transfer=` as a record id, or null. Only a plain positive integer names a
- * transfer; anything else is ignored rather than failing the page. A repeated
- * parameter takes its last value, the way the page's other parameters do.
+ * `?transfer=` as a record id, or null (`parseOpenRecordId`: only a plain
+ * positive integer names a transfer).
  */
 export function parseOpenTransferId(value: string | string[] | undefined): number | null {
-  const raw = Array.isArray(value) ? value[value.length - 1] : value;
-  if (raw === undefined || !/^[1-9][0-9]{0,14}$/.test(raw)) return null;
-  return Number(raw);
+  return parseOpenRecordId(value);
 }
 
 /** The All Transactions URL that shows `potId` over `window` with this transfer open. */
@@ -71,18 +73,6 @@ export function transferInPlaceHref(
   transferId: number,
 ): string {
   return `/transactions?potId=${potId}&from=${window.dateFrom}&to=${window.dateTo}&${OPEN_TRANSFER_PARAM}=${transferId}#transfer-${transferId}`;
-}
-
-/**
- * A date window that contains `date`. The page's own default — the last 30
- * days, so the "Last 30 days" quick pick still reads as selected — whenever
- * it can; otherwise about a month around the date, never past today.
- */
-export function activityWindowContaining(date: string, today: string): ActivityWindow {
-  const defaultFrom = addDaysLocal(today, -29);
-  if (date >= defaultFrom) return { dateFrom: defaultFrom, dateTo: today };
-  const end = addDaysLocal(date, 15);
-  return { dateFrom: addDaysLocal(date, -14), dateTo: end > today ? today : end };
 }
 
 /**
@@ -188,27 +178,12 @@ export function pinnedTransferLinks(
 
 /**
  * The entries with the pinned transfer placed exactly where the projection
- * would list it (`compareActivityOrder`): a transfer voided or moved onto
- * other pots stays in the very position it held while live, so the panel
- * the household is using does not jump; a re-dated one moves to its new
- * date — at the top when it is newer than the window, at the bottom when it
- * is older. A checkpoint divider sits below its own date's rows, so the
- * pinned row goes above any divider dated on or before it. It is an addition
- * only: no live entry moves, so the stripe and the totals the page already
- * computed stay exactly as they were.
+ * would list it — `withPinnedEntry` in the shared in-place contract, so a
+ * pinned purchase lands by the very same rule.
  */
 export function withPinnedTransfer(
   entries: readonly ActivityEntry[],
   pinned: PinnedTransferEntry | null,
-): DisplayEntry[] {
-  const display: DisplayEntry[] = [...entries];
-  if (pinned === null) return display;
-  const insertAt = display.findIndex((entry) =>
-    entry.kind === 'checkpoint'
-      ? entry.checkpoint.date <= pinned.row.date
-      : entry.kind === 'row' && compareActivityOrder(pinned.order, entry.order) < 0,
-  );
-  if (insertAt === -1) display.push(pinned);
-  else display.splice(insertAt, 0, pinned);
-  return display;
+): Array<ActivityEntry | PinnedTransferEntry> {
+  return withPinnedEntry(entries, pinned);
 }

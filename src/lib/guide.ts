@@ -88,6 +88,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     paragraphs: [
       'A transfer — current account to bills account, bank to a cash pot, bank to your own credit card — is internal and two-sided. It moves the pots’ estimates, and no insight, chart or month comparison ever counts it as spending. Paying your own card back is a transfer, not a payment.',
       'That is why the till keeps a Move tab of its own, and why a transfer opens right where you read it in All Transactions: select its pot name and a mistaken transfer is corrected beneath its own row — its pots, its amount, its date or a note added afterwards — or voided, and never re-categorised as spending.',
+      'A purchase opens the same way, for the same reason: select the supplier on an ordinary purchase, a direct debit or a standing order row and the amount, the category, the date or the note is corrected — or the record voided — in place, while a refund stays on Purchases beside the original it came back from.',
     ],
     seeAlso: [
       { href: '/#quick-entry', label: 'the till’s Move tab' },

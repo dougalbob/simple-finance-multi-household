@@ -1,22 +1,31 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import {
-  ACTIVITY_TABLE_ID,
-  OpenTransferProvider,
-  TransferActivityRow,
-  type PinnedTransferView,
-} from '@/components/transfer-activity-row';
+import { ACTIVITY_TABLE_ID, ActivityOpenRowProvider } from '@/components/activity-open-row';
+import { PurchaseActivityRow, type PinnedPurchaseView } from '@/components/purchase-activity-row';
+import { TransferActivityRow, type PinnedTransferView } from '@/components/transfer-activity-row';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import {
   defaultActivityPot,
   listPotActivity,
+  purchaseActivityOrder,
+  purchaseActivityRow,
   transferActivityOrder,
   transferActivityRow,
   type ActivityRow,
 } from '@/lib/records/activity';
+import { leafCategoryOptions } from '@/lib/records/entry-view';
 import { ensureScheduleState } from '@/lib/records/money-view';
+import { listPeople } from '@/lib/records/people';
 import { latestCheckpointPerPot, listPots, listPotsIncludingArchived } from '@/lib/records/pots';
+import { findPurchaseWithLines } from '@/lib/records/purchases';
+import {
+  parseOpenPurchaseId,
+  pinnedPurchaseLinks,
+  pinnedPurchaseReason,
+  withPinnedPurchase,
+  type PinnedPurchaseEntry,
+} from '@/lib/records/purchase-activity';
 import { getDefaultTransactionsPotId } from '@/lib/records/settings';
 import { addDaysLocal } from '@/lib/records/dates';
 import {
@@ -27,6 +36,7 @@ import {
   type PinnedTransferEntry,
 } from '@/lib/records/transfer-activity';
 import { findTransfer } from '@/lib/records/transfers';
+import { listVehicles } from '@/lib/records/vehicles';
 import { isValidLocalDate, toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -37,17 +47,24 @@ interface SearchParams {
   to?: string;
   /** The transfer open in place beneath its row (decision 225). */
   transfer?: string | string[];
+  /** The purchase open in place beneath its row (decision 226). */
+  purchase?: string | string[];
 }
 
 /**
  * All Transactions (SPEC §15.3, plan decisions 101–108): a one-pot activity
  * view. A pure projection of existing records, with every row linking to the
- * canonical page that owns its add/edit/void behaviour — with one exception
- * (decision 225, GitHub issue #55): a transfer between the household's own
- * pots opens **in place**, its correction and void forms in a panel directly
- * beneath its row, because the pots page's separate transfer list only
- * repeated what this table already shows. Without a valid potId in the URL,
- * the household's saved default is used before the existing fallback.
+ * canonical page that owns its add/edit/void behaviour — with two exceptions
+ * that open **in place**, their correction and void forms in a panel directly
+ * beneath the row: a transfer between the household's own pots (decision 225,
+ * GitHub issue #55), because the pots page's separate transfer list only
+ * repeated what this table already shows; and a purchase (decision 226, GitHub
+ * issue #57) — one recorded by hand (`PUR`) or converted from a schedule
+ * (`DD` / `SO`) — because the record a household most often needs to put right
+ * is the one they can see in front of them. A refund keeps its link to
+ * Purchases, beside the original it was refunded against. Without a valid
+ * potId in the URL, the household's saved default is used before the existing
+ * fallback.
  *
  * Running balance (v0.33.0): far-right column shows balance after each
  * movement, anchored on checkpoints. Green = credit, red = debit. Drift is
@@ -149,7 +166,52 @@ export default async function TransactionsPage({
       }),
     };
   }
-  const displayEntries = withPinnedTransfer(activity.entries, pinnedEntry);
+  // The purchase open in place (decision 226) works the same way: usually one
+  // of the rows above, and after a void or a re-date outside the window it is
+  // pinned at the position it held while live. The two parameters are
+  // alternatives (the provider clears the other), so at most one is used.
+  const openPurchaseId = parseOpenPurchaseId(params.purchase);
+  const openPurchase = openPurchaseId === null ? null : findPurchaseWithLines(db, openPurchaseId);
+  const purchasePinReason =
+    openPurchase === null
+      ? null
+      : pinnedPurchaseReason(openPurchase.purchase, {
+          ...activityWindow,
+          entries: activity.entries,
+        });
+  // The correction and void forms are the Purchases page's own, so the options
+  // they offer are the Purchases page's own — declared categories, people and
+  // vehicles (SPEC §12, §15.2).
+  const purchaseEditor = {
+    categories: leafCategoryOptions(db),
+    people: listPeople(db).map(({ id, label }) => ({ id, label })),
+    vehicles: listVehicles(db).map(({ id, label }) => ({ id, label })),
+  };
+  let pinnedPurchase: PinnedPurchaseEntry | null = null;
+  let pinnedPurchaseView: PinnedPurchaseView | null = null;
+  if (openPurchase !== null && purchasePinReason !== null) {
+    pinnedPurchase = {
+      kind: 'pinned-purchase',
+      row: purchaseActivityRow(db, openPurchase.purchase, pot.id, activityWindow),
+      order: purchaseActivityOrder(openPurchase.purchase),
+      reason: purchasePinReason,
+    };
+    pinnedPurchaseView = {
+      reason: purchasePinReason,
+      links: pinnedPurchaseLinks(openPurchase.purchase, purchasePinReason, {
+        potId: pot.id,
+        livePots: potOptions,
+        today,
+      }),
+    };
+  }
+  // One record is open at a time, so one pin at most is ever placed.
+  const displayEntries: Array<
+    (typeof activity.entries)[number] | PinnedTransferEntry | PinnedPurchaseEntry
+  > =
+    pinnedEntry !== null
+      ? withPinnedTransfer(activity.entries, pinnedEntry)
+      : withPinnedPurchase(activity.entries, pinnedPurchase);
 
   const monthStart = `${today.slice(0, 7)}-01`;
   const quickPicks = [
@@ -172,10 +234,12 @@ export default async function TransactionsPage({
         <p className="mt-1 text-sm text-ink-soft">
           Everything that touched <span className="font-medium">{pot.label}</span> between two
           dates, newest first. Each row opens its record in the page that can edit or void it —
-          except a transfer between your own pots, which opens right here: select its pot name to
-          correct it or void it beneath its row. Green is money into this pot, red is money out. The
-          far-right balance is the running balance after each movement, anchored on checkpoints —
-          green in credit, red overdrawn.
+          except a purchase and a transfer between your own pots, which open right here: select the
+          supplier or the other pot&apos;s name to correct it or void it beneath its row, without
+          leaving the list. A refund stays a link to Purchases, beside the record it was refunded
+          against. Green is money into this pot, red is money out. The far-right balance is the
+          running balance after each movement, anchored on checkpoints — green in credit, red
+          overdrawn.
         </p>
       </header>
 
@@ -287,12 +351,13 @@ export default async function TransactionsPage({
         activity.totals.expectedRowCount === 0 &&
         activity.entries.every((entry) => entry.kind !== 'checkpoint') &&
         // Voiding the window's only movement must not take its open panel away.
-        pinnedEntry === null ? (
+        pinnedEntry === null &&
+        pinnedPurchase === null ? (
           <p className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
             Nothing touched {pot.label} in this window.
           </p>
         ) : (
-          <OpenTransferProvider>
+          <ActivityOpenRowProvider>
             <div
               id={ACTIVITY_TABLE_ID}
               tabIndex={-1}
@@ -366,6 +431,19 @@ export default async function TransactionsPage({
                           {formatPence(entry.checkpoint.amountPence)}
                         </td>
                       </tr>
+                    ) : entry.kind === 'pinned-purchase' ? (
+                      <PurchaseActivityRow
+                        key={entry.row.key}
+                        row={entry.row}
+                        potLabel={pot.label}
+                        dates={activityWindow}
+                        today={today}
+                        categories={purchaseEditor.categories}
+                        people={purchaseEditor.people}
+                        vehicles={purchaseEditor.vehicles}
+                        striped={false}
+                        pinned={pinnedPurchaseView}
+                      />
                     ) : entry.row.family === 'transfer' ? (
                       <TransferActivityRow
                         key={entry.row.key}
@@ -375,6 +453,19 @@ export default async function TransactionsPage({
                         dates={activityWindow}
                         pots={potOptions}
                         today={today}
+                        striped={(stripeIndex.get(entry.row.key) ?? 0) % 2 === 1}
+                        pinned={null}
+                      />
+                    ) : entry.row.purchase !== null ? (
+                      <PurchaseActivityRow
+                        key={entry.row.key}
+                        row={entry.row}
+                        potLabel={pot.label}
+                        dates={activityWindow}
+                        today={today}
+                        categories={purchaseEditor.categories}
+                        people={purchaseEditor.people}
+                        vehicles={purchaseEditor.vehicles}
                         striped={(stripeIndex.get(entry.row.key) ?? 0) % 2 === 1}
                         pinned={null}
                       />
@@ -420,7 +511,7 @@ export default async function TransactionsPage({
                 </tfoot>
               </table>
             </div>
-          </OpenTransferProvider>
+          </ActivityOpenRowProvider>
         )}
 
         <p className="mt-3 text-xs text-ink-muted">

@@ -85,6 +85,16 @@ export async function waitForTransferToggle(row: Locator): Promise<void> {
 }
 
 /**
+ * Wait until a purchase row's in-place toggle is listening (decision 226 — the
+ * same rule, applied to the supplier name). Each purchase row is a client
+ * island: a click on its supplier before React hydrates it would open nothing,
+ * so the toggle is `inert` until then and publishes `data-purchase-ready`.
+ */
+export async function waitForPurchaseToggle(row: Locator): Promise<void> {
+  await expect(row.locator('[data-purchase-ready="true"]')).toBeAttached();
+}
+
+/**
  * Wait until the category tree editor is listening (decision 167). The
  * rename/retire picker is controlled React state with `parent:` / `child:`
  * option values; a `selectOption` before hydration would leave the visible

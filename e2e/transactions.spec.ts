@@ -1,14 +1,16 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { waitForTill, waitForTransferToggle } from './support';
+import { waitForPurchaseToggle, waitForTill, waitForTransferToggle } from './support';
 
 /**
  * All Transactions (SPEC §15.3, plan decisions 101–108): a one-pot activity
  * view. These specs check the projection itself — codes, the pot-relative
  * sign, the checkpoint divider, the honest "movements shown" total — and that
  * every row's deep link lands on the record in the page that can edit or
- * void it. The one exception is an internal transfer (decision 225, GitHub
- * issue #55): it opens in place, its correction and void forms beneath its
- * own row, and the pots page no longer lists transfers at all.
+ * void it. Two exceptions open in place, their correction and void forms
+ * beneath their own row: an internal transfer (decision 225, GitHub issue
+ * #55) and a purchase (decision 226, GitHub issue #57) — a hand-recorded
+ * `PUR`, a `DD` or an `SO`, while a refund keeps its link to Purchases. The
+ * pots page no longer lists transfers at all.
  *
  * Runs after `checkpoint`; all writes remain inside the isolated E2E seed,
  * and every transfer a spec records is voided before it ends.
@@ -28,14 +30,17 @@ test.describe('all transactions', () => {
     // The seeded split purchase: one row, first allocation line + "+1 more",
     // red (money out), with the original note and the exact-total intact.
     const corner = table
-      .locator('tr', { has: page.getByRole('link', { name: /Corner Foods/ }) })
+      .locator('tr', { has: page.getByRole('button', { name: /Corner Foods/ }) })
       .first();
     // Anchored: the source cell's name ("Corner Foods — Open this purchase")
     // contains "pur" too, so an unanchored match is not unique.
     await expect(corner.getByRole('cell', { name: /^PUR\b/ })).toBeVisible();
-    // Purchases keep their link to Purchases (issue #55 changes transfers only):
-    // no in-place toggle on a purchase row.
-    await expect(corner.locator('button[aria-expanded]')).toHaveCount(0);
+    // A purchase opens in place too (issue #57, decision 226): the supplier
+    // name is a disclosure, not a link off to Purchases.
+    await expect(
+      corner.getByRole('button', { name: /Corner Foods — Open this purchase/ }),
+    ).toBeVisible();
+    await expect(corner.getByRole('link', { name: /Corner Foods/ })).toHaveCount(0);
     await expect(corner).toContainText('Groceries / Weekly Shop (household)');
     await expect(corner).toContainText('+1 more');
     await expect(corner).toContainText('−£63.47');
@@ -56,11 +61,16 @@ test.describe('all transactions', () => {
     // a cadence edit regenerates only the forward window and never invents past
     // instances (SPEC §11.1, decision 162).
     const phone = table
-      .locator('tr', { has: page.getByRole('link', { name: /Phone plan/ }) })
+      .locator('tr', { has: page.getByRole('button', { name: /Phone plan/ }) })
       .first();
     // No \b after the code: JSX leaves no whitespace between the badge and the
     // schedule link, so the cell's accessible name is "SOOpen the schedule".
     await expect(phone.getByRole('cell', { name: /^SO/ })).toBeVisible();
+    // The schedule a converted row came from is still a link (issue #57
+    // changes the record's own cell, never the schedule it was converted from).
+    await expect(
+      phone.getByRole('button', { name: /Phone plan — Open this purchase/ }),
+    ).toBeVisible();
     await expect(phone.getByRole('link', { name: 'Open the schedule' })).toHaveAttribute(
       'href',
       /^\/recurring#schedule-\d+$/,
@@ -349,16 +359,46 @@ test.describe('all transactions', () => {
     ).toContainText('+£45.00');
   });
 
-  test('a purchase row deep-links to its filtered row on Purchases', async ({ page }) => {
+  test('a refund keeps its link to Purchases and lands below the sticky header (issues #30, #57)', async ({
+    page,
+  }) => {
+    // Refund part of the seeded shop from its own page: a refund is corrected
+    // and voided beside the original it was refunded against, so it keeps the
+    // link (issue #57, decision 226).
+    await page.goto('/purchases');
+    const results = page.locator('section[aria-labelledby="results-heading"]');
+    // The row is held by id, not by its text: the refund this spec records
+    // carries the same £63.47, so a `hasText` lookup would find whichever of
+    // the two rows the list happens to put first once the refund exists.
+    const originalId = await results
+      .locator('tr[id^="purchase-"]', { hasText: '£63.47' })
+      .first()
+      .getAttribute('id');
+    const original = page.locator(`#${originalId}`);
+    await original.locator('summary', { hasText: 'Edit' }).click();
+    await original.getByRole('button', { name: 'Refund', exact: true }).click();
+    await original.getByRole('button', { name: 'Record refund' }).click();
+    await expect(original.getByRole('status')).toContainText(/refund of £63\.47 saved/i, {
+      timeout: 30_000,
+    });
+
+    // On All Transactions it is a REF row — money back — with no in-place
+    // toggle, and its supplier name still a link.
     await page.goto('/transactions');
     const table = page.locator('section[aria-labelledby="activity-heading"] table');
-    await table
-      .getByRole('link', { name: /Corner Foods/ })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/purchases\?potId=\d+&from=\d{4}-\d{2}-\d{2}&to=/);
-    await expect(page.locator('section[aria-labelledby="results-heading"]')).toContainText(
-      'Corner Foods',
+    const refundRow = table
+      .locator('tr', { has: page.getByRole('cell', { name: /^REF/ }) })
+      .first();
+    await expect(refundRow).toContainText('+£63.47');
+    await expect(refundRow.locator('button[aria-expanded]')).toHaveCount(0);
+    const refundLink = refundRow.getByRole('link', { name: /Corner Foods/ });
+    await expect(refundLink).toHaveAttribute(
+      'href',
+      /^\/purchases\?potId=\d+&from=\d{4}-\d{2}-\d{2}&to=/,
+    );
+    await refundLink.click();
+    await expect(page).toHaveURL(
+      /\/purchases\?potId=\d+&from=\d{4}-\d{2}-\d{2}&to=[\d-]+#purchase-\d+/,
     );
 
     // Issue #30: the target row lands *below* the sticky site header, not
@@ -369,7 +409,7 @@ test.describe('all transactions', () => {
     // scroll pass corrects a cold load's own scroll (`src/components/scroll-hash.tsx`).
     const anchoredId = new URL(page.url()).hash.slice(1);
     const row = page.locator(`tr[id="${anchoredId}"]`);
-    await expect(row).toContainText('Corner Foods');
+    await expect(row).toContainText('Refund');
     const header = page.locator('header.sticky').first();
     await expect
       .poll(async () => {
@@ -379,6 +419,151 @@ test.describe('all transactions', () => {
         return rowBox.y >= headerBox.y + headerBox.height;
       })
       .toBe(true);
+
+    // Leave the ledger as it was: the refund is voided, so nothing it moved
+    // counts again, and its row leaves All Transactions.
+    await row.locator('summary', { hasText: 'Edit' }).click();
+    await row.getByRole('button', { name: 'Void', exact: true }).click();
+    await row.getByLabel(/Why are you voiding this/).fill('Browser-test refund, put back');
+    await row.getByRole('button', { name: 'Void purchase' }).click();
+    await expect(row).toContainText('Voided', { timeout: 30_000 });
+    await page.goto('/transactions');
+    await expect(
+      table.locator('tr', { has: page.getByRole('cell', { name: /^REF/ }) }),
+    ).toHaveCount(0);
+  });
+
+  test('a purchase recorded at the till is corrected in place, then voided (issue #57)', async ({
+    page,
+  }) => {
+    await recordPurchase(page, { supplier: 'Corner Foods', amount: '31.42' });
+
+    await page.goto('/transactions');
+    const row = purchaseRows(page).filter({ hasText: '£31.42' }).first();
+    const rowId = await row.getAttribute('id');
+    expect(rowId).toMatch(/^purchase-\d+$/);
+    const purchaseId = Number(rowId?.slice('purchase-'.length));
+    await expect(row.getByRole('cell', { name: /^PUR\b/ })).toBeVisible();
+    const liveRow = page.locator(`#${rowId}`);
+    await waitForPurchaseToggle(liveRow);
+    await liveRow.getByRole('button', { name: /Corner Foods — Open this purchase/ }).click();
+    const panel = page.locator(`#${rowId}-panel`);
+    // The panel is the row's own next sibling — directly beneath it, never
+    // somewhere else on the page.
+    await expect(
+      liveRow.locator('xpath=following-sibling::tr[1]').locator(`#${rowId}-panel`),
+    ).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`purchase=${purchaseId}#purchase-${purchaseId}$`));
+    await expect(
+      panel.getByRole('heading', { name: /Purchase #\d+ · Corner Foods/ }),
+    ).toBeVisible();
+
+    // The editor holds the record as saved — the amount, the date and the
+    // note — instead of blanks the household must retype.
+    await expect(panel.getByLabel('Amount')).toHaveValue('31.42');
+    await expect(panel.getByLabel('Note (blank keeps the current note)')).toHaveValue('');
+    await expect(panel.getByLabel('When it happened (blank keeps the current date)')).toHaveValue(
+      /^\d{4}-\d{2}-\d{2}$/,
+    );
+
+    // Correct the amount and add the note the hurried entry left out.
+    await panel.getByLabel('Amount').fill('31.99');
+    await panel.getByLabel('Note (blank keeps the current note)').fill('Right shop, wrong amount');
+    await panel.getByRole('button', { name: 'Save purchase' }).click();
+    await expect(panel.getByText(/Entry #\d+ saved/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(`#${rowId}`)).toContainText('−£31.99');
+    await expect(page.locator(`#${rowId}`)).toContainText('Right shop, wrong amount');
+    await expect(page.locator(`#${rowId}`)).not.toContainText('£31.42');
+
+    // Void it from the same panel. A void takes the purchase out of the list —
+    // voided records are never movements — but the open purchase stays on
+    // screen, pinned and struck through, saying so, until the household closes it.
+    // A void cannot move the row, so the page must not move either: this is the
+    // v1.19.0 regression guard, where a router still holding the pre-open URL
+    // treated the save as a new page and scrolled it 439px (the spec ran red at
+    // 333px). Measured here, in the case where nothing legitimately moves.
+    const scrollBefore = await page.evaluate(() => Math.round(window.scrollY));
+    await panel.getByLabel(/Why are you voiding this/).fill('Recorded twice by the browser test');
+    await panel.getByRole('button', { name: 'Void purchase' }).click();
+    await expect(panel).toContainText('Voided — “Recorded twice by the browser test”', {
+      timeout: 30_000,
+    });
+    await expect(page.locator(`#${rowId}`)).toContainText('voided — not counted');
+    // Settled after the delayed anchor passes (0/150/350ms) have had their turn.
+    await page.waitForTimeout(600);
+    await expect
+      .poll(async () =>
+        Math.abs((await page.evaluate(() => Math.round(window.scrollY))) - scrollBefore),
+      )
+      .toBeLessThanOrEqual(4);
+    await expect(panel.getByRole('button', { name: 'Save purchase' })).toHaveCount(0);
+    await expect(panel.getByRole('link', { name: 'See it on Purchases →' })).toHaveAttribute(
+      'href',
+      `/purchases?voidedOnly=1#purchase-${purchaseId}`,
+    );
+
+    await panel.getByRole('button', { name: 'Close' }).click();
+    await expect(page.locator(`#${rowId}`)).toHaveCount(0);
+    await expect(page).not.toHaveURL(/purchase=/);
+    await page.reload();
+    await expect(purchaseRows(page).filter({ hasText: '£31.99' })).toHaveCount(0);
+  });
+
+  test('a purchase re-dated out of the window stays pinned where it was (issue #57)', async ({
+    page,
+  }) => {
+    await recordPurchase(page, { supplier: 'Corner Foods', amount: '44.55' });
+
+    await page.goto('/transactions');
+    const row = purchaseRows(page).filter({ hasText: '£44.55' }).first();
+    const rowId = await row.getAttribute('id');
+    const purchaseId = Number(rowId?.slice('purchase-'.length));
+    const liveRow = page.locator(`#${rowId}`);
+    await waitForPurchaseToggle(liveRow);
+    await liveRow.getByRole('button', { name: /Open this purchase/ }).click();
+    const panel = page.locator(`#${rowId}-panel`);
+
+    // Hold the row well down the screen first, so the save has real work to do.
+    await page.evaluate((id) => {
+      const target = document.getElementById(id);
+      if (target !== null) window.scrollBy(0, target.getBoundingClientRect().top - 450);
+    }, rowId ?? '');
+
+    // Correct it to a date before the window opens: it leaves the list, and
+    // stays pinned where its date now puts it, out of the totals.
+    const serverToday = (await page.getByLabel('End date').getAttribute('max')) ?? '';
+    await panel
+      .getByLabel('When it happened (blank keeps the current date)')
+      .fill(minusDays(serverToday, 45));
+    await panel.getByRole('button', { name: 'Save purchase' }).click();
+    await expect(page.locator(`#${rowId}`)).toContainText('outside these dates — not counted', {
+      timeout: 30_000,
+    });
+    await expect(panel).toContainText('It stays here until you close it');
+    await expect(
+      panel.getByRole('link', { name: /Show Main account around .* →/ }),
+    ).toHaveAttribute('href', new RegExp(`purchase=${purchaseId}#purchase-${purchaseId}$`));
+    // The row genuinely moves inside the list — the corrected date sorts it to
+    // the far end — so the household is brought back to their panel rather than
+    // left reading the wrong part of the table. That correction is deliberate
+    // and only fires when the panel is entirely off screen
+    // (`useKeepPinnedPanelInView`); the *unchanged-position* case, where the
+    // page must not move at all, is asserted in the test above.
+    await expect(panel).toBeInViewport({ timeout: 15_000 });
+
+    // Put it right in place — a date inside the window — and it is a live row
+    // again, with its forms still holding what was saved.
+    await panel.getByLabel('When it happened (blank keeps the current date)').fill(serverToday);
+    await panel.getByRole('button', { name: 'Save purchase' }).click();
+    await expect(page.locator(`#${rowId}`)).not.toContainText('not counted', { timeout: 30_000 });
+    await expect(page.locator(`#${rowId}`)).toContainText('−£44.55');
+
+    // Leave the ledger as it was: void it from the same panel.
+    await panel.getByLabel(/Why are you voiding this/).fill('Re-dated by the browser test');
+    await panel.getByRole('button', { name: 'Void purchase' }).click();
+    await expect(panel).toContainText('Voided', { timeout: 30_000 });
+    await panel.getByRole('button', { name: 'Close' }).click();
+    await expect(page.locator(`#${rowId}`)).toHaveCount(0);
   });
 
   test('expected support appears from its due date and gives way to the recorded borrowing', async ({
@@ -517,6 +702,38 @@ function minusDays(isoDate: string, days: number): string {
 /** The visible option text of a <select> — what the household sees selected. */
 async function selectedLabel(select: Locator): Promise<string> {
   return select.evaluate((el) => (el as HTMLSelectElement).selectedOptions[0]?.textContent ?? '');
+}
+
+/**
+ * The activity table's in-place purchase rows (decision 226) — never a
+ * transfer or other record that happens to share an amount with the purchase
+ * under test, and never the open panel's own row.
+ */
+function purchaseRows(page: Page): Locator {
+  return page.locator(
+    'section[aria-labelledby="activity-heading"] table tbody > tr[id^="purchase-"]',
+  );
+}
+
+/** Record a purchase through the till, as the household does (SPEC §15.1). */
+async function recordPurchase(
+  page: Page,
+  { supplier, amount }: { supplier: string; amount: string },
+): Promise<void> {
+  await page.goto('/');
+  await waitForTill(page);
+  const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+  await entry.locator('input[name="supplierName"]').fill(supplier);
+  await entry.locator('input[name="amount"]').fill(amount);
+  // Main account is named outright: the `settings` project, which runs before
+  // this one, ends with the household's default purchase pot cleared, and the
+  // till refuses to save without one (SPEC §15.1). These rows are looked up on
+  // Main account's activity, so the pot here is not negotiable either.
+  await entry.getByLabel('Pot').selectOption({ label: 'Main account' });
+  await entry.getByRole('button', { name: 'Next: category →' }).click();
+  await entry.getByLabel(/^Category/).selectOption({ label: 'Groceries / Weekly Shop' });
+  await entry.getByRole('button', { name: 'Save purchase' }).click();
+  await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
 }
 
 /**

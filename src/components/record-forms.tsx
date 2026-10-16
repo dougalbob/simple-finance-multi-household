@@ -13,6 +13,7 @@ import {
   voidTransferAction,
 } from '@/app/actions';
 import { initialActionState } from '@/lib/action-state';
+import { penceInput } from '@/lib/money';
 
 export interface EntryLineState {
   amount: string;
@@ -295,6 +296,8 @@ export function PurchaseEditForm(props: PurchaseEditFormProps) {
 export interface RefundFormProps {
   purchaseId: number;
   expectedVersion: number;
+  /** The original's pot: a refund is money back into the account it left. */
+  potId: number;
   occurredDate: string;
   note: string;
   lines: EntryLineState[];
@@ -308,6 +311,14 @@ export interface RefundFormProps {
  * Refund form (negative purchase that links to its original, decision 37).
  * The lines are prefilled from the original purchase as POSITIVE magnitudes;
  * the action flips the signs before calling createRefund.
+ *
+ * The field names are the contract with `addRefundAction` (the same rule
+ * `VoidForm` follows): the original is `refundOfPurchaseId` — *not*
+ * `purchaseId`, which names a hidden field the action never reads — the pot
+ * travels with the form, the total is an `amount` the household can read, and
+ * the lines are whole pence (`amountPence`), because the action's schema reads
+ * the till's own line shape, not the editor's typed text. Nothing here is
+ * typed twice: the total is the sum of the lines, as SPEC §9.5 requires.
  */
 export function RefundForm(props: RefundFormProps) {
   const [lines, setLines] = useState<EntryLineState[]>(props.lines);
@@ -315,14 +326,26 @@ export function RefundForm(props: RefundFormProps) {
   return (
     <form
       action={(formData: FormData) => {
+        const pence = lines.map((line) => Math.abs(poundsToPence(line.amount).pence ?? 0));
         for (const [index, line] of lines.entries()) {
-          const { pence, error } = poundsToPence(line.amount);
-          if (pence === null || error !== null) {
+          const { error } = poundsToPence(line.amount);
+          if (error !== null) {
             formData.set('clientError', `Line ${index + 1}: ${error}`);
             break;
           }
         }
-        formData.set('linesJson', JSON.stringify(lines));
+        formData.set(
+          'linesJson',
+          JSON.stringify(
+            lines.map((line, index) => ({
+              amountPence: pence[index] ?? 0,
+              categoryId: line.categoryId,
+              targetKind: line.targetKind,
+              targetId: line.targetKind === 'household' ? null : line.targetId,
+            })),
+          ),
+        );
+        formData.set('amount', penceInput(pence.reduce((sum, value) => sum + value, 0)));
         formAction(formData);
       }}
       className="flex flex-col gap-3"
@@ -361,7 +384,8 @@ export function RefundForm(props: RefundFormProps) {
           className={inputClass}
         />
       </div>
-      <input type="hidden" name="purchaseId" value={props.purchaseId} />
+      <input type="hidden" name="refundOfPurchaseId" value={props.purchaseId} />
+      <input type="hidden" name="potId" value={props.potId} />
       <input type="hidden" name="expectedVersion" value={props.expectedVersion} />
       <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
         {pending ? 'Saving…' : 'Record refund'}
@@ -432,6 +456,8 @@ export interface EntryLineAmounts {
 
 export interface RecentEntryActionsProps {
   purchaseId: number;
+  /** The purchase's pot — a refund is money back into the account it left. */
+  potId: number;
   expectedVersion: number;
   occurredDate: string;
   note: string;
@@ -508,6 +534,7 @@ export function RecentEntryActions(props: RecentEntryActionsProps) {
         <RefundForm
           purchaseId={props.purchaseId}
           expectedVersion={props.expectedVersion}
+          potId={props.potId}
           occurredDate={props.occurredDate}
           note={props.note}
           lines={refundLines}

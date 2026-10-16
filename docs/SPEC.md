@@ -538,6 +538,11 @@ scenario and confirmed household-level granularity is all they need.)
   Nothing is silently deleted. A purchase record is never deleted. Removing a receipt (§23.4) is a
   deliberate, audited removal of that file — not a silent deletion of the purchase, and not an undelete.
 - A **duplicate** (e.g. both users recorded the same purchase) is resolved by voiding one copy — see §9.6.
+- **Corrected where it is read (decision 226, GitHub issue #57).** A purchase record — one recorded by
+  hand (`PUR`) or converted from a schedule (`DD` / `SO`) — can be corrected or voided **in place** on All
+  Transactions (§15.3), beneath its own row, using the Purchases page's own forms, version guard and
+  audit. A **refund** is not corrected there: its form belongs beside the original it was refunded
+  against, so its row keeps its link to Purchases.
 
 ### 9.6 Duplicate-entry protection (light-touch)
 
@@ -986,8 +991,8 @@ Menu pages:
 | Page | Contents |
 |---|---|
 | **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; payday projection panel retaining its date, tier, liquid funds, day-to-day total, commitments and receipts, plus the worst-pot bills-only transfer nudge (§7.5), but **no expandable forecast sections or day-by-day table** (v0.37.0 follow-up, decision 187). Horizon owns the dated shops/fills, expected-support list and day-by-day detail; the panel links there, opening on the day before payday. Quick Entry/Till stays visible beside the projection. Due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
-| **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); the four record-kind boxes — **Purchases** (anything not from a schedule), **From schedule**, **Refunds**, **Voided** — are show toggles, all on by default so the full history including voided records is shown, and unticking one hides that kind (a record with two tags is hidden if either is off; decision 205); the result heading shows the number of entries and their **net total** from the rows actually displayed (up to 500 newest matches): whole purchases count once even if a category filter matched one line, refunds subtract, and voided history adds nothing; rows alternate plain/tinted (`bg-canvas`) so neighbouring records are easy to tell apart; the supplier name links to that supplier's expanded card on Suppliers (decision 149's link); inline editing; the line editor puts **Spent for** and **Amount** on its first row and **Category** full-width on the second (plus **Which** when a person/vehicle is chosen), with slightly shorter controls; refund/void/correct with audit trail visible; split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
-| **All Transactions** | Activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. Nothing is added here, and nothing is edited or voided here **except an internal transfer**, which opens in place — its correction and void forms in a panel directly beneath its row (decision 225, GitHub issue #55; §15.3). |
+| **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); the four record-kind boxes — **Purchases** (anything not from a schedule), **From schedule**, **Refunds**, **Voided** — are show toggles, all on by default so the full history including voided records is shown, and unticking one hides that kind (a record with two tags is hidden if either is off; decision 205); the result heading shows the number of entries and their **net total** from the rows actually displayed (up to 500 newest matches): whole purchases count once even if a category filter matched one line, refunds subtract, and voided history adds nothing; rows alternate plain/tinted (`bg-canvas`) so neighbouring records are easy to tell apart; the supplier name links to that supplier's expanded card on Suppliers (decision 149's link); inline editing; the line editor puts **Spent for** and **Amount** on its first row and **Category** full-width on the second (plus **Which** when a person/vehicle is chosen), with slightly shorter controls; refund/void/correct with audit trail visible — a refund is its own negative record in the same category and target as the original, linked to it, with the original's pot, supplier and payer unless the form says otherwise; its lines total the refund exactly, so a partial refund is simply a smaller amount (§9.5); split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
+| **All Transactions** | Activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. Nothing is added here, and nothing is edited or voided here **except a purchase and an internal transfer**, which open in place — their correction and void forms in a panel directly beneath their row (decisions 225 and 226, GitHub issues #55 and #57; §15.3). A refund keeps its link to Purchases. |
 | **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance and state); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. Provider agreements and their review dates live on Contracts & Renewals, with an optional link from a schedule. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below and a link card to Contracts & Renewals beside projection. On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row, below the sticky site header (every hash target in the app spends the measured `sf-anchor` offset, so a link works at any window width whatever the nav wraps to — decision 216, re-opened issue #34; and the scroll pass verifies each landing against the real header, correcting once a settled landing a browser left behind the bar — decision 222, issue #43). Cancelled schedules show by default; a Hide cancelled toggle (`?hideCancelled=1`, with a count of those hidden) removes them from the list while keeping the calendar and history (decision 212); the hide-cancelled preference is remembered across page navigations via a device cookie (decision 214). An in-place filter search box with Clear button filters schedules by name or supplier, revealing matching cancelled schedules even when cancelled schedules are hidden (decision 215). |
 | **Horizon** | "How far the money would go" (§7.6): pick a date up to 400 days ahead (opens on the day before the next scheduled income; a date change applies itself, v0.13.0), scope by pot (all selected by default) and toggle day-to-day; the free-to-spend headline, the always-shown lowest point with its date and tier, and detail blocks for the commitments, expected money in (debts' expected support flagged `expected`), the projected day-to-day events (dated shops/fills, v0.6.0) and the day-by-day table. Same engine as the payday projection; laptop-shaped by the household's choice. |
 | **Income** | Money coming in: the scheduled income (salary) that converts itself, editable in place from the next instance onward; one-off income recorded by hand with an optional source; and one list of everything received — scheduled and one-off together, with inline correction, void and the retained history. Income is desktop-shaped by the household's choice: it is not a till-side task, so nothing here is squeezed into the mobile quick-entry panel. |
@@ -1015,31 +1020,53 @@ one dense table — purchases, direct debits and standing orders, transfers, mon
 household boundary, and income (`BAC`). It is a **pure projection of existing records** — it stores
 nothing, and every row links to the canonical record that owns the add/edit/void behaviour and the
 retained history. (One derived exception since v0.7.0: a debt's expected support renders as a flagged
-`EXP<` row that is not a record at all — it links to the debt, not to a form.) **One exception since
-decision 225:** an internal transfer's canonical form *is* this page — it opens in place, beneath its
-own row (below).
+`EXP<` row that is not a record at all — it links to the debt, not to a form.) **Two exceptions since
+decisions 225 and 226:** an internal transfer's and a purchase's canonical form *is* this page — they
+open in place, beneath their own row (below).
 
-**Internal transfers open in place (decision 225, GitHub issue #55).** The pots page's separate
-"Transfers between pots" list only repeated what this table already shows, and grew harder to read with
-every transfer, so it is gone. On a `TX<` / `TX>` row that is an internal transfer, the other pot's name
-is a disclosure button (dotted underline, as Horizon's breakdowns, decision 203): selecting it opens a
-panel **directly beneath that row** — the page does not navigate away — naming the transfer in full
-(`#id · from → to`, amount, date, who recorded it) with its **correction form** (the two pots, amount,
-date, note; decision 218's rules and stale-version guard, unchanged) beside its **void form** (reason
-required; the record and reason are kept). One transfer is open at a time; opening another closes the
-first, and Close (or the name again) shuts it. Purchases, income, boundary money (`TX` rows for `other`
-money included) and expectations keep their links exactly as before.
+**Transfers and purchases open in place (decisions 225 and 226, GitHub issues #55 and #57).** The pots
+page's separate "Transfers between pots" list only repeated what this table already shows, and grew
+harder to read with every transfer, so it is gone. On a `TX<` / `TX>` row that is an internal transfer,
+the other pot's name is a disclosure button (dotted underline, as Horizon's breakdowns, decision 203):
+selecting it opens a panel **directly beneath that row** — the page does not navigate away — naming the
+transfer in full (`#id · from → to`, amount, date, who recorded it) with its **correction form** (the two
+pots, amount, date, note; decision 218's rules and stale-version guard, unchanged) beside its **void
+form** (reason required; the record and reason are kept). **One record is open at a time** — a transfer or
+a purchase; opening another closes the first, and Close (or the name again) shuts it. Income, boundary
+money (`TX` rows for `other` money included) and expectations keep their links exactly as before.
 
-- **The open transfer is the URL's `?transfer={id}`** (with `#transfer-{id}`), replaced through the
-  router without a history entry or a scroll, so a refresh or a shared link reopens it and the page the
-  server renders after a save knows which transfer is open. An id that names no transfer is ignored.
-- **A save never pulls the panel out from under the household.** A void always takes the transfer out of
-  this list (voids are never movements), and a correction can (onto two other pots, or re-dated outside
-  the window). The open transfer then stays on screen as a **pinned row** in exactly the position it
-  held — muted, outside the totals, the stripe and the running balance, and badged *voided*, *moved to
-  other pots*, *outside these dates* or *past the row limit* — with a panel saying why: a voided transfer
-  shows its reason and no forms; a moved or re-dated one keeps its forms (so a mistake is put right in
-  place) and links to where it is a live row again. Closing the panel lets the pinned row go.
+**Purchases open in place the same way (decision 226, GitHub issue #57).** A one-off purchase (`PUR`), a
+direct debit (`DD`) and a standing order (`SO`) are the same record with the same canonical forms on the
+Purchases page, and the row a household most often needs to put right is the one in front of them: on
+those rows the supplier's name — or the schedule's name when the record has none, as a standing order
+may — is the disclosure button, opening the Purchases page's own `PurchaseEditForm` and `VoidForm` in a
+panel directly beneath the row, with the same live category tree, people and vehicles that page offers.
+A **refund** (`REF`) is deliberately not one of them: it is a purchase record too, but its amount lives
+in the negative, its form belongs beside the original it was refunded against, and it can only be
+recorded, corrected and voided on Purchases — so its row keeps its link there. Correcting a converted
+`DD` / `SO` record never touches the schedule that produced it (§11.1), and the schedule link stays
+beside the code.
+
+- **The open record is the URL's `?transfer={id}` or `?purchase={id}`** (with `#transfer-{id}` /
+  `#purchase-{id}`), replaced through the router without a history entry or a scroll, so a refresh or a
+  shared link reopens it and the page the server renders after a save knows which record is open. The two
+  parameters are alternatives — opening one clears the other, so there is never more than one panel — and
+  an id that names no record is ignored (a bare `?purchase=abc` changes nothing; a nonsense `transfer`
+  does not shadow a valid `purchase`).
+- **A save never pulls the panel out from under the household.** A void always takes the record out of
+  this list (voids are never movements), and a correction can (a purchase re-dated outside the window; a
+  transfer onto two other pots, or re-dated outside it). The open record then stays on screen as a
+  **pinned row** placed by the projection's own comparator, at the position it holds in the list — muted,
+  outside the totals, the stripe and the running balance, and badged *voided*, *moved to other pots*,
+  *outside these dates* or *past the row limit* — with a panel saying why: a voided record shows its
+  reason and no forms; a re-dated or moved one keeps its forms (so a mistake is put right in place). The
+  save itself never navigates or scrolls the page (a void cannot move the row at all). A re-date does
+  move it — the row sorts where the new date belongs — so when that leaves the panel entirely off screen
+  it is brought back to the middle of the view once, and only then: an in-view panel, one the household
+  scrolled away from themselves, and a hash landing are all left as they are. A pinned row links to where
+  it is a live row again: a move or a re-date to that pot's activity over a
+  window holding its date, and a voided purchase to `/purchases?voidedOnly=1#purchase-{id}`, the one page
+  where a voided record is still readable. Closing the panel lets the pinned row go.
 - **Old links:** `/pots?transfer={id}` (bookmarks from decision 164) redirects to this page with that
   transfer open — on the household's usual pot (the saved default, then `Main account`, then the first
   pot) when the transfer touches it, otherwise the pot the money left — over the last 30 days when they
@@ -1110,9 +1137,9 @@ projections (§7.2, §7.6) are what show the plan ahead, while this page shows t
 expected to move — on the days the window covers.
 
 **Voided records are excluded** (`voided_at IS NULL` on every family) and no history machinery is
-rendered; corrections happen on the canonical page behind the link — for an internal transfer, in place
-(decision 225), where a transfer voided while its panel is open stays pinned, struck through and
-uncounted, until the panel closes. **Refunds are
+rendered; corrections happen on the canonical page behind the link — for an internal transfer or a
+purchase, in place (decisions 225 and 226), where a record voided while its panel is open stays pinned,
+struck through and uncounted, until the panel closes. **Refunds are
 shown** as green `REF` rows: a refund is already just a purchase with a negative total and the
 estimate counts it (§7.1), so hiding it would make this page disagree with the pot for no gain.
 
@@ -1126,10 +1153,11 @@ here, and §7.1 absorbs a date-only credit that was written down before a checkp
 date while counting a date-only debit (and counting a credit written down after that checkpoint). The
 page says so rather than implying an equality it cannot keep.
 
-**Deep links.** Each row links to its record's canonical form: purchases to
+**Deep links.** Each row links to its record's canonical form: refunds (`REF`) to
 `/purchases?potId&from&to#purchase-{id}`; `DD`/`SO` rows additionally to `/recurring#schedule-{id}`;
-internal transfers open in place (decision 225), their URL being this page's own
-`/transactions?potId&from&to&transfer={id}#transfer-{id}`; boundary money (other, loan, swap
+`PUR`, `DD` and `SO` rows open in place (decision 226), their URL being this page's own
+`/transactions?potId&from&to&purchase={id}#purchase-{id}`; internal transfers open in place too
+(decision 225), as `/transactions?potId&from&to&transfer={id}#transfer-{id}`; boundary money (other, loan, swap
 legs) to `/pots?external={id}#external-{id}`, swaps also under `/pots#swaps`; income to
 `/income?receipt={id}#receipt-{id}`. Those anchors and the `?external=` parameter exist so that a
 linked record lying outside a page's recent list is still rendered and findable, instead of the link
@@ -1142,8 +1170,8 @@ makes even that ambiguous.
 
 **The lazy due pass still runs** on this page as on every read page (§11.2), so a direct debit that
 came due today appears. Nothing on this page creates a record, and the only user-facing writes are the
-open internal transfer's correction and void (decision 225) — the same server actions, guards and audit
-as anywhere else, refused for a read-only support view.
+open transfer's and the open purchase's correction and void (decisions 225 and 226) — the same server
+actions, guards and audit as anywhere else, refused for a read-only support view.
 
 ### 15.5 The guide and "what this page needs first" (v1.2.0, decision 196)
 
