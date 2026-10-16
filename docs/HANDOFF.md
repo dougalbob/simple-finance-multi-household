@@ -38,7 +38,11 @@ category drill `<tr colSpan={columnCount}>` and the `MONTH_PANEL_ANCHOR` fallbac
 **Verified locally:** Gates: `npm run format:check`, `npm run typecheck`, `npm test`
 (**1,012/1,012 across 233 suites**), `npm run build`. Browser (Playwright via SANDBOX entry 8, fresh
 seed): `borrowing` (5/5), `debt-lifecycle` (8/8) and `insights` (7/7) — 20/20, including the seven
-new issue-#68 journeys. See `docs/RELEASE_NOTES_v1.25.0.md`.
+new issue-#68 journeys. Two sandbox lessons from this slice are recorded as **SANDBOX entry 24**:
+a scroll assertion must call `scrollIntoViewIfNeeded()` before it measures (Playwright's click
+scrolls the target into view), and a dirty e2e database is fixed by **restarting the server**
+(`scripts/e2e-server.mts` re-seeds its data directory on every start) rather than by editing the
+spec. See `docs/RELEASE_NOTES_v1.25.0.md`.
 
 ---
 
