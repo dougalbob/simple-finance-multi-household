@@ -1,24 +1,21 @@
 import { redirect } from 'next/navigation';
-import {
-  ArchivePotForm,
-  ExternalMovementEditForm,
-  OtherMovementForm,
-  SwapForm,
-  VoidSwapPairForm,
-} from '@/components/external-forms';
+import { ArchivePotForm, OtherMovementForm, SwapForm } from '@/components/external-forms';
 import { BorrowingMovedRedirect } from '@/components/borrowing-moved-redirect';
+import { ExternalHistoryList } from '@/components/external-history';
 import { AddCheckpointForm, CreatePotForm } from '@/components/pot-forms';
-import { VoidForm } from '@/components/record-forms';
 import { PotEditForm } from '@/components/settings-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import type { Db } from '@/lib/db/client';
 import { formatPence } from '@/lib/money';
-import { debtsSummary } from '@/lib/records/debts';
 import {
-  describeExternalMovement,
+  buildExternalHistory,
+  EXTERNAL_HISTORY_DISPLAY_LIMIT,
+  EXTERNAL_HISTORY_FETCH_LIMIT,
+  SWAP_HISTORY_ANCHOR,
+} from '@/lib/records/external-history';
+import {
   getExternalMovement,
   ExternalMovementNotFoundError,
-  listExchanges,
   listExternalMovements,
   type ExternalMovement,
 } from '@/lib/records/external-movements';
@@ -53,11 +50,14 @@ export const dynamic = 'force-dynamic';
  * a bank facility or a credit line, not counted notes.
  *
  * Also home to the household boundary (SPEC §10.2) that is **not**
- * borrowing: swap pairs and other money in & out, with their edit and void
- * controls. Informal debts — Owed & owing, borrowing, repayments and their
- * ledger — moved to their own **Borrowing** page (GitHub issue #60, decision
- * 228); a signpost card carries the running owed figures and a link. An old
- * `/pots?external={id}` deep link to a loan movement redirects there.
+ * borrowing: swap pairs and other money in & out, recorded in the two cards
+ * and managed in the one history panel below them (GitHub issue #65) — each
+ * swap's legs nested into a single object, with per-leg inline correction and
+ * void plus the pair-level void. Informal debts — Owed & owing, borrowing,
+ * repayments and their ledger — moved to their own **Borrowing** page
+ * (GitHub issue #60, decision 228); the redundant Owed & owing signpost that
+ * stood here afterwards is gone (issue #65). An old `/pots?external={id}`
+ * deep link to a loan movement still redirects there.
  *
  * Internal pot-to-pot transfers no longer have a list here (decision 225,
  * GitHub issue #55): they are recorded in Quick Entry → Move, and corrected
@@ -97,34 +97,56 @@ export default async function PotsPage({
   const people = listPeople(db);
   const peopleById = new Map(people.map((person) => [person.id, person.label]));
   const money = getMoneySnapshot(db, now);
-  const owed = debtsSummary(db);
   // Swaps and other money stay here (issue #60); borrowing history lives on
   // the Borrowing page. A deep link from All Transactions (SPEC §15.3) must
   // land on the record it names, even after it has fallen out of the recent
-  // twenty — unless it names a loan, which redirects to Borrowing.
-  const recentExternal = listExternalMovements(db, { includeVoided: true, limit: 20 }).filter(
-    (movement) => movement.kind !== 'loan',
-  );
+  // list — unless it names a loan, which redirects to Borrowing. The fetch
+  // window is deliberately wider than the list it feeds (issue #65): each
+  // swap takes two rows but one entry, so sixty rows always contain the whole
+  // of the twenty entries drawn — a pair is never split by the limit.
+  const recentExternal = listExternalMovements(db, {
+    includeVoided: true,
+    limit: EXTERNAL_HISTORY_FETCH_LIMIT,
+  });
   const linkedExternalId = Number(params.external);
   const linkedExternal =
-    Number.isInteger(linkedExternalId) &&
-    linkedExternalId > 0 &&
-    recentExternal.every((movement) => movement.id !== linkedExternalId)
+    Number.isInteger(linkedExternalId) && linkedExternalId > 0
       ? findExternalMovement(db, linkedExternalId)
       : null;
   if (linkedExternal !== null && linkedExternal.kind === 'loan') {
     redirect(`/borrowing?external=${linkedExternal.id}#external-${linkedExternal.id}`);
   }
-  const externalRows =
-    linkedExternal === null ? recentExternal : [linkedExternal, ...recentExternal];
-  // Swaps grouped as pairs (SPEC §10.2) for the management list: the
-  // household records a swap and then looks for it next to the pot cards —
-  // this is where that list lives, with edit and void-both-legs.
-  const exchanges = listExchanges(db, { includeVoided: true, limit: 20 });
-  const potNames = new Map(pots.map((pot) => [pot.id, pot.label]));
+  // A record the fetch window did not reach is pinned to the top of the list
+  // and flagged by the note below it; the wide fetch means this is rare.
+  const pinnedExternal =
+    linkedExternal !== null && recentExternal.every((movement) => movement.id !== linkedExternal.id)
+      ? linkedExternal
+      : null;
+  // A pinned swap leg brings its partner with it, so the nested object is
+  // whole even when the pair's other leg is older than the window.
+  const pinnedPartners =
+    pinnedExternal !== null && pinnedExternal.kind === 'swap' && pinnedExternal.exchangeKey !== null
+      ? listExternalMovements(db, {
+          exchangeKey: pinnedExternal.exchangeKey,
+          includeVoided: true,
+          limit: 4,
+        }).filter((movement) => movement.id !== pinnedExternal.id)
+      : [];
+  // Issue #65: swaps and other money in one feed, each swap's legs nested
+  // into a single object.
+  const history = buildExternalHistory(
+    pinnedExternal === null
+      ? recentExternal
+      : [...recentExternal, pinnedExternal, ...pinnedPartners],
+    { pinnedId: pinnedExternal?.id ?? null },
+  ).slice(0, EXTERNAL_HISTORY_DISPLAY_LIMIT);
+  // A pot card's link promises the swaps its pot takes part in; count them
+  // from the very entries the panel below draws, so the promise and the list
+  // cannot drift apart.
   const swapsInvolving = (potId: number) =>
-    exchanges.filter(
-      (exchange) => exchange.inLeg?.potId === potId || exchange.outLeg?.potId === potId,
+    history.filter(
+      (entry) =>
+        entry.kind === 'swap' && (entry.inLeg?.potId === potId || entry.outLeg?.potId === potId),
     ).length;
 
   return (
@@ -264,7 +286,10 @@ export default async function PotsPage({
                 )}
 
                 {swapsInvolving(pot.id) > 0 ? (
-                  <a href="#swaps" className="mt-2 inline-block text-xs sf-link-arrow">
+                  <a
+                    href={`#${SWAP_HISTORY_ANCHOR}`}
+                    className="mt-2 inline-block text-xs sf-link-arrow"
+                  >
                     Recent swaps involving {pot.label} ↓
                   </a>
                 ) : null}
@@ -387,41 +412,12 @@ export default async function PotsPage({
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Issue #60: informal borrowing moved to its own page. The signpost
-            keeps this page's overview role — the running owed figures — and
-            old `#debt-{id}` bookmarks are forwarded there (client-side: a
-            fragment never reaches the server). */}
+        {/* Issue #60: informal borrowing moved to its own page, and issue #65
+            retired the Owed & owing signpost that stood beside the swap card
+            once the page's job became recording and managing boundary money.
+            Old `#debt-{id}` bookmarks are still forwarded client-side: a
+            fragment never reaches the server. */}
         <BorrowingMovedRedirect />
-        <section
-          aria-labelledby="borrowing-signpost-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <h2 id="borrowing-signpost-heading" className="text-lg font-semibold">
-            Owed &amp; owing
-          </h2>
-          <p className="mb-3 mt-1 text-sm text-ink-soft">
-            Informal debts — money borrowed or lent outside the household — now live on their own
-            page, with the setup flow, the repay panel and the full ledger.
-          </p>
-          <p className="text-sm">
-            <span className="font-semibold tabular-nums">
-              we owe {formatPence(owed.owedByHouseholdPence)}
-            </span>
-            <span className="mx-2 text-ink-muted">·</span>
-            <span className="font-semibold tabular-nums">
-              owed to us {formatPence(owed.owedToHouseholdPence)}
-            </span>
-            <span className="ml-2 text-xs text-ink-muted">
-              ({owed.debtCount} arrangement{owed.debtCount === 1 ? '' : 's'})
-            </span>
-          </p>
-          <p className="mt-3">
-            <a href="/borrowing" className="sf-link-arrow">
-              Open Borrowing
-            </a>
-          </p>
-        </section>
-
         <section
           id="swaps"
           aria-labelledby="swap-heading"
@@ -441,151 +437,6 @@ export default async function PotsPage({
             pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
             today={today}
           />
-
-          <h3 className="mb-2 mt-4 text-sm font-semibold">Recent swaps</h3>
-          {exchanges.length === 0 ? (
-            <p className="text-sm text-ink-muted">Nothing recorded yet.</p>
-          ) : (
-            <ul className="space-y-2">
-              {exchanges.map((exchange) => {
-                const { inLeg, outLeg } = exchange;
-                const inLive = inLeg?.voidedAt === null;
-                const outLive = outLeg?.voidedAt === null;
-                const bothLive = inLive && outLive;
-                const bothVoided = !inLive && !outLive;
-                const inAmount = inLeg?.amountPence ?? 0;
-                const outAmount = outLeg?.amountPence ?? 0;
-                // Net across the LIVE legs: a balanced live pair reads
-                // £0.00; a pair with an orphaned leg reads the difference,
-                // honestly, instead of pretending.
-                const net = (inLive ? inAmount : 0) - (outLive ? outAmount : 0);
-                const counterparty = inLeg?.counterparty ?? outLeg?.counterparty ?? '—';
-                const date = inLeg?.occurredDate ?? outLeg?.occurredDate ?? '—';
-                const note = inLeg?.note ?? outLeg?.note ?? null;
-                const inPot = inLeg ? (potNames.get(inLeg.potId) ?? '—') : null;
-                const outPot = outLeg ? (potNames.get(outLeg.potId) ?? '—') : null;
-                return (
-                  <li
-                    key={exchange.exchangeKey}
-                    className="rounded-lg border border-border bg-canvas p-3"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="text-sm font-medium text-ink">
-                        {formatPence(inAmount || outAmount)} with {counterparty}
-                        <span className="ml-2 text-xs font-normal text-ink-muted">
-                          {date}
-                          {note !== null && note !== '' ? ` — ${note}` : ''}
-                        </span>
-                      </p>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          bothVoided
-                            ? 'bg-surface-muted text-ink-muted'
-                            : net === 0
-                              ? 'bg-positive-50 text-positive-800'
-                              : 'bg-warning-50 text-warning'
-                        }`}
-                      >
-                        {bothVoided
-                          ? 'voided'
-                          : net === 0
-                            ? 'net £0.00'
-                            : `legs differ · net ${net > 0 ? '+' : '−'}${formatPence(
-                                Math.abs(net),
-                              )}`}
-                      </span>
-                    </div>
-                    <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
-                      <p className={inLive ? undefined : 'text-ink-faint line-through'}>
-                        In{' '}
-                        <span className="tabular-nums font-medium text-positive">
-                          +{formatPence(inAmount)}
-                        </span>{' '}
-                        → {inPot ?? '—'}
-                      </p>
-                      <p className={outLive ? undefined : 'text-ink-faint line-through'}>
-                        Out{' '}
-                        <span className="tabular-nums font-medium text-danger">
-                          −{formatPence(outAmount)}
-                        </span>{' '}
-                        ← {outPot ?? '—'}
-                      </p>
-                    </div>
-                    {bothVoided ? (
-                      <p className="mt-1 text-xs text-ink-faint">
-                        Voided{inLeg?.voidReason ? ` — ${inLeg.voidReason}` : ''}
-                      </p>
-                    ) : (
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {bothLive && inLeg && outLeg ? (
-                          <VoidSwapPairForm
-                            idPrefix={`swap-void-${exchange.exchangeKey.slice(0, 8)}`}
-                            exchangeKey={exchange.exchangeKey}
-                            inLeg={{ id: inLeg.id, version: inLeg.version }}
-                            outLeg={{ id: outLeg.id, version: outLeg.version }}
-                            summary={`${formatPence(inAmount)} with ${counterparty}`}
-                          />
-                        ) : null}
-                        <details className="text-xs">
-                          <summary className="cursor-pointer font-medium text-ink-soft">
-                            Correct or void one leg
-                          </summary>
-                          <div className="mt-2 flex flex-col gap-2">
-                            {inLeg && inLive ? (
-                              <details className="rounded border border-border bg-surface p-2">
-                                <summary className="cursor-pointer font-medium text-ink-body">
-                                  In-leg — to {inPot}
-                                </summary>
-                                <div className="mt-2">
-                                  <ExternalMovementEditForm
-                                    idPrefix={`swap-edit-in-${inLeg.id}`}
-                                    movement={inLeg}
-                                    pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-                                    today={today}
-                                  />
-                                </div>
-                                <div className="mt-2 border-t border-border-hairline pt-2">
-                                  <VoidForm
-                                    kind="external"
-                                    recordId={inLeg.id}
-                                    expectedVersion={inLeg.version}
-                                    summary={describeExternalMovement(inLeg)}
-                                  />
-                                </div>
-                              </details>
-                            ) : null}
-                            {outLeg && outLive ? (
-                              <details className="rounded border border-border bg-surface p-2">
-                                <summary className="cursor-pointer font-medium text-ink-body">
-                                  Out-leg — from {outPot}
-                                </summary>
-                                <div className="mt-2">
-                                  <ExternalMovementEditForm
-                                    idPrefix={`swap-edit-out-${outLeg.id}`}
-                                    movement={outLeg}
-                                    pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-                                    today={today}
-                                  />
-                                </div>
-                                <div className="mt-2 border-t border-border-hairline pt-2">
-                                  <VoidForm
-                                    kind="external"
-                                    recordId={outLeg.id}
-                                    expectedVersion={outLeg.version}
-                                    summary={describeExternalMovement(outLeg)}
-                                  />
-                                </div>
-                              </details>
-                            ) : null}
-                          </div>
-                        </details>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
         </section>
 
         <section
@@ -607,6 +458,7 @@ export default async function PotsPage({
       </div>
 
       <section
+        id={SWAP_HISTORY_ANCHOR}
         aria-labelledby="external-history-heading"
         className="mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm"
       >
@@ -614,64 +466,25 @@ export default async function PotsPage({
           Recent swaps &amp; other money
         </h2>
         <p className="mb-3 mt-1 text-sm text-ink-soft">
-          Swaps and other money across the boundary — newest first. Voiding keeps the history.
-          Borrowing and repayments live on{' '}
+          Swaps and other money across the boundary — newest first, each swap&rsquo;s two legs
+          nested as the one record it is. Correct or void a leg in place; void both legs together
+          when the swap never happened. Voiding keeps the history. Borrowing and repayments live on{' '}
           <a href="/borrowing" className="sf-link">
             Borrowing
           </a>
           .
         </p>
-        {linkedExternal !== null ? (
+        {pinnedExternal !== null ? (
           <p className="mb-2 rounded-lg bg-accent-50 px-3 py-2 text-xs text-accent-900">
             Showing the record you linked to — it is older than the twenty most recent.
           </p>
         ) : null}
-        {externalRows.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nothing recorded yet.</p>
-        ) : (
-          <ul className="divide-y divide-border-hairline">
-            {externalRows.map((movement) => (
-              <li key={movement.id} id={`external-${movement.id}`} className="py-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                  <span
-                    className={
-                      movement.voidedAt !== null ? 'text-ink-faint line-through' : undefined
-                    }
-                  >
-                    {describeExternalMovement(movement)} · {potNames.get(movement.potId) ?? '—'}
-                    <span className="ml-2 text-xs text-ink-muted">
-                      {movement.occurredDate} · {movement.enteredBy}
-                      {movement.note !== null && movement.note !== '' ? ` — ${movement.note}` : ''}
-                    </span>
-                  </span>
-                  <span className="tabular-nums">
-                    {movement.direction === 'in' ? '+' : '−'}
-                    {formatPence(movement.amountPence)}
-                  </span>
-                </div>
-                {movement.voidedAt === null ? (
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-xs font-medium text-ink-soft">
-                      Void
-                    </summary>
-                    <div className="mt-2">
-                      <VoidForm
-                        kind="external"
-                        recordId={movement.id}
-                        expectedVersion={movement.version}
-                        summary={describeExternalMovement(movement)}
-                      />
-                    </div>
-                  </details>
-                ) : (
-                  <p className="text-xs text-ink-faint">
-                    Voided{movement.voidReason ? ` — ${movement.voidReason}` : ''}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ExternalHistoryList
+          entries={history}
+          pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
+          today={today}
+          pinnedId={pinnedExternal?.id ?? null}
+        />
       </section>
     </main>
   );

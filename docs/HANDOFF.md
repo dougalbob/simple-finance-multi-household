@@ -1,3 +1,44 @@
+# Release v1.23.0 — Swaps nested as one object in the boundary history (GitHub issue #65) (2026-10-16)
+
+**Release scope is prepared on this branch.** The household reviewed the Arena preview of issue #65,
+approved both judgement calls (the pointer arrow marks the **nested** leg so it doubles as the pair's
+indent marker; each **leg** keeps its own Edit/Void with pair-level **Void both legs** in the footer)
+and authorised a new stable tag. Version files are aligned at **v1.23.0 stable**, moving `latest` on
+`ghcr.io/dougalbob/simple-finance-multi-household` only. No schema, migration or backup-format change.
+Required PR CI, main CI and tagged Publish evidence are still pending at preparation time; this is a
+pre-merge record, not proof that a tag or image exists.
+
+**#65 (decision 231).** On Accounts, Pots & Checkpoints, "Recent swaps & other money" still reads as one
+newest-first feed, but a swap's two legs are grouped by exchange key into a single card
+(`<div data-swap-pair>`): the **in** leg (`Swap in £40.00 from Sam · into Alex's cash`) on top, the
+nested **out** leg (`Swap out £40.00 to Sam · from Main account`) beneath it on the alternate row shade,
+indented under the same gutter and introduced by an inline-SVG pointer (vertical leg → short horizontal
+leg → right-pointing arrowhead), then a footer with the pair's badge — `net £0.00`, `legs differ · net
++£2.50`, `one leg voided · net …`, `voided` — beside **Void both legs**. Every leg carries its own
+**Edit** and **Void** that open that leg's form inline beneath it, one panel at a time; other-money rows
+get the same two controls. The **"Recent swaps"** list inside the **Swap with someone outside** card is
+removed, so a swap is corrected in exactly one place, and the redundant **Owed & owing** signpost panel
+is removed too (its `<BorrowingMovedRedirect>` helper stays for legacy `#debt-{id}` bookmarks; old
+`/pots?external={id}` loan links still redirect to `/borrowing`).
+
+**Where the code lives.** `src/lib/records/external-history.ts` — pure: grouping and ordering, the
+honest half-pair, the four badge states, `describeSwapLeg` / `describeBoundaryMovement`, and the
+`SWAP_HISTORY_ANCHOR` constant. `src/components/external-history.tsx` — draws it and holds which leg's
+panel is open. The page fetches `EXTERNAL_HISTORY_FETCH_LIMIT` (60) rows and draws
+`EXTERNAL_HISTORY_DISPLAY_LIMIT` (20) entries so a pair is never split by the limit; `?external={id}`
+still pins the linked record (`pinnedExternal`), and a pinned swap leg brings its partner with it. The
+panel carries `id="swap-history"`, which the pot cards' "Recent swaps involving …" links and All
+Transactions' "Open the swap list" now target (`#swaps` only names the recording card now).
+
+**Verified locally:** Gates: `npm run format:check`, `npm run typecheck`, `npm test`
+(**1010/1010 across 233 suites**, including the new `tests/external-history.test.ts`), `npm run build`.
+Browser (Playwright via SANDBOX entry 8): `external` (**4/4**, two rewritten journeys) and `borrowing`
+(**5/5**); the seventeen failures a full local run reports (admin, backup, credit-card-pots, insights,
+recurring, payday-summary) all pass when re-run in their own batch — the sandbox's mid-run web-server
+loss of SANDBOX entry 17, not this change.
+
+---
+
 # Release v1.22.0 — Chart E in-card scopes and Borrowing inline recording with repayment guards (GitHub issues #61 and #63) (2026-10-16)
 
 **Release scope is prepared on this branch.** The household reviewed and approved the Arena preview of

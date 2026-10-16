@@ -282,11 +282,15 @@ test.describe('Borrowing page — the ledger and inline recording (issues #60, #
     const debtId = /\bdebt=(\d+)/.exec(recordHref ?? '')?.[1];
     expect(debtId).toMatch(/^\d+$/);
 
-    // The signpost on Accounts, Pots & Checkpoints.
+    // Accounts, Pots & Checkpoints no longer carries a borrowing panel or
+    // signpost at all (issue #65 retired the redundant Owed & owing card);
+    // the history panel says where borrowing lives instead.
     await page.goto('/pots');
-    const signpost = page.locator('section[aria-labelledby="borrowing-signpost-heading"]');
-    await expect(signpost.getByText(/we owe/)).toBeVisible();
-    await signpost.getByRole('link', { name: 'Open Borrowing' }).click();
+    await expect(page.locator('section[aria-labelledby="borrowing-signpost-heading"]')).toHaveCount(
+      0,
+    );
+    const history = page.locator('section[aria-labelledby="external-history-heading"]');
+    await history.getByRole('link', { name: 'Borrowing' }).click();
     await expect(page).toHaveURL(/\/borrowing/);
 
     // An old `/pots?external={id}` loan link redirects to the borrowing row.
