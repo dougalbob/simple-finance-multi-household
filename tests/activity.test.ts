@@ -1109,4 +1109,35 @@ describe('All Transactions: running balance (v0.33.0)', () => {
       fx.close();
     }
   });
+
+  it('formats activity source with paidVia when present', async () => {
+    const { purchaseActivitySource } = await import('../src/lib/records/activity');
+    const supplierNames = new Map([[1, 'The Crown Inn']]);
+
+    // Merchant + paidVia:
+    assert.equal(
+      purchaseActivitySource({ supplierId: 1, paidVia: 'James' }, supplierNames),
+      'The Crown Inn · via James',
+    );
+    // Merchant only:
+    assert.equal(
+      purchaseActivitySource({ supplierId: 1, paidVia: null }, supplierNames),
+      'The Crown Inn',
+    );
+    // No merchant, with paidVia:
+    assert.equal(
+      purchaseActivitySource({ supplierId: null, paidVia: 'James' }, supplierNames),
+      'via James',
+    );
+    // Neither:
+    assert.equal(
+      purchaseActivitySource({ supplierId: null, paidVia: null }, supplierNames),
+      'Unknown supplier',
+    );
+    // Schedule conversion with paidVia:
+    assert.equal(
+      purchaseActivitySource({ supplierId: null, paidVia: 'Direct' }, supplierNames, 'Energy Co'),
+      'Energy Co · via Direct',
+    );
+  });
 });

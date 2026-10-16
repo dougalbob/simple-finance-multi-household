@@ -1,0 +1,1 @@
+ALTER TABLE `purchases` ADD `paid_via` text;

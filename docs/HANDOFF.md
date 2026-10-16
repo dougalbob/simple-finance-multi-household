@@ -1,3 +1,18 @@
+# Release v1.24.0 — Statement payee on purchases and Other money signposting (2026-10-16)
+
+**Release scope is prepared on this branch.** Version files are aligned at **v1.24.0 stable**, moving `latest` on
+`ghcr.io/dougalbob/simple-finance-multi-household` only. Migration `0019_purchase_paid_via.sql` adds `paid_via`
+to `purchases`.
+
+**What was delivered.**
+1. Purchases now support an optional `paidVia` statement payee field (up to 120 chars) alongside the merchant/supplier,
+   enabling shared meal transfers and third-party payment routes (e.g. PayPal) to match banking statements without
+   polluting the commercial supplier directory.
+2. In Quick Entry Panel 1, `+ Paid via` is available beside `+ Note`.
+3. In All Transactions and Purchases, purchases with a statement payee display as `Supplier · via Payee` (or `via Payee` if no commercial supplier is set).
+4. Both the in-place All Transactions editor and the Purchases page editor support viewing and editing `paidVia`.
+5. "Other money in & out" on Accounts, Pots & Checkpoints and Quick Entry gains clearer signposting to distinguish it from loans/borrowing and categorized spending.
+
 # Release v1.23.0 — Swaps nested as one object in the boundary history (GitHub issue #65) (2026-10-16)
 
 **Release scope is prepared on this branch.** The household reviewed the Arena preview of issue #65,

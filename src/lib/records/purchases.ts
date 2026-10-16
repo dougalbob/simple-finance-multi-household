@@ -89,6 +89,7 @@ export class VoidBlockedError extends Error {
 }
 
 export const MAX_PURCHASE_NOTE_LENGTH = 280;
+export const MAX_PURCHASE_PAID_VIA_LENGTH = 120;
 export const MAX_VOID_REASON_LENGTH = 280;
 /** Duplicate-notice matching window (SPEC §9.6, plan OQ3 default: ~2 hours). */
 export const DUPLICATE_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -111,6 +112,8 @@ export interface CreatePurchaseInput {
   occurredAt?: Date;
   occurredDate?: string;
   note?: string | null;
+  /** Optional secondary payee or payment route when bank statement differs from merchant. */
+  paidVia?: string | null;
   lines: AllocationLineInput[];
   refundOfPurchaseId?: number | null;
   /**
@@ -152,6 +155,7 @@ export function createPurchase(db: Db, input: CreatePurchaseInput): CreatePurcha
     input.lines.map((line) => line.amountPence),
   );
   const note = checkedNote(input.note);
+  const paidVia = checkedPaidVia(input.paidVia);
   const occurred = resolveOccurred({
     occurredAt: input.occurredAt,
     occurredDate: input.occurredDate,
@@ -188,6 +192,7 @@ export function createPurchase(db: Db, input: CreatePurchaseInput): CreatePurcha
         paidByPersonId: input.paidByPersonId ?? null,
         enteredBy: actor,
         note,
+        paidVia,
         refundOfPurchaseId: input.refundOfPurchaseId ?? null,
         scheduleInstanceId: input.scheduleInstanceId ?? null,
         odometerMiles: fuelDetails.odometerMiles,
@@ -317,6 +322,8 @@ export interface EditPurchasePatch {
   occurredDate?: string;
   /** undefined = unchanged; null = clear the note. */
   note?: string | null;
+  /** undefined = unchanged; null = clear paid via. */
+  paidVia?: string | null;
   /** Full replacement of the allocation lines when provided. */
   lines?: AllocationLineInput[];
 }
@@ -391,6 +398,7 @@ export function editPurchase(db: Db, input: EditPurchaseInput): PurchaseWithLine
         ? resolveOccurred({ occurredAt: patch.occurredAt, occurredDate: patch.occurredDate, now })
         : { occurredAt: current.occurredAt, occurredDate: current.occurredDate };
     const note = patch.note === undefined ? current.note : checkedNote(patch.note);
+    const paidVia = patch.paidVia === undefined ? current.paidVia : checkedPaidVia(patch.paidVia);
 
     if (isRefund) {
       assertRefundLink(tx, {
@@ -417,6 +425,7 @@ export function editPurchase(db: Db, input: EditPurchaseInput): PurchaseWithLine
         occurredDate: occurred.occurredDate,
         paidByPersonId: effectivePaidBy,
         note,
+        paidVia,
         updatedAt: now,
         version: current.version + 1,
       })
@@ -1082,6 +1091,18 @@ function checkedNote(raw: string | null | undefined): string | null {
   return note;
 }
 
+export function checkedPaidVia(raw: string | null | undefined): string | null {
+  if (raw === undefined || raw === null) return null;
+  const paidVia = raw.trim();
+  if (paidVia === '') return null;
+  if (paidVia.length > MAX_PURCHASE_PAID_VIA_LENGTH) {
+    throw new InvalidPurchaseInputError(
+      `Keep paid via to ${MAX_PURCHASE_PAID_VIA_LENGTH} characters or fewer.`,
+    );
+  }
+  return paidVia;
+}
+
 function checkedVoidReason(raw: string | null | undefined): string | null {
   if (raw === undefined || raw === null) return null;
   const reason = raw.trim();
@@ -1097,8 +1118,9 @@ function checkedVoidReason(raw: string | null | undefined): string | null {
 function creationSummary(purchase: Purchase, supplier: Supplier | null, lineCount: number): string {
   const amount = formatPence(Math.abs(purchase.totalPence));
   const where = supplier === null ? 'unknown supplier' : supplier.name;
+  const via = purchase.paidVia ? ` via ${purchase.paidVia}` : '';
   if (purchase.refundOfPurchaseId !== null) {
-    return `Recorded refund ${amount} from ${where} for purchase #${purchase.refundOfPurchaseId}`;
+    return `Recorded refund ${amount} from ${where}${via} for purchase #${purchase.refundOfPurchaseId}`;
   }
-  return `Recorded purchase ${amount} at ${where} (${lineCount} ${lineCount === 1 ? 'line' : 'lines'})`;
+  return `Recorded purchase ${amount} at ${where}${via} (${lineCount} ${lineCount === 1 ? 'line' : 'lines'})`;
 }

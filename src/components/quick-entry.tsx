@@ -484,7 +484,9 @@ function MoveForm({ data }: { data: QuickEntryData }) {
       {mode === 'other' ? (
         <div>
           <p className="mb-3 text-xs text-ink-muted">
-            Anything else across the household boundary — always with a note saying what it was.
+            One-off cash or transfers with no expectation of repayment — e.g. selling an old bike,
+            or a non-budgeted gift. Not for loans (use Borrow &amp; repay) or categorised spending
+            (use Purchases).
           </p>
           <OtherMovementForm idPrefix="quick-other" pots={data.pots} today={data.today} />
         </div>
@@ -565,6 +567,9 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
   const [note, setNote] = useState('');
   /** Most purchases at a till need no note at all, so the field waits behind "+ Note". */
   const [noteOpen, setNoteOpen] = useState(false);
+  const [paidVia, setPaidVia] = useState('');
+  /** Statement payee / intermediary (e.g. James, PayPal) when different from supplier. */
+  const [paidViaOpen, setPaidViaOpen] = useState(false);
   /** Which panel the phone is showing. The laptop shows both and ignores it. */
   const [panel, setPanel] = useState(0);
   const wide = useWideLayout();
@@ -654,6 +659,8 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     setOccurredDate('');
     setNote('');
     setNoteOpen(false);
+    setPaidVia('');
+    setPaidViaOpen(false);
     setLines([newLine(data.defaultCategoryId, data)]);
     setLineFollowsTotal(true);
     setAddingLineIndex(null);
@@ -731,6 +738,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
    */
   const nextEntryStarted =
     supplierName !== '' ||
+    paidVia !== '' ||
     total !== '' ||
     note !== '' ||
     occurredDate !== '' ||
@@ -918,6 +926,8 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
     setOccurredDate('');
     setNote('');
     setNoteOpen(false);
+    setPaidVia('');
+    setPaidViaOpen(false);
     setLines([newLine(data.defaultCategoryId, data)]);
     setLineFollowsTotal(true);
     setAddingLineIndex(null);
@@ -1037,15 +1047,47 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                     className={inputClass}
                   />
                 </Field>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setNoteOpen(true)}
-                  className="rounded-lg px-1 py-2 text-sm font-semibold text-accent underline decoration-dotted"
-                >
-                  + Note
-                </button>
-              )}
+              ) : null}
+
+              {paidViaOpen ? (
+                <Field label="Paid via / Bank payee (optional)">
+                  <input
+                    name="paidVia"
+                    value={paidVia}
+                    onChange={(event) => setPaidVia(event.target.value)}
+                    maxLength={120}
+                    autoFocus
+                    enterKeyHint="next"
+                    placeholder="e.g. James, PayPal (matches bank statement)"
+                    className={inputClass}
+                  />
+                </Field>
+              ) : paidVia !== '' ? (
+                <input type="hidden" name="paidVia" value={paidVia} />
+              ) : null}
+
+              {!noteOpen || !paidViaOpen ? (
+                <div className="flex flex-wrap gap-3">
+                  {!noteOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setNoteOpen(true)}
+                      className="rounded-lg px-1 py-1.5 text-sm font-semibold text-accent underline decoration-dotted"
+                    >
+                      + Note
+                    </button>
+                  ) : null}
+                  {!paidViaOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setPaidViaOpen(true)}
+                      className="rounded-lg px-1 py-1.5 text-sm font-semibold text-accent underline decoration-dotted"
+                    >
+                      + Paid via
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
 
               <button
                 type="button"

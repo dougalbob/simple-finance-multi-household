@@ -650,6 +650,11 @@ describe('purchase validation', () => {
         InvalidPurchaseInputError,
       );
       assert.throws(
+        () =>
+          createPurchase(fx.db, { ...base, paidVia: 'x'.repeat(121), actor: 'alex@example.com' }),
+        InvalidPurchaseInputError,
+      );
+      assert.throws(
         () => createPurchase(fx.db, { ...base, actor: '  ' }),
         InvalidPurchaseInputError,
       );
@@ -720,10 +725,51 @@ describe('purchase editing', () => {
         id: saved.purchase.id,
         expectedVersion: 2,
         actor: 'sam@example.com',
-        patch: { supplierName: null, note: null },
+        patch: { supplierName: null, note: null, paidVia: 'James' },
       });
       assert.equal(cleared.purchase.supplierId, null);
       assert.equal(cleared.purchase.note, null);
+      assert.equal(cleared.purchase.paidVia, 'James');
+
+      // Clearing paidVia
+      const clearedPaidVia = editPurchase(fx.db, {
+        id: saved.purchase.id,
+        expectedVersion: 3,
+        actor: 'sam@example.com',
+        patch: { paidVia: null },
+      });
+      assert.equal(clearedPaidVia.purchase.paidVia, null);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('records and preserves paidVia (secondary statement payee) without polluting suppliers', async () => {
+    const fx = await createHouseholdFixture();
+    try {
+      const at = new Date('2026-09-20T19:30:00Z');
+      const diningOut = fx.categoryId('Entertainment & Eating Out', 'Dining Out & Takeaways');
+      const saved = createPurchase(fx.db, {
+        supplierName: 'The Crown Inn',
+        paidVia: 'James',
+        potId: fx.pots.main.id,
+        totalPence: 4500,
+        paidByPersonId: fx.people.alex.id,
+        occurredAt: at,
+        note: 'Our half of meal with friends',
+        lines: [{ amountPence: 4500, categoryId: diningOut, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: at,
+      });
+
+      assert.equal(saved.purchase.paidVia, 'James');
+      assert.ok(saved.purchase.supplierId !== null);
+      assert.equal(findSupplierByName(fx.db, 'The Crown Inn')?.id, saved.purchase.supplierId);
+      // "James" was NOT created as a supplier:
+      assert.equal(findSupplierByName(fx.db, 'James'), null);
+
+      const retrieved = getPurchaseWithLines(fx.db, saved.purchase.id);
+      assert.equal(retrieved.purchase.paidVia, 'James');
     } finally {
       fx.close();
     }
