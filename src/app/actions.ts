@@ -139,6 +139,13 @@ import {
 } from '@/lib/records/receipts';
 import { computeProjectOptimiser, planForKind } from '@/lib/projects/projects-view';
 import {
+  getOrCreateLongTermPlan,
+  LongTermPlanNotFoundError,
+  resetLongTermPlan,
+  saveLongTermPlan,
+} from '@/lib/longterm/store';
+import { InvalidLongTermPlanError, parsePlanDocument } from '@/lib/longterm/validation';
+import {
   applyProjectSelections,
   createProject,
   createProjectItem,
@@ -1516,6 +1523,7 @@ const PAGE_PATHS = [
   '/settings',
   '/transactions',
   '/tasks',
+  '/longterm',
   // The setup path (docs/ONBOARDING_PLAN.md): derived from the records, so an
   // action taken anywhere must refresh it too.
   '/start',
@@ -1523,6 +1531,129 @@ const PAGE_PATHS = [
 
 function revalidatePages(): void {
   for (const page of PAGE_PATHS) revalidatePath(page);
+}
+
+/**
+ * Parse the assumptions form's hidden JSON payload. The form validates shapes
+ * client-side to give immediate feedback, but this boundary is the authority:
+ * a browser can post anything.
+ */
+function parseLongTermPayload(
+  formData: FormData,
+):
+  | { success: true; document: ReturnType<typeof parsePlanDocument> }
+  | { success: false; message: string } {
+  const raw = formData.get('payload');
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    return { success: false, message: 'The assumptions form was empty. Reload and try again.' };
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return { success: false, message: 'The assumptions could not be read. Reload and try again.' };
+  }
+  try {
+    return { success: true, document: parsePlanDocument(value) };
+  } catch (err) {
+    if (err instanceof InvalidLongTermPlanError) {
+      return {
+        success: false,
+        message:
+          err.issues.length === 1
+            ? (err.issues[0] as string)
+            : `Check these figures: ${err.issues.slice(0, 3).join(' · ')}`,
+      };
+    }
+    throw err;
+  }
+}
+
+/** Save every long-term forecast assumption (slice 2) behind the row's version. */
+export async function saveLongTermPlanAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+
+  const parsed = parseLongTermPayload(formData);
+  if (!parsed.success) return { status: 'error', message: parsed.message };
+  const expectedVersion = positiveNumber(formData.get('expectedVersion'));
+  if (expectedVersion === null) {
+    return {
+      status: 'error',
+      message: 'That saved forecast could not be identified. Reload the page and try again.',
+    };
+  }
+
+  try {
+    saveLongTermPlan(user.db, {
+      document: parsed.document,
+      expectedVersion,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: 'Assumptions saved. The forecast below updates immediately.',
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidLongTermPlanError ||
+      err instanceof LongTermPlanNotFoundError ||
+      err instanceof VersionConflictError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The assumptions could not be saved. Please try again.' };
+  }
+}
+
+/**
+ * Rebuild the draft from today's records and replace every edited assumption.
+ * The form confirms first; the replaced payload stays in the audit trail.
+ */
+export async function resetLongTermPlanAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+
+  // Make sure a plan exists before asking for a version (a first visit can
+  // race a reset if the household reloads while the page is drafting).
+  getOrCreateLongTermPlan(user.db, {
+    actor: user.email,
+    today: toLocalDateString(new Date()),
+  });
+  const expectedVersion = positiveNumber(formData.get('expectedVersion'));
+  if (expectedVersion === null) {
+    return {
+      status: 'error',
+      message: 'That saved forecast could not be identified. Reload the page and try again.',
+    };
+  }
+  try {
+    resetLongTermPlan(user.db, {
+      expectedVersion,
+      actor: user.email,
+      today: toLocalDateString(new Date()),
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message:
+        'The draft was rebuilt from household records. Every edited assumption was replaced.',
+    };
+  } catch (err) {
+    if (err instanceof LongTermPlanNotFoundError || err instanceof VersionConflictError) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The draft could not be rebuilt. Please try again.' };
+  }
 }
 
 /**

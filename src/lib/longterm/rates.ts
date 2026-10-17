@@ -104,4 +104,18 @@ export const HOUSEHOLD_DEFAULTS = {
   fullStatePensionWeeklyPence: 24_130,
   /** "£5,500 a year per £100k" — the illustrative annuity rate offered in the grill. */
   annuityPencePer100k: 550_000,
+  /**
+   * The household's birth years from the grill (§11A), used only to seed a
+   * new plan's draft — never inside the engine. Every household edits them in
+   * the assumptions panel; a second household simply starts from these and
+   * corrects them. No calculation reads this constant.
+   */
+  birthYears: [1970, 1980] as const,
+  /** The two pension pots' rough start dates from the grill (his, ages 60 and 65). */
+  pensionPotStartDates: ['2030-01-01', '2035-01-01'] as const,
+  /** The inheritance: start of 2027, £250,000 after the mortgage is paid off. */
+  inheritanceDate: '2027-01-01',
+  inheritancePence: 25_000_000,
+  /** The household's ISA plan default: the couple's combined £20,000 caps. */
+  isaShelterAnnualPence: 4_000_000,
 } as const;

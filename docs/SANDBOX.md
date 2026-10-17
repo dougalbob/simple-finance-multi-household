@@ -708,3 +708,23 @@ destructure (`import playwright from '@playwright/test/index.js'; const { define
 playwright;`). The override config lives **outside** the repo (`/home/user/pw.local.config.mts`),
 points `executablePath` at the `@sparticuz/chromium` binary (entry 8) and sets `baseURL` to the
 e2e server on port 3100.
+
+## 25. A spec that edits a saved document should reset it to a fresh draft first (2026-10-17)
+
+The long-term forecast's `/longterm` page **persists** what the household edits, unlike every other
+seeded page: once a run saves `otherAnnualPence = 6000`, the next run's "the £0 line is flagged"
+assertion fails against a plan that no longer has a £0 line — and a Playwright retry starts from
+that same dirty plan, so the second attempt fails for a reason that looks like a code bug. The
+`longterm` spec therefore opens with a `Reset to a draft from records` (accepting the confirm
+dialog) and asserts the reset succeeded before asserting anything else. Any future spec that saves
+state which another assertion reads should do the same.
+
+Two smaller lessons from the same slice:
+
+- **A `<details>` that opens by default only while a warning exists collapses under the reader when
+  the save clears the warning.** Keep the open state in the client component (`useState` +
+  `onToggle`) so the form and its success message stay where the household left them; the server
+  passes only the *initial* position.
+- **A summary's text is not always a heading.** `getByRole('heading', { name: /Does the money last\?/ })`
+  finds nothing where the page uses a small `<p>` label above an `<h2>` — match the visible text
+  instead, and give the card an `aria-label` when a spec needs a stable region name.

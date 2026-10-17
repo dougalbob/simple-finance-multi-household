@@ -223,6 +223,14 @@ export default defineConfig({
           use: { viewport: { width: 1400, height: 950 } },
         },
         {
+          // Own project (slice 2 of the long-term forecast): the spec resets the
+          // saved plan to a fresh draft before it asserts anything, then saves
+          // one edited assumption — so it neither reads nor leaves shared data.
+          name: 'longterm',
+          testMatch: /longterm\.spec\.ts/,
+          use: { viewport: { width: 1400, height: 950 } },
+        },
+        {
           // The payday example rewrites only the isolated E2E seed. Keep it last so
           // its fictional account, schedules and settings cannot affect other specs.
           name: 'payday-summary',

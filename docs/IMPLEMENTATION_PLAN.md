@@ -3720,3 +3720,72 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       windfall-then-January-shelter ordering; end-dated commitments; three-rate comparison
       ordering. Gates green: `format:check`, `typecheck`, `npm test` (1,034/1,034 across 238
       suites), `npm run build`.
+
+234. **The long-term forecast's page and saved plan are built — slice 2 (2026-10-17).** The engine
+    from decision 233 now has a face: `/longterm` ("Long-term forecast", "Your money across the
+    years") renders the household's own questions over a **saved, editable plan of assumptions**.
+    This is a preview slice — no nav entry, guide vocabulary, SPEC section, version bump or release
+    yet (slice 3 follows once the household accepts the page, per `LONGTERM_FORECASTING.md` §9).
+
+    - **Persistence — one migration, `0020_longterm_plans.sql`.** `longterm_plans(id, name, payload,
+      created_at, updated_at, version)` with a unique name. The whole plan (people and their
+      optional streams, pots, investments, windfalls, spending, commitments, the three comparison
+      rates) lives in the validated JSON `payload`; the row carries the same optimistic-concurrency
+      `version` counter as every other correctable record, so a stale tab gets a visible conflict
+      instead of overwriting newer figures. Create, save and reset all write `audit_entries`
+      (`longterm_plan.create|update|reset`) with before/after payloads.
+    - **The draft is drafted, never baked in.** `buildDraftPlan` reads the records that already
+      exist — the people, the active direct debits/standing orders (monthly-equivalent; an
+      end-dated schedule becomes the engine's fixed commitment, so this household's mortgage drops
+      out at payoff), the groceries/fuel basis, and the active **receipt** schedules as earnings. An
+      unassigned receipt lands on the **younger** person (the working member in this household) with
+      a draft stop date of the year before State Pension age; the editor says the stop date is a
+      draft to correct. Everything the records cannot know comes from the reviewed defaults in
+      `rates.ts` (birth years, pot start dates, the 2027 inheritance, 2.5% inflation, 4/6/8% rates,
+      £40k ISA shelter, the £5,500 per £100k annuity rate) — and **every one of those is an
+      editable field**, never a constant inside a calculation.
+    - **The page leads with the household's questions** (grill Q6): "Income in 2030" and "Income at
+      age 62 — 2032" are first-class cards, each showing net income a year, the same figure in
+      today's money, estimated tax on gross, then per person and capital at year end. "Does the
+      money last?" sits beside them with the three-rate list. The year query defaults to 2030 and
+      the age query to 62; both are in the URL (`?year=&rate=&person=&age=`) and every link keeps
+      the other parameters, so changing the rate never moves the year being read.
+    - **Runs out vs a temporary gap — a decision forced by the draft.** `capitalTrajectory`-style
+      first-shortfall reporting calls the pre-inheritance year "runs out", which is false for a plan
+      a windfall rescues: the household's draft showed "the money runs out during 2026" at all three
+      rates while 2027 onward was covered. `sustainabilityOf` now separates the **first shortfall**
+      from the **trailing** run of unmet spending: `runsOutInYear` is the first year of the trailing
+      run (null when the last year is covered), `gapYears` are the unmet years before it,
+      `firstCoveredAfterGapYear` is the year after the last gap, and the headline says "It covers
+      every year from {firstCoveredAfterGapYear} to {endYear}" with the gap named plainly. The year
+      table marks any unmet year `unmet` and only the trailing run's first year `ran out`. The
+      engine's old `moneyLastsTo` helper was deleted rather than left as a second, wrong rule.
+    - **Three rates, one rule.** The comparison runs replace the **investments'** growth only
+      (`overrideInvestmentGrowthBp`); pension pots keep their own rates, and both the card and the
+      table say so. Drawdown and annuity are shown **side by side on the same pot** (projected value
+      at the start date with the engine's own monthly rounding, 25% tax-free cash + the taxable
+      residual fund vs the household's annuity rate) with "arithmetic, not a quote" and no
+      recommendation anywhere — the honesty rule, also repeated in the page footer with the rate
+      card's year and in every "est." label.
+    - **The assumptions panel is one form over the whole plan.** `LongTermAssumptionsForm` keeps a
+      client copy (`structuredClone`), posts the whole document as hidden JSON with
+      `expectedVersion`, and the server re-validates it with zod before saving. Rows can be added
+      and removed; reset re-drafts from records behind a `window.confirm` and an audit entry. The
+      panel opens by default only while a warning is asking for a figure, and then **stays where the
+      household put it** — a save that clears the last warning must not collapse the form (and its
+      success message) underneath the reader.
+    - **Warnings are output, not setup gates.** A £0 "other spending" line, an empty pension pot, a
+      £0 drawdown, no capital, no State Pension and 0% inflation each get a visible flag at the top
+      of the page with a link to the assumptions; the forecast still answers every question.
+    - **A migration count is not a fixture.** `tests/backup-restore.test.ts` asserted exactly 20
+      `__drizzle_migrations` rows; it now reads the repo journal's length, so the next migration does
+      not break a backup test that was never about the count.
+    - Coverage: `tests/longterm-plan.test.ts` (6 — percent parsing, age/year helpers, draft seeding
+      from records including end-dated commitments and receipt-derived earnings, validation,
+      create/save/reset with the audit trail), `tests/longterm-view.test.ts` (12 — the three runs,
+      sustainability in the covered/exhausted/gap cases, the year table in both monies,
+      drawdown-vs-annuity, warnings), `e2e/longterm.spec.ts` (4 — answer cards and warnings, asking an
+      age, switching the rate, saving an assumption and reloading it). `npm test` 1,052/1,052 across
+      245 suites; `format:check`, `typecheck`, `npm run build` green. Browser evidence in this session
+      came from the sandbox's `@sparticuz/chromium` recipe (SANDBOX entry 8): the four journeys passed
+      and desktop/phone screenshots showed no horizontal overflow.

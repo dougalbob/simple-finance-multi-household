@@ -75,8 +75,12 @@ function nextMonthKey(key: string): string {
   return month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-/** Apply one month of an annual basis-point rate to an integer-pence value. */
-function growMonthlyPence(valuePence: number, growthBp: number): number {
+/**
+ * Apply one month of an annual basis-point rate to an integer-pence value.
+ * Exported so the view layer projects a pension pot's value at its start date
+ * with exactly the engine's monthly rounding (no second compounding rule).
+ */
+export function growMonthlyPence(valuePence: number, growthBp: number): number {
   return valuePence + roundHalfUpDivide(valuePence * growthBp, MONTHLY_RATE_DENOMINATOR);
 }
 
@@ -596,23 +600,6 @@ function buildYearAnswer(row: YearRow): YearAnswer {
     ),
     people,
   };
-}
-
-/**
- * The sustainability headline (§4): the last year capital covers everything,
- * or the first year with unmet spending — whichever the plan reaches. Capital
- * landing on exactly £0 at a year end is a year that *was* covered.
- */
-export function moneyLastsTo(result: ForecastResult): {
-  lastsToYear: number | null;
-  runsOutInYear: number | null;
-} {
-  const exhausted = result.years.find((row) => row.shortfallPence > 0);
-  if (exhausted) {
-    return { lastsToYear: exhausted.year - 1, runsOutInYear: exhausted.year };
-  }
-  const last = result.years[result.years.length - 1];
-  return { lastsToYear: last ? last.year : null, runsOutInYear: null };
 }
 
 /** End-of-year capital per year for the three-rate comparison chart (§5.3). */
