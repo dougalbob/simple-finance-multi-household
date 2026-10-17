@@ -134,6 +134,15 @@ export function taxCardForYear(card: TaxRateCard, indexBp: number, year: number)
  * so the defaults a plan is seeded with are one reviewable block. Not baked
  * into any calculation: plans carry their own values.
  */
+/**
+ * ONS period life expectancy at 65, UK 2022–2024 (issue #73, slice 3): the
+ * age a new person's life expectancy is seeded to, by sex. An average, freely
+ * editable (including downward); it seeds plan-to only.
+ */
+export const LIFE_EXPECTANCY_AGE = { woman: 87, man: 84 } as const;
+/** Plan-to defaults this many years beyond life expectancy. */
+export const PLAN_TO_MARGIN_YEARS = 5;
+
 export const HOUSEHOLD_DEFAULTS = {
   inflationBp: 250,
   /** Tax thresholds and allowances rise a year (issue #73, option B): ~1%. */

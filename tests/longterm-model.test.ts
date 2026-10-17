@@ -574,3 +574,65 @@ describe('long-term forecast engine: tax indexation (issue #73, option B)', () =
     assert.ok((indexed[2] ?? 0) < (fixed[2] ?? 0));
   });
 });
+
+describe('long-term forecast engine: per-person plan-to (issue #73, slice 3)', () => {
+  it("each person's earnings and State Pension stop after their own plan-to year", () => {
+    // Him: born 1960, plan-to 68 → his last year is 2028.
+    // Her: born 1980, plan-to 80 → 2060, still running at the 2029 horizon.
+    const result = runForecast(
+      plan({
+        people: [
+          person({
+            id: 'him',
+            birthYear: 1960,
+            planToAge: 68,
+            earnings: { monthlyPence: 300_000, untilDate: '2040-12-31' },
+            statePension: { weeklyPence: 24_130, startDate: '2026-12-01', upratingBp: 0 },
+          }),
+          person({
+            id: 'her',
+            birthYear: 1980,
+            planToAge: 80,
+            earnings: { monthlyPence: 300_000, untilDate: '2040-12-31' },
+          }),
+        ],
+        horizonEndDate: '2029-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2028 = result.years.find((y) => y.year === 2028);
+    const y2029 = result.years.find((y) => y.year === 2029);
+    assert.ok(y2028 && y2029);
+    // Him: pay and State Pension run through his plan-to year (2028), then stop.
+    assert.equal(y2028.people[0]?.income.earningsPence, 3_600_000);
+    assert.equal(y2029.people[0]?.income.earningsPence, 0);
+    assert.equal(y2028.people[0]?.income.statePensionPence, 1_254_756);
+    assert.equal(y2029.people[0]?.income.statePensionPence, 0);
+    // Her: still earning in 2029.
+    assert.equal(y2029.people[1]?.income.earningsPence, 3_600_000);
+  });
+
+  it("a person's drawdown stops after their plan-to year, while the fund stays invested", () => {
+    const result = runForecast(
+      plan({
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1960,
+            planToAge: 68,
+            pensionPots: [pot({ id: 'a', startDate: '2026-11-01' })],
+          }),
+        ],
+        horizonEndDate: '2029-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2028 = result.years.find((y) => y.year === 2028);
+    const y2029 = result.years.find((y) => y.year === 2029);
+    assert.ok(y2028 && y2029);
+    assert.equal(y2028.people[0]?.income.pensionDrawdownPence, 1_200_000);
+    assert.equal(y2029.people[0]?.income.pensionDrawdownPence, 0);
+    // The undrawn fund is still counted in the pension total (not lost).
+    assert.ok((y2029.pensionFundsPence ?? 0) > 0);
+  });
+});

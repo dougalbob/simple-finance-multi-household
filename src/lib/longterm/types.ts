@@ -27,6 +27,15 @@ export interface LongTermPerson {
   /** Calendar year of birth (1970). The tool shows dates as age AND year. */
   birthYear: number;
   /**
+   * Life expectancy and plan-to (issue #73, slice 3). Optional so saved plans
+   * load. Plan-to is the age this person's own streams (earnings, State
+   * Pension, drawdown) run to: the year they reach it is their last year.
+   * Life expectancy is an average, not a limit; it only seeds plan-to.
+   */
+  sex?: 'woman' | 'man';
+  lifeExpectancyAge?: number;
+  planToAge?: number;
+  /**
    * Gross employment income; `untilDate` is when the person stops working.
    * `monthlyPence` is today's pay. Each January after today it rises by the
    * plan's inflation rate (`risesWithInflation`, the default, so a later change

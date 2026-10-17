@@ -41,6 +41,7 @@ import { UK_2026_27, taxCardForYear, type TaxRateCard } from './rates';
 import { estimatePersonTax, type PersonTaxComponents } from './tax';
 import type {
   ForecastResult,
+  LongTermPerson,
   LongTermPlan,
   PersonYearIncome,
   PensionPotPlan,
@@ -179,6 +180,10 @@ export function runForecast(
       annuityBaseYear: 0,
     })),
   );
+
+  /** True once a person has passed their plan-to year: their own streams end. */
+  const pastPlanTo = (person: LongTermPerson, month: string): boolean =>
+    person.planToAge !== undefined && `${person.birthYear + person.planToAge}-12` < month;
 
   /** Today's gross monthly pay per person, grown each January while still paid. */
   const earningsMonthly = new Map<string, number>();
@@ -372,7 +377,8 @@ export function runForecast(
           earnings &&
           earningsMonthly.has(person.id) &&
           monthYear > yearOf(startDate) &&
-          monthKey(earnings.untilDate) >= month
+          monthKey(earnings.untilDate) >= month &&
+          !pastPlanTo(person, month)
         ) {
           const bp =
             earnings.risesWithInflation === false ? (earnings.risesBp ?? 0) : plan.inflationBp;
@@ -447,13 +453,13 @@ export function runForecast(
     for (const person of plan.people) {
       const acc = row.people.get(person.id) as PersonAcc;
       const earnings = person.earnings;
-      if (earnings && monthKey(earnings.untilDate) >= month) {
+      if (earnings && monthKey(earnings.untilDate) >= month && !pastPlanTo(person, month)) {
         const monthly = earningsMonthly.get(person.id) as number;
         acc.earningsPence += monthly;
         monthIncomePence += monthly;
       }
       const sp = person.statePension;
-      if (sp && monthKey(sp.startDate) <= month) {
+      if (sp && monthKey(sp.startDate) <= month && !pastPlanTo(person, month)) {
         const monthly = roundHalfUpDivide(statePensionAnnual.get(person.id) as number, 12);
         acc.statePensionPence += monthly;
         monthIncomePence += monthly;
@@ -469,7 +475,7 @@ export function runForecast(
         const monthly = roundHalfUpDivide(pot.annuityAnnualPence, 12);
         if (acc) acc.pensionAnnuityPence += monthly;
         monthIncomePence += monthly;
-      } else if (pot.valuePence > 0) {
+      } else if (pot.valuePence > 0 && !(owner && pastPlanTo(owner, month))) {
         const monthly = Math.min(
           pot.valuePence,
           roundHalfUpDivide(pot.plan.drawdownAnnualPence, 12),
