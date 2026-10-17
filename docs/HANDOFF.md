@@ -1,45 +1,47 @@
-# Next: long-term forecasting — slice 3 (nav, guide, SPEC, release) (2026-10-17)
+# Release v1.26.0 — Long-term forecasting (slices 1–3) (2026-10-17)
 
 **Read [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) first** — the feature's own design
-record, grill answers (§11A) and session log (§12); decision 234 in
+record, grill answers (§11A) and session log (§12); decision 235 in
 [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) is this slice's build record.
 
-**What this session delivered — slice 2, merged to `main` as PR #71 (2026-10-17). No release cut:**
-`/longterm` page renders the household's own questions over a saved plan: "income in 2030" and
-"income at age 62 — 2032" first, "does the money last?" beside them, the selected year line by line,
-the three-rate comparison, the same pot as drawdown vs annuity, every calendar year in future and
-today's money, and **one assumptions editor in which every pot value, rate, amount and date is
-editable**. Persistence is migration `0020_longterm_plans.sql` — one row per household holding a
-validated JSON payload behind a version counter, audited on create/save/reset. `npm test` is
-**1,052/1,052 across 245 suites** (18 of them new: `tests/longterm-plan.test.ts`,
-`tests/longterm-view.test.ts`) and `format:check`, `typecheck`, `npm run build` are green;
-`e2e/longterm.spec.ts` (4 journeys) passed locally through SANDBOX entry 8.
+**What this session delivered — slice 3, prepared on this branch as PR for `main`. No tag, image or
+GitHub release yet: the household asked to see the preview first.** Slice 2 (`/longterm` and the
+saved plan, migration `0020_longterm_plans.sql`) was merged as PR #71. This slice makes the feature
+reachable and documented: **`/longterm` is in the menu** — on the desktop bar immediately beside
+Horizon, and in the phone drawer's second group — the guide gains its **ninth section**
+(`/guide#longterm`, "The long-term forecast is your assumptions, not a prediction") with a link back
+from the page's footer, and `docs/SPEC.md` gains **§28** plus the row in the §15.2 page table and the
+§15.5 guide wording. `docs/RELEASE_NOTES_v1.26.0.md` and the five-place version bump are prepared
+(`package.json`, `package-lock.json`, `src/lib/version.ts`, the Unraid template's comment/description
+and the release notes), and every contract document names the new tag. `e2e/longterm.spec.ts` gains a
+fifth journey proving the desktop menu, the phone drawer and the guide section all reach the page.
 
-**Decisions this slice added** (recorded at `LONGTERM_FORECASTING.md` §12 row 4 and decision 234):
+**Validation evidence (this session):** full test suite **1,052/1,052 across 245 suites**;
+`npm run format:check`, `npm run typecheck`, `npm run build` green; `e2e/longterm.spec.ts` **5/5**
+through SANDBOX entry 8, and desktop/phone screenshots checked for horizontal overflow.
 
-- **A gap is not a run-out.** `sustainabilityOf` reports the first shortfall separately from the
-  trailing unmet run: `runsOutInYear` is the *start of the trailing run* (null when the horizon's
-  last year is covered), `gapYears` lists the unmet years before it, and the page says "It covers
-  every year from {firstCoveredAfterGapYear} to {endYear}" with the gap named. The engine's old
-  `moneyLastsTo` was deleted. Without this, the draft's pre-inheritance 2026 gap printed "the money
-  runs out during 2026" at every rate while 2027 onward was covered.
-- **Earnings are drafted from receipt schedules.** An unassigned receipt lands on the younger person
-  with a stop date of the year before State Pension age — a draft the editor labels as one to
-  correct. This is what makes "both members working" work as the ordinary case.
-- **The comparison rates replace the investments' growth only**; pension pots keep their own rates,
-  and the page says so twice.
-- **The assumptions panel keeps the reader's open/closed choice** across a save (a save that clears
-  the last warning must not collapse the form and its success message under the reader).
+**First CI run (PR #72) and its fix.** The Browser acceptance job failed on
+`e2e/bell.spec.ts:233`, which pins the phone drawer at 17 links — the new menu entry makes it 18
+(6 Daily + 12 More). The longterm journey's own drawer step flaked (passed on retry) because it
+resized a live session; it now reloads at the phone width first. `e2e/desktop.spec.ts` and
+`e2e/home.spec.ts` also gained the new entry in their "every page" lists, so menu changes fail
+where they happen. Local bell + desktop + mobile + longterm projects: **53/53**.
 
-**What slice 3 builds (when the household accepts the preview):** the nav entry in the menu's second
-group beside Horizon, guide vocabulary (`src/lib/guide.ts`), a SPEC section, the release notes + the
-five-place version bump, and the merge/tag/release per `docs/RELEASE_PROCESS.md`. The e2e spec and
-its `longterm` Playwright project already exist from slice 2, so slice 3 mostly adds the
-documentation and release plumbing.
+**Release checklist still to run after the household approves the preview:** merge the PR, wait for
+required CI, create the annotated lower-case tag **`v1.26.0`** on the merge commit in `main`, push
+only that tag, wait for Publish, verify `v1.26.0`, `latest` and `sha-<short>` all resolve to one
+digest in `ghcr.io/dougalbob/simple-finance-multi-household` (SANDBOX entry 6), and confirm the
+GitHub release is Latest. Do not publish to the original package.
+
+**Decisions carried from slices 1–2** (LONGTERM_FORECASTING.md §12 rows 3–4, decisions 233–234):
+the pure month-step engine with all-integer pence and an editable 2026/27 rate card; a gap is not a
+run-out; earnings are drafted from receipt schedules; the comparison rates replace only the
+investments' growth; the assumptions panel keeps the reader's open/closed choice across a save; and
+the whole plan is one validated JSON row per household, audited on create/save/reset.
 
 **Two flags still awaiting the household** (§5.7/§11A): (1) "to age 90" currently means the
 **younger person's** 90th — **2070**, not his 2060; (2) her state pension age defaults to **68**
-(current law for a 1980 birth year). Both are single editable fields now, on the page.
+(current law for a 1980 birth year). Both are single editable fields on the page.
 
 **Household inputs still not supplied** (form variables, not blockers): both pension pot values, her
 salary and stop date, the annual ISA-shelter amount (default suggestion £40k/year), and the annuity

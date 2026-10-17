@@ -13,17 +13,18 @@ const repoFile = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
 /**
- * The guide's contract (docs/ONBOARDING_PLAN.md §5, Slice 2): the eight ideas
- * the plan names, anchored so any page can link to `/guide#checkpoint`, and
- * honest — every section must keep the rule it states. The copy lives in
- * `src/lib/guide.ts` beside the anchors, and these tests pin the anchors, the
- * shape and the load-bearing phrases, the same way tests/setup-path.test.ts
- * pins the step copy. The guide explains behaviour that is built and tested
- * elsewhere; if a phrase here ever stops being true, that is a decision, not
- * an edit.
+ * The guide's contract (docs/ONBOARDING_PLAN.md §5, Slice 2): the ideas the
+ * plan names, anchored so any page can link to `/guide#checkpoint`, and
+ * honest — every section must keep the rule it states. The ninth section
+ * (`longterm`) arrived with the long-term forecast (v1.26.0). The copy lives
+ * in `src/lib/guide.ts` beside the anchors, and these tests pin the anchors,
+ * the shape and the load-bearing phrases, the same way
+ * tests/setup-path.test.ts pins the step copy. The guide explains behaviour
+ * that is built and tested elsewhere; if a phrase here ever stops being true,
+ * that is a decision, not an edit.
  */
-describe('the guide: eight anchored ideas, pinned to what the app really does', () => {
-  it('is the eight sections the plan names, in reading order', () => {
+describe('the guide: nine anchored ideas, pinned to what the app really does', () => {
+  it('is the nine sections the plan names, in reading order', () => {
     assert.deepEqual(
       [...GUIDE_ANCHORS],
       [
@@ -33,6 +34,7 @@ describe('the guide: eight anchored ideas, pinned to what the app really does', 
         'borrowing',
         'schedules',
         'projection',
+        'longterm',
         'noticed',
         'never',
       ],
@@ -113,6 +115,30 @@ describe('the guide: eight anchored ideas, pinned to what the app really does', 
     assert.match(text('projection'), /honesty loop/);
     assert.match(text('projection'), /Friday before/);
     assert.match(text('projection'), /stay out of the liquid projection/);
+    // The long-term forecast is arithmetic on editable assumptions (v1.26.0):
+    // not Horizon, not a prediction, estimated tax, three rates, drawdown vs
+    // annuity compared and never recommended, a gap distinguished from a
+    // run-out, and a saved plan the household owns.
+    assert.match(text('longterm'), /never a bank forecast or financial advice/);
+    assert.match(text('longterm'), /every date shown as both an age and a year/);
+    assert.match(text('longterm'), /editable assumption/);
+    assert.match(text('longterm'), /estimated from the editable 2026\/27 rate card/);
+    assert.match(text('longterm'), /Three return rates are always compared side by side/);
+    assert.match(
+      text('longterm'),
+      /drawdown and as an annuity — arithmetic, never a recommendation/,
+    );
+    assert.match(text('longterm'), /A temporary shortfall is named as a gap/);
+    assert.match(text('longterm'), /reserved for the final uncovered run/);
+    assert.match(text('longterm'), /saved per household/);
+    assert.ok(
+      guideSection('longterm').seeAlso.some((link) => link.href === '/longterm'),
+      'the long-term section points at the page',
+    );
+    assert.ok(
+      repoFile('src/app/longterm/page.tsx').includes("guideSection('longterm')"),
+      'the long-term page links back into its guide section',
+    );
     // “The app has noticed” is derived prompts, never notifications.
     assert.match(text('noticed'), /never notifications/);
     assert.match(text('noticed'), /no emails, no alerts/);

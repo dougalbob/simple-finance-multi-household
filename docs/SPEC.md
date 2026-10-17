@@ -1008,6 +1008,7 @@ Menu pages:
 | **All Transactions** | Activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. Nothing is added here, and nothing is edited or voided here **except a purchase and an internal transfer**, which open in place — their correction and void forms in a panel directly beneath their row (decisions 225 and 226, GitHub issues #55 and #57; §15.3). A refund keeps its link to Purchases. |
 | **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance and state); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. Provider agreements and their review dates live on Contracts & Renewals, with an optional link from a schedule. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below and a link card to Contracts & Renewals beside projection. On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row, below the sticky site header (every hash target in the app spends the measured `sf-anchor` offset, so a link works at any window width whatever the nav wraps to — decision 216, re-opened issue #34; and the scroll pass verifies each landing against the real header, correcting once a settled landing a browser left behind the bar — decision 222, issue #43). Cancelled schedules show by default; a Hide cancelled toggle (`?hideCancelled=1`, with a count of those hidden) removes them from the list while keeping the calendar and history (decision 212); the hide-cancelled preference is remembered across page navigations via a device cookie (decision 214). An in-place filter search box with Clear button filters schedules by name or supplier, revealing matching cancelled schedules even when cancelled schedules are hidden (decision 215). |
 | **Horizon** | "How far the money would go" (§7.6): pick a date up to 400 days ahead (opens on the day before the next scheduled income; a date change applies itself, v0.13.0), scope by pot (all selected by default) and toggle day-to-day; the free-to-spend headline, the always-shown lowest point with its date and tier, and detail blocks for the commitments, expected money in (debts' expected support flagged `expected`), the projected day-to-day events (dated shops/fills, v0.6.0) and the day-by-day table. Same engine as the payday projection; laptop-shaped by the household's choice. |
+| **Long-term forecast** (v1.26.0, decisions 233–235) | The multi-decade projection (§28, `LONGTERM_FORECASTING.md`): the household's own questions first — income in a chosen year and income at a chosen age, each carrying both an age and a year — with "does the money last?" beside them; the selected year line by line; the three-rate comparison (`?rate=cautious\|middle\|optimistic`); the same pension pot as drawdown vs annuity; every calendar year in future and today's money; and one assumptions editor in which every pot value, rate, amount and date is editable. The plan is one `longterm_plans` row per household (validated JSON behind a version counter, audited on create/save/reset), seeded from records as a draft. A £0 "everything else" line and other missing figures are flagged before the figures; a temporary gap is named separately from a run-out; every screen says the figures are arithmetic on the household's assumptions, never a bank forecast or financial advice. |
 | **Income** | Money coming in: the scheduled income (salary) that converts itself, editable in place from the next instance onward; one-off income recorded by hand with an optional source; and one list of everything received — scheduled and one-off together, with inline correction, void and the retained history. Income is desktop-shaped by the household's choice: it is not a till-side task, so nothing here is squeezed into the mobile quick-entry panel. |
 | **Suppliers** | Supplier list + detail: contact card (phone, email, website, address, label→value reference pairs such as policy numbers, notes; directly below Address, connected recurring schedules link to `/recurring?q=<name>#schedule-<id>` or indicate no scheduled payments relate to the supplier; decision 215), interaction log with "+ Create Interaction", linked purchases (§21), including removing a receipt from a linked purchase (§23.4). Tap-to-call on mobile. |
 | **Contracts & Renewals** | The agreement register groups explicit insurance policies (regardless of provider auto-renew status), service contracts and other reminders. It owns renewal/review and separate fee-free switch dates, independent per-date in-app leads, provider auto-renew status for insurance, notes and optional recurring-schedule links. It also retains credit-card payment reviews and supplier follow-ups. |
@@ -1192,7 +1193,7 @@ actions, guards and audit as anywhere else, refused for a read-only support view
 
 ### 15.5 The guide and "what this page needs first" (v1.2.0, decision 196)
 
-`/guide` is one plain-language page with eight anchored sections (checkpoints and bank balances, income is not spending, transfers, borrowed money, schedules and history, the projection, "the app has noticed", and what the app never does). It reads no household records, is reached from the footer and from the setup path, and is not a navigation entry.
+`/guide` is one plain-language page with nine anchored sections (checkpoints and bank balances, income is not spending, transfers, borrowed money, schedules and history, the projection, the long-term forecast — added by v1.26.0 — "the app has noticed", and what the app never does). It reads no household records, is reached from the footer and from the setup path, and is not a navigation entry.
 
 The four payoff pages (the payday projection, Horizon, Charts and Insights) state what they are waiting for, in place of zero-figure scaffolding. Each missing record is a setup-path step that is not done, so it closes everywhere once recorded. Optional steps and Phase B bills are never prerequisites. A reported chart or an Insights panel gives way to the block only while nothing is recorded for it. Nothing is stored and nothing is dismissable.
 
@@ -2353,3 +2354,105 @@ projects show no bar. Nothing here changes the schema.
 Phase 1 is the DIY matrix end-to-end above; Phase 2 is the optimiser above. Phase 3 is holiday/
 bundle refinements; Phase 4 the `compare_options` candidate/TCO mode. `PROJECTS_IMPLEMENTATION.MD`
 tracks the stage session by session.
+
+## 28. Long-term forecast (v1.26.0, decisions 233–235)
+
+A multi-decade projection at `/longterm`, reached from the menu — on the desktop bar beside Horizon,
+and in the phone drawer's second group, because it is a sit-down page rather than a daily tap. It is
+deliberately **not Horizon**: Horizon is penny-exact liquidity over recorded reality to 400 days,
+while this is arithmetic on assumptions the household chooses across decades — pension pots,
+earnings with a stop date, the State Pension, windfalls, one spending baseline, one inflation figure,
+and estimated UK tax. `LONGTERM_FORECASTING.md` is the feature's design record and working plan.
+
+### 28.1 The model
+
+- **Per-person optional streams, project-wide.** A person carries any of: earnings with a stop date,
+  State Pension (weekly amount, start date, uprating), and up to eight pension pots (value, growth
+  rate, start date, drawdown or annuity shape). Nothing is assumed present, so two working people
+  model as naturally as this household's retired/working pair. Household-wide figures add the two
+  taxpayers only after each has been taxed separately.
+- **Month-step, year-display.** The pure engine (`src/lib/longterm/`) steps one month at a time and
+  reports calendar years, because "income in 2030" and "at age 62" are the household's own questions.
+  Every date in the interface is shown as **both an age and a year**.
+- **Integer pence and basis points.** No binary floating point touches money; rates are integer basis
+  points (400 = 4.00%). Annuity arithmetic is pinned to pence per £100,000 of pot.
+- **One inflation figure, stepped each January.** Year one is exactly today's baseline, so deflating
+  to today's money is exact. The State Pension uprating defaults to inflation + 1% and is labelled as
+  a changeable assumption.
+- **Estimated UK tax per person, per year.** Income tax in HMRC stacking order with personal-allowance
+  taper, the savings starting rate and personal savings allowance, the dividend allowance, capital
+  gains tax on realised GIA gains, and employee National Insurance. The 2026/27 card is **data** in
+  `rates.ts`, versioned by tax year and editable with the plan — never a constant in the arithmetic —
+  and every tax figure in the UI is labelled **estimated**.
+- **Surplus never vanishes.** A GIA is auto-created when needed, so a surplus is invested rather than
+  ignored, and the 25% tax-free pension cash is re-invested when drawdown begins.
+- **Sustainability distinguishes a gap from a run-out.** The first shortfall is reported separately
+  from the trailing run of unmet spending: a year that cannot be met but is followed by covered years
+  is a **gap** (named in the headline), while "the money runs out during {year}" is reserved for the
+  start of the final uncovered run. The end of the forecast says nothing about years beyond it.
+- **Three rates and two pension routes are always compared.** The three comparison rates replace the
+  **investments'** growth only — pension pots keep their own rates, and the page says so twice. The
+  same pension pot is shown as flexible drawdown and as an indicative annuity from a
+  household-entered rate; the tool compares arithmetic and never recommends.
+
+### 28.2 The saved plan and the draft
+
+`longterm_plans` (migration `0020_longterm_plans.sql`) holds **one row per household**: a name, a
+validated JSON payload, created/updated instants and the same optimistic-concurrency `version`
+counter as every other correctable record. Create, save and reset write `audit_entries`
+(`longterm_plan.create|update|reset`) with before-and-after payloads. The zod boundary in
+`validation.ts` validates the whole document on the way in, and the stored payload is revalidated on
+read so a corrupted row fails loudly instead of feeding the engine nonsense. A read-only support
+session can view the plan and cannot save it.
+
+The **draft is drafted, never baked in** (`plan.ts` / `store.ts`): it reads the people, the active
+DD/SO commitments (an end-dated schedule becomes the engine's fixed commitment, so a mortgage drops
+out at payoff), the groceries/fuel basis, and active receipt schedules as earnings. An unassigned
+receipt lands on the younger person with a draft stop date of the year before State Pension age, and
+the editor labels that as a draft to correct. Everything the records cannot know comes from the
+reviewed defaults in `rates.ts` — and **every one is an editable field**, never a constant inside a
+calculation.
+
+### 28.3 The page
+
+1. **The household's own questions.** `?year=&rate=&person=&age=` drives two answer cards — income in
+   2030 and income at age 62 (2032) by default — each showing net income a year, the same figure in
+   today's money, estimated tax on gross and capital at year end. Every link keeps the parameters it
+   does not change, so changing the rate never moves the year being read, and an answer is shareable
+   and survives refresh.
+2. **Does the money last?** Beside them, the sustainability headline with the three rates listed and
+   a link to select each one.
+3. **The selected year, line by line.** Per person: earnings, State Pension, drawdown, annuity,
+   estimated income tax and NI, and net. Beneath: investment income, estimated CGT, the spending
+   baseline, end-dated commitments, surplus or shortfall, unmet spending when nothing is left, and
+   capital at year end split ISA/GIA/pensions — in future money and today's money.
+4. **Three return assumptions, side by side.** Money lasts, net income for the selected year, and
+   capital at the selected year and at the horizon.
+5. **Drawdown or annuity — the same pot, two routes.** Projected pot value at the start date, the
+   indicative annuity, and the arithmetic of the 25% tax-free cash plus taxable residual fund.
+6. **Every calendar year** in future and today's money, with age markers and unmet/ran-out years
+   marked; a year links to its detail.
+7. **One assumptions editor** over the whole plan, opened by default only while a warning is asking
+   for a figure, and staying where the reader put it across a save. Rows can be added and removed;
+   reset re-drafts from records behind a confirmation and an audit entry.
+8. **Warnings before the figures.** A £0 "everything else" line, an empty pension pot, a £0 drawdown,
+   no capital, no State Pension and 0% inflation each get a visible flag with a link to the
+   assumptions; the forecast still answers every question.
+9. **The honesty line.** Every screen ends with the same sentence the payday projection carries — a
+   projection of the assumptions, not a bank forecast and not financial advice — plus the rate card's
+   year, the warning that future tax law, inflation and returns will differ, and the guide link.
+
+### 28.4 The guide vocabulary
+
+`/guide#longterm` explains the idea in plain words: the difference from Horizon, what is drafted from
+records and what is an assumption, that tax is estimated from an editable rate card, that three
+rates are always compared, that drawdown and annuity are arithmetic rather than a recommendation,
+that a gap is not a run-out, and that the saved plan belongs to the household. The long-term page's
+footer links back to it.
+
+### 28.5 What it is not
+
+No bank connection, no financial advice, no Monte Carlo, no bad-early-years stress run, no
+IHT/care-cost modelling, no real annuity quote and no named saved scenarios in v1. A scenario is a
+later slice if the household wants one. The forecast never writes a household record: it reads, seeds
+a draft and saves its own plan.

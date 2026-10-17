@@ -216,9 +216,10 @@ for the first-run flow (fresh household → complete Phase A → projection visi
 
 ## 9. What Slice 2 shipped — `v1.2.0` (the vocabulary)
 
-- `src/lib/guide.ts` — the guide's copy and anchors: eight sections (`checkpoint`, `income`, `transfers`,
-  `borrowing`, `schedules`, `projection`, `noticed`, `never`). Each carries a lead, paragraphs and
-  "where to see it" links. `tests/guide.test.ts` pins the anchors, the shape and the load-bearing phrases.
+- `src/lib/guide.ts` — the guide's copy and anchors: nine sections (`checkpoint`, `income`, `transfers`,
+  `borrowing`, `schedules`, `projection`, `longterm`, `noticed`, `never` — `longterm` was added with the
+  long-term forecast in v1.26.0). Each carries a lead, paragraphs and "where to see it" links.
+  `tests/guide.test.ts` pins the anchors, the shape and the load-bearing phrases.
 - `src/app/guide/page.tsx` — `/guide`, "How this app thinks", rendered from `GUIDE_SECTIONS`, behind the
   sign-in gate, reading no household records. Linked from the footer and from `/start`'s review rhythm.
 - `src/lib/records/page-needs.ts` — "What this page needs first": per payoff page (`projection`,

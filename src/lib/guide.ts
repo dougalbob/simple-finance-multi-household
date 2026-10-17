@@ -1,10 +1,11 @@
 /**
- * The vocabulary page (docs/ONBOARDING_PLAN.md §5, Slice 2): eight ideas that
+ * The vocabulary page (docs/ONBOARDING_PLAN.md §5, Slice 2): nine ideas that
  * make the rest of the app click — checkpoint vs estimate vs bank balance,
  * income is not spending, transfers are not spending, borrowing is owed and
  * never income, schedules convert and history is never rewritten, the
- * projection is arithmetic on configured figures, what “the app has noticed”
- * is, and what the app will never do.
+ * projection is arithmetic on configured figures, the long-term forecast is
+ * the same arithmetic across decades of assumptions, what “the app has
+ * noticed” is, and what the app will never do.
  *
  * The copy lives here, beside the anchor ids, for the same reason the setup
  * path keeps its copy in `setup-path.ts`: the “what this page needs first”
@@ -15,7 +16,7 @@
  * never extends it.
  */
 
-/** The eight anchors, in reading order. Any page may link to `/guide#<anchor>`. */
+/** The nine anchors, in reading order. Any page may link to `/guide#<anchor>`. */
 export const GUIDE_ANCHORS = [
   'checkpoint',
   'income',
@@ -23,6 +24,7 @@ export const GUIDE_ANCHORS = [
   'borrowing',
   'schedules',
   'projection',
+  'longterm',
   'noticed',
   'never',
 ] as const;
@@ -49,8 +51,8 @@ export const GUIDE_PAGE = {
   eyebrow: 'Guide',
   title: 'How this app thinks',
   intro:
-    'Eight short ideas that make the rest of the app click. None of this is a setting and none of it is a tutorial — it is how the app already behaves, said out loud, so the figures on every page can be trusted. Any page can link into a section: /guide#checkpoint lands straight on the first one.',
-  tocTitle: 'The eight ideas',
+    'Nine short ideas that make the rest of the app click. None of this is a setting and none of it is a tutorial — it is how the app already behaves, said out loud, so the figures on every page can be trusted. Any page can link into a section: /guide#checkpoint lands straight on the first one.',
+  tocTitle: 'The nine ideas',
 } as const;
 
 export const GUIDE_SECTIONS: readonly GuideSection[] = [
@@ -135,6 +137,20 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       { href: '/horizon', label: 'Horizon' },
       { href: '/charts', label: 'the forecast chart' },
       { href: '/insights', label: 'the honesty loop' },
+    ],
+  },
+  {
+    anchor: 'longterm',
+    title: 'The long-term forecast is your assumptions, not a prediction',
+    lead: 'Across decades every figure is arithmetic on numbers you set — never a bank forecast or financial advice.',
+    paragraphs: [
+      'Horizon asks whether the money reaches payday; the Long-term forecast asks what income looks like in 2030, at an age you choose, and whether the capital lasts to the end of the forecast. It steps month by month and reports calendar years, with every date shown as both an age and a year, because neither anchor alone means the same thing to two people born ten years apart.',
+      'What the records already know is drafted in: the people, the active commitments and the groceries/fuel basis — and active receipt schedules become earnings with a stop date you can correct. Everything the records cannot know is an editable assumption: birth years, pension pot values and growth rates, pension start dates, the State Pension, windfalls, inflation, one spending baseline and an “everything else” line. A £0 on that line is flagged rather than quietly believed, and every tax figure is estimated from the editable 2026/27 rate card.',
+      'Three return rates are always compared side by side, because a single smooth line is the most flattering lie a forecast can tell. The same pension pot is shown as drawdown and as an annuity — arithmetic, never a recommendation. A temporary shortfall is named as a gap; “the money runs out” is reserved for the final uncovered run. The plan is saved per household, every figure can be changed, and every screen ends with the same honesty line the payday projection carries.',
+    ],
+    seeAlso: [
+      { href: '/longterm', label: 'Long-term forecast' },
+      { href: '/guide#projection', label: 'the projection, the same idea over 400 days' },
     ],
   },
   {

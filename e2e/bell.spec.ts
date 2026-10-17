@@ -225,12 +225,13 @@ test.describe('bell — phone layout', () => {
     const drawerNav = page.locator('nav[aria-label="Pages"]');
     await expect(drawerNav.getByRole('button', { name: /Needs attention|Nothing/ })).toHaveCount(0);
 
-    // Open drawer and check the link list (11 links in More + 6 in Daily = 17)
+    // Open drawer and check the link list (12 links in More + 6 in Daily = 18)
     await page.getByRole('button', { name: 'Open navigation menu' }).click();
     await expect(drawerNav).toBeVisible();
     const links = drawerNav.getByRole('link');
-    // There should be 17 links (6 Daily + 11 More) — 10 until Borrowing arrived (issue #60).
-    await expect(links).toHaveCount(17);
+    // There should be 18 links (6 Daily + 12 More) — 17 until the long-term
+    // forecast arrived (v1.26.0). A new menu entry must keep these in step.
+    await expect(links).toHaveCount(18);
     // Bell should still be visible in top bar even when drawer open
     await expect(button).toBeVisible();
   });

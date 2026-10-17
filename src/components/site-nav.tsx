@@ -17,6 +17,11 @@ const NAV_ITEMS = [
   { href: '/transactions', label: 'All Transactions' },
   { href: '/recurring', label: 'Recurring' },
   { href: '/horizon', label: 'Horizon' },
+  // The multi-decade forecast (LONGTERM_FORECASTING.md). It sits beside
+  // Horizon on the desktop bar — the two answer different spans of the same
+  // question — and in the drawer's second group, because it is a sit-down
+  // page rather than a daily tap.
+  { href: '/longterm', label: 'Long-term forecast' },
   { href: '/income', label: 'Income' },
   { href: '/pots', label: 'Accounts, Pots & Checkpoints' },
   { href: '/borrowing', label: 'Borrowing' },
@@ -50,6 +55,7 @@ const NAV_GROUPS = [
     title: 'More',
     items: [
       { href: '/transactions', label: 'All Transactions' },
+      { href: '/longterm', label: 'Long-term forecast' },
       { href: '/income', label: 'Income' },
       { href: '/pots', label: 'Accounts, Pots & Checkpoints' },
       { href: '/borrowing', label: 'Borrowing' },
