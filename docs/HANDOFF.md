@@ -1,3 +1,26 @@
+# Released v1.27.0 (2026-10-17) — ready for Unraid Force Update
+
+**Publication verified:** stable/Latest [v1.27.0](https://github.com/dougalbob/simple-finance-multi-household/releases/tag/v1.27.0).
+PR **#75** merged as `7dbdc13f3e49202018e075eaa3bdde45debefd0d`. All three required checks passed on
+PR CI **39056027734** and main CI **39056913495**. Publish **39057753777** passed image and upgrade
+smoke, push, **Verify the registry tags resolve**, and GitHub release creation. The published tags
+`v1.27.0`, `latest`, `sha-7dbdc13` on `ghcr.io/dougalbob/simple-finance-multi-household` share
+`sha256:64d8b153c02e3f28d7df56dcd76edb7d4bf2c18dd27cbc447510c14050846a8c` (Publish verification
+and release metadata). Direct package API inspection returned 403; registry host is blocked here,
+so the successful registry-verification step is the proof (SANDBOX 6).
+
+Household asked for publication to test with their own data. Back up, Force Update the existing
+`:latest` container (host **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`),
+confirm `v1.27.0 · stable`. No schema/backup-format change. Warn that saved forecast numbers
+change under new defaults. Sex remains household-chosen; survivor transfer remains follow-up.
+
+**Administrative loose end:** attempt to comment on/close #73 was denied by GitHub with
+"Resource not accessible by integration"; the chained close was not executed. Issue closure is
+not a publication blocker, but needs permissions attention. No extra PR/merge was made for this
+post-publication stamp; it is saved on the Arena branch only.
+
+---
+
 # v1.27.0 — approved for publication (2026-10-17)
 
 The household approved publishing for own-data testing and Unraid Force Update. This supersedes
