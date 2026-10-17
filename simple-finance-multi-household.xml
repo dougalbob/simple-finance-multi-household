@@ -9,11 +9,12 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.25.0 is the stable production release and moves :latest (the Borrowing
-  page's plain-word "Nothing owing" status, its greyed-out repayment when
-  nothing is owed, one expected row, newest-first ledger that keeps the
-  reader's scroll position, and the Insights line items opening and closing
-  where they were asked to, GitHub issue #68).
+  v1.26.0 is the stable production release and moves :latest (the Long-term
+  forecast: a multi-decade projection of pension pots, earnings with a stop
+  date, State Pension, windfalls, inflation and estimated UK tax, with the
+  household's own questions first, three return rates compared side by side,
+  drawdown versus annuity on the same pot, every figure editable, and one
+  saved plan per household).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -49,7 +50,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.25.0 is the stable production release and moves :latest.
+    v1.26.0 is the stable production release and moves :latest.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

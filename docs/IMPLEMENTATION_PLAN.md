@@ -3789,3 +3789,39 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       245 suites; `format:check`, `typecheck`, `npm run build` green. Browser evidence in this session
       came from the sandbox's `@sparticuz/chromium` recipe (SANDBOX entry 8): the four journeys passed
       and desktop/phone screenshots showed no horizontal overflow.
+
+235. **The long-term forecast becomes a first-class page — slice 3: nav, guide, SPEC and release
+    (2026-10-17).** The household accepted the direction and asked for a preview before a release.
+    This slice does not change the engine or the saved plan; it makes the feature reachable, explains
+    it in the app's vocabulary, documents it, and prepares the `v1.26.0` stable release.
+
+    - **Navigation.** `src/components/site-nav.tsx` carries `Long-term forecast` in the desktop bar
+      **immediately beside Horizon** — the two answer different spans of the same question — and in
+      the phone drawer's **second group** (`More`), because the page is a sit-down reading and
+      planning surface rather than a daily tap. The active state follows the same path rule as every
+      other entry (`aria-current="page"`).
+    - **Guide vocabulary.** `src/lib/guide.ts` gains its ninth anchored section, `longterm`: the
+      difference from Horizon, what is drafted from records and what is an assumption, estimated tax
+      from the editable 2026/27 card, three rates compared, drawdown versus annuity as arithmetic and
+      never a recommendation, a gap distinguished from a run-out, and the plan belonging to the
+      household. The guide's intro/toc say **nine**, the page footer links back to
+      `/guide#longterm`, and `tests/guide.test.ts` pins the new anchor and its load-bearing phrases.
+      `docs/ONBOARDING_PLAN.md` §9 records the new count.
+    - **Specification.** `docs/SPEC.md` gains **§28** (the model, the saved plan and draft, the page's
+      nine layers, the guide vocabulary, and what v1 is not), a **Long-term forecast** row in the
+      §15.2 menu-page table, and the nine-section wording in §15.5.
+    - **E2E.** `e2e/longterm.spec.ts` gains a fifth journey: the desktop navigation carries the entry
+      with `href="/longterm"` and the active state, the phone drawer carries it in `More`, and
+      `/guide#longterm` renders the ninth section's title and its three-rate promise. The existing
+      `longterm` Playwright project already covers the page's four data journeys.
+    - **Release preparation.** `docs/RELEASE_NOTES_v1.26.0.md` describes the whole feature (the
+      engine, the page and the saved plan were never released before), migration `0020` adds only
+      `longterm_plans`, no existing record or backup format changes, and the five version places are
+      aligned at **1.26.0** (`package.json`, `package-lock.json`, `src/lib/version.ts`, the Unraid
+      template and the release notes). `AGENTS.md`, `README.md`, `docs/HANDOFF.md`,
+      `docs/RELEASE_PROCESS.md` and `docs/MULTI_HOUSEHOLD_PLAN.md` name `v1.26.0`, as
+      `tests/multi-household-isolation-contract.test.ts` requires. No tag, image or GitHub release is
+      created until the household accepts the preview.
+    - **Coverage:** `tests/guide.test.ts` (the new anchor and promises), `e2e/longterm.spec.ts` (the
+      fifth journey); full suite **1,052/1,052 across 245 suites**, `format:check`, `typecheck` and
+      `npm run build` green, browser evidence through SANDBOX entry 8.

@@ -88,4 +88,37 @@ test.describe.serial('long-term forecast', () => {
     await expect(page.getByText(/Other spending is £0\.00 a year/)).toHaveCount(0);
     await expect(page.getByText(/Pension A, Pension B have no value yet/)).toHaveCount(0);
   });
+
+  test('is reachable from the menu and explained in the guide', async ({ page }) => {
+    // Slice 3: the page is no longer reachable only by typing its URL. On the
+    // desktop bar it sits beside Horizon; in the phone drawer it is in the
+    // second group, because it is a sit-down page rather than a daily tap.
+    await page.goto('/longterm');
+    const desktopNav = page.getByRole('navigation', { name: 'Desktop navigation' });
+    await expect(desktopNav.getByRole('link', { name: 'Long-term forecast' })).toHaveAttribute(
+      'href',
+      '/longterm',
+    );
+    await expect(desktopNav.getByRole('link', { name: 'Long-term forecast' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Open navigation menu' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Navigation menu' });
+    await expect(drawer.getByRole('link', { name: 'Long-term forecast' })).toBeVisible();
+
+    // The guide's ninth idea explains the same arithmetic the page performs.
+    await page.goto('/guide#longterm');
+    await expect(page.getByText('The nine ideas')).toBeVisible();
+    await expect(
+      page.getByRole('heading', {
+        name: 'The long-term forecast is your assumptions, not a prediction',
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Three return rates are always compared side by side/),
+    ).toBeVisible();
+  });
 });

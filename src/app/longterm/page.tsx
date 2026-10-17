@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { LongTermAssumptionsForm } from '@/components/longterm-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
+import { guideSection } from '@/lib/guide';
 import { incomeForYear, todayMoneyPence, type YearAnswer } from '@/lib/longterm/model';
 import {
   comparisonIndexFromParam,
@@ -367,6 +368,13 @@ export default async function LongTermPage({
           with the {RATE_CARD_YEAR} rate card; future tax law, inflation and investment returns will
           all differ. A real annuity quote comes from a provider and depends on your health and the
           rates at the time.
+        </p>
+        <p className="mt-2">
+          How this app thinks:{' '}
+          <Link href="/guide#longterm" className="sf-link">
+            {guideSection('longterm').title}
+          </Link>
+          .
         </p>
       </footer>
     </main>
