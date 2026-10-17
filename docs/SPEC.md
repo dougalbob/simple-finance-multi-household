@@ -2355,7 +2355,7 @@ Phase 1 is the DIY matrix end-to-end above; Phase 2 is the optimiser above. Phas
 bundle refinements; Phase 4 the `compare_options` candidate/TCO mode. `PROJECTS_IMPLEMENTATION.MD`
 tracks the stage session by session.
 
-## 28. Long-term forecast (v1.26.0, decisions 233–235; issue #73 slices 1–3 unreleased, decisions 236–238)
+## 28. Long-term forecast (v1.26.0, decisions 233–235; v1.27.0 issue #73, decisions 236–238)
 
 A multi-decade projection at `/longterm`, reached from the menu — on the desktop bar beside Horizon,
 and in the phone drawer's second group, because it is a sit-down page rather than a daily tap. It is

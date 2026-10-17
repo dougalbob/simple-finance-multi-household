@@ -9,7 +9,7 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.26.0 is the stable production release and moves :latest (the Long-term
+  v1.27.0 is the stable production release and moves :latest (the Long-term
   forecast: a multi-decade projection of pension pots, earnings with a stop
   date, State Pension, windfalls, inflation and estimated UK tax, with the
   household's own questions first, three return rates compared side by side,
@@ -50,7 +50,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.26.0 is the stable production release and moves :latest.
+    v1.27.0 is the stable production release and moves :latest. Long-term forecasts now grow earnings, index tax thresholds, uprate State Pension before its start and use per-person plan-to ages.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

@@ -14,10 +14,15 @@ async function resetToDraft(page: Page): Promise<void> {
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Reset to a draft from records' }).click();
   await expect(page.getByText(/The draft was rebuilt from household records/)).toBeVisible();
+  // The action message precedes router.refresh(); start edits on the persisted draft,
+  // not on client state that the in-flight refresh is about to replace.
+  await page.reload();
+  await openAssumptions(page);
 }
 
 /** The panel opens by default only while a warning asks for a figure. */
 async function openAssumptions(page: Page): Promise<void> {
+  await expect(page.locator('[data-longterm-ready="true"]')).toBeAttached();
   const summary = page.getByText('The assumptions — every figure is editable');
   const baseline = page.getByLabel('Spending baseline, a month');
   if (!(await baseline.isVisible())) await summary.click();
@@ -88,6 +93,67 @@ test.describe.serial('long-term forecast', () => {
     await expect(page.getByText(/Other spending is £0\.00 a year/)).toHaveCount(0);
     await expect(page.getByText(/Pension A, Pension B have no value yet/)).toHaveCount(0);
   });
+
+  test('saves pension timing, earnings growth and the later plan-to horizon', async ({ page }) => {
+    await resetToDraft(page);
+    await expect(page.getByText(/fixed 3.50%; it does not follow/).first()).toBeVisible();
+    await expect(page.getByLabel('Tax thresholds rise a year')).toHaveValue('1.00');
+    await expect(
+      page.getByText(/with allowances and bands rising 1.00% a year from 2027/),
+    ).toBeVisible();
+
+    await page.locator('#longterm-person-0-sex').selectOption('man');
+    await expect(page.locator('#longterm-person-0-life-expectancy')).toHaveValue('84');
+    await expect(page.locator('#longterm-person-0-plan-to')).toHaveValue('89');
+    await page.locator('#longterm-person-1-sex').selectOption('woman');
+    await expect(page.locator('#longterm-person-1-life-expectancy')).toHaveValue('87');
+    await expect(page.locator('#longterm-person-1-plan-to')).toHaveValue('92');
+    await expect(page.getByLabel('Forecast ends on')).toHaveValue('2072-12-31');
+    await page.locator('#longterm-person-1-life-expectancy').fill('88');
+    await expect(page.locator('#longterm-person-1-plan-to')).toHaveValue('93');
+    await expect(page.getByLabel('Forecast ends on')).toHaveValue('2073-12-31');
+    await page.locator('#longterm-person-1-plan-to').fill('94');
+    await expect(page.getByLabel('Forecast ends on')).toHaveValue('2074-12-31');
+
+    await page.locator('#longterm-person-0-earning').check();
+    const inflation = page.locator('#longterm-person-0-earnings-inflation');
+    await expect(inflation).toBeChecked();
+    await inflation.uncheck();
+    await page.locator('#longterm-person-0-earnings-rises').fill('4.25');
+    await inflation.check();
+    await expect(page.locator('#longterm-person-0-earnings-rises')).toHaveCount(0);
+    await inflation.uncheck();
+    await expect(page.locator('#longterm-person-0-earnings-rises')).toHaveValue('4.25');
+    await page.locator('#longterm-person-0-state-pension-start').fill('2037-07-01');
+    await page.getByRole('button', { name: 'Save assumptions' }).click();
+    await expect(
+      page.getByText('Assumptions saved. The forecast below updates immediately.'),
+    ).toBeVisible();
+    await page.goto('/longterm?year=2037');
+    await openAssumptions(page);
+    await expect(inflation).not.toBeChecked();
+    await expect(page.locator('#longterm-person-0-earnings-rises')).toHaveValue('4.25');
+    await expect(page.getByLabel('Forecast ends on')).toHaveValue('2074-12-31');
+    await expect(page.getByRole('link', { name: '2074', exact: true })).toBeVisible();
+    await expect(page.getByText(/2037 is a part-year: 6 of 12 months/)).toBeVisible();
+    await expect(page.getByText(/The first full year is 2038/)).toBeVisible();
+  });
+
+  for (const width of [1400, 390, 320]) {
+    test(`assumptions and year detail fit at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 950 });
+      await page.goto('/longterm?year=2037');
+      await openAssumptions(page);
+      await expect(page.getByLabel('Forecast ends on')).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`longterm-${width}.png`), fullPage: true });
+      await page.getByRole('group', { name: 'The people', exact: true }).screenshot({
+        path: testInfo.outputPath(`people-${width}.png`),
+      });
+    });
+  }
 
   test('is reachable from the menu and explained in the guide', async ({ page }) => {
     // Slice 3: the page is no longer reachable only by typing its URL. On the
