@@ -3673,3 +3673,50 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     drill opening and closing on its own row, the vehicle close landing just below the menu, the
     greyed £0.00). No schema, migration or domain change — this is presentation, copy and navigation
     only.
+
+233. **The long-term forecast is designed, grilled and engine-built — deliberately not Horizon
+    (2026-10-17).** The household asked for multi-year forecasting around pensions (two
+    defined-contribution pots starting in ~4 and ~9 years), state pension at 67, a start-of-2027
+    inheritance (~£250k invested after the mortgage is paid off within months), user-set investment
+    return rates (recent returns treated as a possible outlier), one best-guess inflation figure on
+    recurring + day-to-day spending, and estimated UK tax — answered as "income at age 62",
+    "income in 2030", including the second member. The design record is
+    [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) (feature plan + session log, beside
+    `PROJECTS_IMPLEMENTATION.MD` at the household's naming request).
+
+    - **Not Horizon.** Horizon (SPEC §7.6) is penny-exact liquidity over recorded reality to 400
+      days; this is decades of **assumption-driven scenarios** — per-person streams (earnings with a
+      stop date, pension pots, state pension), growth rates, inflation, windfalls and estimated tax
+      — answered per calendar year and per age, in future money and today's money. The only reuse
+      is the spending baseline concept and the people/pot data.
+    - **The grill settled the model (LONGTERM_FORECASTING.md §11A):** both pensions are DC **pots**
+      (a DB shape remains in the design for other households); the tool must **aid** the
+      drawdown-vs-annuity decision with a side-by-side comparison on a household-entered annuity
+      rate (it never recommends); dates display as **age and year**; pot values/rates are editable
+      variables, never baked in; and — the **project-wide correction** — employment with a stop date
+      is a first-class stream because other households have both members working (this household's
+      retired-at-56 member is the unusual case). Inflation 2.5%; return rates 4/6/8% read as net of
+      charges; other spending £0 with a required output warning; horizon default = the year the
+      younger person turns 90 (2070) — flagged for confirmation; her state pension age defaults to
+      68 (current law for a 1980 birth year) — flagged likewise.
+    - **Slice 1 is built and tested** (this decision): `src/lib/longterm/` — `types.ts` (the plan
+      model), `rates.ts` (the versioned **2026/27 rate card as data** — PA £12,570 with taper,
+      20/40/45, savings starting rate + PSA, dividend allowance at 10.75/35.75/39.35, CGT £3,000
+      exempt at 18/24, employee NI 8/2 — plus the household's chosen defaults), `tax.ts`
+      (estimated per-person tax in HMRC stacking order: non-savings, then savings, then dividends,
+      gains on top), `model.ts` (the month-step engine and answer queries: income in a year, income
+      at an age, money-lasts headline, capital trajectory). All integer pence via
+      `roundHalfUpDivide`; inflation is one figure per year stepped each January so year one is
+      exactly today's baseline and today's-money deflates exactly; annuity income is pence per
+      £100k of pot at conversion; an auto-created GIA so surplus never vanishes; "money runs out"
+      is the first year with **unmet** spending (capital to exactly £0 at a year end is a covered
+      year). 22 tests (`tests/longterm-tax.test.ts`, `tests/longterm-model.test.ts`).
+    - **No schema, migration, backup, nav, SPEC, guide or version change** — the engine is inert
+      until slice 2 wires the `/longterm` page and `longterm_plans` persistence (the SPEC section,
+      guide vocabulary and any release arrive with the visible build, per the feature plan §9).
+      No release cut. Coverage: the tax arithmetic (allowances, bands, PSA, dividend allowance,
+      CGT stacking); spend-down/run-out; state pension start + January uprating; PCLS + drawdown
+      money conservation; annuity conversion and the take-up override; two-earner stop dates;
+      windfall-then-January-shelter ordering; end-dated commitments; three-rate comparison
+      ordering. Gates green: `format:check`, `typecheck`, `npm test` (1,034/1,034 across 238
+      suites), `npm run build`.
