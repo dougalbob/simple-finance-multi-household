@@ -21,7 +21,7 @@ import { LIFE_EXPECTANCY_AGE, PLAN_TO_MARGIN_YEARS } from '@/lib/longterm/rates'
 import { parsePence, penceInput } from '@/lib/money';
 
 const inputClass =
-  'rounded border border-border-strong bg-surface px-2.5 py-1.5 text-sm focus:border-border-emphasis focus:outline-none disabled:opacity-60';
+  'min-w-0 w-full rounded border border-border-strong bg-surface px-2.5 py-1.5 text-sm focus:border-border-emphasis focus:outline-none disabled:opacity-60';
 const labelClass = 'text-xs font-medium text-ink-soft';
 const submitClass =
   'rounded bg-till px-3 py-1.5 text-sm font-medium text-till-ink disabled:opacity-60';
@@ -190,6 +190,12 @@ function NumberField({
 }) {
   const [text, setText] = useState(() => String(value));
   const [valid, setValid] = useState(true);
+  // Sex and life-expectancy edits can change this value from another field.
+  // Keep partial typing intact when it already represents the draft value.
+  useEffect(() => {
+    setText((current) => (Number(current) === value ? current : String(value)));
+    setValid(true);
+  }, [value]);
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className={labelClass}>
@@ -330,7 +336,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <fieldset className="rounded-lg border border-border-hairline p-3">
+    <fieldset className="min-w-0 rounded-lg border border-border-hairline p-3">
       <legend className="px-1 text-sm font-semibold">{title}</legend>
       {description === undefined ? null : (
         <p className="mb-2 text-xs text-ink-soft">{description}</p>
@@ -370,6 +376,8 @@ export function LongTermAssumptionsForm({
   lastSavedLabel,
 }: LongTermAssumptionsFormProps) {
   const router = useRouter();
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [draft, setDraft] = useState<LongTermPlanDocument>(initialDocument);
   // The panel stays where the household put it: a save that clears the last
   // warning must not collapse the form (and its success message) underneath
@@ -414,6 +422,8 @@ export function LongTermAssumptionsForm({
 
   return (
     <details
+      data-longterm-ready={ready ? 'true' : 'false'}
+      inert={!ready}
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
       className="rounded-xl border border-border bg-surface shadow-sm"
@@ -429,7 +439,7 @@ export function LongTermAssumptionsForm({
         <form action={formAction} className="space-y-4" key={version}>
           <input type="hidden" name="payload" value={JSON.stringify(draft)} />
           <input type="hidden" name="expectedVersion" value={version} />
-          <fieldset disabled={readOnly} className="space-y-4">
+          <fieldset disabled={readOnly} className="min-w-0 space-y-4">
             <Section
               title="The people"
               description="Each person is their own taxpayer. Birth years place every age-anchored answer and the forecast's end."
@@ -835,6 +845,31 @@ function PersonEditor({
   return (
     <div className="rounded-lg border border-border-hairline p-3">
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <TextField
+          id={`longterm-person-${personIndex}-label`}
+          label="Name"
+          value={person.label}
+          onValue={(value) => onEdit((target) => (target.label = value))}
+          disabled={readOnly}
+        />
+        <NumberField
+          id={`longterm-person-${personIndex}-birth-year`}
+          label="Birth year"
+          value={person.birthYear}
+          min={1900}
+          max={2100}
+          onValue={(value) => onEdit((target) => (target.birthYear = value), true)}
+          disabled={readOnly}
+        />
+        {canRemove ? (
+          <div className="flex items-end">
+            <button type="button" className={removeButtonClass} onClick={onRemove}>
+              Remove this person
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1">
           <label
             htmlFor={`longterm-person-${personIndex}-sex`}
@@ -894,31 +929,6 @@ function PersonEditor({
           plan does not stop where half the population is still alive. The forecast ends on the
           later plan-to year. Both can be edited, including downwards.
         </p>
-      </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <TextField
-          id={`longterm-person-${personIndex}-label`}
-          label="Name"
-          value={person.label}
-          onValue={(value) => onEdit((target) => (target.label = value))}
-          disabled={readOnly}
-        />
-        <NumberField
-          id={`longterm-person-${personIndex}-birth-year`}
-          label="Birth year"
-          value={person.birthYear}
-          min={1900}
-          max={2100}
-          onValue={(value) => onEdit((target) => (target.birthYear = value), true)}
-          disabled={readOnly}
-        />
-        {canRemove ? (
-          <div className="flex items-end">
-            <button type="button" className={removeButtonClass} onClick={onRemove}>
-              Remove this person
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">

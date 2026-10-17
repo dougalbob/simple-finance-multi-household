@@ -1,3 +1,64 @@
+# v1.27.0 — approved for publication (2026-10-17)
+
+The household approved publishing for own-data testing and Unraid Force Update. This supersedes
+the release hold and the pending-go-ahead bullets below. Sex stays household-chosen (issue #73's
+agreed scope); survivor transfer remains follow-up. Release notes: `docs/RELEASE_NOTES_v1.27.0.md`.
+Image: `ghcr.io/dougalbob/simple-finance-multi-household:latest`, host port **3009**, appdata
+`/mnt/user/appdata/simple-finance-multi-household`. Back up before upgrading: saved forecasts
+change numbers under the new growth/indexation defaults. No schema/backup-format change.
+
+Release sequence in progress: one gated PR from `arena/7cfd38f8-simple-finance-multi-household`,
+merge commit, main CI, annotated tag, Publish registry verification and Latest GitHub release.
+Do not interpret this prepared entry as proof of publication; check GitHub release/workflow
+metadata for the merge SHA, run IDs and digest. Prior browser evidence and known flakiness follow.
+
+---
+
+# Issue #73 — browser acceptance slice (2026-10-17) — unreleased, target v1.27.0
+
+**Read this entry first, then the previous entry for the engine changes and household flags.**
+PR #74 is merged (the previous session's PR status is stale). Its Playwright job failed and
+passed on retry: treat that result as flaky, not as a fixed clean pass.
+
+**Release override remains in force:** no version bump, release notes, tag, publication or
+GitHub release in this slice. `package.json` remains **1.26.0**. No remote CI run requested here.
+
+**Delivered:** `e2e/longterm.spec.ts` now has nine journeys: the original five, one covering
+State Pension July-2037 part-year copy (6/12, first full year 2038), earnings inflation/override
+persistence, sex defaults, life-expectancy edits and plan-to/horizon sync, plus screenshot and
+no-document-overflow checks at **1400, 390 and 320px**. Full-page and people-panel screenshots
+are written to git-ignored `test-results/` on each run.
+
+**Browser checks found and fixed two product bugs:** the whole-number editor kept stale local
+text when another field changed its value (sex/life expectancy changed the saved plan-to but
+not the displayed age); it now synchronises external value changes while preserving partial
+valid typing. At 320px, fieldsets and intrinsic input widths pushed the document sideways;
+fieldsets and inputs now shrink to their container. Name/birth year now precede sex/life
+expectancy/plan-to so the reader knows whose assumptions they are editing.
+
+**Flake prevention, not a claim to fix #74's CI failure:** the assumptions island now publishes
+`data-longterm-ready` and stays inert until hydrated (decision 131). Tests wait for that signal.
+The reset helper reloads after the successful action before editing: the action's success message
+can precede its `router.refresh()`, which otherwise replaces edits with the reset document.
+
+**Validation:** full unit suite **1,063/1,063 across 249 suites**; format, typecheck and production
+build green. Local Chromium via SANDBOX entry 8: **9/9** after fixes; no retries configured.
+The full Playwright suite and browser CI have **not** been run. Initial local failures exposed
+the stale age, the 320px overflow and the reset/refresh race; do not report those as clean runs.
+
+**Still needs household direction before final release:**
+- Drafts from records still leave sex blank. Should they seed it from records where available?
+- Undrawn pension capital stays invested after plan-to; survivor transfer remains a follow-up,
+  not part of #73 acceptance.
+- Confirm go-ahead for the full browser CI/release gate. Then follow `docs/RELEASE_PROCESS.md`
+  for v1.27.0; no release has been prepared in this slice.
+
+**Sandbox correction:** entry 21 is the batched unit-test runner, not the native rebuild;
+entry 18 covers installed Node headers. Used `npm ci --ignore-scripts` then
+`npm_config_nodedir=/usr/local npm rebuild better-sqlite3`. The browser overlay is ignored.
+
+---
+
 # Issue #73 — long-term forecast fixes and additions, slices 1–3 (2026-10-17) — unreleased, target v1.27.0
 
 **Read first:** [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) (§12 session log, row 6), SPEC §28,
