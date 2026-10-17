@@ -920,7 +920,7 @@ function PersonEditor({
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <PenceField
                 id={`longterm-person-${personIndex}-state-pension-weekly`}
-                label="A week (gross)"
+                label="A week, today's rate (gross)"
                 value={person.statePension.weeklyPence}
                 onValue={(pence) =>
                   onEdit((target) => {
@@ -942,7 +942,7 @@ function PersonEditor({
               />
               <RateField
                 id={`longterm-person-${personIndex}-state-pension-uprating`}
-                label="Rises a year"
+                label="Rises a year (from today)"
                 valueBp={person.statePension.upratingBp}
                 onValue={(bp) =>
                   onEdit((target) => {
@@ -952,6 +952,15 @@ function PersonEditor({
                 disabled={readOnly}
               />
             </div>
+          )}
+          {person.statePension === null ? null : (
+            <p className={`mt-2 ${HINT_CLASS}`}>
+              The weekly figure is today&apos;s rate, not the rate when payments begin: the app
+              grows it each January from today, through the start date. Rises a year defaults to a
+              fixed 3.50%; it does not follow the plan&apos;s inflation rate. The State Pension
+              triple lock is the highest of inflation, 2.5% or earnings growth; 3.50% is a mid
+              assumption you can change.
+            </p>
           )}
         </div>
       </div>

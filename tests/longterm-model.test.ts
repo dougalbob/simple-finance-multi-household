@@ -159,13 +159,70 @@ describe('long-term forecast engine: income streams (§5.1, project-wide)', () =
     const [y2026, y2027, y2028] = result.years;
     assert.ok(y2026 && y2027 && y2028);
     assert.equal(y2026.people[0]?.income.statePensionPence, 0, 'nothing before the start date');
-    // £241.30 × 52 = £12,547.60 = 1,254,760p; monthly 104,563p (half-up), ×12.
-    assert.equal(y2027.people[0]?.income.statePensionPence, 1_254_756);
-    assert.equal(y2027.people[0]?.income.incomeTaxPence, 0, 'under the £12,570 allowance');
-    // 3.5% uprating: 1,254,760 + 43,917 = 1,298,677 → monthly 108,223p, ×12.
-    assert.equal(y2028.people[0]?.income.statePensionPence, 1_298_676);
-    // Taxed on the £41,676 above the allowance at 20% = 8,335p.
-    assert.equal(y2028.people[0]?.income.incomeTaxPence, 8_335);
+    // The weekly figure is today's rate, so the first January after today
+    // (2027) uprates it before it is paid. £241.30 × 52 = 1,254,760p; +3.5%
+    // = 1,254,760 + 43,917 = 1,298,677p; monthly 108,223p (half-up), ×12.
+    assert.equal(y2027.people[0]?.income.statePensionPence, 1_298_676);
+    // Taxed on the £41,676 above the £12,570 allowance at 20% = 8,335p.
+    assert.equal(y2027.people[0]?.income.incomeTaxPence, 8_335);
+    // Second uprating: 1,298,677 + 45,454 = 1,344,131p → monthly 112,011p, ×12.
+    assert.equal(y2028.people[0]?.income.statePensionPence, 1_344_132);
+    // Taxed on the £87,132 above the allowance at 20% = 17,426p.
+    assert.equal(y2028.people[0]?.income.incomeTaxPence, 17_426);
+  });
+
+  it('a mid-year State Pension start is uprated from today before it starts (the weekly figure is today’s rate)', () => {
+    // Today Oct 2026; starts 1 Sep 2037 (four months of 2037). At 0% inflation
+    // and 3.5% uprating the 2037 rate is £12,547.60 × 1.035^11, and 2038 is one
+    // more uprating on top — not the 2026 rate.
+    const result = runForecast(
+      plan({
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1971,
+            statePension: { weeklyPence: 24_130, startDate: '2037-09-01', upratingBp: 350 },
+          }),
+        ],
+        horizonEndDate: '2038-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2037 = result.years.find((y) => y.year === 2037);
+    const y2038 = result.years.find((y) => y.year === 2038);
+    assert.ok(y2037 && y2038);
+    // Four months only: 4 × monthly, where the annual figure is ~£18,319.12.
+    assert.equal(y2037.people[0]?.income.statePensionPence, 610_636);
+    assert.equal(y2038.people[0]?.income.statePensionPence, 1_896_036);
+    // The first full year is exactly one more uprating than the part-year rate.
+    const annual2037 = 1_831_912;
+    assert.ok(Math.abs(1_896_036 - Math.round(annual2037 * 1.035)) < 1_000);
+  });
+
+  it('a mid-year start at 2.5% and 3.0% inflation/uprating also grows from today', () => {
+    const at = (rateBp: number) =>
+      runForecast(
+        plan({
+          inflationBp: rateBp,
+          people: [
+            person({
+              id: 'p1',
+              birthYear: 1971,
+              statePension: { weeklyPence: 24_130, startDate: '2037-09-01', upratingBp: rateBp },
+            }),
+          ],
+          horizonEndDate: '2038-12-31',
+        }),
+        '2026-10-17',
+      );
+    const at25 = at(250)
+      .years.filter((y) => y.year >= 2037)
+      .map((y) => y.people[0]?.income.statePensionPence);
+    const at30 = at(300)
+      .years.filter((y) => y.year >= 2037)
+      .map((y) => y.people[0]?.income.statePensionPence);
+    assert.deepEqual(at25, [548_784, 1_687_512]);
+    assert.deepEqual(at30, [578_960, 1_788_984]);
   });
 
   it('a drawdown pot takes 25% tax-free cash, then pays its annual draw while the fund lasts', () => {

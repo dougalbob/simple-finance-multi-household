@@ -2377,7 +2377,9 @@ and estimated UK tax. `LONGTERM_FORECASTING.md` is the feature's design record a
 - **Integer pence and basis points.** No binary floating point touches money; rates are integer basis
   points (400 = 4.00%). Annuity arithmetic is pinned to pence per £100,000 of pot.
 - **One inflation figure, stepped each January.** Year one is exactly today's baseline, so deflating
-  to today's money is exact. The State Pension uprating defaults to inflation + 1% and is labelled as
+  to today's money is exact. The State Pension's weekly figure is **today's rate**: it is compounded
+  each January from the first one after today, before and after its start date (a part-year start
+  is labelled as one). The uprating defaults to a fixed 3.50% (not inflation + 1%) and is labelled as
   a changeable assumption.
 - **Estimated UK tax per person, per year.** Income tax in HMRC stacking order with personal-allowance
   taper, the savings starting rate and personal savings allowance, the dividend allowance, capital

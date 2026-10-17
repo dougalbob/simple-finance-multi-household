@@ -30,8 +30,9 @@ export interface LongTermPerson {
   earnings: { monthlyPence: number; untilDate: string } | null;
   /**
    * State pension. `weeklyPence` is the household's forecast (full rate is
-   * the labelled default); `upratingBp` is the annual rise (the design
-   * defaults to inflation + 1%, §5.6) applied from the second calendar year.
+   * today's rate (the full new State Pension is the labelled default).
+   * `upratingBp` is the annual rise (the form default is a fixed 3.50%, §5.6),
+   * applied every January after today, from the first one onwards.
    */
   statePension: {
     weeklyPence: number;

@@ -7,9 +7,12 @@
  *
  * Month order (documented so tests can pin it):
  *   1. January (or the first month): uprate the price level, state pensions
- *      and annuities from the second calendar year; move the yearly ISA
+ *      (from the first January after today) and annuities (from the second
+ *      calendar year); move the yearly ISA
  *      shelter from the GIA. Inflation is one figure per year (§5.6): the
- *      first forecast year is exactly today's baseline spending.
+ *      first forecast year is exactly today's baseline spending. A State
+ *      Pension's weekly figure is today's rate, so it uprates each January
+ *      after today, before and after its start date.
  *   2. Date events in the month: windfalls land and are invested; a pension
  *      pot starting converts to an annuity or takes its 25% tax-free cash.
  *   3. Income accruals: earnings before the stop date; state pension after
@@ -356,7 +359,9 @@ export function runForecast(
       priceIndex += roundHalfUpDivide(priceIndex * plan.inflationBp, RATE_DENOMINATOR);
       for (const person of plan.people) {
         const sp = person.statePension;
-        if (sp && statePensionAnnual.has(person.id) && monthYear > yearOf(sp.startDate)) {
+        // The weekly figure is today's rate: it compounds every January after
+        // today, whether or not the pension has started yet (§5.6).
+        if (sp && statePensionAnnual.has(person.id) && monthYear > yearOf(startDate)) {
           statePensionAnnual.set(
             person.id,
             uprateAnnualPence(statePensionAnnual.get(person.id) as number, sp.upratingBp),
