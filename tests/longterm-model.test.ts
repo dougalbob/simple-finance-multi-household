@@ -7,6 +7,7 @@ import {
   runForecast,
   todayMoneyPence,
 } from '../src/lib/longterm/model';
+import { UK_2026_27, taxCardForYear } from '../src/lib/longterm/rates';
 import type {
   LongTermPerson,
   LongTermPlan,
@@ -454,5 +455,122 @@ describe('long-term forecast engine: the three-rate comparison (§5.3)', () => {
     const trajectory = capitalTrajectory(optimistic);
     assert.equal(trajectory.length, 10);
     assert.ok((trajectory[0]?.capitalPence ?? 0) > 25_000_000, 'year one already grows');
+  });
+});
+
+describe('long-term forecast engine: earnings growth (issue #73, slice 2)', () => {
+  it('pay rises each January with the plan inflation by default, and stops at the last paid date', () => {
+    // Today Oct 2026. £3,000/month today; 2.5% inflation; paid until June 2028.
+    const result = runForecast(
+      plan({
+        inflationBp: 250,
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1975,
+            earnings: { monthlyPence: 300_000, untilDate: '2028-06-30', risesWithInflation: true },
+          }),
+        ],
+        horizonEndDate: '2028-12-31',
+      }),
+      '2026-10-17',
+    );
+    const [y2026, y2027, y2028] = result.years;
+    assert.ok(y2026 && y2027 && y2028);
+    // Oct–Dec 2026 at today's pay.
+    assert.equal(y2026.people[0]?.income.earningsPence, 900_000);
+    // Jan 2027: 300,000 + 2.5% (7,500) = 307,500 × 12.
+    assert.equal(y2027.people[0]?.income.earningsPence, 3_690_000);
+    // Jan 2028: 307,500 × 1.025 = 315,187.5 → 315,188 (half-up); paid Jan–Jun only.
+    assert.equal(y2028.people[0]?.income.earningsPence, 1_891_128);
+  });
+
+  it('an explicit override replaces inflation when the box is unticked', () => {
+    const result = runForecast(
+      plan({
+        inflationBp: 250,
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1975,
+            earnings: {
+              monthlyPence: 300_000,
+              untilDate: '2030-12-31',
+              risesWithInflation: false,
+              risesBp: 400,
+            },
+          }),
+        ],
+        horizonEndDate: '2027-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2027 = result.years.find((y) => y.year === 2027);
+    assert.ok(y2027);
+    // Jan 2027 at 4%: 300,000 + 12,000 = 312,000 × 12.
+    assert.equal(y2027.people[0]?.income.earningsPence, 3_744_000);
+  });
+
+  it('growth is not applied in the year pay is set (before the first January after today)', () => {
+    const result = runForecast(
+      plan({
+        inflationBp: 250,
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1975,
+            earnings: { monthlyPence: 300_000, untilDate: '2030-12-31' },
+          }),
+        ],
+        horizonEndDate: '2026-12-31',
+      }),
+      '2026-10-17',
+    );
+    assert.equal(result.years[0]?.people[0]?.income.earningsPence, 900_000);
+  });
+});
+
+describe('long-term forecast engine: tax indexation (issue #73, option B)', () => {
+  it('indexes every money figure together from 2027, rates unchanged, rounded to the penny each step', () => {
+    const card2027 = taxCardForYear(UK_2026_27, 100, 2027);
+    // £12,570 × 1.01 = £12,695.70; PA is 1,257,000p → 1,269,570p.
+    assert.equal(card2027.personalAllowancePence, 1_269_570);
+    assert.equal(card2027.basicRateLimitPence, 3_770_000 * 1.01);
+    assert.equal(card2027.niUpperEarningsLimitPence, Math.round(5_027_000 * 1.01));
+    // Rates never move.
+    assert.equal(card2027.basicRateBp, UK_2026_27.basicRateBp);
+    assert.equal(card2027.niMainRateBp, UK_2026_27.niMainRateBp);
+    // Two steps compound: 1,257,000 → 1,269,570 → 1,282,265.7 → 1,282,266p.
+    assert.equal(taxCardForYear(UK_2026_27, 100, 2028).personalAllowancePence, 1_282_266);
+  });
+
+  it('the published card is untouched in 2026 and at 0%', () => {
+    assert.equal(taxCardForYear(UK_2026_27, 100, 2026), UK_2026_27);
+    assert.equal(taxCardForYear(UK_2026_27, 0, 2040), UK_2026_27);
+  });
+
+  it('a 0% index reproduces the fixed-card forecast; a rising index pays less tax on the same income', () => {
+    const base = (taxThresholdsBp: number | undefined) =>
+      runForecast(
+        plan({
+          taxThresholdsBp,
+          people: [
+            person({
+              id: 'p1',
+              birthYear: 1971,
+              earnings: { monthlyPence: 500_000, untilDate: '2040-12-31' },
+            }),
+          ],
+          horizonEndDate: '2028-12-31',
+        }),
+        '2026-10-17',
+      );
+    const fixed = base(0).years.map((y) => y.people[0]?.income.incomeTaxPence);
+    const indexed = base(100).years.map((y) => y.people[0]?.income.incomeTaxPence);
+    // 2026 is the published card either way.
+    assert.equal(indexed[0], fixed[0]);
+    // 2027 and 2028 are charged on the indexed bands, so they are lower.
+    assert.ok((indexed[1] ?? 0) < (fixed[1] ?? 0));
+    assert.ok((indexed[2] ?? 0) < (fixed[2] ?? 0));
   });
 });

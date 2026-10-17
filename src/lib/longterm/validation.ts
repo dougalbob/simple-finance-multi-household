@@ -40,6 +40,8 @@ const earningsSchema = z
   .object({
     monthlyPence: pence,
     untilDate: localDate,
+    risesWithInflation: z.boolean().default(true),
+    risesBp: basisPoints.default(350),
   })
   .strict();
 
@@ -121,6 +123,7 @@ const planSchema = z
     spending: spendingSchema,
     commitments: z.array(commitmentSchema).max(30),
     inflationBp: basisPoints,
+    taxThresholdsBp: basisPoints.default(100),
     isaShelterAnnualPence: pence,
     horizonEndDate: localDate,
   })

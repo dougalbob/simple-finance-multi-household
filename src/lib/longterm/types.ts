@@ -26,8 +26,19 @@ export interface LongTermPerson {
   label: string;
   /** Calendar year of birth (1970). The tool shows dates as age AND year. */
   birthYear: number;
-  /** Gross employment income; `untilDate` is when the person stops working. */
-  earnings: { monthlyPence: number; untilDate: string } | null;
+  /**
+   * Gross employment income; `untilDate` is when the person stops working.
+   * `monthlyPence` is today's pay. Each January after today it rises by the
+   * plan's inflation rate (`risesWithInflation`, the default, so a later change
+   * to inflation flows through) or by `risesBp` when that is unticked. Growth
+   * stops at `untilDate`. Both growth fields are optional so saved plans load.
+   */
+  earnings: {
+    monthlyPence: number;
+    untilDate: string;
+    risesWithInflation?: boolean;
+    risesBp?: BasisPoints;
+  } | null;
   /**
    * State pension. `weeklyPence` is the household's forecast (full rate is
    * today's rate (the full new State Pension is the labelled default).
@@ -126,6 +137,11 @@ export interface LongTermPlan {
   commitments: CommitmentPlan[];
   /** Single best-guess annual inflation rate on spending (250 = 2.5%). */
   inflationBp: BasisPoints;
+  /**
+   * Tax thresholds and allowances rise each January after 2026 by this rate
+   * (issue #73, option B). Optional so saved plans load; the schema defaults it.
+   */
+  taxThresholdsBp?: BasisPoints;
   /** Moved from the first GIA into ISAs each January, up to this amount. */
   isaShelterAnnualPence: number;
   /** Final date the forecast runs to (default: the younger person's 90th year). */

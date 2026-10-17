@@ -37,7 +37,7 @@
  */
 
 import { roundHalfUpDivide } from '../money';
-import { UK_2026_27, type TaxRateCard } from './rates';
+import { UK_2026_27, taxCardForYear, type TaxRateCard } from './rates';
 import { estimatePersonTax, type PersonTaxComponents } from './tax';
 import type {
   ForecastResult,
@@ -180,6 +180,12 @@ export function runForecast(
     })),
   );
 
+  /** Today's gross monthly pay per person, grown each January while still paid. */
+  const earningsMonthly = new Map<string, number>();
+  for (const person of plan.people) {
+    if (person.earnings) earningsMonthly.set(person.id, person.earnings.monthlyPence);
+  }
+
   /** The state pension's annual amount per person, uprated each January. */
   const statePensionAnnual = new Map<string, number>();
   for (const person of plan.people) {
@@ -264,7 +270,10 @@ export function runForecast(
         dividendPence: acc.dividendPence,
         capitalGainsPence: acc.capitalGainsPence,
       };
-      const tax = estimatePersonTax(components, taxCard);
+      const tax = estimatePersonTax(
+        components,
+        taxCardForYear(taxCard, plan.taxThresholdsBp ?? 0, currentYearRow.year),
+      );
       const income: PersonYearIncome = {
         earningsPence: acc.earningsPence,
         statePensionPence: acc.statePensionPence,
@@ -358,6 +367,20 @@ export function runForecast(
     if (month.endsWith('-01') && !isFirstMonth) {
       priceIndex += roundHalfUpDivide(priceIndex * plan.inflationBp, RATE_DENOMINATOR);
       for (const person of plan.people) {
+        const earnings = person.earnings;
+        if (
+          earnings &&
+          earningsMonthly.has(person.id) &&
+          monthYear > yearOf(startDate) &&
+          monthKey(earnings.untilDate) >= month
+        ) {
+          const bp =
+            earnings.risesWithInflation === false ? (earnings.risesBp ?? 0) : plan.inflationBp;
+          earningsMonthly.set(
+            person.id,
+            uprateAnnualPence(earningsMonthly.get(person.id) as number, bp),
+          );
+        }
         const sp = person.statePension;
         // The weekly figure is today's rate: it compounds every January after
         // today, whether or not the pension has started yet (§5.6).
@@ -425,8 +448,9 @@ export function runForecast(
       const acc = row.people.get(person.id) as PersonAcc;
       const earnings = person.earnings;
       if (earnings && monthKey(earnings.untilDate) >= month) {
-        acc.earningsPence += earnings.monthlyPence;
-        monthIncomePence += earnings.monthlyPence;
+        const monthly = earningsMonthly.get(person.id) as number;
+        acc.earningsPence += monthly;
+        monthIncomePence += monthly;
       }
       const sp = person.statePension;
       if (sp && monthKey(sp.startDate) <= month) {

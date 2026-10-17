@@ -702,6 +702,17 @@ export function LongTermAssumptionsForm({
                     })
                   }
                 />
+                <RateField
+                  id="longterm-tax-thresholds"
+                  label="Tax thresholds rise a year"
+                  valueBp={draft.plan.taxThresholdsBp ?? 0}
+                  hint="Allowances and tax bands rise each January from 2027, at this rate. The 2026/27 rates stay the basis."
+                  onValue={(bp) =>
+                    editPlan((plan) => {
+                      plan.taxThresholdsBp = bp;
+                    })
+                  }
+                />
                 <PenceField
                   id="longterm-isa-shelter"
                   label="Move into ISAs, a year"
@@ -849,7 +860,12 @@ function PersonEditor({
             onChange={(checked) =>
               onEdit((target) => {
                 target.earnings = checked
-                  ? { monthlyPence: 300_000, untilDate: `${currentYear + 10}-12-31` }
+                  ? {
+                      monthlyPence: 300_000,
+                      untilDate: `${currentYear + 10}-12-31`,
+                      risesWithInflation: true,
+                      risesBp: 350,
+                    }
                   : null;
               })
             }
@@ -863,7 +879,7 @@ function PersonEditor({
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <PenceField
                 id={`longterm-person-${personIndex}-earnings`}
-                label="Pay, a month (gross)"
+                label="Pay a month, today (gross)"
                 value={person.earnings.monthlyPence}
                 onValue={(pence) =>
                   onEdit((target) => {
@@ -884,6 +900,40 @@ function PersonEditor({
                 disabled={readOnly}
               />
             </div>
+          )}
+          {person.earnings === null ? null : (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <CheckField
+                id={`longterm-person-${personIndex}-earnings-inflation`}
+                label="Rises with inflation"
+                checked={person.earnings.risesWithInflation !== false}
+                disabled={readOnly}
+                onChange={(checked) =>
+                  onEdit((target) => {
+                    if (target.earnings !== null) target.earnings.risesWithInflation = checked;
+                  })
+                }
+              />
+              {person.earnings.risesWithInflation === false ? (
+                <RateField
+                  id={`longterm-person-${personIndex}-earnings-rises`}
+                  label="Rises a year (override)"
+                  valueBp={person.earnings.risesBp ?? 0}
+                  onValue={(bp) =>
+                    onEdit((target) => {
+                      if (target.earnings !== null) target.earnings.risesBp = bp;
+                    })
+                  }
+                  disabled={readOnly}
+                />
+              ) : null}
+            </div>
+          )}
+          {person.earnings === null ? null : (
+            <p className={`mt-1 ${HINT_CLASS}`}>
+              Pay rises each January from today — with inflation while the box is ticked, or at the
+              percentage you enter when it is not — and stops on the last day of pay.
+            </p>
           )}
           {person.earnings === null ? null : (
             <p className={`mt-1 ${HINT_CLASS}`}>

@@ -365,9 +365,9 @@ export default async function LongTermPage({
         <p>
           A projection of the assumptions above — arithmetic, not a bank forecast, not financial
           advice, and not a promise. Tax figures are <span className="font-medium">estimated</span>{' '}
-          with the {RATE_CARD_YEAR} rate card; future tax law, inflation and investment returns will
-          all differ. A real annuity quote comes from a provider and depends on your health and the
-          rates at the time.
+          with the {RATE_CARD_YEAR} rate card, {taxThresholdsSentence(plan.taxThresholdsBp ?? 0)};
+          future tax law, inflation and investment returns will all differ. A real annuity quote
+          comes from a provider and depends on your health and the rates at the time.
         </p>
         <p className="mt-2">
           How this app thinks:{' '}
@@ -442,6 +442,12 @@ function YearCard({
       )}
     </section>
   );
+}
+
+/** The honesty footer's tax sentence: the card is indexed, or held fixed. */
+function taxThresholdsSentence(indexBp: number): string {
+  if (indexBp === 0) return 'with allowances and bands held at those figures';
+  return `with allowances and bands rising ${(indexBp / 100).toFixed(2)}% a year from 2027`;
 }
 
 const MONTH_NAMES = [
