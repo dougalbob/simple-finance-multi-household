@@ -4,7 +4,7 @@
 record, grill answers (§11A) and session log (§12); decision 234 in
 [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) is this slice's build record.
 
-**What this session delivered — slice 2, on this branch (PR open, no release cut).** The
+**What this session delivered — slice 2, merged to `main` as PR #71 (2026-10-17). No release cut:**
 `/longterm` page renders the household's own questions over a saved plan: "income in 2030" and
 "income at age 62 — 2032" first, "does the money last?" beside them, the selected year line by line,
 the three-rate comparison, the same pot as drawdown vs annuity, every calendar year in future and
