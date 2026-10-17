@@ -1,3 +1,60 @@
+# Next: long-term forecasting — slice 2 (the `/longterm` page) (2026-10-17)
+
+**Read [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) first** — it is the feature's own
+design record, grill answers (§11A) and session log (§12). This note is the app-level pointer.
+
+**What this session delivered (PR #70, decision 233):** the design record (committed as
+`LONGTERM_FORECASTING.md` at the repo root, beside `PROJECTS_IMPLEMENTATION.MD` by the household's
+naming request); the household's grill answers folded into it; and **slice 1 — the pure engine** in
+`src/lib/longterm/` (`types.ts`, `rates.ts`, `tax.ts`, `model.ts`) with 22 tests
+(`tests/longterm-tax.test.ts`, `tests/longterm-model.test.ts`). Gates were green at handoff:
+`format:check`, `typecheck`, `npm test` (**1,034/1,034 across 238 suites**), `npm run build`.
+No schema, migration, backup, nav, SPEC, guide or version change; **no release cut**; the engine is
+inert until the page exists.
+
+**What the next session builds — slice 2 (then slice 3):**
+
+1. **`/longterm` — "Long-term forecast"** page (menu's second group beside Horizon), server-rendered
+   house style: an assumptions panel (**everything an editable variable — pot values, rates,
+   amounts are never baked in**, dates shown as **age and year**); answer cards led by the
+   household's own questions ("income in {year}", "income at age 62 — 2032"); the calendar-year
+   table with per-person + household totals in future money and today's money; the **three-rate
+   capital comparison** (runForecast's `overrideInvestmentGrowthBp` — the household's 4/6/8% net);
+   and the **drawdown vs annuity side-by-side** (`pensionTakeUpOverride` — the tool aids that
+   decision and never recommends). Estimated-tax figures always say **estimated**; a £0
+   "other spending" line must carry a visible warning (§5.6).
+2. **Persistence:** one migration creating `longterm_plans` (id, name, versioned JSON payload,
+   created/updated — house conventions). Pensions/investments/windfalls live in the payload at v1.
+3. **Slice 3:** nav entry, guide vocabulary, SPEC section, e2e spec, release notes + version bump
+   (the five version places) when the household accepts the preview — per `docs/RELEASE_PROCESS.md`.
+
+**Engine facts the page must respect** (details in the feature plan §5 and the `model.ts` header):
+all money is integer pence (`roundHalfUpDivide`, never float); inflation is **one figure per year,
+stepped each January** (year one = today's baseline exactly); annuity rates are **pence per £100k of
+pot**; tax is per person per calendar year from the versioned `rates.ts` card (2026/27 as data —
+edit there, never in `tax.ts`), charged at year end against the GIA then ISA; shortfalls draw ISA
+then GIA; "money runs out" = first year with **unmet** spending (`moneyLastsTo`); a GIA is
+auto-created if surplus has nowhere to go; January's ISA shelter runs **before** that month's
+windfalls land.
+
+**Two flags awaiting the household** (LONGTERM_FORECASTING.md §5.7/§11A): (1) "to age 90" is
+currently interpreted as the **younger person's** 90th — **2070**, not his 2060; (2) her state
+pension age defaults to **68** (current law for a 1980 birth year). Both are single editable
+assumptions once the page exists; confirm before the first release.
+
+**Household inputs not yet supplied** (they are form variables, not blockers): both pension pot
+values, her salary and stop date, the annual ISA-shelter amount (default suggestion £40k/year), and
+the annuity comparison rate (default suggestion £5,500/yr per £100k). The inheritance is start-of-
+2027, £250k after the mortgage payoff; the mortgage is an end-dated commitment that ends within
+months; inflation 2.5%; return rates 4/6/8% net; "other spending" £0 flagged.
+
+**Sandbox notes for this feature's work:** `npm ci` must be `npm ci --ignore-scripts` (SANDBOX
+entry 1); Playwright cannot run here (entry 2) — a UI slice's browser evidence comes from the CI
+`browser` job. `next build` rewrites `next-env.d.ts` (dev paths ↔ build paths) — revert that churn,
+it is not part of the work.
+
+---
+
 # Release v1.25.0 — "Nothing owing" on Borrowing, and line items that open and close where you were (GitHub issue #68) (2026-10-16)
 
 **Release scope is prepared on this branch.** The household's report was a list of small annoyances
