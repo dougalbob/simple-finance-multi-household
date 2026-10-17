@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { describe, it } from 'node:test';
@@ -12,6 +13,14 @@ import { APP_VERSION } from '../src/lib/version';
 import { makeTempDir, migrationsFolderBefore } from './helpers';
 
 const PASSWORD = 'correct-horse-battery-staple';
+
+/** The live migration count, so a new migration does not break this suite. */
+function journalEntryCount(): number {
+  const journal = JSON.parse(readFileSync(path.resolve('drizzle/meta/_journal.json'), 'utf8')) as {
+    entries: unknown[];
+  };
+  return journal.entries.length;
+}
 
 async function seededHandle() {
   const dir = await makeTempDir('sf-backup-src-');
@@ -95,7 +104,7 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
       assert.equal(countRows(target, 'checkpoints'), 2);
       assert.equal(countRows(target, 'audit_entries'), 3);
       // One row per applied migration: 0000…0019 (twenty files).
-      assert.equal(countRows(target, '__drizzle_migrations'), 20);
+      assert.equal(countRows(target, '__drizzle_migrations'), journalEntryCount());
     } finally {
       handle.raw.close();
     }
@@ -155,7 +164,7 @@ describe('encrypted backup + restore round-trip (isolated copies only)', () => {
       password: PASSWORD,
       targetDatabasePath: target,
     });
-    assert.equal(countRows(target, '__drizzle_migrations'), 20);
+    assert.equal(countRows(target, '__drizzle_migrations'), journalEntryCount());
     assert.equal(countRows(target, 'pots'), 1);
     const db = new Database(target, { readonly: true });
     try {

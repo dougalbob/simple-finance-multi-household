@@ -4,7 +4,6 @@ import {
   capitalTrajectory,
   incomeAtAge,
   incomeForYear,
-  moneyLastsTo,
   runForecast,
   todayMoneyPence,
 } from '../src/lib/longterm/model';
@@ -90,7 +89,8 @@ describe('long-term forecast engine: penny-exact spend-down and run-out (LONGTER
     assert.equal(y2027?.shortfallPence, 0, 'capital to exactly zero is a covered year');
     assert.equal(y2028?.shortfallPence, 1_200_000);
     assert.equal(y2029?.shortfallPence, 1_200_000);
-    assert.deepEqual(moneyLastsTo(result), { lastsToYear: 2027, runsOutInYear: 2028 });
+    // The view's sustainability rule owns the "runs out" headline; the
+    // engine only reports each year's shortfall (tests/longterm-view.test.ts).
   });
 
   it('a GIA drawdown spends basis first and records no gain while basis remains', () => {

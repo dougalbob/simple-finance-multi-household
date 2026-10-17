@@ -141,6 +141,13 @@
       "when": 1792163098691,
       "tag": "0019_purchase_paid_via",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1792231894624,
+      "tag": "0020_longterm_plans",
+      "breakpoints": true
     }
   ]
 }

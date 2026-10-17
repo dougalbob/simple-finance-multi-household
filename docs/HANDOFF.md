@@ -1,57 +1,56 @@
-# Next: long-term forecasting — slice 2 (the `/longterm` page) (2026-10-17)
+# Next: long-term forecasting — slice 3 (nav, guide, SPEC, release) (2026-10-17)
 
-**Read [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) first** — it is the feature's own
-design record, grill answers (§11A) and session log (§12). This note is the app-level pointer.
+**Read [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) first** — the feature's own design
+record, grill answers (§11A) and session log (§12); decision 234 in
+[`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) is this slice's build record.
 
-**What this session delivered (PR #70, decision 233):** the design record (committed as
-`LONGTERM_FORECASTING.md` at the repo root, beside `PROJECTS_IMPLEMENTATION.MD` by the household's
-naming request); the household's grill answers folded into it; and **slice 1 — the pure engine** in
-`src/lib/longterm/` (`types.ts`, `rates.ts`, `tax.ts`, `model.ts`) with 22 tests
-(`tests/longterm-tax.test.ts`, `tests/longterm-model.test.ts`). Gates were green at handoff:
-`format:check`, `typecheck`, `npm test` (**1,034/1,034 across 238 suites**), `npm run build`.
-No schema, migration, backup, nav, SPEC, guide or version change; **no release cut**; the engine is
-inert until the page exists.
+**What this session delivered — slice 2, merged to `main` as PR #71 (2026-10-17). No release cut:**
+`/longterm` page renders the household's own questions over a saved plan: "income in 2030" and
+"income at age 62 — 2032" first, "does the money last?" beside them, the selected year line by line,
+the three-rate comparison, the same pot as drawdown vs annuity, every calendar year in future and
+today's money, and **one assumptions editor in which every pot value, rate, amount and date is
+editable**. Persistence is migration `0020_longterm_plans.sql` — one row per household holding a
+validated JSON payload behind a version counter, audited on create/save/reset. `npm test` is
+**1,052/1,052 across 245 suites** (18 of them new: `tests/longterm-plan.test.ts`,
+`tests/longterm-view.test.ts`) and `format:check`, `typecheck`, `npm run build` are green;
+`e2e/longterm.spec.ts` (4 journeys) passed locally through SANDBOX entry 8.
 
-**What the next session builds — slice 2 (then slice 3):**
+**Decisions this slice added** (recorded at `LONGTERM_FORECASTING.md` §12 row 4 and decision 234):
 
-1. **`/longterm` — "Long-term forecast"** page (menu's second group beside Horizon), server-rendered
-   house style: an assumptions panel (**everything an editable variable — pot values, rates,
-   amounts are never baked in**, dates shown as **age and year**); answer cards led by the
-   household's own questions ("income in {year}", "income at age 62 — 2032"); the calendar-year
-   table with per-person + household totals in future money and today's money; the **three-rate
-   capital comparison** (runForecast's `overrideInvestmentGrowthBp` — the household's 4/6/8% net);
-   and the **drawdown vs annuity side-by-side** (`pensionTakeUpOverride` — the tool aids that
-   decision and never recommends). Estimated-tax figures always say **estimated**; a £0
-   "other spending" line must carry a visible warning (§5.6).
-2. **Persistence:** one migration creating `longterm_plans` (id, name, versioned JSON payload,
-   created/updated — house conventions). Pensions/investments/windfalls live in the payload at v1.
-3. **Slice 3:** nav entry, guide vocabulary, SPEC section, e2e spec, release notes + version bump
-   (the five version places) when the household accepts the preview — per `docs/RELEASE_PROCESS.md`.
+- **A gap is not a run-out.** `sustainabilityOf` reports the first shortfall separately from the
+  trailing unmet run: `runsOutInYear` is the *start of the trailing run* (null when the horizon's
+  last year is covered), `gapYears` lists the unmet years before it, and the page says "It covers
+  every year from {firstCoveredAfterGapYear} to {endYear}" with the gap named. The engine's old
+  `moneyLastsTo` was deleted. Without this, the draft's pre-inheritance 2026 gap printed "the money
+  runs out during 2026" at every rate while 2027 onward was covered.
+- **Earnings are drafted from receipt schedules.** An unassigned receipt lands on the younger person
+  with a stop date of the year before State Pension age — a draft the editor labels as one to
+  correct. This is what makes "both members working" work as the ordinary case.
+- **The comparison rates replace the investments' growth only**; pension pots keep their own rates,
+  and the page says so twice.
+- **The assumptions panel keeps the reader's open/closed choice** across a save (a save that clears
+  the last warning must not collapse the form and its success message under the reader).
 
-**Engine facts the page must respect** (details in the feature plan §5 and the `model.ts` header):
-all money is integer pence (`roundHalfUpDivide`, never float); inflation is **one figure per year,
-stepped each January** (year one = today's baseline exactly); annuity rates are **pence per £100k of
-pot**; tax is per person per calendar year from the versioned `rates.ts` card (2026/27 as data —
-edit there, never in `tax.ts`), charged at year end against the GIA then ISA; shortfalls draw ISA
-then GIA; "money runs out" = first year with **unmet** spending (`moneyLastsTo`); a GIA is
-auto-created if surplus has nowhere to go; January's ISA shelter runs **before** that month's
-windfalls land.
+**What slice 3 builds (when the household accepts the preview):** the nav entry in the menu's second
+group beside Horizon, guide vocabulary (`src/lib/guide.ts`), a SPEC section, the release notes + the
+five-place version bump, and the merge/tag/release per `docs/RELEASE_PROCESS.md`. The e2e spec and
+its `longterm` Playwright project already exist from slice 2, so slice 3 mostly adds the
+documentation and release plumbing.
 
-**Two flags awaiting the household** (LONGTERM_FORECASTING.md §5.7/§11A): (1) "to age 90" is
-currently interpreted as the **younger person's** 90th — **2070**, not his 2060; (2) her state
-pension age defaults to **68** (current law for a 1980 birth year). Both are single editable
-assumptions once the page exists; confirm before the first release.
+**Two flags still awaiting the household** (§5.7/§11A): (1) "to age 90" currently means the
+**younger person's** 90th — **2070**, not his 2060; (2) her state pension age defaults to **68**
+(current law for a 1980 birth year). Both are single editable fields now, on the page.
 
-**Household inputs not yet supplied** (they are form variables, not blockers): both pension pot
-values, her salary and stop date, the annual ISA-shelter amount (default suggestion £40k/year), and
-the annuity comparison rate (default suggestion £5,500/yr per £100k). The inheritance is start-of-
-2027, £250k after the mortgage payoff; the mortgage is an end-dated commitment that ends within
-months; inflation 2.5%; return rates 4/6/8% net; "other spending" £0 flagged.
+**Household inputs still not supplied** (form variables, not blockers): both pension pot values, her
+salary and stop date, the annual ISA-shelter amount (default suggestion £40k/year), and the annuity
+comparison rate (default suggestion £5,500/year per £100k). The draft seeds the inheritance
+(start-2027, £250k), inflation 2.5%, the 4/6/8% rates, and the £0 "other spending" line with its
+required warning.
 
-**Sandbox notes for this feature's work:** `npm ci` must be `npm ci --ignore-scripts` (SANDBOX
-entry 1); Playwright cannot run here (entry 2) — a UI slice's browser evidence comes from the CI
-`browser` job. `next build` rewrites `next-env.d.ts` (dev paths ↔ build paths) — revert that churn,
-it is not part of the work.
+**Sandbox notes:** `npm ci --ignore-scripts` (SANDBOX entry 1); Playwright **can** run here through
+the `@sparticuz/chromium` recipe (SANDBOX entry 8) — that is how this slice's browser evidence was
+taken; a spec that saves to the shared seed should reset to a fresh draft first (the `longterm` spec
+does); `next build` rewrites `next-env.d.ts` — revert that churn.
 
 ---
 

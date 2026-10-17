@@ -1037,3 +1037,26 @@ export const projectQuotes = sqliteTable(
     index('project_quotes_supplier_idx').on(table.supplierId),
   ],
 );
+
+/**
+ * The long-term forecast's saved assumptions (LONGTERM_FORECASTING.md §9,
+ * slice 2). One row per household holds the whole plan as a versioned JSON
+ * payload — people and their optional streams, pension pots, investments,
+ * windfalls, spending, commitments and the comparison rates. Pensions and
+ * investments stay inside the payload at v1; promote them to tables only with
+ * a real need. The row carries the same optimistic-concurrency `version`
+ * counter as every other correctable record.
+ */
+export const longtermPlans = sqliteTable(
+  'longterm_plans',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    /** JSON `LongTermPlanDocument` (src/lib/longterm/plan.ts), validated on read and write. */
+    payload: text('payload').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [uniqueIndex('longterm_plans_name_unique').on(table.name)],
+);
