@@ -2355,7 +2355,7 @@ Phase 1 is the DIY matrix end-to-end above; Phase 2 is the optimiser above. Phas
 bundle refinements; Phase 4 the `compare_options` candidate/TCO mode. `PROJECTS_IMPLEMENTATION.MD`
 tracks the stage session by session.
 
-## 28. Long-term forecast (v1.26.0, decisions 233–235)
+## 28. Long-term forecast (v1.26.0, decisions 233–235; issue #73 slices 1–3 unreleased, decisions 236–238)
 
 A multi-decade projection at `/longterm`, reached from the menu — on the desktop bar beside Horizon,
 and in the phone drawer's second group, because it is a sit-down page rather than a daily tap. It is
@@ -2368,7 +2368,11 @@ and estimated UK tax. `LONGTERM_FORECASTING.md` is the feature's design record a
 
 - **Per-person optional streams, project-wide.** A person carries any of: earnings with a stop date,
   State Pension (weekly amount, start date, uprating), and up to eight pension pots (value, growth
-  rate, start date, drawdown or annuity shape). Nothing is assumed present, so two working people
+  rate, start date, drawdown or annuity shape). Each person also has a sex, a life expectancy
+  (ONS period life expectancy at 65: 87 woman / 84 man, seeding the default) and a **plan-to age**
+  (life expectancy + 5 by default). From the year after their plan-to year, their earnings, State
+  Pension and drawdown stop; household spending continues. The forecast ends on the later plan-to
+  year. Saved plans from before plan-to existed fill it from their saved horizon, so nothing moves. Nothing is assumed present, so two working people
   model as naturally as this household's retired/working pair. Household-wide figures add the two
   taxpayers only after each has been taxed separately.
 - **Month-step, year-display.** The pure engine (`src/lib/longterm/`) steps one month at a time and
@@ -2381,6 +2385,16 @@ and estimated UK tax. `LONGTERM_FORECASTING.md` is the feature's design record a
   each January from the first one after today, before and after its start date (a part-year start
   is labelled as one). The uprating defaults to a fixed 3.50% (not inflation + 1%) and is labelled as
   a changeable assumption.
+- **Earnings grow, too (issue #73, slice 2).** Pay is entered as today's figure and rises each January
+  from today — with inflation by default ("Rises with inflation" ticked, so a later inflation change
+  flows through), or at an explicit % override when unticked — until its last-paid date. Tax and NI
+  follow.
+- **Tax thresholds rise (option B).** One plan-level rate (default 1.0%) indexes every money figure on
+  the card together — personal allowance and taper point, basic-rate limit, additional-rate threshold,
+  savings band, personal savings allowances, dividend and CGT allowances, NI thresholds — from 2027,
+  stepped each January; rates never move. Option C (separate allowance and band rates) is a recorded
+  later refinement, not built. Growth steps in January while UK tax years start on 6 April; this is a
+  recorded approximation.
 - **Estimated UK tax per person, per year.** Income tax in HMRC stacking order with personal-allowance
   taper, the savings starting rate and personal savings allowance, the dividend allowance, capital
   gains tax on realised GIA gains, and employee National Insurance. The 2026/27 card is **data** in
