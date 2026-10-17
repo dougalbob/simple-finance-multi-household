@@ -7,6 +7,7 @@ import {
   runForecast,
   todayMoneyPence,
 } from '../src/lib/longterm/model';
+import { UK_2026_27, taxCardForYear } from '../src/lib/longterm/rates';
 import type {
   LongTermPerson,
   LongTermPlan,
@@ -159,13 +160,70 @@ describe('long-term forecast engine: income streams (§5.1, project-wide)', () =
     const [y2026, y2027, y2028] = result.years;
     assert.ok(y2026 && y2027 && y2028);
     assert.equal(y2026.people[0]?.income.statePensionPence, 0, 'nothing before the start date');
-    // £241.30 × 52 = £12,547.60 = 1,254,760p; monthly 104,563p (half-up), ×12.
-    assert.equal(y2027.people[0]?.income.statePensionPence, 1_254_756);
-    assert.equal(y2027.people[0]?.income.incomeTaxPence, 0, 'under the £12,570 allowance');
-    // 3.5% uprating: 1,254,760 + 43,917 = 1,298,677 → monthly 108,223p, ×12.
-    assert.equal(y2028.people[0]?.income.statePensionPence, 1_298_676);
-    // Taxed on the £41,676 above the allowance at 20% = 8,335p.
-    assert.equal(y2028.people[0]?.income.incomeTaxPence, 8_335);
+    // The weekly figure is today's rate, so the first January after today
+    // (2027) uprates it before it is paid. £241.30 × 52 = 1,254,760p; +3.5%
+    // = 1,254,760 + 43,917 = 1,298,677p; monthly 108,223p (half-up), ×12.
+    assert.equal(y2027.people[0]?.income.statePensionPence, 1_298_676);
+    // Taxed on the £41,676 above the £12,570 allowance at 20% = 8,335p.
+    assert.equal(y2027.people[0]?.income.incomeTaxPence, 8_335);
+    // Second uprating: 1,298,677 + 45,454 = 1,344,131p → monthly 112,011p, ×12.
+    assert.equal(y2028.people[0]?.income.statePensionPence, 1_344_132);
+    // Taxed on the £87,132 above the allowance at 20% = 17,426p.
+    assert.equal(y2028.people[0]?.income.incomeTaxPence, 17_426);
+  });
+
+  it('a mid-year State Pension start is uprated from today before it starts (the weekly figure is today’s rate)', () => {
+    // Today Oct 2026; starts 1 Sep 2037 (four months of 2037). At 0% inflation
+    // and 3.5% uprating the 2037 rate is £12,547.60 × 1.035^11, and 2038 is one
+    // more uprating on top — not the 2026 rate.
+    const result = runForecast(
+      plan({
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1971,
+            statePension: { weeklyPence: 24_130, startDate: '2037-09-01', upratingBp: 350 },
+          }),
+        ],
+        horizonEndDate: '2038-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2037 = result.years.find((y) => y.year === 2037);
+    const y2038 = result.years.find((y) => y.year === 2038);
+    assert.ok(y2037 && y2038);
+    // Four months only: 4 × monthly, where the annual figure is ~£18,319.12.
+    assert.equal(y2037.people[0]?.income.statePensionPence, 610_636);
+    assert.equal(y2038.people[0]?.income.statePensionPence, 1_896_036);
+    // The first full year is exactly one more uprating than the part-year rate.
+    const annual2037 = 1_831_912;
+    assert.ok(Math.abs(1_896_036 - Math.round(annual2037 * 1.035)) < 1_000);
+  });
+
+  it('a mid-year start at 2.5% and 3.0% inflation/uprating also grows from today', () => {
+    const at = (rateBp: number) =>
+      runForecast(
+        plan({
+          inflationBp: rateBp,
+          people: [
+            person({
+              id: 'p1',
+              birthYear: 1971,
+              statePension: { weeklyPence: 24_130, startDate: '2037-09-01', upratingBp: rateBp },
+            }),
+          ],
+          horizonEndDate: '2038-12-31',
+        }),
+        '2026-10-17',
+      );
+    const at25 = at(250)
+      .years.filter((y) => y.year >= 2037)
+      .map((y) => y.people[0]?.income.statePensionPence);
+    const at30 = at(300)
+      .years.filter((y) => y.year >= 2037)
+      .map((y) => y.people[0]?.income.statePensionPence);
+    assert.deepEqual(at25, [548_784, 1_687_512]);
+    assert.deepEqual(at30, [578_960, 1_788_984]);
   });
 
   it('a drawdown pot takes 25% tax-free cash, then pays its annual draw while the fund lasts', () => {
@@ -397,5 +455,184 @@ describe('long-term forecast engine: the three-rate comparison (§5.3)', () => {
     const trajectory = capitalTrajectory(optimistic);
     assert.equal(trajectory.length, 10);
     assert.ok((trajectory[0]?.capitalPence ?? 0) > 25_000_000, 'year one already grows');
+  });
+});
+
+describe('long-term forecast engine: earnings growth (issue #73, slice 2)', () => {
+  it('pay rises each January with the plan inflation by default, and stops at the last paid date', () => {
+    // Today Oct 2026. £3,000/month today; 2.5% inflation; paid until June 2028.
+    const result = runForecast(
+      plan({
+        inflationBp: 250,
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1975,
+            earnings: { monthlyPence: 300_000, untilDate: '2028-06-30', risesWithInflation: true },
+          }),
+        ],
+        horizonEndDate: '2028-12-31',
+      }),
+      '2026-10-17',
+    );
+    const [y2026, y2027, y2028] = result.years;
+    assert.ok(y2026 && y2027 && y2028);
+    // Oct–Dec 2026 at today's pay.
+    assert.equal(y2026.people[0]?.income.earningsPence, 900_000);
+    // Jan 2027: 300,000 + 2.5% (7,500) = 307,500 × 12.
+    assert.equal(y2027.people[0]?.income.earningsPence, 3_690_000);
+    // Jan 2028: 307,500 × 1.025 = 315,187.5 → 315,188 (half-up); paid Jan–Jun only.
+    assert.equal(y2028.people[0]?.income.earningsPence, 1_891_128);
+  });
+
+  it('an explicit override replaces inflation when the box is unticked', () => {
+    const result = runForecast(
+      plan({
+        inflationBp: 250,
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1975,
+            earnings: {
+              monthlyPence: 300_000,
+              untilDate: '2030-12-31',
+              risesWithInflation: false,
+              risesBp: 400,
+            },
+          }),
+        ],
+        horizonEndDate: '2027-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2027 = result.years.find((y) => y.year === 2027);
+    assert.ok(y2027);
+    // Jan 2027 at 4%: 300,000 + 12,000 = 312,000 × 12.
+    assert.equal(y2027.people[0]?.income.earningsPence, 3_744_000);
+  });
+
+  it('growth is not applied in the year pay is set (before the first January after today)', () => {
+    const result = runForecast(
+      plan({
+        inflationBp: 250,
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1975,
+            earnings: { monthlyPence: 300_000, untilDate: '2030-12-31' },
+          }),
+        ],
+        horizonEndDate: '2026-12-31',
+      }),
+      '2026-10-17',
+    );
+    assert.equal(result.years[0]?.people[0]?.income.earningsPence, 900_000);
+  });
+});
+
+describe('long-term forecast engine: tax indexation (issue #73, option B)', () => {
+  it('indexes every money figure together from 2027, rates unchanged, rounded to the penny each step', () => {
+    const card2027 = taxCardForYear(UK_2026_27, 100, 2027);
+    // £12,570 × 1.01 = £12,695.70; PA is 1,257,000p → 1,269,570p.
+    assert.equal(card2027.personalAllowancePence, 1_269_570);
+    assert.equal(card2027.basicRateLimitPence, 3_770_000 * 1.01);
+    assert.equal(card2027.niUpperEarningsLimitPence, Math.round(5_027_000 * 1.01));
+    // Rates never move.
+    assert.equal(card2027.basicRateBp, UK_2026_27.basicRateBp);
+    assert.equal(card2027.niMainRateBp, UK_2026_27.niMainRateBp);
+    // Two steps compound: 1,257,000 → 1,269,570 → 1,282,265.7 → 1,282,266p.
+    assert.equal(taxCardForYear(UK_2026_27, 100, 2028).personalAllowancePence, 1_282_266);
+  });
+
+  it('the published card is untouched in 2026 and at 0%', () => {
+    assert.equal(taxCardForYear(UK_2026_27, 100, 2026), UK_2026_27);
+    assert.equal(taxCardForYear(UK_2026_27, 0, 2040), UK_2026_27);
+  });
+
+  it('a 0% index reproduces the fixed-card forecast; a rising index pays less tax on the same income', () => {
+    const base = (taxThresholdsBp: number | undefined) =>
+      runForecast(
+        plan({
+          taxThresholdsBp,
+          people: [
+            person({
+              id: 'p1',
+              birthYear: 1971,
+              earnings: { monthlyPence: 500_000, untilDate: '2040-12-31' },
+            }),
+          ],
+          horizonEndDate: '2028-12-31',
+        }),
+        '2026-10-17',
+      );
+    const fixed = base(0).years.map((y) => y.people[0]?.income.incomeTaxPence);
+    const indexed = base(100).years.map((y) => y.people[0]?.income.incomeTaxPence);
+    // 2026 is the published card either way.
+    assert.equal(indexed[0], fixed[0]);
+    // 2027 and 2028 are charged on the indexed bands, so they are lower.
+    assert.ok((indexed[1] ?? 0) < (fixed[1] ?? 0));
+    assert.ok((indexed[2] ?? 0) < (fixed[2] ?? 0));
+  });
+});
+
+describe('long-term forecast engine: per-person plan-to (issue #73, slice 3)', () => {
+  it("each person's earnings and State Pension stop after their own plan-to year", () => {
+    // Him: born 1960, plan-to 68 → his last year is 2028.
+    // Her: born 1980, plan-to 80 → 2060, still running at the 2029 horizon.
+    const result = runForecast(
+      plan({
+        people: [
+          person({
+            id: 'him',
+            birthYear: 1960,
+            planToAge: 68,
+            earnings: { monthlyPence: 300_000, untilDate: '2040-12-31' },
+            statePension: { weeklyPence: 24_130, startDate: '2026-12-01', upratingBp: 0 },
+          }),
+          person({
+            id: 'her',
+            birthYear: 1980,
+            planToAge: 80,
+            earnings: { monthlyPence: 300_000, untilDate: '2040-12-31' },
+          }),
+        ],
+        horizonEndDate: '2029-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2028 = result.years.find((y) => y.year === 2028);
+    const y2029 = result.years.find((y) => y.year === 2029);
+    assert.ok(y2028 && y2029);
+    // Him: pay and State Pension run through his plan-to year (2028), then stop.
+    assert.equal(y2028.people[0]?.income.earningsPence, 3_600_000);
+    assert.equal(y2029.people[0]?.income.earningsPence, 0);
+    assert.equal(y2028.people[0]?.income.statePensionPence, 1_254_756);
+    assert.equal(y2029.people[0]?.income.statePensionPence, 0);
+    // Her: still earning in 2029.
+    assert.equal(y2029.people[1]?.income.earningsPence, 3_600_000);
+  });
+
+  it("a person's drawdown stops after their plan-to year, while the fund stays invested", () => {
+    const result = runForecast(
+      plan({
+        people: [
+          person({
+            id: 'p1',
+            birthYear: 1960,
+            planToAge: 68,
+            pensionPots: [pot({ id: 'a', startDate: '2026-11-01' })],
+          }),
+        ],
+        horizonEndDate: '2029-12-31',
+      }),
+      '2026-10-17',
+    );
+    const y2028 = result.years.find((y) => y.year === 2028);
+    const y2029 = result.years.find((y) => y.year === 2029);
+    assert.ok(y2028 && y2029);
+    assert.equal(y2028.people[0]?.income.pensionDrawdownPence, 1_200_000);
+    assert.equal(y2029.people[0]?.income.pensionDrawdownPence, 0);
+    // The undrawn fund is still counted in the pension total (not lost).
+    assert.ok((y2029.pensionFundsPence ?? 0) > 0);
   });
 });

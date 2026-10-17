@@ -17,6 +17,7 @@ import type {
   PensionPotPlan,
   WindfallPlan,
 } from '@/lib/longterm/types';
+import { LIFE_EXPECTANCY_AGE, PLAN_TO_MARGIN_YEARS } from '@/lib/longterm/rates';
 import { parsePence, penceInput } from '@/lib/money';
 
 const inputClass =
@@ -441,10 +442,11 @@ export function LongTermAssumptionsForm({
                   canRemove={draft.plan.people.length > 1}
                   readOnly={readOnly}
                   today={today}
-                  onEdit={(mutator) =>
+                  onEdit={(mutator, syncHorizon) =>
                     editPlan((plan) => {
                       const target = plan.people.find((entry) => entry.id === person.id);
                       if (target !== undefined) mutator(target);
+                      if (syncHorizon) plan.horizonEndDate = laterPlanToEnd(plan);
                     })
                   }
                   onRemove={() =>
@@ -702,6 +704,17 @@ export function LongTermAssumptionsForm({
                     })
                   }
                 />
+                <RateField
+                  id="longterm-tax-thresholds"
+                  label="Tax thresholds rise a year"
+                  valueBp={draft.plan.taxThresholdsBp ?? 0}
+                  hint="Allowances and tax bands rise each January from 2027, at this rate. The 2026/27 rates stay the basis."
+                  onValue={(bp) =>
+                    editPlan((plan) => {
+                      plan.taxThresholdsBp = bp;
+                    })
+                  }
+                />
                 <PenceField
                   id="longterm-isa-shelter"
                   label="Move into ISAs, a year"
@@ -724,8 +737,8 @@ export function LongTermAssumptionsForm({
                   }
                 />
                 <div className="rounded border border-dashed border-border-strong p-2 text-[11px] text-ink-muted">
-                  The default end is the year the younger person turns 90. Change it here if you
-                  would rather stop at 95, or earlier.
+                  The default end is the later of the people's plan-to years, and moves when a
+                  plan-to age changes. Change it here if you want a different end.
                 </div>
               </div>
             </Section>
@@ -789,6 +802,14 @@ export function LongTermAssumptionsForm({
   );
 }
 
+/** The forecast ends on the later of the people's plan-to years (issue #73). */
+function laterPlanToEnd(plan: LongTermPlanDocument['plan']): string {
+  const ends = plan.people
+    .filter((person) => person.planToAge !== undefined)
+    .map((person) => `${person.birthYear + (person.planToAge ?? 0)}-12-31`);
+  return ends.length === 0 ? plan.horizonEndDate : ends.reduce((a, b) => (a > b ? a : b));
+}
+
 function PersonEditor({
   person,
   personIndex,
@@ -805,7 +826,7 @@ function PersonEditor({
   canRemove: boolean;
   readOnly: boolean;
   today: string;
-  onEdit: (mutator: (person: LongTermPerson) => void) => void;
+  onEdit: (mutator: (person: LongTermPerson) => void, syncHorizon?: boolean) => void;
   onRemove: () => void;
   onAddPot: () => void;
   onRemovePot: (potId: string) => void;
@@ -813,7 +834,68 @@ function PersonEditor({
   const currentYear = Number(today.slice(0, 4));
   return (
     <div className="rounded-lg border border-border-hairline p-3">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor={`longterm-person-${personIndex}-sex`}
+            className="text-xs font-medium text-ink-soft"
+          >
+            Sex
+          </label>
+          <select
+            id={`longterm-person-${personIndex}-sex`}
+            value={person.sex ?? ''}
+            disabled={readOnly}
+            className={inputClass}
+            onChange={(event) => {
+              const sex = event.target.value === 'man' ? 'man' : 'woman';
+              onEdit((target) => {
+                target.sex = sex;
+                target.lifeExpectancyAge = LIFE_EXPECTANCY_AGE[sex];
+                target.planToAge = LIFE_EXPECTANCY_AGE[sex] + PLAN_TO_MARGIN_YEARS;
+              }, true);
+            }}
+          >
+            <option value="" disabled>
+              Choose
+            </option>
+            <option value="woman">Woman</option>
+            <option value="man">Man</option>
+          </select>
+        </div>
+        {person.lifeExpectancyAge === undefined ? null : (
+          <NumberField
+            id={`longterm-person-${personIndex}-life-expectancy`}
+            label="Life expectancy (age)"
+            value={person.lifeExpectancyAge}
+            min={1}
+            max={120}
+            onValue={(value) =>
+              onEdit((target) => {
+                target.lifeExpectancyAge = value;
+                target.planToAge = value + PLAN_TO_MARGIN_YEARS;
+              }, true)
+            }
+            disabled={readOnly}
+          />
+        )}
+        <NumberField
+          id={`longterm-person-${personIndex}-plan-to`}
+          label="Plan to age"
+          value={person.planToAge ?? 0}
+          min={1}
+          max={120}
+          onValue={(value) => onEdit((target) => (target.planToAge = value), true)}
+          disabled={readOnly}
+        />
+        <p className={`sm:col-span-3 ${HINT_CLASS}`}>
+          Life expectancy is an average — about half of people live longer. Plan to is the age this
+          forecast runs to for this person; it defaults five years beyond life expectancy so the
+          plan does not stop where half the population is still alive. The forecast ends on the
+          later plan-to year. Both can be edited, including downwards.
+        </p>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <TextField
           id={`longterm-person-${personIndex}-label`}
           label="Name"
@@ -827,7 +909,7 @@ function PersonEditor({
           value={person.birthYear}
           min={1900}
           max={2100}
-          onValue={(value) => onEdit((target) => (target.birthYear = value))}
+          onValue={(value) => onEdit((target) => (target.birthYear = value), true)}
           disabled={readOnly}
         />
         {canRemove ? (
@@ -849,7 +931,12 @@ function PersonEditor({
             onChange={(checked) =>
               onEdit((target) => {
                 target.earnings = checked
-                  ? { monthlyPence: 300_000, untilDate: `${currentYear + 10}-12-31` }
+                  ? {
+                      monthlyPence: 300_000,
+                      untilDate: `${currentYear + 10}-12-31`,
+                      risesWithInflation: true,
+                      risesBp: 350,
+                    }
                   : null;
               })
             }
@@ -863,7 +950,7 @@ function PersonEditor({
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <PenceField
                 id={`longterm-person-${personIndex}-earnings`}
-                label="Pay, a month (gross)"
+                label="Pay a month, today (gross)"
                 value={person.earnings.monthlyPence}
                 onValue={(pence) =>
                   onEdit((target) => {
@@ -884,6 +971,40 @@ function PersonEditor({
                 disabled={readOnly}
               />
             </div>
+          )}
+          {person.earnings === null ? null : (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <CheckField
+                id={`longterm-person-${personIndex}-earnings-inflation`}
+                label="Rises with inflation"
+                checked={person.earnings.risesWithInflation !== false}
+                disabled={readOnly}
+                onChange={(checked) =>
+                  onEdit((target) => {
+                    if (target.earnings !== null) target.earnings.risesWithInflation = checked;
+                  })
+                }
+              />
+              {person.earnings.risesWithInflation === false ? (
+                <RateField
+                  id={`longterm-person-${personIndex}-earnings-rises`}
+                  label="Rises a year (override)"
+                  valueBp={person.earnings.risesBp ?? 0}
+                  onValue={(bp) =>
+                    onEdit((target) => {
+                      if (target.earnings !== null) target.earnings.risesBp = bp;
+                    })
+                  }
+                  disabled={readOnly}
+                />
+              ) : null}
+            </div>
+          )}
+          {person.earnings === null ? null : (
+            <p className={`mt-1 ${HINT_CLASS}`}>
+              Pay rises each January from today — with inflation while the box is ticked, or at the
+              percentage you enter when it is not — and stops on the last day of pay.
+            </p>
           )}
           {person.earnings === null ? null : (
             <p className={`mt-1 ${HINT_CLASS}`}>
@@ -920,7 +1041,7 @@ function PersonEditor({
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <PenceField
                 id={`longterm-person-${personIndex}-state-pension-weekly`}
-                label="A week (gross)"
+                label="A week, today's rate (gross)"
                 value={person.statePension.weeklyPence}
                 onValue={(pence) =>
                   onEdit((target) => {
@@ -942,7 +1063,7 @@ function PersonEditor({
               />
               <RateField
                 id={`longterm-person-${personIndex}-state-pension-uprating`}
-                label="Rises a year"
+                label="Rises a year (from today)"
                 valueBp={person.statePension.upratingBp}
                 onValue={(bp) =>
                   onEdit((target) => {
@@ -952,6 +1073,15 @@ function PersonEditor({
                 disabled={readOnly}
               />
             </div>
+          )}
+          {person.statePension === null ? null : (
+            <p className={`mt-2 ${HINT_CLASS}`}>
+              The weekly figure is today&apos;s rate, not the rate when payments begin: the app
+              grows it each January from today, through the start date. Rises a year defaults to a
+              fixed 3.50%; it does not follow the plan&apos;s inflation rate. The State Pension
+              triple lock is the highest of inflation, 2.5% or earnings growth; 3.50% is a mid
+              assumption you can change.
+            </p>
           )}
         </div>
       </div>

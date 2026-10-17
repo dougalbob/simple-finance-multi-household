@@ -3834,3 +3834,31 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       the menu button asleep until the mobile layout is interactive, which is why it flaked in CI
       and passed on retry. Local run after the fix: bell, desktop, mobile and longterm projects
       **53/53**.
+
+236. **Issue #73, slice 1 — the State Pension is today's rate, uprated from today (2026-10-17).** The
+    weekly figure the household types is **today's** rate, not the rate in the start year. It is
+    compounded each January after today, before and after the start date (`model.ts`, the January
+    step). Before this, a 2037 start was paid at the 2026 rate and understated the pension by about
+    23% in real terms. The pinned test at `tests/longterm-model.test.ts` is rewritten to the corrected
+    numbers, with mid-year-start cases at 2.5%, 3.0% and 3.5%. The start year is labelled as a
+    part-year on the year detail. The form's uprating default is a **fixed 3.50%**, not inflation +
+    1%, and the hint names the triple lock (highest of inflation, 2.5% or earnings growth).
+
+237. **Issue #73, slice 2 — earnings growth and tax-threshold indexation (2026-10-17).** Earnings are
+    today's pay and rise each January from today: with the plan's inflation rate while **Rises with
+    inflation** is ticked (the default, so a later inflation change flows through), or at an explicit
+    override % when unticked; growth stops at the last-paid date. Tax thresholds and allowances are a
+    plan-level option-B rate (default 1.0%): every money figure on the card indexes together from
+    2027 (`rates.ts` `taxCardForYear`); rates never move. The honesty footer states the indexation
+    rate. Option C (separate allowance and band rates) is recorded for later and not built. Both
+    growth fields are optional with schema defaults, so saved plans load.
+
+238. **Issue #73, slice 3 — per-person life expectancy and plan-to (2026-10-17).** Each person has a
+    sex, life expectancy (ONS 87 woman / 84 man, seeded by sex, freely editable including downwards)
+    and a plan-to age (life expectancy + 5). Earnings, State Pension and drawdown stop after the
+    person's plan-to year (option b; spending continues, undrawn pots stay invested). The forecast
+    ends on the later plan-to year and moves when a plan-to age changes; the date stays editable.
+    Saved plans without plan-to fill it from their saved horizon, so their numbers do not move.
+    Recorded and not built: drafts from records do not seed sex; a pension pot left at a plan-to date
+    needs a follow-up (transfer to the survivor's investments, or stay); no mortality modelling and no
+    joint-life model (issue #73, non-goals).

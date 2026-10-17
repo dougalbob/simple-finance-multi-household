@@ -40,6 +40,8 @@ const earningsSchema = z
   .object({
     monthlyPence: pence,
     untilDate: localDate,
+    risesWithInflation: z.boolean().default(true),
+    risesBp: basisPoints.default(350),
   })
   .strict();
 
@@ -70,6 +72,9 @@ const personSchema = z
     id,
     label,
     birthYear: z.number().int().min(1900).max(2100),
+    sex: z.enum(['woman', 'man']).optional(),
+    lifeExpectancyAge: z.number().int().min(1).max(120).optional(),
+    planToAge: z.number().int().min(1).max(120).optional(),
     earnings: earningsSchema.nullable(),
     statePension: statePensionSchema.nullable(),
     pensionPots: z.array(pensionPotSchema).max(8),
@@ -121,10 +126,24 @@ const planSchema = z
     spending: spendingSchema,
     commitments: z.array(commitmentSchema).max(30),
     inflationBp: basisPoints,
+    taxThresholdsBp: basisPoints.default(100),
     isaShelterAnnualPence: pence,
     horizonEndDate: localDate,
   })
-  .strict();
+  .strict()
+  .transform((plan) => {
+    // A saved plan from before plan-to existed keeps its horizon: each person's
+    // plan-to is the age they reach in the horizon year, so nothing moves.
+    const horizonYear = Number(plan.horizonEndDate.slice(0, 4));
+    return {
+      ...plan,
+      people: plan.people.map((person) =>
+        person.planToAge === undefined
+          ? { ...person, planToAge: Math.max(1, Math.min(120, horizonYear - person.birthYear)) }
+          : person,
+      ),
+    };
+  });
 
 const documentSchema = z
   .object({

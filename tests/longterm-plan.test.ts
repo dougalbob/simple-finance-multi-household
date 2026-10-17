@@ -197,6 +197,8 @@ describe('long-term plan: the draft from records and the saved row', () => {
     assert.deepEqual(plan.people[1]?.earnings, {
       monthlyPence: 245_000,
       untilDate: '2047-12-31',
+      risesWithInflation: true,
+      risesBp: 350,
     });
     assert.deepEqual(
       plan.people[0]?.pensionPots.map((pot) => pot.startDate),

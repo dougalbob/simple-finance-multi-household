@@ -327,7 +327,7 @@ export default async function LongTermPage({
       </div>
 
       {answer ? (
-        <YearDetail answer={answer} year={year} />
+        <YearDetail answer={answer} year={year} partYears={statePensionPartYears(plan, year)} />
       ) : (
         <p className="mt-6 rounded-xl border border-dashed border-border-strong bg-surface p-4 text-sm text-ink-soft">
           {year} is outside the forecast. Choose a year between {startYear} and {endYear}.
@@ -365,9 +365,9 @@ export default async function LongTermPage({
         <p>
           A projection of the assumptions above — arithmetic, not a bank forecast, not financial
           advice, and not a promise. Tax figures are <span className="font-medium">estimated</span>{' '}
-          with the {RATE_CARD_YEAR} rate card; future tax law, inflation and investment returns will
-          all differ. A real annuity quote comes from a provider and depends on your health and the
-          rates at the time.
+          with the {RATE_CARD_YEAR} rate card, {taxThresholdsSentence(plan.taxThresholdsBp ?? 0)};
+          future tax law, inflation and investment returns will all differ. A real annuity quote
+          comes from a provider and depends on your health and the rates at the time.
         </p>
         <p className="mt-2">
           How this app thinks:{' '}
@@ -444,7 +444,60 @@ function YearCard({
   );
 }
 
-function YearDetail({ answer, year }: { answer: YearAnswer; year: number }) {
+/** The honesty footer's tax sentence: the card is indexed, or held fixed. */
+function taxThresholdsSentence(indexBp: number): string {
+  if (indexBp === 0) return 'with allowances and bands held at those figures';
+  return `with allowances and bands rising ${(indexBp / 100).toFixed(2)}% a year from 2027`;
+}
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/**
+ * People whose State Pension starts part-way through `year`: the year's
+ * figure is then only the months from the start date, and must say so.
+ */
+function statePensionPartYears(
+  plan: LongTermPlan,
+  year: number,
+): { label: string; startMonthName: string; months: number }[] {
+  const out: { label: string; startMonthName: string; months: number }[] = [];
+  for (const person of plan.people) {
+    const start = person.statePension?.startDate;
+    if (!start) continue;
+    const startYear = Number(start.slice(0, 4));
+    const startMonth = Number(start.slice(5, 7));
+    if (startYear !== year || startMonth <= 1) continue;
+    out.push({
+      label: person.label,
+      startMonthName: MONTH_NAMES[startMonth - 1] ?? '',
+      months: 13 - startMonth,
+    });
+  }
+  return out;
+}
+
+function YearDetail({
+  answer,
+  year,
+  partYears,
+}: {
+  answer: YearAnswer;
+  year: number;
+  partYears: { label: string; startMonthName: string; months: number }[];
+}) {
   const row = answer.row;
   const incomeTax = answer.people.reduce(
     (sum, entry) => sum + entry.income.incomeTaxPence + entry.income.nationalInsurancePence,
@@ -465,6 +518,17 @@ function YearDetail({ answer, year }: { answer: YearAnswer; year: number }) {
           and today&apos;s money
         </span>
       </div>
+
+      {partYears.map((part) => (
+        <p
+          key={part.label}
+          className="mt-2 rounded border border-border-hairline bg-surface-muted p-2 text-xs text-ink-soft"
+        >
+          <span className="font-medium">{part.label}&apos;s State Pension</span> starts in{' '}
+          {part.startMonthName} {year}, so {year} is a part-year: {part.months} of 12 months, shown
+          as {part.months}/12 of the annual figure. The first full year is {year + 1}.
+        </p>
+      ))}
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">

@@ -1,3 +1,76 @@
+# Issue #73 — long-term forecast fixes and additions, slices 1–3 (2026-10-17) — unreleased, target v1.27.0
+
+**Read first:** [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) (§12 session log, row 6), SPEC §28,
+decisions **236–238** in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md), and the sandbox notes
+(entries 1, 8 and 21 in [`docs/SANDBOX.md`](SANDBOX.md)).
+
+**Release override — read before you do anything with tags or versions.** The product owner has overridden
+the release steps for issue #73 (see *Interim override* in [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md)).
+**Do not bump the version, write release notes, tag, publish or create a GitHub release until all of #73 is
+done.** `package.json` is still **v1.26.0**; the contract test requires documents to name that version. Open
+PRs for `main` unreleased. The Playwright browser CI check is left for the session that completes #73.
+
+**What this branch delivers (issue #73, the feature's fixes and additions):**
+
+1. **State Pension timing (`36062d4`).** The weekly figure is today's rate and grows each January from 2027,
+   before the start date as well. A 2037 start was paid at the 2026 rate; the bug is fixed and the pinned test
+   rewritten. The start year is labelled as a part-year. Copy says "today's rate", and the default uprating is
+   a fixed 3.50%.
+2. **Earnings growth and tax indexation (`da43028`).** Pay rises each January with inflation by default
+   ("Rises with inflation" ticked), or at an override %, and stops at the last-paid date. A plan-level **Tax
+   thresholds rise a year** (default 1.0%) indexes every money figure on the card together from 2027. The footer
+   states it.
+3. **Per-person life expectancy and plan-to (`c0a1220`).** Each person has sex, life expectancy (ONS 87 woman /
+   84 man) and plan-to (life expectancy + 5). Earnings, State Pension and drawdown stop after their plan-to year.
+   The forecast ends on the later plan-to year, which moves when a plan-to age changes.
+4. **Docs and guide (this commit).** The guide's longterm paragraph, SPEC §28, decisions 236–238, the sandbox note
+   on the native rebuild, and this entry.
+
+**Validation (this session):** `npm test` **1,063/1,063 across 249 suites**; `npm run format:check`,
+`npm run typecheck` and `npm run build` all green. The native module needed a rebuild after
+`npm ci --ignore-scripts` (SANDBOX 21). **Not run:** the Playwright suite, by the household's instruction.
+`e2e/longterm.spec.ts` is unchanged and its five journeys were **not** re-run here.
+
+**Issue #73 acceptance criteria — where they stand:**
+- 1 (State Pension, pre-start uprating): **met**, engine and tests.
+- 2 (start year marked as part-year): **met** on the year detail. Not browser-checked.
+- 3 (earnings grow, override, stop, tax and NI follow): **met**, engine and tests.
+- 4 (thresholds rise at the plan-level rate from 2027/28; footer says so): **met**, engine, tests and footer.
+- 5 (per-person sex, life expectancy, plan-to; horizon = later plan-to; lowered plan-to stops streams): **met**
+  in the engine and the form. The form's new row has not been checked in a browser.
+- 6 (saved plans load and save unchanged, with new fields defaulted): **met**, tested. Plans without plan-to
+  fill it from their horizon; plans without growth fields take the new defaults (see flags below).
+- 7 (`npm test`, format, typecheck and build green; e2e journeys extended; screenshots with no overflow): **partly.**
+  The first four are green. The e2e journeys are not extended and no screenshots were taken.
+
+**Left to do — next session (must finish #73, then release v1.27.0):**
+1. **Browser check of `/longterm`.** Check the State Pension hint and part-year note, the earnings "Rises with
+   inflation" checkbox and override, the new tax footer and threshold field, the sex, life expectancy and plan-to
+   row (it sits above the name and birth-year row; review the order), and the horizon sync. Check desktop and phone
+   for horizontal overflow and take screenshots.
+2. **Extend `e2e/longterm.spec.ts`** with a journey for the part-year label, the earnings checkbox, and a plan-to
+   change moving "Forecast ends on". Run it locally through SANDBOX entry 8. Leave the browser CI check for the
+   household's go-ahead, as instructed.
+3. **Decide with the household:** should drafts from records seed sex (and so life expectancy and plan-to)? Today
+   they leave sex blank, and the form asks for it.
+4. **Follow-up, not in #73's acceptance list:** a pension pot still held at a plan-to date keeps being invested. The
+   survivor-transfer or stay decision is open.
+5. **Release v1.27.0** once all of #73 is done, following `docs/RELEASE_PROCESS.md` in full: the five-place
+   version bump, `docs/RELEASE_NOTES_v1.27.0.md`, the contract documents naming v1.27.0, the PR gate, the
+   annotated tag, GHCR checks and the GitHub release. Then close issue #73 with a comment linking the PR.
+
+**Flags for the household (§5.7/§11A and #73):**
+- Existing saved plans **change numbers** when next loaded: thresholds index at 1.0% from 2027; pay grows with
+  inflation in January; plan-to is filled from the saved horizon (which keeps the horizon itself unchanged).
+- The State Pension uprating default is a fixed **3.50%**, which doesn't follow the inflation rate.
+- Life expectancy defaults (87 woman / 84 man) and plan-to (+5) are ONS-based defaults, not a forecast.
+- Her state pension age default (68 in 2048) is still the earlier flag.
+
+**Sandbox:** `npm ci --ignore-scripts`, then `npm_config_nodedir=/usr/local npm rebuild better-sqlite3`
+(SANDBOX 21). Run `git checkout -- next-env.d.ts` after `npm run build`.
+
+---
+
 # Release v1.26.0 — Long-term forecasting (slices 1–3) (2026-10-17)
 
 **Read [`LONGTERM_FORECASTING.md`](../LONGTERM_FORECASTING.md) first** — the feature's own design

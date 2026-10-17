@@ -4,6 +4,23 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## Interim override — issue #73 (recorded 2026-10-17)
+
+**The product owner has overridden the release steps below for the long-term forecast work (GitHub
+issue #73).** Until every slice of #73 is complete, the agent must:
+
+- **Not cut a release.** No version bump in `package.json`, `package-lock.json`, `src/lib/version.ts`,
+  the Unraid template or the release notes; no new `docs/RELEASE_NOTES_<tag>.md`; no annotated tag; no
+  image publish; no GitHub release. `package.json` stays at the last released version (`v1.26.0`), and the
+  contract test in `tests/multi-household-isolation-contract.test.ts` keeps requiring documents to name it.
+- **Open the pull request for `main` and leave it unreleased.** Its body says so. The household decides when it merges.
+- **Not wait on or fix the Playwright browser CI check** for these PRs. The household will pick that up
+  when the last slice is complete. Local checks (`npm test`, `format:check`, `typecheck`, `build`) are still expected.
+
+When the last slice is complete, the full release sequence below applies once, as **v1.27.0**: the version
+bump, the release notes, the contract documents naming the new tag, the PR gate, the annotated tag, the
+GHCR checks and the GitHub release. `AGENTS.md` and `docs/HANDOFF.md` point here.
+
 ## 0. Non-negotiable destination and production separation
 
 - This repository must be exactly `dougalbob/simple-finance-multi-household`.

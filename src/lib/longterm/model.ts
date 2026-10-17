@@ -7,9 +7,12 @@
  *
  * Month order (documented so tests can pin it):
  *   1. January (or the first month): uprate the price level, state pensions
- *      and annuities from the second calendar year; move the yearly ISA
+ *      (from the first January after today) and annuities (from the second
+ *      calendar year); move the yearly ISA
  *      shelter from the GIA. Inflation is one figure per year (§5.6): the
- *      first forecast year is exactly today's baseline spending.
+ *      first forecast year is exactly today's baseline spending. A State
+ *      Pension's weekly figure is today's rate, so it uprates each January
+ *      after today, before and after its start date.
  *   2. Date events in the month: windfalls land and are invested; a pension
  *      pot starting converts to an annuity or takes its 25% tax-free cash.
  *   3. Income accruals: earnings before the stop date; state pension after
@@ -34,10 +37,11 @@
  */
 
 import { roundHalfUpDivide } from '../money';
-import { UK_2026_27, type TaxRateCard } from './rates';
+import { UK_2026_27, taxCardForYear, type TaxRateCard } from './rates';
 import { estimatePersonTax, type PersonTaxComponents } from './tax';
 import type {
   ForecastResult,
+  LongTermPerson,
   LongTermPlan,
   PersonYearIncome,
   PensionPotPlan,
@@ -177,6 +181,16 @@ export function runForecast(
     })),
   );
 
+  /** True once a person has passed their plan-to year: their own streams end. */
+  const pastPlanTo = (person: LongTermPerson, month: string): boolean =>
+    person.planToAge !== undefined && `${person.birthYear + person.planToAge}-12` < month;
+
+  /** Today's gross monthly pay per person, grown each January while still paid. */
+  const earningsMonthly = new Map<string, number>();
+  for (const person of plan.people) {
+    if (person.earnings) earningsMonthly.set(person.id, person.earnings.monthlyPence);
+  }
+
   /** The state pension's annual amount per person, uprated each January. */
   const statePensionAnnual = new Map<string, number>();
   for (const person of plan.people) {
@@ -261,7 +275,10 @@ export function runForecast(
         dividendPence: acc.dividendPence,
         capitalGainsPence: acc.capitalGainsPence,
       };
-      const tax = estimatePersonTax(components, taxCard);
+      const tax = estimatePersonTax(
+        components,
+        taxCardForYear(taxCard, plan.taxThresholdsBp ?? 0, currentYearRow.year),
+      );
       const income: PersonYearIncome = {
         earningsPence: acc.earningsPence,
         statePensionPence: acc.statePensionPence,
@@ -355,8 +372,25 @@ export function runForecast(
     if (month.endsWith('-01') && !isFirstMonth) {
       priceIndex += roundHalfUpDivide(priceIndex * plan.inflationBp, RATE_DENOMINATOR);
       for (const person of plan.people) {
+        const earnings = person.earnings;
+        if (
+          earnings &&
+          earningsMonthly.has(person.id) &&
+          monthYear > yearOf(startDate) &&
+          monthKey(earnings.untilDate) >= month &&
+          !pastPlanTo(person, month)
+        ) {
+          const bp =
+            earnings.risesWithInflation === false ? (earnings.risesBp ?? 0) : plan.inflationBp;
+          earningsMonthly.set(
+            person.id,
+            uprateAnnualPence(earningsMonthly.get(person.id) as number, bp),
+          );
+        }
         const sp = person.statePension;
-        if (sp && statePensionAnnual.has(person.id) && monthYear > yearOf(sp.startDate)) {
+        // The weekly figure is today's rate: it compounds every January after
+        // today, whether or not the pension has started yet (§5.6).
+        if (sp && statePensionAnnual.has(person.id) && monthYear > yearOf(startDate)) {
           statePensionAnnual.set(
             person.id,
             uprateAnnualPence(statePensionAnnual.get(person.id) as number, sp.upratingBp),
@@ -419,12 +453,13 @@ export function runForecast(
     for (const person of plan.people) {
       const acc = row.people.get(person.id) as PersonAcc;
       const earnings = person.earnings;
-      if (earnings && monthKey(earnings.untilDate) >= month) {
-        acc.earningsPence += earnings.monthlyPence;
-        monthIncomePence += earnings.monthlyPence;
+      if (earnings && monthKey(earnings.untilDate) >= month && !pastPlanTo(person, month)) {
+        const monthly = earningsMonthly.get(person.id) as number;
+        acc.earningsPence += monthly;
+        monthIncomePence += monthly;
       }
       const sp = person.statePension;
-      if (sp && monthKey(sp.startDate) <= month) {
+      if (sp && monthKey(sp.startDate) <= month && !pastPlanTo(person, month)) {
         const monthly = roundHalfUpDivide(statePensionAnnual.get(person.id) as number, 12);
         acc.statePensionPence += monthly;
         monthIncomePence += monthly;
@@ -440,7 +475,7 @@ export function runForecast(
         const monthly = roundHalfUpDivide(pot.annuityAnnualPence, 12);
         if (acc) acc.pensionAnnuityPence += monthly;
         monthIncomePence += monthly;
-      } else if (pot.valuePence > 0) {
+      } else if (pot.valuePence > 0 && !(owner && pastPlanTo(owner, month))) {
         const monthly = Math.min(
           pot.valuePence,
           roundHalfUpDivide(pot.plan.drawdownAnnualPence, 12),

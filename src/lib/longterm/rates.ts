@@ -1,3 +1,5 @@
+import { roundHalfUpDivide } from '../money';
+
 /**
  * UK tax rate card as **data** (LONGTERM_FORECASTING.md §5.4): never hard-coded
  * into the engine, versioned by tax year, editable per plan. This is the
@@ -87,14 +89,65 @@ export const UK_2026_27: TaxRateCard = {
   niUpperRateBp: 200,
 };
 
+/** The calendar year the card's figures describe (2026/27). */
+export const CARD_BASE_YEAR = 2026;
+
+/** Every money figure on the card — indexed together so the card stays consistent. */
+const MONEY_FIELDS = [
+  'personalAllowancePence',
+  'paTaperFromPence',
+  'basicRateLimitPence',
+  'additionalRateFromPence',
+  'savingsStartingRateBandPence',
+  'personalSavingsAllowanceBasicPence',
+  'personalSavingsAllowanceHigherPence',
+  'dividendAllowancePence',
+  'cgtAnnualExemptPence',
+  'niPrimaryThresholdPence',
+  'niUpperEarningsLimitPence',
+] as const satisfies readonly (keyof TaxRateCard)[];
+
+/**
+ * The card for a calendar year when thresholds and allowances rise each
+ * January at `indexBp` (issue #73, option B). Year `CARD_BASE_YEAR` and before
+ * are the published card; each later January compounds one step, every money
+ * figure rounded half-up to the penny at each step. Rates never move.
+ * This is an approximation: UK tax years start on 6 April, the forecast's rows
+ * are calendar years (LONGTERM_FORECASTING.md §5.4).
+ */
+export function taxCardForYear(card: TaxRateCard, indexBp: number, year: number): TaxRateCard {
+  const steps = Math.max(0, year - CARD_BASE_YEAR);
+  if (steps === 0 || indexBp === 0) return card;
+  const indexed: TaxRateCard = { ...card };
+  for (const field of MONEY_FIELDS) {
+    let amount = card[field];
+    for (let step = 0; step < steps; step += 1) {
+      amount = roundHalfUpDivide(amount * (10_000 + indexBp), 10_000);
+    }
+    indexed[field] = amount;
+  }
+  return indexed;
+}
+
 /**
  * The household's own reference figures from the grill (§11A) — kept together
  * so the defaults a plan is seeded with are one reviewable block. Not baked
  * into any calculation: plans carry their own values.
  */
+/**
+ * ONS period life expectancy at 65, UK 2022–2024 (issue #73, slice 3): the
+ * age a new person's life expectancy is seeded to, by sex. An average, freely
+ * editable (including downward); it seeds plan-to only.
+ */
+export const LIFE_EXPECTANCY_AGE = { woman: 87, man: 84 } as const;
+/** Plan-to defaults this many years beyond life expectancy. */
+export const PLAN_TO_MARGIN_YEARS = 5;
+
 export const HOUSEHOLD_DEFAULTS = {
   inflationBp: 250,
-  /** "Not sure — suggest": inflation + 1%. */
+  /** Tax thresholds and allowances rise a year (issue #73, option B): ~1%. */
+  taxThresholdsBp: 100,
+  /** "Not sure — suggest": a fixed 3.50% (not inflation + 1%). */
   statePensionUpratingBp: 350,
   /** Chosen comparison rates (§11A), read as net of charges. */
   cautiousGrowthBp: 400,

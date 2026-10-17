@@ -22,7 +22,7 @@ Target households contain one or two people and each has a separate SQLite datab
 
 **Still deferred:** import of the owner's existing single-household data (a fictional rehearsal passes via `npm run rehearse:import`; real data needs its own approval), and a browser test for the support-grant flow. The registry and `.env` are still not in a household backup: since `v1.0.1` the registry has its own admin-panel download/restore, while `.env` still needs the host's own backup routine. Do not point this app at the original appdata. See [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md) and the current [`docs/HANDOFF.md`](docs/HANDOFF.md) before changing storage, auth, backup, restore, deployment or release code.
 
-Releases follow [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — the standing default for every GitHub release: the agent owns version bumps, the merge-commit pull request, the lower-case annotated tag, registry verification, release notes and the GitHub release. Do not ask the household to merge, tag or publish anything by hand.
+Releases follow [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — **except the interim override there (issue #73, 2026-10-17): no release, version bump or tag until every #73 slice is complete; PRs stay unreleased and the Playwright CI check is left for the next session.** The standing default for every GitHub release: the agent owns version bumps, the merge-commit pull request, the lower-case annotated tag, registry verification, release notes and the GitHub release. Do not ask the household to merge, tag or publish anything by hand.
 
 ## Working ethos — how to use the docs
 

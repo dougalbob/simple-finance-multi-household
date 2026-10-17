@@ -180,6 +180,8 @@ export function buildDraftPlan(db: Db, options: { today: string }): LongTermPlan
           ? {
               monthlyPence: draftedEarningsPence,
               untilDate: `${statePensionStartYear(birthYear) - 1}-12-31`,
+              risesWithInflation: true,
+              risesBp: 350,
             }
           : null,
       statePension: {
@@ -230,6 +232,7 @@ export function buildDraftPlan(db: Db, options: { today: string }): LongTermPlan
     spending,
     commitments,
     inflationBp: HOUSEHOLD_DEFAULTS.inflationBp,
+    taxThresholdsBp: HOUSEHOLD_DEFAULTS.taxThresholdsBp,
     isaShelterAnnualPence: HOUSEHOLD_DEFAULTS.isaShelterAnnualPence,
     horizonEndDate: endOfYearDate(horizonYear),
   };

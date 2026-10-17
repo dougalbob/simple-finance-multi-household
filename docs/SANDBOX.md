@@ -728,3 +728,15 @@ Two smaller lessons from the same slice:
 - **A summary's text is not always a heading.** `getByRole('heading', { name: /Does the money last\?/ })`
   finds nothing where the page uses a small `<p>` label above an `<h2>` — match the visible text
   instead, and give the card an `aria-label` when a spec needs a stable region name.
+
+## 21. `npm ci --ignore-scripts` leaves `better-sqlite3` without its binding — rebuild it against `/usr/local` (2026-10-17)
+
+- **Symptom:** you ran `npm ci --ignore-scripts` (entry 1) to get past the blocked header download, and then
+  `npm run build` or the tests that open a SQLite database fail with a missing native binding for `better-sqlite3`.
+  Pure-engine tests (`node --import tsx --test tests/longterm-model.test.ts`) still run, which is why this is easy to miss.
+- **Fix that worked here:** the Node headers are already in `/usr/local` (entry 18), so rebuild only the native module:
+  `npm_config_nodedir=/usr/local npm rebuild better-sqlite3`. It finished in about a second, and `npm run build` then
+  passed (`next build` rewrites `next-env.d.ts` — run `git checkout -- next-env.d.ts` before committing).
+- **Not run this session:** the Playwright suite. The household asked that the browser CI check be left for the next
+  session; entry 8 still describes how to run it locally.
+
