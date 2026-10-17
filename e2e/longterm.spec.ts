@@ -104,7 +104,11 @@ test.describe.serial('long-term forecast', () => {
       'page',
     );
 
+    // The drawer is a phone-only surface. Reload at the phone width rather
+    // than resizing the live session: a client-side resize closes the drawer
+    // and leaves the menu button asleep until the mobile layout is interactive.
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/longterm');
     await page.getByRole('button', { name: 'Open navigation menu' }).click();
     const drawer = page.getByRole('dialog', { name: 'Navigation menu' });
     await expect(drawer.getByRole('link', { name: 'Long-term forecast' })).toBeVisible();

@@ -902,6 +902,7 @@ test.describe('mobile quick entry', () => {
     const daily = ['Quick Entry (Till)', 'Purchases', 'Horizon', 'Charts', 'Overview', 'Recurring'];
     const more = [
       'All Transactions',
+      'Long-term forecast',
       'Income',
       'Accounts, Pots & Checkpoints',
       'Insights',

@@ -127,6 +127,7 @@ test.describe('desktop review', () => {
       'All Transactions',
       'Recurring',
       'Horizon',
+      'Long-term forecast',
       'Income',
       'Accounts, Pots & Checkpoints',
       'Insights',

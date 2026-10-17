@@ -3825,3 +3825,12 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     - **Coverage:** `tests/guide.test.ts` (the new anchor and promises), `e2e/longterm.spec.ts` (the
       fifth journey); full suite **1,052/1,052 across 245 suites**, `format:check`, `typecheck` and
       `npm run build` green, browser evidence through SANDBOX entry 8.
+    - **The menu entry's arithmetic, fixed after the first CI run.** A new drawer entry changes the
+      link count three specs depend on. `e2e/bell.spec.ts` pins it (6 Daily + 12 More = **18**, 17
+      until this release); `e2e/desktop.spec.ts`'s "every page" list and `e2e/home.spec.ts`'s phone
+      `more` list now name the new entry, so a future menu change fails where it changes rather than
+      passing silently. The longterm journey's drawer step also became a **reload at the phone
+      width** instead of an in-session resize — a client-side resize closes the drawer and leaves
+      the menu button asleep until the mobile layout is interactive, which is why it flaked in CI
+      and passed on retry. Local run after the fix: bell, desktop, mobile and longterm projects
+      **53/53**.

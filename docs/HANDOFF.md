@@ -20,6 +20,13 @@ fifth journey proving the desktop menu, the phone drawer and the guide section a
 `npm run format:check`, `npm run typecheck`, `npm run build` green; `e2e/longterm.spec.ts` **5/5**
 through SANDBOX entry 8, and desktop/phone screenshots checked for horizontal overflow.
 
+**First CI run (PR #72) and its fix.** The Browser acceptance job failed on
+`e2e/bell.spec.ts:233`, which pins the phone drawer at 17 links — the new menu entry makes it 18
+(6 Daily + 12 More). The longterm journey's own drawer step flaked (passed on retry) because it
+resized a live session; it now reloads at the phone width first. `e2e/desktop.spec.ts` and
+`e2e/home.spec.ts` also gained the new entry in their "every page" lists, so menu changes fail
+where they happen. Local bell + desktop + mobile + longterm projects: **53/53**.
+
 **Release checklist still to run after the household approves the preview:** merge the PR, wait for
 required CI, create the annotated lower-case tag **`v1.26.0`** on the merge commit in `main`, push
 only that tag, wait for Publish, verify `v1.26.0`, `latest` and `sha-<short>` all resolve to one
