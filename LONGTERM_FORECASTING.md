@@ -6,10 +6,14 @@
 > *"will we reach payday?"*; this answers *"when I am 62, what is our income? Does the money last?
 > What does 2030 look like?"*
 >
-> **Status (2026-10-17): design stage.** No code, no schema, no migration. This document records the
-> proposal as it stands, the design thinking behind it, the issues already visible, and the
-> questions the household needs to answer before anything is built. Whether a first build happens in
-> this session depends on those answers and on the size settled in §10.
+> **Status (2026-10-17, later the same day): the grill is answered and v1 scope is settled.** The
+> design record below is updated with the household's answers (§11A) and the scope changes they
+> forced — notably: both pensions are defined-contribution **pots**; the tool must help compare
+> **drawdown vs annuity** on the household's own numbers; employment income with a stop date is a
+> first-class per-person stream because **the tool is project-wide** and must model working
+> households (both people working is the ordinary case; this household's retired-at-56 member is the
+> unusual one); every pot value, rate and amount is a **user-editable variable, never baked in**;
+> and every date is displayed as **both an age and a calendar year**.
 >
 > **Continuation point for this feature.** The app-level handoff is `docs/HANDOFF.md`; the product
 > spec is `docs/SPEC.md` (Horizon is §7.6 — useful as a boundary, not as a base); the decision log
@@ -42,13 +46,27 @@ numbers (§7 asks which of these matter most):
 - Does the invested money last to 90? 95? If not, at what age does it run out?
 - What changes if the investments return 3% instead of 5%? What if inflation is 4%?
 
-The household's situation as stated (details to be confirmed in §11): two people, one of whom is
-already retired and expects an inheritance that, after paying off the remaining mortgage, leaves
-about **£250k of capital to invest**; two pensions starting in roughly **4 years** and **9 years**;
-**state pension at 67, about 11 years away**; recent strong pension investment returns that are
-explicitly treated as possibly an outlier, so the return rate must be user-set; recurring and
-day-to-day spending growing at a single user-chosen **inflation** figure; and UK tax to consider,
-with the working assumption that the retired member's personal allowance is available.
+The household's situation as confirmed in the grill (§11A). Two people: the asking member, male,
+born **1970** (56 now — already **retired**, which he rightly flags as unusual); his partner, born
+**1980** (46 now), **still working and expecting to continue for at least 10 years, maybe longer**.
+Two **defined-contribution pension pots** (his), starting to pay in roughly **4 years** (≈2030,
+age 60) and **9 years** (≈2035, age 65) — pot values are **user-editable inputs, never baked in**,
+and every date is shown as **both an age and a year**. **State pension at 67** for him (2037, "in
+11 years") at the **full rate**; hers will follow later (born 1980 — see §5.7 on her pension age).
+An **inheritance at the start of 2027** leaves about **£250k to invest after the mortgage is paid
+off** — and the mortgage is gone "within months", so it drops out of the spending baseline early
+(kept as a general end-dated commitment because **other households differ**). Recent strong pension
+investment returns are explicitly treated as possibly an outlier: return rates are user-set
+(chosen: **4% / 6% / 8%**, treated as **net of charges**), inflation is a single best-guess figure
+(chosen: **2.5%**), spending baseline is recurring + day-to-day, "other spending" is **£0 for now
+with a visible warning**, there are **no existing savings or other income**, and UK tax is to be
+estimated per person. The forecast runs **to age 90** (interpretation flagged in §5.7).
+
+And the requirement that reshapes the whole model: **this is a project-wide tool.** Other
+households will have **both people still working**, pensions of their own shapes, and mortgages
+running for years. Nothing in the engine may special-case "retired" or "working" — a person is a
+list of optional streams (earnings with a stop date, pension pots, state pension, windfalls), and
+this household just happens to have the unusual mix.
 
 ---
 
@@ -152,18 +170,24 @@ calculate differently:
   with fixed escalation (e.g. CPI, or 2.5%, or nothing). No pot, no growth rate; a start date and an
   income line.
 
-The household's phrasing ("start paying out", "current pot value", "investment return on the pot")
-sounds like defined contribution with a planned drawdown start date — but "pays out" is also exactly
-how people describe a DB promise. The grill must settle this before a line of engine code is
-written.
+**Settled in the grill (§11A): both pensions are defined-contribution pots** — "with option to
+purchase an annuity if I want to". So the engine's pension object is a **pot**: value (an editable
+variable), growth rate, a start date (displayed as age *and* year), and a **take-up shape** that can
+be drawdown or annuity. The DB shape stays in the model because other households will need it, but
+it is no longer on this household's critical path. The household has **not** chosen drawdown or
+annuity — *"I am hoping our tool will aid in that decision making"* — so v1 must show **both routes
+side by side** on the same pot (§7).
 
 ### 5.2 Investments and how money is taken from them
 
 The £250k (plus any existing invested savings) sits in **wrappers**, and the wrapper decides the tax:
 
 - **ISA** — returns and withdrawals untaxed. Subscriptions are capped (£20,000 per person per tax
-  year), so sheltering £250k is a multi-year project — the tool should be able to model "move £X per
-  year into ISAs" (OQ-LT-D4), but v1 may simply ask what will be inside an ISA and what will not.
+  year), so sheltering £250k is a multi-year project. The household chose **"ISAs first, rest
+  GIA"** but is unsure of the yearly amount (OQ-LT-D4 answered "not sure yet"), so v1 carries an
+  editable **"move £X per year into ISAs"** variable defaulting to the couple's combined cap
+  (£40,000/year until the GIA is sheltered or empty) — a labelled, changeable assumption, never
+  baked in.
 - **General investment account (GIA)** — dividends and interest taxed yearly (small allowances),
   capital gains taxed when gains are **realised** (i.e. when selling/withdrawing, above a small
   annual exempt amount).
@@ -172,8 +196,11 @@ The £250k (plus any existing invested savings) sits in **wrappers**, and the wr
 
 Two spending policies to support (OQ-LT-D5): **natural yield** (live on interest/dividends, touch
 the capital rarely) and **drawdown as needed** (shortfalls come out of capital, with the tax that
-implies). V1 can implement "drawdown as needed" first and treat investment yield as taxable income
-either way.
+implies). The household picked **"drawdown as needed"** as the modelling default (Q2: undecided
+between drawdown and annuity overall), and v1 additionally shows the **annuity route side by side**
+on the same pot: an **indicative guaranteed income** computed from a rate the household enters
+(e.g. "£5,500 a year per £100k of pot"). The app compares the arithmetic of both routes and never
+recommends one — the decision, and any real quote, belongs to the household and their adviser.
 
 ### 5.3 Rates of return: the household drives them
 
@@ -181,7 +208,10 @@ Explicit requirement, and the right call — recent returns may be an outlier, s
 
 - Each investment pot carries an assumed **annual growth rate** set by the household (e.g. 3%, 5%,
   7%). Growth is applied to whatever capital the pot holds each month, including accumulated
-  surpluses.
+  surpluses. **Chosen for this household (§11A): 4% / 6% / 8%, treated as net of charges** (the
+  "no idea on charges" answer is read conservatively — if the rates are actually gross, the
+  forecast is slightly pessimistic, which is the right direction to be wrong in). Never baked in:
+  they are inputs like everything else.
 - The headline comparison runs **three rates side by side** ("cautious / middle / optimistic" —
   labels chosen by the household), and every answer card says which rate it used. The three-run
   comparison is also the honest answer to *sequence-of-returns risk* (§6.4) at v1 — a single smooth
@@ -240,28 +270,56 @@ Exactly as the household asked:
 - **Mortgage** is a commitment with an **end date** (the payoff when the inheritance arrives) — it
   must drop out of the baseline afterwards, and the model must never quietly inflate it forever.
 - **Inflation**: one best-guess % per year applied to all spending (the household explicitly does
-  not want an inflation curve). Separate uprating knobs for anything that follows different rules —
-  in particular the state pension (triple-lock-ish, OQ-LT-E4).
+  not want an inflation curve). **Chosen: 2.5%** (§11A). Separate uprating knobs for anything that
+  follows different rules — in particular the state pension (triple-lock-ish, OQ-LT-E4).
 - **"Other spending" line** (OQ-LT-E2): holidays, house maintenance, cars, gifts, help for family.
   Records-based baselines systematically omit these, and omitting them is the classic way a forecast
-  lies by omission. Not mandatory — but the output should nag gently if it is £0.
+  lies by omission. The household chose **£0 for now** — so the output must carry a **visible
+  warning whenever that line is zero**, and the field stays prominent for when that answer changes.
 
 ### 5.7 Time anchors
 
 Answers must land on **calendar years** ("2030") and **ages** ("the year you turn 62"), so the
-engine needs each person's date of birth. Pensions start on specific dates ("in 4 years") — the
-inputs take explicit start dates/ages, not vague windows. Tax is accrued per calendar year for
-display simplicity and labelled estimated (the alternative — tax-year rows — is more precise and
-more confusing; the year table is for humans).
+engine needs each person's date of birth. Following the household's own suggestion (Q3/Q4): **every
+date in the UI is displayed as both an age and a year** — "starts paying · age 60 · 2030" — because
+neither anchor alone means anything to both members of a household ten years apart. Pensions start
+on specific dates ("in 4 years"); the inputs take explicit start dates/ages, not vague windows. Tax
+is accrued per calendar year for display simplicity and labelled estimated (the alternative —
+tax-year rows — is more precise and more confusing; the year table is for humans).
+
+Two date subtleties this household forces into the open:
+
+- **Whose "age 90"?** He chose "to age 90" (2060) — but his partner, born 1980, is only 80 that
+  year, and the household's money must last until the **second** of them is old. The end-year input
+  defaults to **the year the younger person turns 90** (2070) so capital is tested against both
+  lifetimes; changing it to 2060 is one edit. Flagged for his confirmation (§11A).
+- **Her state pension age.** His is 67 (2037). She was born in 1980: under legislation current
+  today her state pension age is **68** (rising in 2044–46), though that rise has been under review
+  before. The tool defaults her to 68 in **2048** with the "assumption — check your GOV.UK
+  forecast" label; the field is editable and the tool never predicts government.
+
+The **mortgage** is an end-dated commitment: for this household it ends "within months" and must
+drop out of the baseline almost immediately — the baseline auto-draft has to handle a commitment
+ending next month without drama. The mechanism stays general (other households will have mortgages
+running for years; OQ-LT-C2 confirmed it must be a selection, not a hard-coded absence).
 
 ---
 
 ## 6. Issues already visible (why a grill session first)
 
-1. **DB vs DC unknown** (§5.1) — changes the engine's core object model. *Must be answered first.*
-2. **Annuity vs drawdown** — same pot, entirely different income shape and tax.
+**The grill resolved the blocking ones (§11A): both pensions are pots; the wrapper question is
+answered (ISA-first, rest GIA); the inheritance is start-of-2027; the mortgage ends within months
+but stays a general end-dated commitment; and the "retired user" assumption is now explicitly
+exorcised — the model is per-person streams because the tool is project-wide.** The list below is
+kept as the record of what was worried about and why, with resolutions noted where they landed.
+
+1. **DB vs DC unknown** (§5.1) — changes the engine's core object model. **Resolved: both pots
+   (§11A).** DB remains in the model for other households, off this household's critical path.
+2. **Annuity vs drawdown** — same pot, entirely different income shape and tax. **Resolved as a
+   feature: side-by-side comparison (§5.2, §7) — the tool exists to aid that decision.**
 3. **Where the £250k will live** — the tax on "investment return" the household worries about
-   depends more on the wrapper (ISA/GIA/pension) than on the rate.
+   depends more on the wrapper (ISA/GIA/pension) than on the rate. **Resolved: ISA-first with a
+   GIA remainder (§5.2); yearly ISA amount still an editable default (OQ-LT-D4 "not sure").**
 4. **Real vs nominal confusion** — the likeliest way for a non-expert (and an expert) to misread a
    forecast; the double-display exists to kill it, but the inputs must also ask it (a "5%" entered
    as a real rate inside a nominal model is 2.5 points wrong).
@@ -269,13 +327,18 @@ more confusing; the year table is for humans).
    you retire". V1 answers with parallel rate runs; a dedicated "bad early years" stress run is
    proposed for later (§10).
 6. **Spending baseline gaps** — the records know groceries, fuel and DDs; they do not know the next
-   car, the roof, or Christmas.
+   car, the roof, or Christmas. **Answered: £0 "other spending" for now — the output must flag it
+   every time (§5.6).**
 7. **Personal-allowance assumption** (§5.4) — will quietly overstate net income if the model
    believed it.
 8. **Second member's tax** — a separate taxpayer with their own allowance and bands; household
-   totals need per-person tax first.
+   totals need per-person tax first. **Sharper after the grill: she is 10 years younger and
+   working for at least 10 more years — earnings with a stop date are a core stream, and her state
+   pension lands two decades after his (§5.7).**
 9. **Inheritance timing** — "about £250k" after a mortgage payoff is two events (money in; mortgage
-   out) that may not be the same date; the model needs both edges (OQ-LT-C2).
+   out) that may not be the same date; the model needs both edges (OQ-LT-C2). **Answered: mortgage
+   gone within months, £250k arrives start of 2027 (§11A) — but both edges stay modelled because
+   other households' two events may differ.**
 10. **ISA sheltering is a slow process** — £20k/person/year means years of GIA tax drag unless the
     model is shown the plan.
 11. **Fiscal drag** — allowances are frozen (currently to April 2031); a decades-long model that
@@ -294,14 +357,26 @@ more confusing; the year table is for humans).
 **V1 (the smallest thing that answers the three questions honestly):**
 
 - New page `/longterm` — **"Long-term forecast"** — in the menu's second group beside Horizon.
-- One assumptions panel (drafted from records, everything editable): people's birth years; the two
-  pensions (shape + pot/amount + start date); state pension amounts and start age; investments
-  (existing + the £250k windfall with its date, wrapper, growth rate); mortgage end; inflation %;
-  other spending; forecast end age.
+- **Per-person stream model, project-wide:** each person carries optional streams — **earnings with
+  a stop date** (working households first-class; this household's partner works ≥10 more years),
+  **pension pots** (value, growth rate, start date, drawdown or annuity shape), **state pension**
+  (amount, start age, uprating), and one-off **windfalls**. No stream is assumed present; nothing
+  assumes anyone is retired.
+- One assumptions panel (drafted from records where records exist; **everything else is an editable
+  variable — pot values, rates, amounts are never baked in**): birth years; the two pension pots
+  (value + start date shown as age **and** year); state pension amounts and ages; earnings and stop
+  dates; investments (existing + the £250k windfall with its start-of-2027 date, wrapper, growth
+  rate); end-dated commitments (the mortgage ends within months for this household, but stays a
+  general selection); inflation % (2.5%); other spending (£0, flagged); forecast end year (default:
+  the year the younger person turns 90).
 - **Answer cards** for arbitrary years and ages (including the household's two examples as
-  first-class queries).
+  first-class queries — "income at age 62 · 2032", "income in 2030").
+- **Drawdown vs annuity side by side** on each pension pot: the same pot as flexible drawdown and
+  as an indicative guaranteed income from a household-entered annuity rate (e.g. "£5,500 a year per
+  £100k"). The tool compares arithmetic and never recommends (§5.2).
 - **The year table** with per-person and household totals, future money and today's money.
-- **The three-rate capital comparison** — the household's "various predicted % investment rates".
+- **The three-rate capital comparison** — the household's "various predicted % investment rates"
+  (4% / 6% / 8% net of charges for this household, editable).
 - Estimated UK tax per person per year from the editable 2026/27 rate card.
 - Assumptions persist (v1 proposal: one `longterm_plans` table holding a versioned JSON payload —
   one migration, honest and small; full normalised tables only if the feature grows).
@@ -310,7 +385,8 @@ more confusing; the year table is for humans).
   future money), tax-shape tests.
 
 **Explicitly not v1:** Monte Carlo; the "bad early years" stress run (v2 candidate, cheap to add to
-a pure engine); annuity pricing; IHT/care-cost modelling; Scottish/NI tax rates (OQ-LT-F1); a
+a pure engine); annuity pricing or quotes — the side-by-side comparison uses only a rate the
+household enters (§5.2); IHT/care-cost modelling; Scottish/NI tax rates (OQ-LT-F1); a
 self-contained tax-year-accurate self-assessment replacement; bank-grade tax advice of any kind.
 
 ---
@@ -362,9 +438,11 @@ work; if either opens out, slices 1–2 become the next session and this documen
 
 ## 11. Open questions for the household — the grill
 
-Written for someone who is **not** a financial expert: each question says why it is asked and offers
-plain options to pick from. **★ = needed before any code is written.** Everything else has a
-sensible default we can start with and change later. Answer in plain words — "no idea, suggest
+**Answered 2026-10-17 — see the answers recorded in §11A.** The questionnaire is kept below as the
+record of what was asked and why; several answers changed the design (they are marked where they
+do). Written for someone who is **not** a financial expert: each question says why it is asked and
+offers plain options to pick from. **★ = needed before any code is written.** Everything else has
+a sensible default we can start with and change later. Answer in plain words — "no idea, suggest
 something" is a perfectly good answer to any of these.
 
 ### A. You both — dates and the second member
@@ -503,8 +581,54 @@ something" is a perfectly good answer to any of these.
 
 ---
 
+## 11A. Answers from the grill (2026-10-17)
+
+Recorded verbatim where the wording matters; the design changes they forced are referenced in
+brackets.
+
+**Numbers**
+
+| Item | Answer |
+| --- | --- |
+| Inflation (best guess, single figure) | **2.5%** |
+| Him | Male, born **1970** — 56 now, **already retired** (his own note: "my situation is unusual that I am retired at 56!") |
+| Her (second household member) | Born **1980** — 46 now, **still working; at least 10 more years, maybe longer** |
+| Pension A (pot) | Pot value: **a user variable, not baked in** (an input field). Starts ≈ **2030** (age 60) — dates displayed as **both age and year**, his suggestion |
+| Pension B (pot) | Same: pot value is an input; starts ≈ **2035** (age 65); age **and** year shown |
+| State pension | **Full rate** for both (~£241.30/week in 2026/27; his starts at 67 in 2037; hers at her pension age — see §5.7) |
+| Mortgage | **Paid off fully within months** — remove from the DD baseline, but keep as a **selection** ("other households may be in a different position") |
+| Inheritance | **Start of 2027; £250k after mortgage payoff** |
+| ISA plan | "I'm not sure yet" → default assumption: move up to the couple's caps (£40k/year) from the GIA until sheltered; editable |
+| Existing savings / other income | **None** |
+| Return rates (cautious / middle / optimistic) | **4% / 6% / 8%** — charges "no idea", so treated as **net** (conservative) |
+| Other spending | **£0 for now — output must flag it** |
+
+**Decisions**
+
+| Question | Answer | Design effect |
+| --- | --- | --- |
+| Q1 pension shape | "both are pots with option to purchase an annuity if i want to" | Pot object with growth + start date (§5.1). DB kept only for other households |
+| Q2 drawdown vs annuity | "I haven't decided… I am hoping our tool will aid in that decision making" | **Side-by-side comparison in v1** (§5.2): drawdown vs indicative annuity on the household's entered rate; never a recommendation |
+| Q3 money home | ISAs first, rest GIA | Wrapper-aware tax (§5.2); yearly ISA amount is a labelled default until he decides |
+| Q6 headline | **Income questions first** ("at age 62", "in 2030"), capital run-out beneath | Answer-card order follows that |
+| Q7 annuity help | Side-by-side comparison | As Q2 |
+| Q8 state pension uprating | "not sure — suggest" | Default **inflation + 1%**, labelled as a changeable assumption |
+| Q9 charges | "no idea" | 4/6/8% read as **net of charges** |
+| Q10 end age | To age 90 | Interpretation flagged (§5.7): default end year = when the **younger** person turns 90 (2070) unless he prefers 2060 |
+| Q11 working style | Tweak-and-see | One assumption set, three rates always compared; saved scenarios stay a later slice |
+| Q12 other spending | £0, flagged | Warning required in the output whenever the line is zero |
+
+**The project-wide correction (his words):** "As this is a project wide tool we need to account for
+other households where both users may still be working." The model is therefore **per-person
+optional streams** — earnings with a stop date, pension pots or promises, state pension, windfalls —
+and never assumes anyone is retired or working. This household (retired 56-year-old, working
+partner born 1980) is one configuration among many.
+
+---
+
 ## 12. Session status log
 
 | Session | Date (Europe/London) | Branch / PR | Stage reached |
 | --- | --- | --- | --- |
 | 1 | 2026-10-17 | `arena/59781088-simple-finance-multi-household` | **Design record opened (this commit).** Repo conventions and the Horizon boundary reviewed; UK rate card facts checked (2026/27: PA £12,570; 20/40/45 bands; PSA £1,000/£500; dividend allowance £500 at 10.75/35.75/39.35; CGT £3,000 exempt at 18/24; full new State Pension £241.30/wk ≈ £12,548/yr — see §5.4). Proposal: pure `src/lib/longterm/` engine, `/longterm` page, one `longterm_plans` table, three-rate comparison, today's-money display. No code yet. Grill issued (§11) — answers decide whether slices 1–3 build in this session or the next. |
+| 2 | 2026-10-17 | `arena/59781088-simple-finance-multi-household` | **Grill answered; v1 scope settled (§11A).** Both pensions are DC pots; drawdown-vs-annuity side-by-side enters v1 as a decision aid; income questions lead the answer cards; dates display as age **and** year; all pot values/rates are editable variables; employment-with-stop-date is a first-class per-person stream (**project-wide correction**: working households are the ordinary case); inheritance start-2027 £250k post-mortgage; mortgage end-dated but general; inflation 2.5%; rates 4/6/8% net; state pension uprating defaults inflation+1%; other spending £0 flagged; horizon ends at the younger person's 90th (2070) by default, flagged for confirmation. Next: build slices 1–3 or hand off per the sizing at §10. |
