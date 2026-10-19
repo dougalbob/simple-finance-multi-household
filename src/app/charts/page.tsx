@@ -23,6 +23,13 @@ import {
 } from '@/components/charts';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
+import {
+  MIX_RESET_KEYS,
+  chartsHref,
+  mixShowReconfirms,
+  sameIdSet,
+  syncMonthWindow,
+} from '@/lib/charts-sync';
 import { NeedsFirst } from '@/components/needs-first';
 import {
   PIE_SPLIT_PARENTS,
@@ -79,6 +86,13 @@ interface SearchParams {
   cat?: string | string[];
   catset?: string;
   slice?: string;
+  /**
+   * The D → E sync (issue #81, decision 241): `mixsync=1` is the toggle on
+   * Chart D (its bars set Chart E's window while on); `mixvia=1` is carried
+   * only by links a synced bar produced, and lights Chart E's signpost.
+   */
+  mixsync?: string;
+  mixvia?: string;
   /** Three months by category (F): exclude the Housing parent. */
   noHousing?: string;
 }
@@ -124,6 +138,8 @@ export default async function ChartsPage({
   );
   const sliceKey = typeof params.slice === 'string' ? params.slice : null;
   const monthsView = getCategoryMonthsView(db, { excludeHeavy: params.noHousing === '1' }, now);
+  // The D → E sync's signpost (decision 241), computed where both views exist.
+  const syncNotice = mixSyncNotice(params, commitments, mixView);
 
   return (
     <main className="mx-auto max-w-7xl overflow-x-clip px-4 py-6 sm:py-8">
@@ -153,8 +169,13 @@ export default async function ChartsPage({
               selected={include}
               params={params}
             />
-            <CommitmentsSection view={commitments} />
-            <MixSection view={mixView} selectedKey={sliceKey} />
+            <CommitmentsSection view={commitments} params={params} />
+            <MixSection
+              view={mixView}
+              selectedKey={sliceKey}
+              params={params}
+              syncNotice={syncNotice}
+            />
             <MonthsSection view={monthsView} params={params} />
           </>
         ) : (
@@ -743,14 +764,47 @@ function labelOf(series: PersonalSeries, key: string): string {
 /* D. Spending trends                                                  */
 /* ------------------------------------------------------------------ */
 
-function CommitmentsSection({ view }: { view: SpendingTrendsView }) {
-  const caption = `${view.selectedPreset?.name ?? 'No preset selected'}: recorded spending in the selected categories, including manual and schedule-generated purchases. Not a projection.${view.presets.source === 'schedules' ? ' Starting with categories used by your schedules; save a preset to keep this selection fixed.' : ''}`;
+function CommitmentsSection({ view, params }: { view: SpendingTrendsView; params: SearchParams }) {
+  // The D → E sync (decision 241). Engaging the toggle is inert: only a
+  // tapped bar changes Chart E, so the chip can never clobber it by itself.
+  const synced = params.mixsync === '1';
+  const caption = `${view.selectedPreset?.name ?? 'No preset selected'}: recorded spending in the selected categories, including manual and schedule-generated purchases. Not a projection.${
+    view.presets.source === 'schedules'
+      ? ' Starting with categories used by your schedules; save a preset to keep this selection fixed.'
+      : ''
+  }${
+    synced
+      ? ' Synced to the Spending mix: tapping a month — a bar, or its name in the table — sets that chart’s window to the whole month with this preset’s categories. The purchases drill-down comes back when the sync is switched off.'
+      : ''
+  }`;
+  // A preset with no categories draws no bars, so there is nothing to sync:
+  // a toggle that changed nothing visible would be a small lie.
+  const syncChip =
+    view.tracking.categoryIds.length === 0 ? null : (
+      <Link
+        href={
+          synced
+            ? chartsHref(paramEntries(params), { drop: MIX_RESET_KEYS }, '#commitments')
+            : chartsHref(paramEntries(params), { set: { mixsync: '1' } }, '#commitments')
+        }
+        scroll={false}
+        aria-pressed={synced}
+        className={`rounded-full border px-3 py-1 text-xs font-medium ${
+          synced
+            ? 'sf-sync-chip border-warning-600 bg-warning-200 text-warning-900'
+            : 'border-border-strong bg-surface text-ink-soft hover:bg-canvas'
+        }`}
+      >
+        {synced ? '✓ ' : ''}Sync to Spending mix
+      </Link>
+    );
   const action = (
     <div className="flex min-w-0 flex-wrap items-end gap-3">
       <SpendingPresetSelect
         presets={view.presets.presets}
         selectedId={view.selectedPreset?.id ?? ''}
       />
+      {syncChip}
       <Link href="/settings#commitment-categories" className="text-xs sf-link-arrow">
         Create/Edit category presets →
       </Link>
@@ -779,19 +833,48 @@ function CommitmentsSection({ view }: { view: SpendingTrendsView }) {
   }
 
   const series = view.series;
-  const href = (from: string, to: string): string =>
+  // While synced, every month link — bar and table twin alike, so the
+  // keyboard path does what the drawing does — hands Chart E that whole
+  // calendar month and the preset's categories, and nothing on this chart
+  // opens Purchases (decision 241: the drill-down returns when the sync is
+  // off; until then Chart E's line items carry the same filtered list).
+  const purchaseHref = (from: string, to: string): string =>
     purchasesHref({
       from,
       to,
       categoryIds: view.tracking.categoryIds,
       scheduleOnly: view.scheduleOnly,
     });
+  const monthHref = (month: { from: string; to: string; complete: boolean }): string => {
+    if (!synced) return purchaseHref(month.from, month.to);
+    const window = syncMonthWindow(month, view.today);
+    return chartsHref(
+      paramEntries(params),
+      {
+        set: {
+          mixsync: '1',
+          mixvia: '1',
+          ...(view.selectedPreset === null ? {} : { preset: view.selectedPreset.id }),
+          from: window.from,
+          to: window.to,
+          catset: '1',
+          cat: view.tracking.categoryIds.map(String),
+          slice: undefined,
+        },
+      },
+      '#mix',
+    );
+  };
+  const monthHint = (month: { label: string; amountPence: number; complete: boolean }): string =>
+    synced
+      ? `${month.label}: ${formatPence(month.amountPence)}${month.complete ? '' : ' so far'} — set the Spending mix to this month`
+      : `${month.label}: ${formatPence(month.amountPence)}${month.complete ? '' : ' so far'} — open these purchases`;
   const bars: BarDatum[] = series.months.map((month) => ({
     key: month.from,
     label: monthTick(month.label),
     valuePence: month.amountPence,
-    href: href(month.from, month.to),
-    hint: `${month.label}: ${formatPence(month.amountPence)}${month.complete ? '' : ' so far'} — open these purchases`,
+    href: monthHref(month),
+    hint: monthHint(month),
     muted: !month.complete,
   }));
   const domain = chartDomain(
@@ -806,7 +889,7 @@ function CommitmentsSection({ view }: { view: SpendingTrendsView }) {
     key: month.from,
     muted: !month.complete,
     cells: [
-      <a key="link" href={href(month.from, month.to)} className="sf-link">
+      <a key="link" href={monthHref(month)} className="sf-link">
         {month.label}
         {month.complete ? '' : ' (so far)'}
       </a>,
@@ -897,20 +980,78 @@ function parseCategoryIds(params: SearchParams): number[] | null {
     .filter((id) => Number.isInteger(id) && id > 0);
 }
 
-/** The page's own URL for a window, a category set and an optional slice. */
+/** The page's current query as [key, value] pairs, repeated keys (`cat`) kept. */
+function paramEntries(params: SearchParams): Array<[string, string]> {
+  const entries: Array<[string, string]> = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) entries.push([key, item]);
+  }
+  return entries;
+}
+
+/**
+ * Chart E's signpost while the D → E sync set its window (decision 241).
+ * Honest by construction: it appears only when the window drawn is the
+ * window asked, that window is exactly what tapping one of Chart D's month
+ * bars produces (a whole calendar month, ending today only for the month
+ * being lived), the categories ticked are exactly the preset's, and the
+ * provenance mark says a synced bar put them there — so an edited URL, or
+ * an E-side Show that changed anything, shows no signpost.
+ */
+function mixSyncNotice(
+  params: SearchParams,
+  trends: SpendingTrendsView,
+  mix: SpendingMixView,
+): { text: string; returnHref: string } | null {
+  if (params.mixsync !== '1' || params.mixvia !== '1') return null;
+  if (params.from !== mix.window.from || params.to !== mix.window.to) return null;
+  const preset = trends.selectedPreset;
+  if (preset === null) return null;
+  // The window must be a month Chart D actually draws, shaped the way a
+  // synced bar hands it over — not merely any valid window.
+  const month = trends.series.months.find((entry) => entry.from === mix.window.from);
+  if (month === undefined || mix.window.to !== syncMonthWindow(month, mix.today).to) {
+    return null;
+  }
+  const allIds = mix.parents.flatMap((parent) =>
+    parent.children.length === 0 ? [parent.id] : parent.children.map((child) => child.id),
+  );
+  if (!sameIdSet(parseCategoryIds(params) ?? allIds, preset.categoryIds)) return null;
+  const catsText = mix.allCategoriesIncluded ? 'every category' : `the ${preset.name} categories`;
+  return {
+    text: `Showing ${month.label} with ${catsText} — set from Spending trends.`,
+    returnHref: chartsHref(paramEntries(params), { drop: MIX_RESET_KEYS }, '#mix'),
+  };
+}
+
+/**
+ * The page's own URL for a window, a category set and an optional slice.
+ * Since decision 241 it merges with the rest of the query rather than
+ * building a fresh one, so a slice click no longer drops Chart D's `preset`
+ * (or the sync state, or any other chart's filter) — the same rule every
+ * other control on this page already followed.
+ */
 function mixHref(
+  params: SearchParams,
   window: { from: string; to: string },
   options: { cats: readonly number[] | null; slice?: string },
 ): string {
-  const query = new URLSearchParams();
-  query.set('from', window.from);
-  query.set('to', window.to);
-  if (options.cats !== null) {
-    query.set('catset', '1');
-    for (const id of options.cats) query.append('cat', String(id));
-  }
-  if (options.slice !== undefined) query.set('slice', options.slice);
-  return `/charts?${query.toString()}#mix`;
+  return chartsHref(
+    paramEntries(params),
+    {
+      set: {
+        from: window.from,
+        to: window.to,
+        // `null` means every category counts, which is what the URL already
+        // says (or says by omission) — leave the cat params exactly as they
+        // are rather than rewriting an explicit all-children list away.
+        ...(options.cats === null ? {} : { catset: '1', cat: options.cats.map(String) }),
+        slice: options.slice,
+      },
+    },
+    '#mix',
+  );
 }
 
 function selectedMixCategoryIds(view: SpendingMixView): number[] | null {
@@ -949,7 +1090,18 @@ function sharePercent(share: number): string {
   return `${Math.round(share * 100)}%`;
 }
 
-function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey: string | null }) {
+function MixSection({
+  view,
+  selectedKey,
+  params,
+  syncNotice,
+}: {
+  view: SpendingMixView;
+  selectedKey: string | null;
+  params: SearchParams;
+  /** The D → E sync's signpost, or null when the window is not sync-set. */
+  syncNotice: { text: string; returnHref: string } | null;
+}) {
   const { mix, window, notice } = view;
   const slots = mixColourSlots(view);
   const colourOf = (key: string): string => {
@@ -966,8 +1118,8 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
   const sliceHref = (slice: MixSlice): string =>
     // Pressing the selected slice again closes its line items.
     selected?.key === slice.key
-      ? mixHref(window, { cats })
-      : mixHref(window, { cats, slice: slice.key });
+      ? mixHref(params, window, { cats })
+      : mixHref(params, window, { cats, slice: slice.key });
 
   const pieSlices: PieSlice[] = drawn.map((slice) => ({
     key: slice.key,
@@ -1073,10 +1225,22 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
         includedParentIds={view.includedParentIds}
         includedCategoryIds={view.includedCategoryIds}
         allCategoriesIncluded={view.allCategoriesIncluded}
+        preserved={paramEntries(params).filter(
+          ([key]) => !['from', 'to', 'cat', 'catset', 'slice'].includes(key),
+        )}
       />
       {notice === null ? null : (
         <p className="mb-3 rounded-lg border border-dashed border-border-strong bg-canvas p-3 text-xs text-ink-soft">
           {notice}
+        </p>
+      )}
+      {syncNotice === null ? null : (
+        <p className="mb-3 rounded-lg border border-warning-200 bg-warning-50 p-3 text-xs text-warning-900">
+          {syncNotice.text}{' '}
+          <Link href={syncNotice.returnHref} className="sf-link">
+            Return to since last payday
+          </Link>{' '}
+          — this also switches the sync off.
         </p>
       )}
       <div className="lg:hidden">{mixFigure('phone', 240)}</div>
@@ -1087,7 +1251,7 @@ function MixSection({ view, selectedKey }: { view: SpendingMixView; selectedKey:
           Select a slice, or its name below, to see the line items behind it.
         </p>
       ) : (
-        <MixLineItems view={view} slice={selected} closeHref={mixHref(window, { cats })} />
+        <MixLineItems view={view} slice={selected} closeHref={mixHref(params, window, { cats })} />
       )}
     </section>
   );

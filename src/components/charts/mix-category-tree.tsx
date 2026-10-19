@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { chartsQuery, mixShowReconfirms } from '@/lib/charts-sync';
 import type { MixParentChoice, MixWindow, MixWindowKind } from '@/lib/records/charts-view';
 
 export interface MixCategoryTreeProps {
@@ -24,6 +25,14 @@ export interface MixScopesProps {
   includedParentIds: readonly number[];
   includedCategoryIds: readonly number[];
   allCategoriesIncluded: boolean;
+  /**
+   * The page's other query parameters, as [key, value] pairs, for a
+   * no-JavaScript Show to carry in hidden inputs (decision 241): a native
+   * GET submits only the form's own fields, which used to drop Chart D's
+   * `preset` and the sync state. The hydrated handler ignores them and
+   * merges the live URL itself.
+   */
+  preserved?: ReadonlyArray<readonly [string, string]>;
 }
 
 interface PresetOption {
@@ -312,8 +321,10 @@ export function MixScopes({
   includedParentIds,
   includedCategoryIds,
   allCategoriesIncluded,
+  preserved = [],
 }: MixScopesProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [fromDate, setFromDate] = useState(window.from);
   const [toDate, setToDate] = useState(window.to);
@@ -366,21 +377,41 @@ export function MixScopes({
     const formData = new FormData(event.currentTarget);
     const from = String(formData.get('from') ?? fromDate);
     const to = String(formData.get('to') ?? toDate);
-    const query = new URLSearchParams();
-    query.set('from', from);
-    query.set('to', to);
-
     const catValues = formData.getAll('cat').map((value) => String(value));
     const totalSelectable = parents.reduce(
       (sum, parent) => sum + (parent.children.length === 0 ? 1 : parent.children.length),
       0,
     );
-    if (catValues.length < totalSelectable) {
-      query.set('catset', '1');
-      for (const cat of catValues) {
-        query.append('cat', cat);
-      }
-    }
+    const everyCategory = catValues.length >= totalSelectable;
+    // Decision 241 ("Show takes control of the window"): re-submitting
+    // exactly what the D → E sync set keeps the provenance mark (and Chart
+    // E's signpost); changing anything takes the window for E's own.
+    const allCategoryIds = parents.flatMap((parent) =>
+      parent.children.length === 0
+        ? [String(parent.id)]
+        : parent.children.map((child) => String(child.id)),
+    );
+    const reconfirms =
+      searchParams.get('mixvia') === '1' &&
+      mixShowReconfirms({
+        currentFrom: searchParams.get('from'),
+        currentTo: searchParams.get('to'),
+        currentCats: searchParams.get('catset') === '1' ? searchParams.getAll('cat') : null,
+        submittedFrom: from,
+        submittedTo: to,
+        submittedCats: everyCategory ? null : catValues,
+        allCategoryIds,
+      });
+    const query = chartsQuery([...searchParams.entries()], {
+      set: {
+        from,
+        to,
+        catset: everyCategory ? undefined : '1',
+        cat: everyCategory ? undefined : catValues,
+        slice: undefined,
+        mixvia: reconfirms ? '1' : undefined,
+      },
+    });
     router.push(`/charts?${query.toString()}#mix`, { scroll: false });
   };
 
@@ -487,6 +518,10 @@ export function MixScopes({
           </div>
 
           <input type="hidden" name="catset" value="1" />
+          {/* A no-JavaScript Show must carry the other charts' state itself. */}
+          {preserved.map(([name, value], index) => (
+            <input key={`${name}-${index}`} type="hidden" name={name} value={value} />
+          ))}
 
           <MixCategoryTree
             parents={parents}

@@ -332,3 +332,28 @@
   ) {
   min-height: 44px;
 }
+
+/*
+ * The Chart D → E sync chip (SPEC §16.7 D, decision 241, issue #81). Engaged
+ * must be unmistakable on every theme, so the fill is the amber warning ramp
+ * — the theme generator re-lights it per theme — and a soft ring breathes
+ * while the link is on. Colour is never the only signal: the ✓, aria-pressed
+ * and the bars' changed hints all say the same thing. Reduced motion stops
+ * the pulse and keeps the amber fill.
+ */
+@keyframes sf-sync-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-warning-600) 55%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-sync-chip {
+    animation: sf-sync-pulse 2.4s ease-in-out infinite;
+  }
+}

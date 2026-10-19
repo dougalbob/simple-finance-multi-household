@@ -3910,3 +3910,58 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       seed. New journeys cover each issue: the category search, the supplier A–Z/search, the Day
       by day totals and the three default ticks. The household reviewed the Arena preview and
       approved publishing as stable **v1.28.0**; the release files and notes are in this slice.
+
+241. **Issue #81 — the Chart D → Chart E sync: a month bar sets the Spending mix (2026-10-19).**
+    The household sketched several shapes in the issue and then sharpened them in conversation:
+    a two-way sync was dropped ("it could get very messy"), and so was giving Chart D date
+    fields of its own — payday cycles are weeks, and monthly trend bars over them are thin.
+    What survives is the one direction that pays for itself: **a toggle on Chart D
+    ("Sync to Spending mix"), off by default.** Engaging it is inert; while it is on, every
+    month link on Chart D — each bar and the table twin's month names, so the keyboard path
+    does what the drawing does — hands Chart E that whole calendar month **and the preset's
+    categories**, and nothing on Chart D opens Purchases (the drill-down returns when the sync
+    is switched off; until then Chart E's line items carry the same month-and-category list).
+    The month being lived ends at today, which is exactly Chart E's existing "Month to date"
+    quick window, so that pill lights on its own. The chip's engaged state is the amber warning
+    ramp plus a soft breathing ring (`prefers-reduced-motion` stops the pulse, keeps the amber),
+    with ✓, `aria-pressed` and the bars' changed hints saying the same thing colour does.
+    - **State and provenance are URL params, nothing else.** `mixsync=1` is the toggle;
+      `mixvia=1` is carried only by links a synced bar produced. Disengaging the chip — or
+      Chart E's "Return to since last payday" link, two doors to the same URL — removes every
+      Chart E filter (window, ticks, slice, provenance, the toggle): the full reset back to the
+      payday default and every category. **"Show takes control of the window"**: pressing Show
+      in Chart E's own panel keeps the provenance mark only when it re-submits exactly what
+      the sync set (dates *and* categories, an unticked tree and an explicit all-children list
+      counting as the same selection); change anything and the signpost goes, the bars stay
+      synced, and the next tap re-claims the window.
+    - **Chart E's signpost is honest by construction.** It reads "Showing September 2026 with
+      the Fixed commitments categories — set from Spending trends" only when the window drawn
+      is the window asked, that window is exactly what tapping one of Chart D's drawn months
+      produces, the ticked categories are exactly the preset's, and the provenance mark is
+      present. A hand-edited URL, a stale link, or a Show that changed anything shows no
+      signpost. Signposting lives in the existing notice slot, amber-tinted to match the chip.
+    - **The pre-#81 quirk is fixed on the way:** Chart E's slice links and Show built a fresh
+      query string and silently dropped `?preset=`, resetting Chart D to its first preset.
+      Every Chart E control now merges parameters the way the rest of the page always did
+      (`chartsQuery` in `src/lib/charts-sync.ts`), and a no-JavaScript Show carries the other
+      charts' state in hidden inputs, since a native GET submits only the form's own fields.
+    - **Files.** `src/lib/charts-sync.ts` (the query builder, `syncMonthWindow`, `sameIdSet`,
+      `mixShowReconfirms` — `tests/charts-sync.test.ts` pins them); `src/app/charts/page.tsx`
+      (the chip, the month-link swap, the signpost, the merging `mixHref`); MixScopes in
+      `src/components/charts/mix-category-tree.tsx` (Show merge + provenance + hidden inputs);
+      the pulse in `src/app/globals.css`. No schema, migration or backup-format change.
+    - **Evidence.** `npm run test` 1087/1087 across 257 suites, `format:check`, `typecheck`
+      and `next build` green; server-rendered behaviour verified against the seeded E2E
+      household (bar hrefs, signpost truth table, full-reset URL). A new Playwright journey in
+      `e2e/charts.spec.ts` covers engage → tap → signpost → Show-reconfirm → return → drill-down
+      restored; this sandbox has no browser binaries (SANDBOX note in `playwright.config.ts`),
+      so the suite runs in CI as ever. Awaiting the household's Arena preview acceptance before
+      any release; the issue stays open until then.
+    - **Preview acceptance fix — the D headline's compared month.** Trying the sync in the
+      Arena preview, the household read "£46.99 in September 2026 — up £12.00 on June 2026" and
+      called the three-months-earlier comparison (inherited from v1.28.0's `completeMonths[length
+      - 4]`, pinned as "three complete months earlier") senseless for a reader: the verdict now
+      compares the latest complete month with **the complete month immediately before it**
+      (`length - 2` in `commitmentSeries`), and a lone complete month states itself without a
+      comparison. `tests/chart-series.test.ts` pins both shapes; SPEC §16.7 D now names the rule.
+      The rest of the sync was accepted as-is ("other than this it looks good").

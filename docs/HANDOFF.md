@@ -1,3 +1,61 @@
+# v1.29.0 — issue #81: the Chart D → Chart E sync (2026-10-19)
+
+**Read decision 241 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
+SPEC §16.7 (D and E) first.** The household designed this in conversation: a two-way sync and
+date fields on Chart D were both dropped ("it could get very messy"; payday cycles are weeks and
+monthly bars over them are thin), leaving the one direction that pays for itself.
+
+**Release: stable `v1.29.0`.** The household reviewed the Arena preview, asked for one fix (the
+trends verdict's compared month — see below), re-checked and approved publishing on 2026-10-19.
+The five version-bearing places agree on **1.29.0** (package.json, package-lock.json,
+`src/lib/version.ts`, the Unraid template description and `docs/RELEASE_NOTES_v1.29.0.md`), and
+the contract documents name `v1.29.0`. Follow `docs/RELEASE_PROCESS.md` for the PR gate, merge,
+annotated tag on the `main` merge commit and the Publish/GHCR verification. The release notes
+explain that the release adds nothing to the schema and that the sync is pure URL state.
+`v1.28.0` remains the previous release.
+
+**Delivered:**
+
+1. **The toggle.** A "Sync to Spending mix" chip beside the preset dropdown on Spending trends,
+   off by default; engaging it is inert. While on, every month link on Chart D — each bar and the
+   table twin's month names (the keyboard path) — hands Chart E that whole calendar month with the
+   preset's categories ticked, landing on `#mix`; the month being lived ends at today, which is
+   Chart E's existing "Month to date" quick window. Nothing on Chart D opens Purchases while
+   synced. Engaged state: amber warning ramp plus a soft breathing ring (`prefers-reduced-motion`
+   keeps the amber, stops the pulse), with ✓, `aria-pressed` and changed bar hints.
+2. **Provenance and reset.** `mixsync=1` is the toggle; `mixvia=1` is carried only by links a
+   synced bar produced. Disengaging the chip or the signpost's "Return to since last payday" is
+   the full reset (window, ticks, slice, provenance, toggle). Chart E's signpost appears only when
+   the window drawn is exactly what tapping a drawn month produces and the cats are exactly the
+   preset's; a no-JS or hand-edited mismatch shows none. Show in Chart E's panel keeps the
+   signpost only when it re-submits exactly what the sync set.
+3. **The pre-#81 quirk fixed.** Chart E's slice links and Show built fresh query strings and
+   dropped `?preset=`, silently resetting Chart D to its first preset. All Chart E controls now
+   merge parameters (`chartsQuery`), and a no-JS Show carries the other charts' filters in hidden
+   inputs.
+4. **Preview-acceptance fix — the trends verdict.** It compared the latest complete month with the
+   month three months earlier ("£46.99 in September 2026 — up £12.00 on June 2026", inherited from
+   v1.28.0). It now compares with **the complete month immediately before it**, and a lone
+   complete month states itself alone: `commitmentSeries` in
+   `src/lib/records/chart-series.ts`, SPEC §16.7 D names the rule.
+
+**Tests added or updated:** `tests/charts-sync.test.ts` (12 tests: the query builder, repeated-key
+preservation, `syncMonthWindow`, `sameIdSet`, `mixShowReconfirms` including the implicit-all
+equivalence), the commitments verdict tests in `tests/chart-series.test.ts` rewritten for
+month-on-month plus a lone-complete-month case, and a new Playwright journey in
+`e2e/charts.spec.ts` (engage → tap a month → signpost → Show-reconfirm → return → drill-down
+restored; asserts Chart E keeps Chart D's preset).
+
+**Validation in this session:** `npm run typecheck`, `npm run format:check`, `npm run build` and
+`npm run test` all green (**1088/1088 unit tests across 257 suites**). Server-rendered behaviour
+verified against the seeded E2E household (bar hrefs, the signpost truth table, the reset URL).
+This sandbox has no browser binaries, so the Playwright suite — including the new journey — runs
+as the PR's `browser` check in CI (the note in `playwright.config.ts`); that check is the gate,
+not this sandbox's curl.
+
+**Not changed:** no figure, projection or record moves; no schema, migration or backup-format
+change; nothing is written to Settings by the sync. Issue #81 closes with this release.
+
 # v1.28.0 — issues #76–#79: searchable pickers, Day by day totals and pot defaults (2026-10-19)
 
 **Read decision 240 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated

@@ -646,7 +646,7 @@ export interface CommitmentSeries {
   /** The most recent complete month (null when the window has none). */
   latestCompletePence: number | null;
   latestCompleteLabel: string | null;
-  /** The complete month three months before that one. */
+  /** The complete month immediately before the latest one. */
   comparedPence: number | null;
   comparedLabel: string | null;
   deltaPence: number | null;
@@ -700,7 +700,11 @@ export function commitmentSeries(
 
   const completeMonths = months.filter((month) => month.complete);
   const latest = completeMonths[completeMonths.length - 1] ?? null;
-  const compared = completeMonths[completeMonths.length - 4] ?? null;
+  // The complete month immediately before the latest (decision 241's preview
+  // acceptance): "up £12.00 on June 2026" next to September asked the reader
+  // to hold a three-month gap in their head for no payoff — month on month
+  // is what the headline is for.
+  const compared = completeMonths[completeMonths.length - 2] ?? null;
   const deltaPence =
     latest === null || compared === null ? null : latest.amountPence - compared.amountPence;
 

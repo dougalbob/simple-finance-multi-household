@@ -7,9 +7,14 @@ Previous release — **v1.27.0**: issue #73 corrects State Pension uprating befo
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-19):** this is the independent multi-household edition and **`v1.28.0` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.28.0.md`](docs/RELEASE_NOTES_v1.28.0.md).
-> It answers GitHub issues #76–#79: the till's category field and the Recurring supplier field now search as
+> **Status (2026-10-19):** this is the independent multi-household edition and **`v1.29.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.29.0.md`](docs/RELEASE_NOTES_v1.29.0.md).
+> It answers GitHub issue #81: on Charts, a **Sync to Spending mix** toggle on the Spending trends chart
+> turns its month bars into one-press links that set the Spending mix's window to that whole calendar
+> month with the preset's categories ticked — signposted, shareable and fully resettable — while Chart
+> E's own controls no longer reset the trends preset; the trends verdict now compares the latest
+> complete month with the month immediately before it. `v1.28.0` before it answered issues #76–#79:
+> the till's category field and the Recurring supplier field now search as
 > you type, Horizon's **Day by day** heading counts and totals its rows, and each pot card chooses its own
 > default uses (**Till**, **Transactions**, **New DD/SO**) in one place. `v1.27.0` before it added the
 > **Long-term forecast** at `/longterm` — a multi-decade projection of pension pots, earnings
