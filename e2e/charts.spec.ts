@@ -597,6 +597,107 @@ test.describe('charts', () => {
     await expect(card.getByText(/window stops at today/)).toBeVisible();
   });
 
+  test('chart D syncs a month into the spending mix, and back again (issue #81)', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1400, height: 950 });
+    await page.goto('/charts#commitments');
+    const card = page.locator('#commitments');
+    const chip = card.getByRole('link', { name: /Sync to Spending mix/ });
+    const drawing = figure(page, 'commitments', 'laptop');
+
+    // Off by default, and the bars are purchases drill-downs.
+    await expect(chip).toHaveAttribute('aria-pressed', 'false');
+    const drilldowns = await barLinks(drawing);
+    expect(drilldowns.length).toBeGreaterThan(0);
+    for (const href of drilldowns) {
+      expect(new URL(href, 'http://example.test').pathname).toBe('/purchases');
+    }
+    // The table twin mirrors the bars — the keyboard path does what the
+    // drawing does, synced or not.
+    expect(await tableLinks(drawing)).toEqual(drilldowns);
+
+    // Engaging is inert: the URL gains the toggle, Chart E keeps its payday
+    // default, and the chip says it is on in more ways than colour.
+    await chip.click();
+    await expect(page).toHaveURL(/mixsync=1/);
+    await expect(page).not.toHaveURL(/from=/);
+    await expect(chip).toHaveAttribute('aria-pressed', 'true');
+    await expect(chip).toContainText('✓ Sync to Spending mix');
+
+    // The bars now hand Chart E the whole month plus the preset's categories.
+    const synced = await barLinks(drawing);
+    expect(synced.length).toBe(drilldowns.length);
+    expect(await tableLinks(drawing)).toEqual(synced);
+    const last = new URL(synced[synced.length - 1]!, 'http://example.test');
+    expect(last.pathname).toBe('/charts');
+    expect(last.hash).toBe('#mix');
+    expect(last.searchParams.get('mixsync')).toBe('1');
+    expect(last.searchParams.get('mixvia')).toBe('1');
+    expect(last.searchParams.get('catset')).toBe('1');
+    expect(last.searchParams.getAll('cat').length).toBeGreaterThan(0);
+    expect(last.searchParams.get('preset')).toMatch(/\S/);
+    // The month being lived ends today, which is Chart E's own "Month to date".
+    const to = last.searchParams.get('to') as string;
+    expect(last.searchParams.get('from')).toBe(`${to.slice(0, 7)}-01`);
+    // A completed month runs from its first day to its last.
+    const complete = new URL(synced[synced.length - 2]!, 'http://example.test');
+    const completeTo = complete.searchParams.get('to') as string;
+    expect(complete.searchParams.get('from')).toBe(`${completeTo.slice(0, 7)}-01`);
+    const dayAfter = new Date(`${completeTo}T00:00:00Z`);
+    dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+    expect(dayAfter.getUTCDate()).toBe(1);
+
+    // Tap a completed month (the table twin is the same link): the page
+    // stays on /charts and lands on Chart E, signposted.
+    if (!(await drawing.locator('table').first().isVisible())) {
+      await drawing.getByText(/^Show the numbers/).click();
+    }
+    await drawing
+      .locator('table a[href]')
+      .nth(synced.length - 2)
+      .click();
+    await expect(page).toHaveURL(/#mix$/);
+    const mix = page.locator('#mix');
+    await expect(mix.getByText(/set from Spending trends/)).toBeVisible();
+    await expect(mix.getByText(/^Showing \w+ \d{4} with /)).toBeVisible();
+    // E's pickers show the month the bar stood for.
+    await mix.getByRole('button', { name: 'Change chart scopes' }).click();
+    await expect(mix.getByLabel('From', { exact: true })).toHaveValue(
+      complete.searchParams.get('from') as string,
+    );
+    await expect(mix.getByLabel('To', { exact: true })).toHaveValue(completeTo);
+
+    // Re-submitting exactly what the sync set keeps the signpost (decision
+    // 241: Show takes control only when something changes) — and since #81,
+    // E's own controls keep Chart D's preset instead of dropping it.
+    const preset = last.searchParams.get('preset') as string;
+    await mix.getByRole('button', { name: 'Show', exact: true }).click();
+    await expect(page).toHaveURL(/mixvia=1/);
+    expect(new URL(page.url()).searchParams.get('preset')).toBe(preset);
+    await expect(mix.getByText(/set from Spending trends/)).toBeVisible();
+
+    // Return to since last payday: the full reset, and the chip disengages.
+    await mix.getByRole('link', { name: 'Return to since last payday' }).click();
+    await expect(page).not.toHaveURL(/from=|catset=|mixvia=|mixsync=/);
+    await expect(chip).toHaveAttribute('aria-pressed', 'false');
+    await expect(mix.getByText(/set from Spending trends/)).toHaveCount(0);
+    // Chart E is back on its payday default window.
+    const scopesButton = mix.getByRole('button', { name: 'Change chart scopes' });
+    if ((await scopesButton.getAttribute('aria-expanded')) !== 'true') {
+      await scopesButton.click();
+    }
+    const quick = mix.getByRole('group', { name: 'Quick windows' });
+    await expect(quick.getByRole('button', { name: /Since last payday$/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    // The purchases drill-down is back on Chart D.
+    const after = await barLinks(drawing);
+    expect(after.length).toBe(drilldowns.length);
+    expect(new URL(after[0]!, 'http://example.test').pathname).toBe('/purchases');
+  });
+
   test('Charts is reachable from the navigation and from the home page', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 950 });
     await page.goto('/');

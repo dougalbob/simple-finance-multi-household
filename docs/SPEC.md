@@ -1419,6 +1419,22 @@ Monthly comparison headlines, the in-progress month hatch, exact-number tables a
 drill-downs remain. Presets classify categories only; they do not reclassify purchases or impose a
 household-independent definition of “discretionary”.
 
+**Sync to Spending mix (issue #81, decision 241).** A toggle chip beside the preset dropdown, off by
+default: **“Sync to Spending mix”**. Engaging it is inert — nothing on Chart E changes until a month
+is tapped — and it can never write to Settings. While it is on, every month link on Chart D (each
+bar, and the table twin's month names, so the keyboard path does what the drawing does) hands Chart
+E **that whole calendar month with the preset's categories ticked**, landing on `#mix`; the month
+being lived ends at today, which is exactly Chart E's “Month to date” quick window, so that pill
+lights on its own. **No link on Chart D opens Purchases while the sync is on** — the drill-down
+returns when the sync is switched off, and until then Chart E's line items carry the same
+month-and-category list through “Open these purchases”. The engaged chip is the amber warning ramp
+with a soft breathing ring (`prefers-reduced-motion` stops the pulse and keeps the amber); colour
+is never the only signal, so the ✓, `aria-pressed` and the bars' changed hints (“set the Spending
+mix to this month”) say the same thing. A preset with no categories draws no bars, so it hides the
+chip: a toggle that changed nothing visible would be a small lie. There is deliberately **no
+Chart E → Chart D sync** and no date fields on Chart D — payday cycles are weeks, and monthly trend
+bars over them are thin; the one-way bridge is the month bar itself.
+
 **E. Where the money went (decisions 195, 207, 208, 229).** A pie of **net spending by parent category**
 over a window the household chooses, so the question "what share of our money went on each thing" has a picture.
 It counts **money already spent, never a projection**, which is why it was renamed from "Where the money goes"
@@ -1444,6 +1460,18 @@ in v1.10.0 (issue #24): **no window runs past today**.
   window updates the `From` and `To` date inputs in place without auto-submitting, so any category-tree changes
   made alongside the window selection are preserved until **Show** is pressed; pressing **Show** submits the form
   with `{ scroll: false }` and keeps the scopes panel open until the household closes it or navigates away.
+- **A window set from Spending trends is signposted, and Show can take it over (issue #81, decision 241).**
+  When Chart D's sync put the window and the categories where they are, an amber notice above the pie reads
+  “Showing September 2026 with the Fixed commitments categories — set from Spending trends”, with a
+  **Return to since last payday** link that is the same URL as disengaging Chart D's toggle: the full reset of
+  window, ticks, slice, provenance and toggle. The signpost is honest by construction — it appears only when
+  the window drawn is the window asked, that window is exactly what tapping one of Chart D's drawn months
+  produces, and the ticked categories are exactly the preset's — so an edited URL or a stale link shows none.
+  Pressing **Show** in this panel takes control of the window: re-submitting exactly what the sync set keeps
+  the signpost; changing anything (dates or categories) drops it while the bars stay synced, and the next tap
+  re-claims the window. Since decision 241 every Chart E control merges query parameters instead of building
+  a fresh string, so a slice click or a Show no longer drops Chart D's `?preset=` or the sync state, and a
+  no-JavaScript Show carries the other charts' filters in hidden inputs.
 
 - **Slices are parent categories**, counted from the same allocation lines as Insights, with refunds netted off
   their own category. **Personal is the one exception**: each person's own spending is a slice of its own

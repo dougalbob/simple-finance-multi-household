@@ -1,3 +1,30 @@
+# In flight — issue #81: the Chart D → Chart E sync (2026-10-19)
+
+**Read decision 241 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
+SPEC §16.7 (D and E) first.** Implemented and awaiting the household's Arena preview acceptance;
+**no release, version bump or tag yet** — issue #81 stays open until then, and the release follows
+`docs/RELEASE_PROCESS.md` once accepted (next version would be v1.29.0; no schema, migration or
+backup-format change).
+
+What to try in the preview (the seeded fictional household, port 3100): `/charts#commitments` →
+engage **Sync to Spending mix** (amber, pulsing) → tap any month bar (or the table twin's month
+name) → the page lands on Chart E showing that whole month with the preset's categories and the
+“set from Spending trends” signpost → **Return to since last payday** does the full reset and
+disengages the toggle. Pressing Show in Chart E's own panel with unchanged values keeps the
+signpost; changing anything takes the window for E's own while the bars stay synced. While the
+sync is on, nothing on Chart D opens Purchases — the drill-down returns when it is switched off.
+
+Delivered in `src/lib/charts-sync.ts` (+ `tests/charts-sync.test.ts`), `src/app/charts/page.tsx`,
+MixScopes in `src/components/charts/mix-category-tree.tsx`, and the pulse in
+`src/app/globals.css`; a new Playwright journey sits in `e2e/charts.spec.ts` (this sandbox has no
+browser binaries — CI runs it, per the note in `playwright.config.ts`). Evidence so far:
+`npm run test` 1087/1087 across 257 suites, `format:check`, `typecheck` and `next build` green,
+plus server-rendered verification of the bar hrefs, the signpost truth table and the reset URL
+against the E2E seed. On acceptance: bump the five version-bearing places, write
+`docs/RELEASE_NOTES_v1.29.0.md`, close #81, and follow the release process.
+
+---
+
 # v1.28.0 — issues #76–#79: searchable pickers, Day by day totals and pot defaults (2026-10-19)
 
 **Read decision 240 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
