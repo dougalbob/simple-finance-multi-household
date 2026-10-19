@@ -9,12 +9,10 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.27.0 is the stable production release and moves :latest (the Long-term
-  forecast: a multi-decade projection of pension pots, earnings with a stop
-  date, State Pension, windfalls, inflation and estimated UK tax, with the
-  household's own questions first, three return rates compared side by side,
-  drawdown versus annuity on the same pot, every figure editable, and one
-  saved plan per household).
+  v1.28.0 is the stable production release and moves :latest (issues #76-#79:
+  search-as-you-type category and supplier pickers at the till and on Recurring,
+  a count-and-total heading on Horizon's Day by day table, and one place to
+  choose each pot's default use - Till, All Transactions and new DD/SO).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -50,7 +48,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.27.0 is the stable production release and moves :latest. Long-term forecasts now grow earnings, index tax thresholds, uprate State Pension before its start and use per-person plan-to ages.
+    v1.28.0 is the stable production release and moves :latest. Category and supplier fields search as you type, Horizon's Day by day table counts and totals its rows, and each pot card sets its own default uses (Till, Transactions, New DD/SO).
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

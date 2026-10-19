@@ -1,12 +1,16 @@
-# Issues #76–#79 — searchable pickers, Day by day totals and pot defaults (2026-10-19) — unreleased, awaiting the household's preview
+# v1.28.0 — issues #76–#79: searchable pickers, Day by day totals and pot defaults (2026-10-19)
 
 **Read decision 240 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
 SPEC §15.1/§15.2 first.** This slice implements the four open issues the household asked to be
 considered together (they chose the slice; #76 and #78 share one searchable picker).
 
-**No release in this slice.** `package.json` stays **1.27.0**, there is no new release note, tag,
-image or GitHub release, and the household has asked to see an Arena preview before publishing.
-`main` is at the v1.27.0 release; this branch is the preview.
+**Release: stable `v1.28.0`.** The household reviewed the Arena preview and approved publishing on
+2026-10-19. The five version-bearing places agree on **1.28.0** (package.json, package-lock.json,
+`src/lib/version.ts`, the Unraid template description and `docs/RELEASE_NOTES_v1.28.0.md`), and
+the contract documents name `v1.28.0`. Follow `docs/RELEASE_PROCESS.md` for the PR gate, merge,
+annotated tag on the `main` merge commit and the Publish/GHCR verification. The release notes explain
+that this release adds nothing to the schema and moves two settings sections onto the pot cards.
+`v1.27.0` remains the previous release.
 
 **Delivered:**
 
