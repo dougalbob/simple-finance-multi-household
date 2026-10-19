@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { pickScheduleSupplier } from './support';
+import { honestyBand, honestyDriftPercent } from '../src/lib/records/insights';
+import {
+  pickEntryCategory,
+  pickScheduleSupplier,
+  waitForCategoryEditor,
+  waitForTill,
+} from './support';
 
 /**
  * Annual vehicle payments on Insights (SPEC §16.3, decision 190). A yearly
@@ -143,16 +149,39 @@ test.describe('honesty loop tolerance band (issue #27)', () => {
     await page.goto('/insights');
     const loop = page.getByRole('region', { name: /configured figures honest/i });
     const groceries = loop.locator('div.rounded-lg', { hasText: 'Actual average weekly' });
-    // The seed's shops drift upwards against the configured £85, robustly
-    // past the +10% edge whatever weekday the suite runs on (any trailing-8
-    // window of seed shops averages over £96 — and the till specs only add
-    // to the in-progress week, which the average never sees). So the verdict
-    // says outside the usual range, with the percent.
-    await expect(groceries).toContainText(/outside the usual range/);
-    await expect(groceries).toContainText(/\d+% over/);
-    // …while the configured and actual figures the charts agree on stay put.
     await expect(groceries).toContainText('Configured weekly');
     await expect(groceries).toContainText('Actual average weekly');
+
+    // Read the two figures the card prints and assert the verdict against its
+    // own band rule, rather than against a drifting seed average. The seed's
+    // trailing-eight-week average moves with the weekday the suite runs on
+    // (it was £93.25 on 2026-10-19 — inside the +10% edge), so pinning the
+    // verdict to "outside the usual range" made this test a calendar trap.
+    const text = (await groceries.innerText()).replace(/\s+/g, ' ');
+    const amountOf = (pattern: RegExp): number => {
+      const match = pattern.exec(text);
+      expect(match, `missing ${String(pattern)} in: ${text}`).not.toBeNull();
+      return Number((match?.[1] ?? '0').replace(/,/g, '')) * 100 + Number(match?.[2] ?? '0');
+    };
+    const configuredPence = amountOf(/Configured weekly\s*£([\d,]+)\.(\d{2})/);
+    const actualPence = amountOf(/Actual average weekly\s*£([\d,]+)\.(\d{2})/);
+    expect(configuredPence).toBeGreaterThan(0);
+
+    const driftPence = actualPence - configuredPence;
+    const band = honestyBand(driftPence, configuredPence);
+    expect(band).not.toBeNull();
+    if (band === 'within-tolerance') {
+      await expect(groceries).toContainText('within the usual range');
+      await expect(groceries).not.toContainText(/% (?:over|under)/);
+      return;
+    }
+    // Outside the band the sentence says so, and prints the percent the
+    // comparison derives — never a rounded-up story.
+    await expect(groceries).toContainText('outside the usual range');
+    const percent = honestyDriftPercent(driftPence, configuredPence);
+    expect(percent).not.toBeNull();
+    const direction = band === 'above-tolerance' ? 'over' : 'under';
+    await expect(groceries).toContainText(`${Math.abs(percent ?? 0)}% ${direction}`);
   });
 });
 
@@ -245,12 +274,56 @@ test.describe('the Insights line-item drill (issue #68)', () => {
   });
 
   test('a £0.00 figure is greyed out and opens nothing', async ({ page }) => {
+    test.slow();
+    // A brand-new category guarantees the shape this rule is about: spending
+    // in the current month, nothing in the two months before it. Asserting on
+    // a seeded row made the test depend on whatever the rest of the suite had
+    // bought that month (issue #79's release run caught it going blank).
+    const stamp = Date.now().toString().slice(-6);
+    const parent = `Playwright zero ${stamp}`;
+    const child = `Nothing behind it ${stamp}`;
+
+    await page.goto('/settings');
+    await waitForCategoryEditor(page);
+    const tree = page.getByRole('region', { name: /Category tree/i });
+    await tree.getByLabel('Operation').selectOption('add-parent');
+    await tree.getByLabel('Name').fill(parent);
+    await tree.getByRole('button', { name: 'Apply' }).click();
+    await expect(tree.getByRole('status')).toContainText(/added/i, { timeout: 30_000 });
+    await tree.getByLabel('Operation').selectOption('add-child');
+    await tree.getByLabel('Under which parent').selectOption({ label: parent });
+    await tree.getByLabel('Name').fill(child);
+    await tree.getByRole('button', { name: 'Apply' }).click();
+    await expect(tree.getByRole('status')).toContainText(/added/i, { timeout: 30_000 });
+
+    // One purchase today — the only spending that category has ever had.
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    // The settings project's default-pot tests end with the Till default
+    // cleared, so name the pot rather than relying on a household setting.
+    await entry.getByLabel('Pot').selectOption({ label: 'Main account' });
+    await entry.locator('input[name="amount"]').fill('5.00');
+    await entry.getByRole('button', { name: 'Next: category →' }).click();
+    await pickEntryCategory(entry, `${parent} / ${child}`);
+    await entry.getByRole('button', { name: 'Save purchase' }).click();
+    await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
+
     await page.goto('/insights');
     const panel = page.locator('section[aria-labelledby="panel-month-heading"]');
-    const zero = panel.locator('tbody td span.text-ink-muted', { hasText: '£0.00' }).first();
-    await expect(zero).toBeVisible();
-    // Plain muted text, never a link: there is nothing behind a zero figure.
-    expect(await zero.evaluate((element) => element.tagName)).toBe('SPAN');
-    expect(await zero.evaluate((element) => element.closest('a'))).toBeNull();
+    const row = panel.locator('tbody tr', { hasText: parent });
+    await expect(row).toHaveCount(1, { timeout: 30_000 });
+    // Columns: the parent, then each month's amount, with a Change cell after
+    // the older two values (so amounts sit at 1, 2 and 4). The two months
+    // before today hold nothing.
+    for (const index of [1, 2]) {
+      const zero = row.locator('td').nth(index).locator('span.text-ink-muted');
+      await expect(zero).toHaveText('£0.00');
+      // Plain muted text, never a link: there is nothing behind a zero figure.
+      expect(await zero.evaluate((element) => element.tagName)).toBe('SPAN');
+      expect(await zero.evaluate((element) => element.closest('a'))).toBeNull();
+    }
+    // The current month's £5.00 is a link, because it has line items behind it.
+    await expect(row.locator('td').nth(4).locator('a.sf-link')).toHaveText('£5.00');
   });
 });

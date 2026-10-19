@@ -44,21 +44,22 @@ default"). `e2e/support.ts` gained `pickEntryCategory`, `pickScheduleSupplier` a
 the pickers.
 
 **Validation in this session:** `npm run typecheck`, `npm run format:check`, `npm run build` and
-`npm run test` all green (**1075/1075 unit tests across 252 suites**). The full Playwright suite ran
+`npm run test` all green (**1075/1075 unit tests across 252 suites**). The full Playwright suite
 through SANDBOX entry 8 (throwaway `playwright.local.config.ts`, `@sparticuz/chromium`, one worker,
-fresh `.e2e-data`): **169 passed, 2 failed** — and the same full suite on `main` at 7dbdc13 (this
-slice stashed) is **165 passed, 2 failed with exactly those two failures**. Both are in
-`insights.spec.ts` and are pre-existing and data/date-dependent, not this slice:
+fresh `.e2e-data`) is **171/171** after repairing two pre-existing traps in `insights.spec.ts` that
+the release gate exposed — both also failed on `main` at `7dbdc13` with the same seed:
 
-- `honesty loop tolerance band (issue #27)` — its comment promises the seed's trailing eight weeks
-  average over £96 "whatever weekday the suite runs on"; on Monday 19 October 2026 they average
-  £93.25, so the verdict reads "within the usual range".
-- `the Insights line-item drill (issue #68) › a £0.00 figure is greyed out` — after the earlier
-  projects' records, the month panel has no £0.00 row to click. It passes when the insights
-  project runs without those earlier mutations.
+- `honesty loop tolerance band (issue #27)` assumed the seed's trailing eight weeks always averaged
+  more than +10% over the configured figure; on Monday 19 October 2026 the drift was 9.7%. It now
+  reads the card's own configured and actual figures and asserts the verdict its band rule derives
+  (`honestyBand`/`honestyDriftPercent`), so it tests the feature rather than the weekday.
+- `the Insights line-item drill (issue #68) › a £0.00 figure is greyed out` relied on a seeded
+  month cell staying zero, which the earlier projects' records fill in. It now creates its own
+  parent/child category, records one £5.00 purchase (naming the pot explicitly, because the
+  settings project ends with the Till default cleared) and asserts the two earlier month cells are
+  muted text while the current month is a link.
 
-Fix those in their own change (the seed or the fixture date), not here. The four issues' own
-journeys pass, and so does every other project.
+The four issues' own journeys pass, and so does every other project.
 
 If your run differs, the four issues' own journeys are the ones to check first: the category search
 (`e2e/home.spec.ts`), the supplier A–Z/search (`e2e/desktop.spec.ts`), the Day by day totals

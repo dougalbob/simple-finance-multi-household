@@ -3903,10 +3903,10 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       guard (`data-pot-defaults-ready`, `inert` until listening). The new-schedule default is read
       by `/recurring`; clearing it keeps the form's first-pot fallback.
     - **Evidence.** `npm run test` 1075/1075 across 252 suites, `format:check`, `typecheck` and
-      `next build` green. Full Playwright through SANDBOX entry 8: **169 passed, 2 failed**, and
-      the identical run on `main` (this slice stashed) is **165 passed, 2 failed with the same two
-      insights tests** — a pre-existing seed/date problem inside
-      `insights.spec.ts` (the groceries band and the £0.00 drill row), not this slice. New
-      journeys cover each issue: the category search, the supplier A–Z/search, the Day by day
-      totals and the three default ticks. The household asked for an Arena preview before any
-      release; no version bump, release notes, tag or image is part of this slice.
+      `next build` green. Full Playwright through SANDBOX entry 8: **171/171**. The gate exposed
+      two pre-existing date/state traps in `insights.spec.ts` (they failed on `main` too); both
+      tests were made deterministic in the same slice — the honesty verdict now derives from the
+      page's own figures, and the £0.00 row is created by the test rather than borrowed from the
+      seed. New journeys cover each issue: the category search, the supplier A–Z/search, the Day
+      by day totals and the three default ticks. The household reviewed the Arena preview and
+      approved publishing as stable **v1.28.0**; the release files and notes are in this slice.

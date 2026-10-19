@@ -50,12 +50,12 @@ first pot until a household ticks one.
 
 - Unit suite: **1,075/1,075 across 252 suites**; `format:check`, `typecheck` and the
   production build pass.
-- Full browser suite through the sandbox Chromium: **169 passed, 2 failed**, and the
-  identical suite on `main` at `7dbdc13` (this slice stashed) is **165 passed, 2 failed
-  with the same two tests** — both in `insights.spec.ts` (the groceries tolerance band
-  and the £0.00 drill row) and both pre-existing, date/data-dependent seed assumptions.
-  They are documented in `docs/HANDOFF.md` for a separate fix and are not regressions
-  from this release.
+- Full browser suite through the sandbox Chromium: **171/171**. The release gate first
+  exposed two pre-existing date/data traps in `insights.spec.ts` — its groceries verdict
+  assumed the seed average always sat over +10% (it was 9.7% on 2026-10-19), and its
+  £0.00 row relied on a seeded cell that earlier projects fill in; both also failed on
+  `main` at `7dbdc13` with the same seed. Both tests now derive their expectations from
+  the page's own figures or create the state they assert, so the suite is deterministic.
 - New browser journeys cover each issue: the till category search, the supplier A–Z
   search, the Day by day totals, and the three pot-default ticks (including moving a
   default between pots).
