@@ -14,11 +14,21 @@ disengages the toggle. Pressing Show in Chart E's own panel with unchanged value
 signpost; changing anything takes the window for E's own while the bars stay synced. While the
 sync is on, nothing on Chart D opens Purchases — the drill-down returns when it is switched off.
 
+**Preview feedback (2026-10-19): the sync itself was accepted** ("other than this it looks
+good"); one fix came out of trying it — Chart D's verdict sentence compared the latest complete
+month with the month **three months earlier** ("£46.99 in September 2026 — up £12.00 on June
+2026", inherited from v1.28.0), which the household rightly called senseless. It now compares
+with **the complete month immediately before it** ("…on August 2026"), and a lone complete month
+states itself without a comparison: `commitmentSeries` in `src/lib/records/chart-series.ts`
+(`completeMonths[length - 2]`), pinned in `tests/chart-series.test.ts`, SPEC §16.7 D names the
+rule, and decision 241 records the change.
+
 Delivered in `src/lib/charts-sync.ts` (+ `tests/charts-sync.test.ts`), `src/app/charts/page.tsx`,
 MixScopes in `src/components/charts/mix-category-tree.tsx`, and the pulse in
 `src/app/globals.css`; a new Playwright journey sits in `e2e/charts.spec.ts` (this sandbox has no
 browser binaries — CI runs it, per the note in `playwright.config.ts`). Evidence so far:
-`npm run test` 1087/1087 across 257 suites, `format:check`, `typecheck` and `next build` green,
+`npm run test` green across the suite (1088 tests / 257 suites after the headline fix),
+`format:check`, `typecheck` and `next build` green,
 plus server-rendered verification of the bar hrefs, the signpost truth table and the reset URL
 against the E2E seed. On acceptance: bump the five version-bearing places, write
 `docs/RELEASE_NOTES_v1.29.0.md`, close #81, and follow the release process.

@@ -3957,3 +3957,11 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       restored; this sandbox has no browser binaries (SANDBOX note in `playwright.config.ts`),
       so the suite runs in CI as ever. Awaiting the household's Arena preview acceptance before
       any release; the issue stays open until then.
+    - **Preview acceptance fix — the D headline's compared month.** Trying the sync in the
+      Arena preview, the household read "£46.99 in September 2026 — up £12.00 on June 2026" and
+      called the three-months-earlier comparison (inherited from v1.28.0's `completeMonths[length
+      - 4]`, pinned as "three complete months earlier") senseless for a reader: the verdict now
+      compares the latest complete month with **the complete month immediately before it**
+      (`length - 2` in `commitmentSeries`), and a lone complete month states itself without a
+      comparison. `tests/chart-series.test.ts` pins both shapes; SPEC §16.7 D now names the rule.
+      The rest of the sync was accepted as-is ("other than this it looks good").

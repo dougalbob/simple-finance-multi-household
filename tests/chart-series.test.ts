@@ -535,17 +535,30 @@ describe('chart series: fixed commitments (D)', () => {
     assert.match(series.headline, /schedule-converted only/);
   });
 
-  it('compares the latest complete month with three complete months earlier', () => {
+  it('compares the latest complete month with the complete month before it', () => {
     const series = commitmentSeries(lines, {
       today: TODAY,
       months: 5,
       trackedCategoryIds: tracked,
     });
     assert.equal(series.latestCompleteLabel, 'August 2026');
-    assert.equal(series.comparedLabel, 'May 2026');
-    assert.equal(series.comparedPence, 0);
-    assert.equal(series.deltaPence, 5800);
-    assert.match(series.headline, /up £58\.00 on May 2026/);
+    assert.equal(series.comparedLabel, 'July 2026');
+    assert.equal(series.comparedPence, 4800);
+    assert.equal(series.deltaPence, 1000);
+    assert.match(series.headline, /up £10\.00 on July 2026/);
+  });
+
+  it('states the latest complete month alone when it has no predecessor', () => {
+    const series = commitmentSeries([lines[0] as ChartSpendingLine], {
+      // June 2026 alone: one complete month, nothing before it to compare.
+      today: '2026-07-15',
+      months: 2,
+      trackedCategoryIds: tracked,
+    });
+    assert.equal(series.latestCompleteLabel, 'June 2026');
+    assert.equal(series.comparedLabel, null);
+    assert.equal(series.deltaPence, null);
+    assert.match(series.headline, /£50\.00 in June 2026\.$/);
   });
 
   it('says what to do when nothing is tracked yet', () => {

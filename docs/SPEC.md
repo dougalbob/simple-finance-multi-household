@@ -1415,7 +1415,10 @@ compatibility read writes nothing. The first mutation persists that starting pre
 new changes. A saved empty collection never resurrects the fallback.
 
 The old **Schedule-converted only** toggle and the long tracked-category/breakdown lists are removed.
-Monthly comparison headlines, the in-progress month hatch, exact-number tables and filtered purchase
+Monthly comparison headlines — the latest complete month against **the complete month immediately
+before it** ("£46.99 in September 2026 — up £12.00 on August 2026"; until decision 241's preview it
+named the month three months earlier, which asked the reader to hold a quarter-long gap in their
+head for no payoff) — the in-progress month hatch, exact-number tables and filtered purchase
 drill-downs remain. Presets classify categories only; they do not reclassify purchases or impose a
 household-independent definition of “discretionary”.
 
