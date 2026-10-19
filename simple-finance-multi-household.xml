@@ -9,10 +9,10 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.28.0 is the stable production release and moves :latest (issues #76-#79:
-  search-as-you-type category and supplier pickers at the till and on Recurring,
-  a count-and-total heading on Horizon's Day by day table, and one place to
-  choose each pot's default use - Till, All Transactions and new DD/SO).
+  v1.29.0 is the stable production release and moves :latest (issue #81: a
+  Sync to Spending mix toggle on the Spending trends chart, whose month bars
+  set the Spending mix's window to that whole month with the preset's
+  categories; Chart D's verdict now compares with the month before it).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -48,7 +48,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.28.0 is the stable production release and moves :latest. Category and supplier fields search as you type, Horizon's Day by day table counts and totals its rows, and each pot card sets its own default uses (Till, Transactions, New DD/SO).
+    v1.29.0 is the stable production release and moves :latest. On Charts, a Sync to Spending mix toggle on Spending trends makes each month bar set the Spending mix to that whole month with the preset's categories, signposted and fully resettable; the trends verdict now compares with the month before it.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.
