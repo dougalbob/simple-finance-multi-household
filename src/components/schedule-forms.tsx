@@ -1,6 +1,7 @@
 'use client';
 
 import { ScheduleMonths } from './schedule-months';
+import { SearchPicker } from './search-picker';
 
 import { useActionState, useState } from 'react';
 import { editRenewalAction, editScheduleAction } from '@/app/actions';
@@ -287,29 +288,34 @@ export function ScheduleEditForm(props: ScheduleEditFormProps) {
       </div>
       {needsSupplier ? (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <label htmlFor={`schedule-${props.scheduleId}-supplier`} className={labelClass}>
-              Supplier
-            </label>
-            <select
-              id={`schedule-${props.scheduleId}-supplier`}
-              name="supplierId"
-              required={props.kind === 'dd'}
-              value={supplierMode}
-              onChange={(event) => setSupplierMode(event.target.value)}
-              className={inputClass}
-            >
-              <option value="" disabled={props.kind === 'dd'}>
-                {props.kind === 'dd' ? 'Choose a supplier…' : 'No supplier / household transfer'}
-              </option>
-              {props.supplierOptions.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.label}
-                </option>
-              ))}
-              <option value="__new__">Add a new supplier…</option>
-            </select>
-          </div>
+          <SearchPicker
+            id={`schedule-${props.scheduleId}-supplier`}
+            name="supplierId"
+            label="Supplier"
+            labelClassName={labelClass}
+            inputClassName={inputClass}
+            value={supplierMode}
+            onChange={setSupplierMode}
+            options={props.supplierOptions.map((supplier) => ({
+              value: String(supplier.id),
+              label: supplier.label,
+            }))}
+            pinnedOptions={
+              props.kind === 'so'
+                ? [{ value: '', label: 'No supplier / household transfer' }]
+                : undefined
+            }
+            footerOptions={[{ value: '__new__', label: 'Add a new supplier…' }]}
+            placeholder="Search suppliers…"
+            listLabel="Matching suppliers"
+            emptyMessage="No suppliers match that search."
+            hint={
+              props.kind === 'dd' && supplierMode === ''
+                ? 'Choose a supplier — a direct debit needs one.'
+                : 'Existing suppliers are A–Z — type any part of a name.'
+            }
+            required={props.kind === 'dd'}
+          />
           {supplierMode === '__new__' ? (
             <div className="flex flex-col gap-1">
               <label htmlFor={`schedule-${props.scheduleId}-supplier-name`} className={labelClass}>

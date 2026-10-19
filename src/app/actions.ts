@@ -244,9 +244,13 @@ import {
   DEFAULT_AGREEMENT_REMINDER_DAYS,
 } from '@/lib/records/agreements';
 import {
+  getDefaultPurchasePotId,
+  getDefaultSchedulePotId,
+  getDefaultTransactionsPotId,
   InvalidSettingValueError,
   setContractEndWarningLeadDays,
   setDefaultPurchasePotId,
+  setDefaultSchedulePotId,
   setDefaultTransactionsPotId,
   setMonthlyFuelPence,
   setRenewalWarningLeadDays,
@@ -1656,48 +1660,23 @@ export async function resetLongTermPlanAction(
   }
 }
 
-/**
- * The pot the Quick Entry purchase form starts on (SPEC §15.1, v0.9.0).
- * A setting rather than a guess: the household's daily-spend pot is not
- * called "Main account", and the old label match pointed the till form at the
- * wrong pot. An empty value clears the default and the form starts with no
- * pot selected.
- */
-export async function saveDefaultPurchasePotAction(
-  _previous: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const user = await householdContextFromRequest();
-  if (user === null) return NOT_SIGNED_IN;
-  if (user.readOnly) return READ_ONLY_VIEW;
+/** The uses a pot can be the default for (GitHub issue #79). */
+const POT_DEFAULT_USES = ['till', 'transactions', 'schedule'] as const;
+type PotDefaultUse = (typeof POT_DEFAULT_USES)[number];
 
-  const raw = formData.get('potId');
-  const text = typeof raw === 'string' ? raw.trim() : '';
-  const potId = text === '' ? null : Number(text);
-  if (potId !== null && (!Number.isInteger(potId) || potId <= 0)) {
-    return { status: 'error', message: 'Choose a pot from the list, or “No default”.' };
-  }
-  try {
-    const db = user.db;
-    setDefaultPurchasePotId(db, potId, user.email);
-    revalidatePages();
-    return {
-      status: 'ok',
-      message:
-        potId === null
-          ? 'Default cleared — the till form starts with no pot selected.'
-          : 'Default pot saved — the till form starts there.',
-    };
-  } catch (err) {
-    if (err instanceof InvalidSettingValueError) {
-      return { status: 'error', message: err.message };
-    }
-    return { status: 'error', message: 'The default pot could not be saved. Please try again.' };
-  }
+function isPotDefaultUse(value: string): value is PotDefaultUse {
+  return (POT_DEFAULT_USES as readonly string[]).includes(value);
 }
 
-/** Save the household's default target when All Transactions opens without a potId. */
-export async function saveDefaultTransactionsPotAction(
+/**
+ * Save the three "Set as default account for" ticks that now live on each
+ * pot's own card (GitHub issue #79). Each use is a single choice across the
+ * household: ticking it here moves it from whichever pot held it before,
+ * and unticking it only clears the setting when this pot is the one holding
+ * it. The legacy Quick entry and All Transactions cards were retired, so
+ * this one action replaces both older single-select savers.
+ */
+export async function savePotDefaultUsesAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
@@ -1705,31 +1684,60 @@ export async function saveDefaultTransactionsPotAction(
   if (user === null) return NOT_SIGNED_IN;
   if (user.readOnly) return READ_ONLY_VIEW;
 
-  const raw = formData.get('potId');
-  const text = typeof raw === 'string' ? raw.trim() : '';
-  const potId = text === '' ? null : Number(text);
-  if (potId !== null && (!Number.isInteger(potId) || potId <= 0)) {
-    return { status: 'error', message: 'Choose a pot from the list, or “No default”.' };
+  const potId = numberOrNull(formData.get('potId'));
+  if (potId === null) {
+    return { status: 'error', message: 'That pot could not be identified. Reload and try again.' };
   }
+  const postedUses = formData.getAll('uses');
+  if (postedUses.some((value) => typeof value !== 'string' || !isPotDefaultUse(value))) {
+    return { status: 'error', message: 'One of those defaults could not be understood.' };
+  }
+  const uses = new Set<PotDefaultUse>(postedUses as string[] as PotDefaultUse[]);
+
   try {
     const db = user.db;
-    setDefaultTransactionsPotId(db, potId, user.email);
+    const current = {
+      till: getDefaultPurchasePotId(db),
+      transactions: getDefaultTransactionsPotId(db),
+      schedule: getDefaultSchedulePotId(db),
+    };
+    let changed = false;
+
+    const apply = (use: PotDefaultUse, isDefault: boolean) => {
+      const held = current[use];
+      if (isDefault) {
+        if (held === potId) return;
+        if (use === 'till') setDefaultPurchasePotId(db, potId, user.email);
+        else if (use === 'transactions') setDefaultTransactionsPotId(db, potId, user.email);
+        else setDefaultSchedulePotId(db, potId, user.email);
+        changed = true;
+        return;
+      }
+      // Unticking is only a clear for the pot that actually holds the use;
+      // otherwise this pot's card would silently remove another pot's default.
+      if (held !== potId) return;
+      if (use === 'till') setDefaultPurchasePotId(db, null, user.email);
+      else if (use === 'transactions') setDefaultTransactionsPotId(db, null, user.email);
+      else setDefaultSchedulePotId(db, null, user.email);
+      changed = true;
+    };
+
+    apply('till', uses.has('till'));
+    apply('transactions', uses.has('transactions'));
+    apply('schedule', uses.has('schedule'));
+
     revalidatePages();
     return {
       status: 'ok',
-      message:
-        potId === null
-          ? 'Default cleared — All Transactions uses its normal starting pot.'
-          : 'Default pot saved — All Transactions will open there.',
+      message: changed
+        ? 'Default uses saved — the ticked uses now start on this pot.'
+        : 'No change — those defaults already point where the ticks say.',
     };
   } catch (err) {
     if (err instanceof InvalidSettingValueError) {
       return { status: 'error', message: err.message };
     }
-    return {
-      status: 'error',
-      message: 'The All Transactions default pot could not be saved. Please try again.',
-    };
+    return { status: 'error', message: 'The default uses could not be saved. Please try again.' };
   }
 }
 

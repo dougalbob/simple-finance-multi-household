@@ -30,11 +30,13 @@ import { renameVehicle, DuplicateVehicleLabelError } from '../src/lib/records/ve
 import {
   getContractEndWarningLeadDays,
   getDefaultPurchasePotId,
+  getDefaultSchedulePotId,
   getDefaultTransactionsPotId,
   getRenewalWarningLeadDays,
   InvalidSettingValueError,
   setContractEndWarningLeadDays,
   setDefaultPurchasePotId,
+  setDefaultSchedulePotId,
   setDefaultTransactionsPotId,
   setRenewalWarningLeadDays,
 } from '../src/lib/records/settings';
@@ -501,5 +503,79 @@ describe('settings: default pot for All Transactions', () => {
         .slice(previousCount)
         .every((row) => row.action === 'setting.update' && row.actor === ACTOR),
     );
+  });
+});
+
+/**
+ * The default pot a new Recurring schedule starts on (GitHub issue #79).
+ * It joins the till and All Transactions defaults on the pot cards, so the
+ * same live-pot rule and the same audit trail apply.
+ */
+describe('settings: default pot for a new schedule', () => {
+  let fixture: HouseholdFixture;
+  after(() => fixture.close());
+  before(async () => {
+    fixture = await createHouseholdFixture();
+  });
+
+  it('is unset until the household ticks a pot', () => {
+    assert.equal(getDefaultSchedulePotId(fixture.db), null);
+  });
+
+  it('stores, changes and clears the default', () => {
+    const { db, pots } = fixture;
+    setDefaultSchedulePotId(db, pots.main.id, ACTOR, NOW);
+    assert.equal(getDefaultSchedulePotId(db), pots.main.id);
+
+    setDefaultSchedulePotId(db, pots.salary.id, ACTOR, NOW);
+    assert.equal(getDefaultSchedulePotId(db), pots.salary.id);
+
+    setDefaultSchedulePotId(db, null, ACTOR, NOW);
+    assert.equal(getDefaultSchedulePotId(db), null);
+  });
+
+  it('rejects a missing or archived pot', () => {
+    const { db } = fixture;
+    assert.throws(() => setDefaultSchedulePotId(db, 9999, ACTOR, NOW), InvalidSettingValueError);
+    assert.throws(() => setDefaultSchedulePotId(db, 0, ACTOR, NOW), InvalidSettingValueError);
+
+    const temporary = createPot(db, {
+      label: 'Temporary schedule pot',
+      kind: 'bank',
+      actor: ACTOR,
+      now: NOW,
+    });
+    setDefaultSchedulePotId(db, temporary.id, ACTOR, NOW);
+    archivePot(db, {
+      id: temporary.id,
+      expectedVersion: temporary.version,
+      actor: ACTOR,
+      now: NOW,
+    });
+    assert.equal(getDefaultSchedulePotId(db), null);
+    assert.throws(
+      () => setDefaultSchedulePotId(db, temporary.id, ACTOR, NOW),
+      InvalidSettingValueError,
+    );
+  });
+
+  it('audits against its own setting key', () => {
+    const { db, pots } = fixture;
+    const before = db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, 'default_schedule_pot_id'))
+      .all().length;
+    setDefaultSchedulePotId(db, pots.main.id, ACTOR, NOW);
+    const rows = db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, 'default_schedule_pot_id'))
+      .all();
+    assert.equal(rows.length, before + 1);
+    const last = rows[rows.length - 1];
+    assert.ok(last !== undefined);
+    assert.equal(last.action, 'setting.update');
+    assert.equal(last.actor, ACTOR);
   });
 });

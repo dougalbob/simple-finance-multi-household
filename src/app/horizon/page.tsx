@@ -15,6 +15,7 @@ import {
 import { getPageNeeds } from '@/lib/records/page-needs';
 import { listPots } from '@/lib/records/pots';
 import { buildHorizonDayDetails } from '@/lib/records/horizon-days';
+import { projectionDayTotals } from '@/lib/records/projection';
 import { toLocalDateString } from '@/lib/time';
 import { NeedsFirst } from '@/components/needs-first';
 
@@ -141,6 +142,7 @@ export default async function HorizonPage({
   const commitmentsTotalPence = sumLinesPence(view.commitmentLines);
   const receiptsTotalPence = sumLinesPence(view.receiptLines);
   const dayToDayTotalPence = sumLinesPence(view.dayToDayEvents);
+  const dayTotals = projectionDayTotals(result.perDay);
 
   // Sorted, day-grouped commitment list for the detail block.
   const commitmentGroups = groupByDate(
@@ -431,7 +433,10 @@ export default async function HorizonPage({
             className="rounded-xl border border-border bg-surface p-4 shadow-sm"
           >
             <summary className="cursor-pointer text-sm font-medium text-ink-body">
-              Day by day ({result.perDay.length} days)
+              Day by day ({result.perDay.length} day{result.perDay.length === 1 ? '' : 's'}){' '}
+              <span className="tabular-nums">
+                · out {formatPence(dayTotals.outPence)} · in {formatPence(dayTotals.receiptsPence)}
+              </span>
             </summary>
             <DayByDayTable
               rows={result.perDay}

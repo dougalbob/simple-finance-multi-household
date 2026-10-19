@@ -104,3 +104,45 @@ export async function waitForPurchaseToggle(row: Locator): Promise<void> {
 export async function waitForCategoryEditor(page: Page): Promise<void> {
   await expect(page.locator('[data-category-ready="true"]')).toBeAttached();
 }
+
+/**
+ * Choose a Quick Entry category through its searchable picker (GitHub issue
+ * #76). The category field is a combobox now, not a native `<select>`:
+ * clicking it opens the inline list, typing filters parent or child, and the
+ * matching row is tapped like a household would tap it.
+ */
+export async function pickEntryCategory(entry: Locator, category: string, line = 1): Promise<void> {
+  const field = entry.getByLabel(/^Category/).nth(line - 1);
+  await field.click();
+  await field.fill(category);
+  await entry
+    .getByRole('listbox', { name: `Matching categories for line ${line}` })
+    .getByRole('option', { name: category, exact: true })
+    .click();
+}
+
+/**
+ * Choose a supplier through the Recurring form's searchable picker (GitHub
+ * issue #78). `Add a new supplier…` is a pinned row, so it survives whatever
+ * was typed before it.
+ */
+export async function pickScheduleSupplier(form: Locator, supplier: string): Promise<void> {
+  const field = form.getByLabel('Supplier', { exact: true });
+  await field.click();
+  await field.fill(supplier);
+  await form
+    .getByRole('listbox', { name: 'Matching suppliers' })
+    .getByRole('option', { name: supplier, exact: true })
+    .click();
+}
+
+/**
+ * Wait until the pot cards' default-use ticks are listening (GitHub issue
+ * #79). Same rule as the till and the category editor (decision 131): the
+ * three boxes are controlled state, so a tick that lands before hydration is
+ * undone by the hydration render. The form is `inert` until it can hear and
+ * publishes `data-pot-defaults-ready`.
+ */
+export async function waitForPotDefaults(page: Page): Promise<void> {
+  await expect(page.locator('[data-pot-defaults-ready="true"]').first()).toBeAttached();
+}

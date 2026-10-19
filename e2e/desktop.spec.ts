@@ -1,6 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { formatPence } from '../src/lib/money';
-import { addDaysIso, londonToday, waitForFilters, waitForTill } from './support';
+import {
+  addDaysIso,
+  londonToday,
+  pickEntryCategory,
+  pickScheduleSupplier,
+  waitForFilters,
+  waitForTill,
+} from './support';
 
 function rolling12Start(today: string): string {
   const [year, month] = today.split('-').map(Number);
@@ -248,7 +255,7 @@ test.describe('desktop review', () => {
     await entry.locator('input[name="supplierName"]').fill('Playwright Duplicate');
     await entry.locator('input[name="amount"]').fill('4.50');
     await entry.getByLabel('Line 1 amount').fill('4.50');
-    await entry.getByLabel(/^Category/).selectOption({ label: 'Groceries / Weekly Shop' });
+    await pickEntryCategory(entry, 'Groceries / Weekly Shop');
     await entry.getByRole('button', { name: 'Save purchase' }).click();
     await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
 
@@ -370,9 +377,7 @@ test.describe('desktop review', () => {
     await addForm
       .locator('select[name="categoryId"]')
       .selectOption({ label: 'Utilities / Energy' });
-    await addForm
-      .locator('select[name="supplierId"]')
-      .selectOption({ label: 'Add a new supplier…' });
+    await pickScheduleSupplier(addForm, 'Add a new supplier…');
     await addForm.locator('input[name="supplierName"]').fill(supplierName);
     // 'Active from' is left at today — which is exactly the mistake this edit
     // exists to correct: the schedule starts after the money already left.
@@ -573,7 +578,7 @@ test.describe('desktop review', () => {
     await form.locator('input[name="amount"]').fill('55.00');
     await form.locator('select[name="kind"]').selectOption('dd');
     await form.locator('select[name="categoryId"]').selectOption({ label: 'Utilities / Energy' });
-    await form.locator('select[name="supplierId"]').selectOption({ label: 'Add a new supplier…' });
+    await pickScheduleSupplier(form, 'Add a new supplier…');
     await form.locator('input[name="supplierName"]').fill(supplierName);
     await form.getByRole('button', { name: 'Add schedule' }).click();
     await expect(form.getByRole('status')).toContainText(/added/i, { timeout: 30_000 });
@@ -763,4 +768,61 @@ test('monthly no-payment months use a compact native disclosure and survive save
   await card.locator('summary', { hasText: 'Edit schedule' }).click();
   await expect(editSummary).toHaveText('Select any months with no payment: none');
   await expect(editSummary.locator('..')).not.toHaveAttribute('open');
+});
+
+/**
+ * Supplier selection when a new schedule is created (GitHub issue #78). The
+ * household's supplier list outgrew a native `<select>`: the picker is A–Z
+ * over every supplier in the directory (not just the most recently used 40),
+ * and typing filters any part of a name. `Add a new supplier…` is a pinned
+ * row, so it is still reachable after a search that matches nothing.
+ */
+test.describe('new schedule supplier picker', () => {
+  test('lists suppliers A–Z and searches as you type', async ({ page }) => {
+    await page.goto('/recurring');
+    const schedules = page.locator('section[aria-labelledby="schedules-heading"]');
+    await schedules.getByText('Add a schedule').click();
+    const form = schedules
+      .locator('form')
+      .filter({ has: page.getByRole('button', { name: 'Add schedule' }) });
+    const field = form.getByLabel('Supplier', { exact: true });
+    const list = form.getByRole('listbox', { name: 'Matching suppliers' });
+
+    // Nothing typed: every supplier, in A–Z order.
+    await field.click();
+    const names = (await list.getByRole('option').allInnerTexts())
+      .map((text) => text.trim())
+      .filter((text) => !text.includes('Add a new supplier'));
+    expect(names.length).toBeGreaterThan(1);
+    expect(names).toEqual([...names].sort((left, right) => left.localeCompare(right)));
+
+    // A typed fragment matches anywhere in the name, case-insensitively, and
+    // the pinned "Add a new supplier…" row survives the filter.
+    await field.fill('BROAD');
+    await expect(list.getByRole('option', { name: 'BroadbandCo', exact: true })).toBeVisible();
+    await expect(list.getByRole('option', { name: 'Corner Foods', exact: true })).toHaveCount(0);
+    await expect(
+      list.getByRole('option', { name: 'Add a new supplier…', exact: true }),
+    ).toBeVisible();
+
+    // Choosing a row leaves the picker closed on that supplier.
+    await list.getByRole('option', { name: 'BroadbandCo', exact: true }).click();
+    await expect(field).toHaveValue('BroadbandCo');
+    await expect(list).toHaveCount(0);
+
+    // A search with no matches says so instead of going blank, and Enter in
+    // the search never submits the whole schedule form.
+    await field.click();
+    await field.fill('zzz no such supplier');
+    await expect(
+      list.getByRole('option', { name: 'No suppliers match that search.' }),
+    ).toBeVisible();
+    await field.press('Enter');
+    await expect(form.getByRole('status')).toHaveCount(0);
+    await expect(field).toHaveValue('zzz no such supplier');
+    // Escape closes the search and leaves the chosen supplier in place.
+    await field.press('Escape');
+    await expect(list).toHaveCount(0);
+    await expect(field).toHaveValue('BroadbandCo');
+  });
 });

@@ -27,6 +27,7 @@ const KEY_RENEWAL_LEAD = 'renewal_warning_lead_days';
 const KEY_CONTRACT_END_LEAD = 'contract_end_warning_lead_days';
 const KEY_DEFAULT_PURCHASE_POT = 'default_purchase_pot_id';
 const KEY_DEFAULT_TRANSACTIONS_POT = 'default_transactions_pot_id';
+const KEY_DEFAULT_SCHEDULE_POT = 'default_schedule_pot_id';
 const KEY_COMMITMENT_CATEGORIES = 'commitment_category_ids';
 
 export const DEFAULT_RENEWAL_WARNING_LEAD_DAYS = 21;
@@ -207,6 +208,42 @@ export function setDefaultTransactionsPotId(
     potId === null ? '' : String(potId),
     actor,
     'all transactions',
+    now,
+  );
+}
+
+/**
+ * The pot a new Recurring schedule starts on (GitHub issue #79). It is a
+ * starting choice only — every payment can still name any pot — and it is
+ * chosen on the pot's own card in Settings beside the till and All
+ * Transactions defaults. `null` keeps the schedule form's first-pot
+ * fallback.
+ */
+export function getDefaultSchedulePotId(db: Db): number | null {
+  const row = settingRow(db, KEY_DEFAULT_SCHEDULE_POT);
+  if (row === null || row.value === '') return null;
+  const potId = Number(row.value);
+  if (!Number.isInteger(potId) || potId <= 0) return null;
+  return isLivePot(db, potId) ? potId : null;
+}
+
+export function setDefaultSchedulePotId(
+  db: Db,
+  potId: number | null,
+  actor: string,
+  now?: Date,
+): void {
+  if (potId !== null && (!Number.isInteger(potId) || potId <= 0 || !isLivePot(db, potId))) {
+    throw new InvalidSettingValueError(
+      'That pot does not exist (or is archived), so it cannot be the default for a new schedule.',
+    );
+  }
+  upsertSetting(
+    db,
+    KEY_DEFAULT_SCHEDULE_POT,
+    potId === null ? '' : String(potId),
+    actor,
+    'recurring',
     now,
   );
 }

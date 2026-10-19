@@ -6,9 +6,8 @@ import { ProjectionSettingsForm } from '@/components/recurring';
 import {
   AddVehicleForm,
   CategoryTreeEditor,
-  DefaultPurchasePotForm,
-  DefaultTransactionsPotForm,
   PersonSignInForm,
+  PotDefaultUsesForm,
   PotEditForm,
   TargetRenameForm,
   WarningLeadsForm,
@@ -38,6 +37,7 @@ import { getProjectionView } from '@/lib/records/money-view';
 import {
   getContractEndWarningLeadDays,
   getDefaultPurchasePotId,
+  getDefaultSchedulePotId,
   getDefaultTransactionsPotId,
   getMonthlyFuelByVehicle,
   getRenewalWarningLeadDays,
@@ -78,6 +78,7 @@ export default async function SettingsPage() {
   const fuelByVehicle = getMonthlyFuelByVehicle(db);
   const defaultPurchasePotId = getDefaultPurchasePotId(db);
   const defaultTransactionsPotId = getDefaultTransactionsPotId(db);
+  const defaultSchedulePotId = getDefaultSchedulePotId(db);
   const commitmentPicker = getCommitmentCategoryPicker(db, true);
   const projection = getProjectionView(db, now);
   const theme = await currentTheme();
@@ -154,41 +155,6 @@ export default async function SettingsPage() {
         </section>
 
         <section
-          aria-labelledby="quick-entry-settings-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <h2 id="quick-entry-settings-heading" className="mb-1 text-lg font-semibold">
-            Quick entry
-          </h2>
-          <p className="mb-3 text-xs text-ink-muted">
-            The till form (home page and Overview) shows the chosen pot&apos;s last reported balance
-            and what is left before income lands. Both come from the records here — never a bank
-            feed.
-          </p>
-          <DefaultPurchasePotForm
-            pots={pots.map(({ id, label }) => ({ id, label }))}
-            defaultPotId={defaultPurchasePotId}
-          />
-        </section>
-
-        <section
-          aria-labelledby="all-transactions-settings-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-        >
-          <h2 id="all-transactions-settings-heading" className="mb-1 text-lg font-semibold">
-            All Transactions
-          </h2>
-          <p className="mb-3 text-xs text-ink-muted">
-            Choose the pot that opens by default when you visit All Transactions. A pot selected
-            from the page&apos;s Target filter still takes precedence.
-          </p>
-          <DefaultTransactionsPotForm
-            pots={pots.map(({ id, label }) => ({ id, label }))}
-            defaultPotId={defaultTransactionsPotId}
-          />
-        </section>
-
-        <section
           aria-labelledby="pots-settings-heading"
           className="rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
@@ -199,7 +165,9 @@ export default async function SettingsPage() {
             Bank overdraft thresholds drive the household warning banner. Credit-card limits and
             near-limit thresholds describe card usage only; card pots are excluded from the “plan a
             transfer” shortfall watch. Cash pots have neither — a cash pot’s Owner is what gives
-            them their pot in Quick Entry → Checkpoint cash.
+            them their pot in Quick Entry → Checkpoint cash. The three ticks on each card choose
+            where the till, All Transactions and a new schedule start; one account per use, and
+            ticking a second account moves the default there.
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
             {pots.map((pot) => (
@@ -219,6 +187,13 @@ export default async function SettingsPage() {
                   creditCardPromotionalEndDate={pot.creditCardPromotionalEndDate}
                   creditCardStatementDueDate={pot.creditCardStatementDueDate}
                   creditCardStatementMinimumPence={pot.creditCardStatementMinimumPence}
+                />
+                <PotDefaultUsesForm
+                  potId={pot.id}
+                  potLabel={pot.label}
+                  till={defaultPurchasePotId === pot.id}
+                  transactions={defaultTransactionsPotId === pot.id}
+                  schedule={defaultSchedulePotId === pot.id}
                 />
               </div>
             ))}

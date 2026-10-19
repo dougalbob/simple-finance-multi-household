@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { pickScheduleSupplier } from './support';
 
 /**
  * Annual vehicle payments on Insights (SPEC §16.3, decision 190). A yearly
@@ -56,7 +57,7 @@ test.describe('annual vehicle payments', () => {
     await form.locator('select[name="categoryId"]').selectOption({
       label: 'Vehicle Running / Insurance',
     });
-    await form.locator('select[name="supplierId"]').selectOption({ label: 'Add a new supplier…' });
+    await pickScheduleSupplier(form, 'Add a new supplier…');
     await form.locator('input[name="supplierName"]').fill(INSURER);
     await form.locator('select[name="target"]').selectOption({ label: `Vehicle — ${VEHICLE}` });
     await form.locator('input[name="activeFrom"]').fill(isoDate(activeFrom));

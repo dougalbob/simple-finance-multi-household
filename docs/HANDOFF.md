@@ -1,3 +1,69 @@
+# Issues #76–#79 — searchable pickers, Day by day totals and pot defaults (2026-10-19) — unreleased, awaiting the household's preview
+
+**Read decision 240 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
+SPEC §15.1/§15.2 first.** This slice implements the four open issues the household asked to be
+considered together (they chose the slice; #76 and #78 share one searchable picker).
+
+**No release in this slice.** `package.json` stays **1.27.0**, there is no new release note, tag,
+image or GitHub release, and the household has asked to see an Arena preview before publishing.
+`main` is at the v1.27.0 release; this branch is the preview.
+
+**Delivered:**
+
+1. **#76 — Quick Entry category search.** Each split line's category field is a combobox
+   (`src/components/search-picker.tsx`) over the same live leaf categories, matching the parent
+   or child name, any word order, case-insensitively. Tap/ArrowDown/Enter/first keystroke opens;
+   arrows and Enter pick; Escape closes leaving the line alone; focus alone never opens the list
+   and selects the shown label so typing replaces it. Pinned "No category — clear this line".
+   Pure ranking in `src/lib/search.ts`.
+2. **#78 — Recurring supplier selection.** The add form's supplier field is the same picker over
+   **the whole supplier directory, A–Z** (`listSuppliers`), not the 40 most recent; "Add a new
+   supplier…" and a standing order's "no supplier / household transfer" stay pinned; the edit
+   form matches. Enter in the search never submits the schedule form.
+3. **#77 — Horizon "Day by day" total.** The card heading now reads
+   `Day by day (N days) · out £… · in £…`, summed by `projectionDayTotals` from the table's own
+   rows; the worked example uses the same helper.
+4. **#79 — pot defaults on the pot cards.** The detached Quick entry and All Transactions cards
+   are gone. Each pot card carries **Set as default account for: Till · Transactions · New DD/SO**.
+   One account per use: ticking moves the default, unticking clears it only where it is held. The
+   new `default_schedule_pot_id` setting feeds a new schedule's Pot field. No schema change — the
+   setting lives in the existing key/value table with its audit entry. The ticks sit behind the
+   decision-131 hydration guard (`data-pot-defaults-ready`).
+
+**Tests added or updated:** `tests/search.test.ts` (ranking), `tests/projection.test.ts`
+(`projectionDayTotals`), `tests/settings-domain.test.ts` (the schedule default's store/clear/archive/
+audit rules). Playwright: a category-search journey in `e2e/home.spec.ts`, a supplier A–Z/search
+journey in `e2e/desktop.spec.ts`, the Day by day totals in `e2e/horizon.spec.ts`, and
+`e2e/settings.spec.ts` rewritten for the three ticks (including "ticking a second pot moves the
+default"). `e2e/support.ts` gained `pickEntryCategory`, `pickScheduleSupplier` and
+`waitForPotDefaults`; the specs that chose a category or supplier through `.selectOption` now use
+the pickers.
+
+**Validation in this session:** `npm run typecheck`, `npm run format:check`, `npm run build` and
+`npm run test` all green (**1075/1075 unit tests across 252 suites**). The full Playwright suite ran
+through SANDBOX entry 8 (throwaway `playwright.local.config.ts`, `@sparticuz/chromium`, one worker,
+fresh `.e2e-data`): **169 passed, 2 failed** — and the same full suite on `main` at 7dbdc13 (this
+slice stashed) is **165 passed, 2 failed with exactly those two failures**. Both are in
+`insights.spec.ts` and are pre-existing and data/date-dependent, not this slice:
+
+- `honesty loop tolerance band (issue #27)` — its comment promises the seed's trailing eight weeks
+  average over £96 "whatever weekday the suite runs on"; on Monday 19 October 2026 they average
+  £93.25, so the verdict reads "within the usual range".
+- `the Insights line-item drill (issue #68) › a £0.00 figure is greyed out` — after the earlier
+  projects' records, the month panel has no £0.00 row to click. It passes when the insights
+  project runs without those earlier mutations.
+
+Fix those in their own change (the seed or the fixture date), not here. The four issues' own
+journeys pass, and so does every other project.
+
+If your run differs, the four issues' own journeys are the ones to check first: the category search
+(`e2e/home.spec.ts`), the supplier A–Z/search (`e2e/desktop.spec.ts`), the Day by day totals
+(`e2e/horizon.spec.ts`) and the three pot-default ticks (`e2e/settings.spec.ts`).
+
+**Not changed:** no figure, projection, chart or record moves; no migration; the backup format is
+unchanged. The **Quick entry** and **All Transactions** settings sections are removed, which is the
+household's own request in #79 — their defaults moved onto the pot cards.
+
 # v1.27.0 — approved for publication (2026-10-17)
 
 The household approved publishing for own-data testing and Unraid Force Update. This supersedes

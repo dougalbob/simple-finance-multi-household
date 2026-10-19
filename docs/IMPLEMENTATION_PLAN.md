@@ -3864,3 +3864,49 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     joint-life model (issue #73, non-goals).
 
 239. **Issue #73 acceptance and v1.27.0 release approval (2026-10-17).** Browser acceptance extends to nine journeys with part-year pension copy, persistent earnings growth override, sex/life-expectancy defaults and edits, plan-to/horizon sync and 1400/390/320px no-document-overflow screenshots. Fixed externally changed whole-number fields displaying stale ages, narrow-screen intrinsic input/fieldset overflow, and added the decision-131 hydration guard. Name/birth year precede life-expectancy assumptions. Reset tests reload after action success to avoid an in-flight refresh replacing edits. The household explicitly approves publication for own-data testing in Unraid; the interim release hold ends. Sex remains household-chosen per #73; survivor modelling remains follow-up. Prepare v1.27.0 with no schema or backup-format change; warn that existing saved forecasts change under the new defaults. Full release CI and Publish are the gates, not the prior #74 retry pass.
+
+240. **Issues #76–#79 — searchable pickers, the Day by day total, and pot defaults on the pot cards
+    (2026-10-19, unreleased; one slice for four issues).** The household asked for the four open
+    issues to be considered together and for a preview before publication. All four are small UI
+    and settings changes; none moves a figure, and there is **no schema change and no migration** —
+    the new schedule default is one more audited row in the existing `settings` key/value table.
+
+    - **#76 — the till's category picker searches as you type.** A split's category field was a
+      native `<select>` over the whole parent/child tree, so a long tree meant a lot of scrolling
+      on a phone. It is now a combobox over the same options, filtering on **either** the parent or
+      the child name and requiring every typed word in any order (`shop groc` finds
+      `Groceries / Weekly Shop`). A tap, ArrowDown, Enter or the first typed character opens the
+      list; arrows and Enter pick, Escape closes; focus alone never opens it (the till's own
+      `Next: category →` moves focus there, and a list that opened by itself would push the rest of
+      the card down), and focusing selects the shown label so typing replaces it. A pinned
+      "No category — clear this line" row survives filtering. Shared component
+      `src/components/search-picker.tsx`; pure ranking in `src/lib/search.ts` (`tests/search.test.ts`).
+    - **#78 — the new-schedule supplier field is A–Z and searchable.** The add form's supplier
+      select now reads the **whole directory in A–Z order** (`listSuppliers`, not the
+      40-most-recent entry list) through the same picker. Matching is on any part of a name,
+      case-insensitively; **Add a new supplier…** and a standing order's "no supplier / household
+      transfer" row are pinned so special choices survive a search; the edit form uses the same
+      picker. Enter never submits the schedule form mid-search.
+    - **#77 — the Horizon Day by day card counts and totals like its neighbours.** Its heading now
+      reads `Day by day (42 days) · out £741.98 · in £5,900.00`, summed from the table's own rows
+      by `projectionDayTotals` in `src/lib/records/projection.ts` (commitments plus day-to-day go
+      out; expected money in comes back). The worked example's table uses the same helper so the
+      two cannot drift. `tests/projection.test.ts` pins the arithmetic.
+    - **#79 — the default pot is chosen on the pot's own card.** The detached **Quick entry** and
+      **All Transactions** cards are retired. Each pot card now carries **Set as default account
+      for: Till · Transactions · New DD/SO**, exactly the shape the household sketched. One
+      account per use: ticking a second account **moves** the default, and unticking clears it
+      only on the account that holds it (so a second card cannot silently remove another pot's
+      tick). Saves go through one action (`savePotDefaultUsesAction`) and keep the existing three
+      audited setting keys (`default_purchase_pot_id`, `default_transactions_pot_id`, and the new
+      `default_schedule_pot_id`). The ticks are controlled state behind the decision-131 hydration
+      guard (`data-pot-defaults-ready`, `inert` until listening). The new-schedule default is read
+      by `/recurring`; clearing it keeps the form's first-pot fallback.
+    - **Evidence.** `npm run test` 1075/1075 across 252 suites, `format:check`, `typecheck` and
+      `next build` green. Full Playwright through SANDBOX entry 8: **169 passed, 2 failed**, and
+      the identical run on `main` (this slice stashed) is **165 passed, 2 failed with the same two
+      insights tests** — a pre-existing seed/date problem inside
+      `insights.spec.ts` (the groceries band and the £0.00 drill row), not this slice. New
+      journeys cover each issue: the category search, the supplier A–Z/search, the Day by day
+      totals and the three default ticks. The household asked for an Arena preview before any
+      release; no version bump, release notes, tag or image is part of this slice.
