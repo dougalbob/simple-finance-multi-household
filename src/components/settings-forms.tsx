@@ -6,9 +6,8 @@ import {
   editPotAction,
   renameTargetAction,
   saveCategoryAction,
-  saveDefaultPurchasePotAction,
-  saveDefaultTransactionsPotAction,
   savePersonEmailAction,
+  savePotDefaultUsesAction,
   saveWarningLeadsAction,
 } from '@/app/actions';
 import { initialActionState } from '@/lib/action-state';
@@ -601,94 +600,106 @@ export function WarningLeadsForm({ renewalLeadDays, contractEndLeadDays }: Warni
   );
 }
 
-export interface DefaultPurchasePotFormProps {
-  pots: Array<{ id: number; label: string }>;
-  defaultPotId: number | null;
+export interface PotDefaultUsesFormProps {
+  potId: number;
+  potLabel: string;
+  till: boolean;
+  transactions: boolean;
+  schedule: boolean;
 }
 
 /**
- * Which pot the till form starts on (SPEC §15.1, v0.9.0). The household's
- * default was inferred from a pot labelled "Main account", which silently
- * pointed the phone at the wrong pot. One explicit choice, saved with the
- * usual audit trail, replaces the guess.
+ * The three "Set as default account for" ticks on a pot's own card (GitHub
+ * issue #79). They replace the detached Quick entry and All Transactions
+ * cards: the household picks the account where the default belongs, and the
+ * new-schedule default joins them. One account per use — ticking here moves
+ * the use from whichever pot held it before.
+ *
+ * Controlled, so a save that moves a default between pots is reflected on
+ * both cards after the server refresh; a failed save leaves the ticks as
+ * they were.
  */
-export function DefaultPurchasePotForm({ pots, defaultPotId }: DefaultPurchasePotFormProps) {
-  const [state, formAction, pending] = useActionState(
-    saveDefaultPurchasePotAction,
-    initialActionState,
-  );
-  return (
-    <form action={formAction} className="flex flex-col gap-3 sm:max-w-md">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="default-purchase-pot" className={labelClass}>
-          Default pot for purchases
-        </label>
-        <select
-          id="default-purchase-pot"
-          name="potId"
-          defaultValue={defaultPotId?.toString() ?? ''}
-          className={inputClass}
-        >
-          <option value="">No default — pick a pot each time</option>
-          {pots.map((pot) => (
-            <option key={pot.id} value={pot.id}>
-              {pot.label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-ink-muted">
-          Every purchase can still be recorded against any pot — this only decides where the form
-          starts. A cash pot can be the default; the form simply shows no balance for cash.
-        </p>
-      </div>
-      <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
-        {pending ? 'Saving…' : 'Save default pot'}
-      </button>
-      <FormMessage status={state.status} message={state.message} />
-    </form>
-  );
-}
+export function PotDefaultUsesForm({
+  potId,
+  potLabel,
+  till,
+  transactions,
+  schedule,
+}: PotDefaultUsesFormProps) {
+  const [state, formAction, pending] = useActionState(savePotDefaultUsesAction, initialActionState);
+  const [ticks, setTicks] = useState({ till, transactions, schedule });
+  /**
+   * The tick boxes are controlled React state (decision 131): a click that
+   * lands before hydration is undone by the hydration render, so the form
+   * says whether it is listening and stays `inert` until it is.
+   */
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
 
-export interface DefaultTransactionsPotFormProps {
-  pots: Array<{ id: number; label: string }>;
-  defaultPotId: number | null;
-}
+  useEffect(() => {
+    setTicks({ till, transactions, schedule });
+  }, [till, transactions, schedule]);
 
-/** The target All Transactions opens on until the page URL names a pot (issue #44). */
-export function DefaultTransactionsPotForm({
-  pots,
-  defaultPotId,
-}: DefaultTransactionsPotFormProps) {
-  const [state, formAction, pending] = useActionState(
-    saveDefaultTransactionsPotAction,
-    initialActionState,
-  );
   return (
-    <form action={formAction} className="flex flex-col gap-3 sm:max-w-md">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="default-transactions-pot" className={labelClass}>
-          Default pot for All Transactions
-        </label>
-        <select
-          id="default-transactions-pot"
-          name="potId"
-          defaultValue={defaultPotId?.toString() ?? ''}
-          className={inputClass}
-        >
-          <option value="">No default — keep the existing fallback</option>
-          {pots.map((pot) => (
-            <option key={pot.id} value={pot.id}>
-              {pot.label}
-            </option>
-          ))}
-        </select>
+    <form
+      action={formAction}
+      className="mt-3 flex flex-col gap-2 border-t border-border-hairline pt-3"
+      data-pot-defaults-ready={ready ? 'true' : 'false'}
+      inert={!ready ? true : undefined}
+    >
+      <input type="hidden" name="potId" value={potId} />
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-xs font-medium text-ink-soft">Set as default account for:</legend>
         <p className="text-xs text-ink-muted">
-          This applies only when All Transactions opens without a pot in its URL. Choosing a pot
-          from the page&apos;s Target filter always overrides it.
+          One account per use — ticking here moves the default from any other pot.
         </p>
-      </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          <label className="flex min-h-9 items-center gap-2 text-sm text-ink-body">
+            <input
+              type="checkbox"
+              name="uses"
+              value="till"
+              checked={ticks.till}
+              onChange={(event) =>
+                setTicks((current) => ({ ...current, till: event.target.checked }))
+              }
+              aria-label={`${potLabel} — default for Till`}
+              className="h-4 w-4 rounded border-border-strong"
+            />
+            Till
+          </label>
+          <label className="flex min-h-9 items-center gap-2 text-sm text-ink-body">
+            <input
+              type="checkbox"
+              name="uses"
+              value="transactions"
+              checked={ticks.transactions}
+              onChange={(event) =>
+                setTicks((current) => ({ ...current, transactions: event.target.checked }))
+              }
+              aria-label={`${potLabel} — default for Transactions`}
+              className="h-4 w-4 rounded border-border-strong"
+            />
+            Transactions
+          </label>
+          <label className="flex min-h-9 items-center gap-2 text-sm text-ink-body">
+            <input
+              type="checkbox"
+              name="uses"
+              value="schedule"
+              checked={ticks.schedule}
+              onChange={(event) =>
+                setTicks((current) => ({ ...current, schedule: event.target.checked }))
+              }
+              aria-label={`${potLabel} — default for New DD/SO`}
+              className="h-4 w-4 rounded border-border-strong"
+            />
+            New DD/SO
+          </label>
+        </div>
+      </fieldset>
       <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
-        {pending ? 'Saving…' : 'Save default pot'}
+        {pending ? 'Saving…' : 'Save default uses'}
       </button>
       <FormMessage status={state.status} message={state.message} />
     </form>

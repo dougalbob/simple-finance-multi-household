@@ -26,6 +26,7 @@ import { getPageNeeds } from '@/lib/records/page-needs';
 import { listPots } from '@/lib/records/pots';
 import { toLocalDateString, formatShortLocalDate } from '@/lib/time';
 import { formatPence } from '@/lib/money';
+import { projectionDayTotals } from '@/lib/records/projection';
 import { QuickEntry } from '@/components/quick-entry';
 import { buildEntryData } from '@/lib/records/entry-view';
 import { PaydaySummary } from '@/components/payday-summary';
@@ -926,6 +927,7 @@ function HorizonInline({
   throughDate: string;
 }) {
   const { result } = view;
+  const dayTotals = projectionDayTotals(result.perDay);
   const lowLine = !view.hasSelectedCheckpoint
     ? 'No selected bank or cash pot has a balance checkpoint.'
     : result.projectedLowPence === null
@@ -1065,7 +1067,10 @@ function HorizonInline({
       {view.hasSelectedCheckpoint && result.perDay.length > 0 ? (
         <details className="mt-4 rounded-xl border border-border bg-surface p-4 shadow-sm">
           <summary className="cursor-pointer text-sm font-medium text-ink-body">
-            Day by day ({result.perDay.length} days)
+            Day by day ({result.perDay.length} day{result.perDay.length === 1 ? '' : 's'}){' '}
+            <span className="tabular-nums">
+              · out {formatPence(dayTotals.outPence)} · in {formatPence(dayTotals.receiptsPence)}
+            </span>
           </summary>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-xs">

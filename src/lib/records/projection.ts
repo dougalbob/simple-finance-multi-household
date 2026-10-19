@@ -225,6 +225,36 @@ export function projectToPayday(input: ProjectionInput): ProjectionResult {
   };
 }
 
+/** The sums behind the Horizon "Day by day" card's summary (issue #77). */
+export interface ProjectionDayTotals {
+  receiptsPence: number;
+  commitmentsPence: number;
+  dayToDayPence: number;
+  /** Everything that leaves the household in the window. */
+  outPence: number;
+  /** Receipts less everything out — what the window adds or removes. */
+  netPence: number;
+}
+
+/**
+ * Sum a projection's per-day rows, in integer pence. The card and the table
+ * are then the same arithmetic: the heading's figures are the rows beneath
+ * it, never a second total computed from different inputs.
+ */
+export function projectionDayTotals(days: readonly ProjectionDay[]): ProjectionDayTotals {
+  const receiptsPence = sum(days.map((day) => day.receiptsPence));
+  const commitmentsPence = sum(days.map((day) => day.commitmentsPence));
+  const dayToDayPence = sum(days.map((day) => day.dayToDayPence));
+  const outPence = commitmentsPence + dayToDayPence;
+  return {
+    receiptsPence,
+    commitmentsPence,
+    dayToDayPence,
+    outPence,
+    netPence: receiptsPence - outPence,
+  };
+}
+
 /**
  * SPEC §8: two tiers against `projected_low`, household-wide.
  * Tier 1 (heads-up): below £0. Tier 2 (warning): at or beyond the

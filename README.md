@@ -1,13 +1,18 @@
 # Simple Finance Multi-household
 
-**v1.27.0 stable release:** issue #73 corrects State Pension uprating before its start date, labels part-years, adds inflation-linked earnings (or an override), indexes tax thresholds at an editable 1.0% default, and adds per-person sex, life expectancy and plan-to ages. Saved forecasts change numbers under these defaults; no schema migration or backup-format change. Back up before updating. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.27.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.27.0.md`.
+**v1.28.0 stable release:** GitHub issues #76–#79. The till's category field and the Recurring supplier field search as you type (parent or child category name; the whole supplier directory in A–Z order, with "Add a new supplier…" pinned); Horizon's **Day by day** heading counts its days and totals out and in from its own rows; and each pot card now sets its own default uses — **Till**, **Transactions**, **New DD/SO** — replacing the two detached default-pot cards, with one account per use. No schema, migration or backup-format change; existing default-pot values carry over as ticks. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.28.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.28.0.md`.
+
+Previous release — **v1.27.0**: issue #73 corrects State Pension uprating before its start date, labels part-years, adds inflation-linked earnings (or an override), indexes tax thresholds at an editable 1.0% default, and adds per-person sex, life expectancy and plan-to ages. Saved forecasts change numbers under these defaults; no schema migration or backup-format change. Back up before updating. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.27.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.27.0.md`.
 
 
 A private finance app for multiple independent households, self-hosted by the product owner on Unraid and protected by Cloudflare Access. Each household has its own database and saved documents; households share the application, not financial data.
 
-> **Status (2026-10-17):** this is the independent multi-household edition and **`v1.27.0` is the current
-> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.26.0.md`](docs/RELEASE_NOTES_v1.26.0.md).
-> It adds the **Long-term forecast** at `/longterm` — a multi-decade projection of pension pots, earnings
+> **Status (2026-10-19):** this is the independent multi-household edition and **`v1.28.0` is the current
+> stable production release** (`v1.0.0` was the first), with its notes in [`docs/RELEASE_NOTES_v1.28.0.md`](docs/RELEASE_NOTES_v1.28.0.md).
+> It answers GitHub issues #76–#79: the till's category field and the Recurring supplier field now search as
+> you type, Horizon's **Day by day** heading counts and totals its rows, and each pot card chooses its own
+> default uses (**Till**, **Transactions**, **New DD/SO**) in one place. `v1.27.0` before it added the
+> **Long-term forecast** at `/longterm` — a multi-decade projection of pension pots, earnings
 > with a stop date, the State Pension, windfalls, inflation and estimated UK tax, answering the household's
 > own questions (income in 2030, income at age 62 — 2032, "does the money last?"), comparing three return
 > rates side by side and showing the same pot as drawdown versus annuity, with every figure editable in one

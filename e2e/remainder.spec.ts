@@ -65,7 +65,9 @@ for (const width of [393, 1400]) {
       expect(clientWidth, `${name} client width at ${width}px`).toBeGreaterThanOrEqual(80);
     }
     if (width === 1400) {
-      const category = line2.locator('xpath=../../..').locator('select');
+      // The category field is the shared search picker (issue #76), not a
+      // native select; its input carries the line's stable id.
+      const category = entry.locator('#entry-category-1');
       const categoryBox = await category.boundingBox();
       const amountBox = await line2.boundingBox();
       expect(amountBox!.y, 'amount row sits below category on PC').toBeGreaterThanOrEqual(

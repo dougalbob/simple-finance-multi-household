@@ -11,6 +11,7 @@ import {
   saveProjectionSettingsAction,
 } from '@/app/actions';
 import { initialActionState, type ActionState } from '@/lib/action-state';
+import { SearchPicker } from '@/components/search-picker';
 
 /**
  * How many confirmation steps a cancel needs. The household asked for
@@ -57,6 +58,8 @@ export interface RecurringData {
   people: Array<{ id: number; label: string }>;
   vehicles: Array<{ id: number; label: string }>;
   suppliers: Array<{ id: number; name: string }>;
+  /** The pot a new schedule starts on (Settings → Pot cards, issue #79). */
+  defaultSchedulePotId: number | null;
   today: string;
   schedules: RecurringScheduleOption[];
   projectionSettings: {
@@ -186,7 +189,12 @@ export function AddScheduleForm({ data }: { data: RecurringData }) {
         ) : null}
         <label className={labelClass}>
           Pot
-          <select name="potId" required className={inputClass}>
+          <select
+            name="potId"
+            required
+            defaultValue={data.defaultSchedulePotId?.toString() ?? undefined}
+            className={inputClass}
+          >
             {data.pots.map((pot) => (
               <option key={pot.id} value={pot.id}>
                 {pot.label}
@@ -211,32 +219,37 @@ export function AddScheduleForm({ data }: { data: RecurringData }) {
         ) : null}
         {needsSupplier ? (
           <div className="flex flex-col gap-2 sm:col-span-2">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="schedule-supplier" className={labelClass}>
-                Supplier
-              </label>
-              <select
-                id="schedule-supplier"
-                // Always post supplierId; "__new__" is stripped by the action when
-                // supplierName is present. An empty value is the standing-order
-                // household-transfer option.
-                name="supplierId"
-                required={kind === 'dd'}
-                className={inputClass}
-                value={supplierMode}
-                onChange={(event) => setSupplierMode(event.target.value)}
-              >
-                <option value="" disabled={kind === 'dd'}>
-                  {kind === 'dd' ? 'Choose a supplier…' : 'No supplier / household transfer'}
-                </option>
-                {data.suppliers.map((supplier) => (
-                  <option key={supplier.id} value={String(supplier.id)}>
-                    {supplier.name}
-                  </option>
-                ))}
-                <option value="__new__">Add a new supplier…</option>
-              </select>
-            </div>
+            <SearchPicker
+              id="schedule-supplier"
+              // Always post supplierId; "__new__" is stripped by the action when
+              // supplierName is present. An empty value is the standing-order
+              // household-transfer option.
+              name="supplierId"
+              label="Supplier"
+              labelClassName={labelClass}
+              inputClassName={inputClass}
+              value={supplierMode}
+              onChange={setSupplierMode}
+              options={data.suppliers.map((supplier) => ({
+                value: String(supplier.id),
+                label: supplier.name,
+              }))}
+              pinnedOptions={
+                kind === 'so'
+                  ? [{ value: '', label: 'No supplier / household transfer' }]
+                  : undefined
+              }
+              footerOptions={[{ value: '__new__', label: 'Add a new supplier…' }]}
+              placeholder="Search suppliers…"
+              listLabel="Matching suppliers"
+              emptyMessage="No suppliers match that search."
+              hint={
+                kind === 'dd' && supplierMode === ''
+                  ? 'Choose a supplier — a direct debit needs one.'
+                  : 'Existing suppliers are A–Z — type any part of a name.'
+              }
+              required={kind === 'dd'}
+            />
             {supplierMode === '__new__' ? (
               <div className="flex flex-col gap-1">
                 <label htmlFor="schedule-supplier-name" className={labelClass}>

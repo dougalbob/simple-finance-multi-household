@@ -27,6 +27,7 @@ import {
   rankSupplierMatches,
 } from '@/lib/records/quick-entry';
 import { TransferForm } from '@/components/record-forms';
+import { SearchPicker } from '@/components/search-picker';
 import {
   DebtForm,
   LoanMovementForm,
@@ -587,7 +588,7 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
   const submitGuard = useRef(false);
   const supplierRef = useRef<HTMLInputElement | null>(null);
   const amountRef = useRef<HTMLInputElement | null>(null);
-  const categoryRef = useRef<HTMLSelectElement | null>(null);
+  const categoryRef = useRef<HTMLInputElement | null>(null);
   /**
    * Where focus should land once the panel switch has rendered. Focusing
    * inside a panel that is still `inert` is silently refused (decision 137),
@@ -1137,28 +1138,29 @@ function PurchaseForm({ data }: { data: QuickEntryData }) {
                 {lines.map((line, index) => (
                   <div key={index} className="rounded-lg border border-border bg-surface p-3">
                     <div className="grid gap-2">
-                      <label className="min-w-0 text-xs font-semibold text-ink-soft">
-                        Category
-                        <select
-                          ref={index === 0 ? categoryRef : undefined}
-                          value={line.categoryId ?? ''}
-                          onChange={(event) =>
-                            updateLine(
-                              index,
-                              { categoryId: Number(event.target.value) || null },
-                              true,
-                            )
-                          }
-                          className={`${inputClass} mt-1`}
-                        >
-                          <option value="">Choose category</option>
-                          {data.categories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.parentName} / {category.childName}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <SearchPicker
+                        id={`entry-category-${index}`}
+                        inputRef={index === 0 ? categoryRef : undefined}
+                        label="Category"
+                        labelClassName="text-xs font-semibold text-ink-soft"
+                        inputClassName={`${inputClass} mt-1`}
+                        value={line.categoryId === null ? '' : String(line.categoryId)}
+                        onChange={(next) =>
+                          updateLine(index, { categoryId: next === '' ? null : Number(next) }, true)
+                        }
+                        options={data.categories.map((category) => ({
+                          value: String(category.id),
+                          label: category.childName,
+                          hint: category.parentName,
+                          displayLabel: `${category.parentName} / ${category.childName}`,
+                          searchText: `${category.parentName} / ${category.childName}`,
+                        }))}
+                        pinnedOptions={[{ value: '', label: 'No category — clear this line' }]}
+                        placeholder="Search categories…"
+                        listLabel={`Matching categories for line ${index + 1}`}
+                        emptyMessage="No categories match that search."
+                        hint="Parent or child name — type to filter."
+                      />
                       <div className="min-w-0">
                         <span className="text-xs font-semibold text-ink-soft">
                           {lines.length > 1 ? `Line ${index + 1} amount` : 'Amount'}

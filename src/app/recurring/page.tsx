@@ -20,8 +20,12 @@ import {
   resolveHideCancelled,
   SCHEDULE_HIDE_CANCELLED_COOKIE,
 } from '@/lib/records/schedule-visibility';
-import { getMonthlyFuelByVehicle, getWeeklyGroceriesPence } from '@/lib/records/settings';
-import { listSuppliersForEntry } from '@/lib/records/suppliers';
+import {
+  getDefaultSchedulePotId,
+  getMonthlyFuelByVehicle,
+  getWeeklyGroceriesPence,
+} from '@/lib/records/settings';
+import { listSuppliers } from '@/lib/records/suppliers';
 import { toLocalDateString } from '@/lib/time';
 import { listVehicles } from '@/lib/records/vehicles';
 
@@ -119,7 +123,9 @@ export default async function RecurringPage({
   const pots = listPots(db);
   const people = listPeople(db);
   const vehicles = listVehicles(db);
-  const suppliers = listSuppliersForEntry(db);
+  // A–Z and complete: the new-schedule supplier picker searches the whole
+  // directory, not just the 40 most recently used names (GitHub issue #78).
+  const suppliers = listSuppliers(db);
   const categoryOptions = categoryTree(db).flatMap((parent) =>
     parent.children
       .filter((child) => child.retiredAt === null)
@@ -134,6 +140,7 @@ export default async function RecurringPage({
     people: people.map(({ id, label }) => ({ id, label })),
     vehicles: vehicles.map(({ id, label }) => ({ id, label })),
     suppliers: suppliers.map(({ id, name }) => ({ id, name })),
+    defaultSchedulePotId: getDefaultSchedulePotId(db),
     today,
     schedules: schedules.map(({ schedule, nextDueDate }) => ({
       id: schedule.id,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   projectToPayday,
+  projectionDayTotals,
   selectTier,
   type ProjectionScheduleLine,
 } from '../src/lib/records/projection';
@@ -360,5 +361,56 @@ describe('projection: day-to-day events and edge cases', () => {
     assert.equal(result.days, 7);
     assert.equal(result.perDay.length, 7);
     assert.equal(result.perDay[0]?.date, '2026-10-25');
+  });
+});
+
+/**
+ * The Horizon "Day by day" heading's totals (GitHub issue #77). The card's
+ * figures must be the table's own rows — commitments plus day-to-day going
+ * out, expected money in coming back — never a second total computed from a
+ * different source.
+ */
+describe('projectionDayTotals', () => {
+  const days = [
+    {
+      date: '2026-10-01',
+      receiptsPence: p(200),
+      commitmentsPence: p(50),
+      dayToDayPence: p(10),
+      runningPence: p(1140),
+    },
+    {
+      date: '2026-10-02',
+      receiptsPence: 0,
+      commitmentsPence: p(25),
+      dayToDayPence: 0,
+      runningPence: p(1115),
+    },
+    {
+      date: '2026-10-03',
+      receiptsPence: p(5),
+      commitmentsPence: 0,
+      dayToDayPence: p(15),
+      runningPence: p(1105),
+    },
+  ];
+
+  it('sums every column in integer pence and keeps out and net honest', () => {
+    const totals = projectionDayTotals(days);
+    assert.equal(totals.receiptsPence, p(205));
+    assert.equal(totals.commitmentsPence, p(75));
+    assert.equal(totals.dayToDayPence, p(25));
+    assert.equal(totals.outPence, p(100));
+    assert.equal(totals.netPence, p(105));
+  });
+
+  it('is zero for an empty window', () => {
+    assert.deepEqual(projectionDayTotals([]), {
+      receiptsPence: 0,
+      commitmentsPence: 0,
+      dayToDayPence: 0,
+      outPence: 0,
+      netPence: 0,
+    });
   });
 });

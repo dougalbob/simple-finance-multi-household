@@ -232,3 +232,56 @@ async function waitForHorizonForm(page: import('@playwright/test').Page): Promis
 function futureDate(days: number): string {
   return addDaysIso(londonToday(), days);
 }
+
+/**
+ * The Day by day card's summary (GitHub issue #77). The two cards above it
+ * already print their row count and total; the day table should read the same
+ * way. Its figures are the rows' own sums, so they must agree with the
+ * commitments and day-to-day cards to the penny.
+ */
+test.describe('day by day totals', () => {
+  test('the card heading counts the days and totals out and in', async ({ page }) => {
+    await page.goto(`/horizon?through=${futureDate(42)}`);
+    await expect(page.getByLabel('Look ahead to')).toHaveValue(futureDate(42));
+
+    const dayByDay = page.locator('details', { hasText: 'Day by day' }).first();
+    await expect(dayByDay).toHaveAttribute('open', '');
+    const summary = (await dayByDay.locator('summary').innerText()).replace(/\s+/g, ' ');
+    const match = /Day by day \((\d+) days?\) · out (£[\d,]+\.\d{2}) · in (£[\d,]+\.\d{2})/.exec(
+      summary,
+    );
+    expect(match, `unexpected summary: ${summary}`).not.toBeNull();
+    const days = Number(match?.[1]);
+    expect(days).toBeGreaterThan(0);
+
+    // Out is commitments plus projected day-to-day; in is expected money in —
+    // both read from the cards that list those rows.
+    const penceOf = (text: string): number => {
+      const amount = /£([\d,]+)\.(\d{2})/.exec(text);
+      return Number((amount?.[1] ?? '0').replace(/,/g, '')) * 100 + Number(amount?.[2] ?? '0');
+    };
+    const commitments = penceOf(
+      await page
+        .locator('details', { hasText: 'Commitments in the window' })
+        .first()
+        .locator('summary')
+        .innerText(),
+    );
+    const dayToDay = penceOf(
+      await page
+        .locator('details', { hasText: 'Projected day-to-day spending' })
+        .first()
+        .locator('summary')
+        .innerText(),
+    );
+    const moneyIn = penceOf(
+      await page
+        .locator('details', { hasText: 'Expected money in' })
+        .first()
+        .locator('summary')
+        .innerText(),
+    );
+    expect(penceOf(match?.[2] ?? '')).toBe(commitments + dayToDay);
+    expect(penceOf(match?.[3] ?? '')).toBe(moneyIn);
+  });
+});

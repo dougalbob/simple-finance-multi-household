@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { waitForTill } from './support';
+import { pickEntryCategory, waitForTill } from './support';
 
 /**
  * Receipt removal (SPEC §23.4). The PNG is generated fictional bytes — never a
@@ -69,7 +69,7 @@ test.describe('removing a receipt', () => {
     await entry.locator('input[name="supplierName"]').fill('Playwright Receipt Shop');
     await entry.locator('input[name="amount"]').fill('4.50');
     await entry.getByLabel('Line 1 amount').fill('4.50');
-    await entry.getByLabel(/^Category/).selectOption({ label: 'Groceries / Weekly Shop' });
+    await pickEntryCategory(entry, 'Groceries / Weekly Shop');
     await entry.getByRole('button', { name: 'Save purchase' }).click();
     await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
 

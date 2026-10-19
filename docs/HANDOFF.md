@@ -1,3 +1,74 @@
+# v1.28.0 — issues #76–#79: searchable pickers, Day by day totals and pot defaults (2026-10-19)
+
+**Read decision 240 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
+SPEC §15.1/§15.2 first.** This slice implements the four open issues the household asked to be
+considered together (they chose the slice; #76 and #78 share one searchable picker).
+
+**Release: stable `v1.28.0`.** The household reviewed the Arena preview and approved publishing on
+2026-10-19. The five version-bearing places agree on **1.28.0** (package.json, package-lock.json,
+`src/lib/version.ts`, the Unraid template description and `docs/RELEASE_NOTES_v1.28.0.md`), and
+the contract documents name `v1.28.0`. Follow `docs/RELEASE_PROCESS.md` for the PR gate, merge,
+annotated tag on the `main` merge commit and the Publish/GHCR verification. The release notes explain
+that this release adds nothing to the schema and moves two settings sections onto the pot cards.
+`v1.27.0` remains the previous release.
+
+**Delivered:**
+
+1. **#76 — Quick Entry category search.** Each split line's category field is a combobox
+   (`src/components/search-picker.tsx`) over the same live leaf categories, matching the parent
+   or child name, any word order, case-insensitively. Tap/ArrowDown/Enter/first keystroke opens;
+   arrows and Enter pick; Escape closes leaving the line alone; focus alone never opens the list
+   and selects the shown label so typing replaces it. Pinned "No category — clear this line".
+   Pure ranking in `src/lib/search.ts`.
+2. **#78 — Recurring supplier selection.** The add form's supplier field is the same picker over
+   **the whole supplier directory, A–Z** (`listSuppliers`), not the 40 most recent; "Add a new
+   supplier…" and a standing order's "no supplier / household transfer" stay pinned; the edit
+   form matches. Enter in the search never submits the schedule form.
+3. **#77 — Horizon "Day by day" total.** The card heading now reads
+   `Day by day (N days) · out £… · in £…`, summed by `projectionDayTotals` from the table's own
+   rows; the worked example uses the same helper.
+4. **#79 — pot defaults on the pot cards.** The detached Quick entry and All Transactions cards
+   are gone. Each pot card carries **Set as default account for: Till · Transactions · New DD/SO**.
+   One account per use: ticking moves the default, unticking clears it only where it is held. The
+   new `default_schedule_pot_id` setting feeds a new schedule's Pot field. No schema change — the
+   setting lives in the existing key/value table with its audit entry. The ticks sit behind the
+   decision-131 hydration guard (`data-pot-defaults-ready`).
+
+**Tests added or updated:** `tests/search.test.ts` (ranking), `tests/projection.test.ts`
+(`projectionDayTotals`), `tests/settings-domain.test.ts` (the schedule default's store/clear/archive/
+audit rules). Playwright: a category-search journey in `e2e/home.spec.ts`, a supplier A–Z/search
+journey in `e2e/desktop.spec.ts`, the Day by day totals in `e2e/horizon.spec.ts`, and
+`e2e/settings.spec.ts` rewritten for the three ticks (including "ticking a second pot moves the
+default"). `e2e/support.ts` gained `pickEntryCategory`, `pickScheduleSupplier` and
+`waitForPotDefaults`; the specs that chose a category or supplier through `.selectOption` now use
+the pickers.
+
+**Validation in this session:** `npm run typecheck`, `npm run format:check`, `npm run build` and
+`npm run test` all green (**1075/1075 unit tests across 252 suites**). The full Playwright suite
+through SANDBOX entry 8 (throwaway `playwright.local.config.ts`, `@sparticuz/chromium`, one worker,
+fresh `.e2e-data`) is **171/171** after repairing two pre-existing traps in `insights.spec.ts` that
+the release gate exposed — both also failed on `main` at `7dbdc13` with the same seed:
+
+- `honesty loop tolerance band (issue #27)` assumed the seed's trailing eight weeks always averaged
+  more than +10% over the configured figure; on Monday 19 October 2026 the drift was 9.7%. It now
+  reads the card's own configured and actual figures and asserts the verdict its band rule derives
+  (`honestyBand`/`honestyDriftPercent`), so it tests the feature rather than the weekday.
+- `the Insights line-item drill (issue #68) › a £0.00 figure is greyed out` relied on a seeded
+  month cell staying zero, which the earlier projects' records fill in. It now creates its own
+  parent/child category, records one £5.00 purchase (naming the pot explicitly, because the
+  settings project ends with the Till default cleared) and asserts the two earlier month cells are
+  muted text while the current month is a link.
+
+The four issues' own journeys pass, and so does every other project.
+
+If your run differs, the four issues' own journeys are the ones to check first: the category search
+(`e2e/home.spec.ts`), the supplier A–Z/search (`e2e/desktop.spec.ts`), the Day by day totals
+(`e2e/horizon.spec.ts`) and the three pot-default ticks (`e2e/settings.spec.ts`).
+
+**Not changed:** no figure, projection, chart or record moves; no migration; the backup format is
+unchanged. The **Quick entry** and **All Transactions** settings sections are removed, which is the
+household's own request in #79 — their defaults moved onto the pot cards.
+
 # v1.27.0 — approved for publication (2026-10-17)
 
 The household approved publishing for own-data testing and Unraid Force Update. This supersedes

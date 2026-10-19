@@ -1,5 +1,10 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { waitForPurchaseToggle, waitForTill, waitForTransferToggle } from './support';
+import {
+  pickEntryCategory,
+  waitForPurchaseToggle,
+  waitForTill,
+  waitForTransferToggle,
+} from './support';
 
 /**
  * All Transactions (SPEC §15.3, plan decisions 101–108): a one-pot activity
@@ -742,7 +747,7 @@ async function recordPurchase(
   // Main account's activity, so the pot here is not negotiable either.
   await entry.getByLabel('Pot').selectOption({ label: 'Main account' });
   await entry.getByRole('button', { name: 'Next: category →' }).click();
-  await entry.getByLabel(/^Category/).selectOption({ label: 'Groceries / Weekly Shop' });
+  await pickEntryCategory(entry, 'Groceries / Weekly Shop');
   await entry.getByRole('button', { name: 'Save purchase' }).click();
   await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
 }

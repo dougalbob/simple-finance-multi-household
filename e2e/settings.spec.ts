@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { waitForTill } from './support';
+import { waitForPotDefaults, waitForTill } from './support';
 
 /**
  * Settings → Category tree (SPEC §15.2). Regression for a field report on
@@ -88,23 +88,24 @@ test.describe('category tree', () => {
 });
 
 /**
- * Quick entry settings (SPEC §15.1, v0.9.0): the pot the till form starts on
- * is an explicit choice, not a guess from a pot's label. Runs in the settings
- * project, after the mobile project has asserted the seeded default, and
- * leaves the installation with the default *cleared* — that state is the point
- * of the last assertion. So any spec that runs after this one and records a
- * purchase names its pot explicitly (the payday scenario does so); the till
- * cannot save without one.
+ * Pot defaults (GitHub issue #79). The detached Quick entry and All
+ * Transactions cards are gone: each pot card now carries the three ticks
+ * that choose where the till, All Transactions and a new schedule start.
+ * These run in the settings project, after the mobile project has asserted
+ * the seeded default, and leave every use *cleared* — that state is the
+ * point of the final assertions. Any spec that runs after this one and
+ * records a purchase names its pot explicitly (the payday scenario does so);
+ * the till cannot save without one.
  */
-test.describe('quick entry settings', () => {
-  test('the default purchase pot moves the till form', async ({ page }) => {
+test.describe('pot defaults', () => {
+  test('the Till tick moves the Quick Entry form and clears again', async ({ page }) => {
     await page.goto('/settings');
-    const section = page.getByRole('region', { name: /Quick entry/i });
-    await expect(section.getByRole('heading', { name: 'Quick entry', level: 2 })).toBeVisible();
+    await waitForPotDefaults(page);
+    const salary = potDefaultForm(page, 'Salary account');
 
-    await section.getByLabel('Default pot for purchases').selectOption('Salary account');
-    await section.getByRole('button', { name: 'Save default pot' }).click();
-    await expect(section.getByRole('status')).toContainText(/default pot saved/i, {
+    await salary.getByRole('checkbox', { name: 'Salary account — default for Till' }).check();
+    await salary.getByRole('button', { name: 'Save default uses' }).click();
+    await expect(salary.getByRole('status')).toContainText(/default uses saved/i, {
       timeout: 30_000,
     });
 
@@ -116,9 +117,13 @@ test.describe('quick entry settings', () => {
     // Back to "no default": the form starts with no pot selected rather than
     // silently falling back to the first pot in the list.
     await page.goto('/settings');
-    await section.getByLabel('Default pot for purchases').selectOption('');
-    await section.getByRole('button', { name: 'Save default pot' }).click();
-    await expect(section.getByRole('status')).toContainText(/default cleared/i, {
+    await waitForPotDefaults(page);
+    const salaryAgain = potDefaultForm(page, 'Salary account');
+    await salaryAgain
+      .getByRole('checkbox', { name: 'Salary account — default for Till' })
+      .uncheck();
+    await salaryAgain.getByRole('button', { name: 'Save default uses' }).click();
+    await expect(salaryAgain.getByRole('status')).toContainText(/default uses saved/i, {
       timeout: 30_000,
     });
     await page.goto('/');
@@ -126,16 +131,16 @@ test.describe('quick entry settings', () => {
     await expect(entry.getByLabel('Pot').locator('option:checked')).toHaveText('Choose…');
   });
 
-  test('the All Transactions default applies until a target is chosen (issue #44)', async ({
-    page,
-  }) => {
+  test('the Transactions tick applies until a target is chosen (issue #44)', async ({ page }) => {
     await page.goto('/settings');
-    const section = page.getByRole('region', { name: /^All Transactions$/i });
-    const defaultPot = section.getByLabel('Default pot for All Transactions');
+    await waitForPotDefaults(page);
+    const salary = potDefaultForm(page, 'Salary account');
 
-    await defaultPot.selectOption({ label: 'Salary account' });
-    await section.getByRole('button', { name: 'Save default pot' }).click();
-    await expect(section.getByRole('status')).toContainText(/All Transactions will open there/i, {
+    await salary
+      .getByRole('checkbox', { name: 'Salary account — default for Transactions' })
+      .check();
+    await salary.getByRole('button', { name: 'Save default uses' }).click();
+    await expect(salary.getByRole('status')).toContainText(/default uses saved/i, {
       timeout: 30_000,
     });
 
@@ -155,14 +160,75 @@ test.describe('quick entry settings', () => {
     await filters.getByRole('button', { name: 'Show activity' }).click();
     await expect(target.locator('option:checked')).toHaveText('Main account');
 
-    // Clearing the setting restores the page's existing fallback.
+    // Clearing the tick restores the page's existing fallback.
     await page.goto('/settings');
-    await section.getByLabel('Default pot for All Transactions').selectOption('');
-    await section.getByRole('button', { name: 'Save default pot' }).click();
-    await expect(section.getByRole('status')).toContainText(/Default cleared/i, {
+    await waitForPotDefaults(page);
+    const salaryAgain = potDefaultForm(page, 'Salary account');
+    await salaryAgain
+      .getByRole('checkbox', { name: 'Salary account — default for Transactions' })
+      .uncheck();
+    await salaryAgain.getByRole('button', { name: 'Save default uses' }).click();
+    await expect(salaryAgain.getByRole('status')).toContainText(/default uses saved/i, {
       timeout: 30_000,
     });
     await page.goto('/transactions');
     await expect(page.getByLabel('Target').locator('option:checked')).toHaveText('Main account');
   });
+
+  test('the New DD/SO tick starts a schedule and moves between pots', async ({ page }) => {
+    await page.goto('/settings');
+    await waitForPotDefaults(page);
+    const main = potDefaultForm(page, 'Main account');
+    await main.getByRole('checkbox', { name: 'Main account — default for New DD/SO' }).check();
+    await main.getByRole('button', { name: 'Save default uses' }).click();
+    await expect(main.getByRole('status')).toContainText(/default uses saved/i, {
+      timeout: 30_000,
+    });
+
+    // A new schedule opens on the chosen pot.
+    await page.goto('/recurring');
+    const schedules = page.locator('section[aria-labelledby="schedules-heading"]');
+    await schedules.getByText('Add a schedule').click();
+    const addForm = schedules
+      .locator('form')
+      .filter({ has: page.getByRole('button', { name: 'Add schedule' }) });
+    await expect(addForm.locator('select[name="potId"]').locator('option:checked')).toHaveText(
+      'Main account',
+    );
+
+    // One account per use: ticking Salary account moves the default and
+    // clears Main account's tick without a reload.
+    await page.goto('/settings');
+    await waitForPotDefaults(page);
+    const salary = potDefaultForm(page, 'Salary account');
+    await salary.getByRole('checkbox', { name: 'Salary account — default for New DD/SO' }).check();
+    await salary.getByRole('button', { name: 'Save default uses' }).click();
+    await expect(salary.getByRole('status')).toContainText(/default uses saved/i, {
+      timeout: 30_000,
+    });
+    await expect(
+      potDefaultForm(page, 'Main account').getByRole('checkbox', {
+        name: 'Main account — default for New DD/SO',
+      }),
+    ).not.toBeChecked();
+
+    // Leave no default behind for the projects that run after this one.
+    await salary
+      .getByRole('checkbox', { name: 'Salary account — default for New DD/SO' })
+      .uncheck();
+    await salary.getByRole('button', { name: 'Save default uses' }).click();
+    await expect(salary.getByRole('status')).toContainText(/default uses saved/i, {
+      timeout: 30_000,
+    });
+  });
 });
+
+/**
+ * The default-use form for one pot. The three ticks' accessible names carry
+ * the pot label, so the containing form is unambiguous.
+ */
+function potDefaultForm(page: import('@playwright/test').Page, potLabel: string) {
+  return page.locator('form').filter({
+    has: page.getByRole('checkbox', { name: `${potLabel} — default for Till` }),
+  });
+}

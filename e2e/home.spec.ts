@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { addDaysIso, waitForTill } from './support';
+import { addDaysIso, pickEntryCategory, waitForTill } from './support';
 import { formatPence } from '../src/lib/money';
 import { APP_RELEASE_STAGE, APP_VERSION } from '../src/lib/version';
 import { seedPaydayScenario } from './payday-scenario';
@@ -149,7 +149,7 @@ test.describe('mobile quick entry', () => {
     await expect(entry.getByText(/Remaining|Over by/)).toBeVisible();
 
     await entry.getByLabel('Line 1 amount').fill('12.34');
-    await entry.getByLabel(/^Category/).selectOption({ label: 'Groceries / Weekly Shop' });
+    await pickEntryCategory(entry, 'Groceries / Weekly Shop');
     await expect(entry.getByText('Matches exactly')).toBeVisible();
 
     await saveButton.click();
@@ -301,7 +301,7 @@ test.describe('mobile quick entry', () => {
     await entry.getByRole('button', { name: '+ Note' }).click();
     await entry.getByLabel('Note (optional)').fill('Follows the amount');
     await showPanel(entry, 1);
-    await entry.getByLabel(/^Category/).selectOption({ label: 'Groceries / Top-up Shops' });
+    await pickEntryCategory(entry, 'Groceries / Top-up Shops');
     await entry
       .getByRole('group', { name: 'For line 1' })
       .getByRole('button', { name: 'Person' })
@@ -1135,5 +1135,59 @@ test.describe('mobile quick entry', () => {
     // figures, so the card is closed again without saving.
     await disclosure.click();
     await expect(card).toHaveCount(0);
+  });
+});
+
+/**
+ * Search as you type in the till's category picker (GitHub issue #76). The
+ * parent/child list is long enough that scrolling a native `<select>` at the
+ * till was the slowest part of a split; the field now filters on the parent
+ * or the child name, and the picked line is unchanged.
+ */
+test.describe('category search at the till', () => {
+  test('filters on the parent or the child and picks the line', async ({ page }) => {
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    await entry.locator('input[name="amount"]').fill('18.40');
+    await entry.getByRole('button', { name: 'Next: category →' }).click();
+
+    const field = entry.getByLabel(/^Category/).first();
+    const list = entry.getByRole('listbox', { name: 'Matching categories for line 1' });
+
+    // The seeded default is Groceries / Weekly Shop.
+    await expect(field).toHaveValue('Groceries / Weekly Shop');
+
+    // The parent name matches its children even though it is not in the label.
+    await field.click();
+    await field.fill('vehicle');
+    await expect(list.getByRole('option', { name: 'Vehicle Running / Fuel' })).toBeVisible();
+    await expect(list.getByRole('option', { name: 'Groceries / Weekly Shop' })).toHaveCount(0);
+
+    // Two words from either side of the slash narrow the list.
+    await field.fill('running insur');
+    await expect(list.getByRole('option', { name: 'Vehicle Running / Insurance' })).toBeVisible();
+    // The pinned "no category" row stays put; only one real category matches.
+    await expect(list.getByRole('option')).toHaveCount(2);
+    await expect(list.getByRole('option', { name: 'No category — clear this line' })).toBeVisible();
+    await list.getByRole('option', { name: 'Vehicle Running / Insurance' }).click();
+    await expect(field).toHaveValue('Vehicle Running / Insurance');
+    await expect(entry.getByText('Matches exactly')).toBeVisible();
+
+    // The keyboard picks too: ArrowDown then Enter chooses the first match.
+    await field.click();
+    await field.fill('energy');
+    await field.press('ArrowDown');
+    await field.press('Enter');
+    await expect(field).toHaveValue('Utilities / Energy');
+
+    // An unmatched search says so, and Escape leaves the last choice alone.
+    await field.click();
+    await field.fill('zzz no such category');
+    await expect(
+      list.getByRole('option', { name: 'No categories match that search.' }),
+    ).toBeVisible();
+    await field.press('Escape');
+    await expect(field).toHaveValue('Utilities / Energy');
   });
 });
