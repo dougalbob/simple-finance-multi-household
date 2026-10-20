@@ -1068,8 +1068,10 @@ money (`TX` rows for `other` money included) and expectations keep their links e
 direct debit (`DD`) and a standing order (`SO`) are the same record with the same canonical forms on the
 Purchases page, and the row a household most often needs to put right is the one in front of them: on
 those rows the supplier's name — or the schedule's name when the record has none, as a standing order
-may — is the disclosure button, opening the Purchases page's own `PurchaseEditForm` and `VoidForm` in a
-panel directly beneath the row, with the same live category tree, people and vehicles that page offers.
+may — is the disclosure button, opening the Purchases page's own `PurchaseEditForm`, receipt
+`AttachmentForm` (issue #83, decision 242 — attach, view in the modal reader, and two-step remove) and
+`VoidForm` in a panel directly beneath the row, with the same live category tree, people, vehicles and
+stored receipts that page offers.
 A **refund** (`REF`) is deliberately not one of them: it is a purchase record too, but its amount lives
 in the negative, its form belongs beside the original it was refunded against, and it can only be
 recorded, corrected and voided on Purchases — so its row keeps its link there. Correcting a converted
@@ -2065,7 +2067,8 @@ uncached, with `Content-Disposition` using a sanitized display name.
 
 ### 23.4 Removal
 
-A household can remove one receipt from the purchase row on Purchases and Suppliers. The
+A household can remove one receipt from the purchase row on Purchases, the in-place purchase panel on
+All Transactions (issue #83), and Suppliers. The
 purchase record stays. There is no undelete in the app.
 
 - The control posts an attachment id. The storage key is read from the row, never from the request, and

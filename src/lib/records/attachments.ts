@@ -343,6 +343,40 @@ export function listStoredAttachments(db: Db, purchaseId: number): StoredAttachm
 }
 
 /**
+ * Stored receipts of many purchases at once (issue #83), oldest first per
+ * purchase — All Transactions lists up to five hundred rows and should not ask
+ * five hundred times.
+ */
+export function listStoredPurchaseAttachments(
+  db: Db,
+  purchaseIds: readonly number[],
+): Map<number, StoredAttachment[]> {
+  const byPurchase = new Map<number, StoredAttachment[]>();
+  if (purchaseIds.length === 0) return byPurchase;
+  const rows = db
+    .select({
+      purchaseId: attachments.purchaseId,
+      id: attachments.id,
+      fileKey: attachments.fileKey,
+      originalName: attachments.originalName,
+      mime: attachments.mime,
+      sizeBytes: attachments.sizeBytes,
+      sha256: attachments.sha256,
+    })
+    .from(attachments)
+    .where(and(inArray(attachments.purchaseId, [...purchaseIds]), eq(attachments.state, 'stored')))
+    .orderBy(asc(attachments.id))
+    .all();
+  for (const { purchaseId, ...attachment } of rows) {
+    if (purchaseId === null) continue;
+    const list = byPurchase.get(purchaseId) ?? [];
+    list.push(attachment);
+    byPurchase.set(purchaseId, list);
+  }
+  return byPurchase;
+}
+
+/**
  * Stored documents of many income records at once, oldest first per record —
  * the Income page lists up to two hundred rows and should not ask two hundred
  * times.

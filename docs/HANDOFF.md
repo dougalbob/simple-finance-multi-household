@@ -1,3 +1,37 @@
+# v1.30.0 — issue #83: purchase receipts on All Transactions (2026-10-20)
+
+**Read decision 242 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
+SPEC §15.3 / §23.4 first.**
+
+**Release: stable `v1.30.0`.** The household reviewed the Arena preview for GitHub issue #83
+(adding the purchase receipt attachment block to the inline **Correct it** panel on All
+Transactions) and approved publishing on 2026-10-20. The five version-bearing places agree on
+**1.30.0** (`package.json`, `package-lock.json`, `src/lib/version.ts`, the Unraid template
+description and `docs/RELEASE_NOTES_v1.30.0.md`), and the contract documents name `v1.30.0`.
+Follow `docs/RELEASE_PROCESS.md` for the PR gate, merge, annotated tag on the `main` merge commit
+and the Publish/GHCR verification. `v1.29.0` remains the previous release.
+
+**Delivered (decision 242):**
+
+1. **Batched stored-receipt projection.** `listStoredPurchaseAttachments(db, purchaseIds)` in
+   `src/lib/records/attachments.ts` fetches the `stored` receipts for every purchase in the
+   activity window in one query (oldest first, matching `listStoredAttachments`).
+   `ActivityPurchaseFacts` in `src/lib/records/activity.ts` carries `attachments:
+   StoredAttachment[]`, populated via `listStoredPurchaseAttachments` in `listPotActivity` (live
+   rows) and `listStoredAttachments` in `purchaseActivityRow` (pinned rows).
+2. **In-place receipt block in the "Correct it" column.** `PurchaseActivityRow` in
+   `src/components/purchase-activity-row.tsx` renders
+   `<AttachmentForm purchaseId={purchaseId} attachments={facts.attachments} />` beneath
+   `PurchaseEditForm`, giving `PUR`, `DD` and `SO` rows on `/transactions` the same single-control
+   `Attach receipt` picker, `AttachmentViewer` modal and two-step `Remove` / `Confirm remove` /
+   `Cancel` flow as `/purchases`.
+3. **In-place revalidation.** `revalidateAttachmentPages()` in `src/app/actions.ts` now also
+   revalidates `/transactions`, so uploading or removing a receipt updates the open row in place.
+4. **Tests.** Unit and wiring tests in `tests/purchase-activity.test.ts` (**1089/1089 across 257
+   suites**) and a Playwright journey in `e2e/transactions.spec.ts` (**12/12 passing**).
+
+---
+
 # v1.29.0 — issue #81: the Chart D → Chart E sync (2026-10-19)
 
 **Read decision 241 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
