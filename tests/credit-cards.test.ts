@@ -15,6 +15,7 @@ import {
 import { getForecastChartView } from '../src/lib/records/charts-view';
 import { keyDateMessage } from '../src/lib/records/keydates';
 import { creditCardPaymentReminderDate } from '../src/lib/records/credit-cards';
+import { setPaydayDayOfMonth } from '../src/lib/records/settings';
 
 const p = (pounds: number) => Math.round(pounds * 100);
 const actor = 'alex@example.com';
@@ -90,6 +91,7 @@ describe('credit-card pots', () => {
     fixture = await createHouseholdFixture(actor, now);
     const { db, pots } = fixture;
     const card = await addCard(fixture);
+    setPaydayDayOfMonth(db, 26, actor, now);
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(500), actor, now });
     addCheckpoint(db, { potId: pots.salary.id, amountPence: p(200), actor, now });
     addCheckpoint(db, { potId: card.id, amountPence: -p(1000), actor, now });
@@ -151,7 +153,6 @@ describe('credit-card pots', () => {
     const payday = getProjectionView(db, now);
     assert.ok(payday);
     assert.equal(payday.result.paydayDate, '2026-10-26', 'a card receipt cannot anchor payday');
-    assert.equal(payday.paydayScheduleName, 'Salary');
     assert.equal(payday.result.availableNowPence, p(700));
     assert.equal(payday.result.totalCommitmentsPence, p(800));
     assert.equal(payday.result.totalReceiptsPence, p(100));

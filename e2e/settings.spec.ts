@@ -28,6 +28,36 @@ const RENAMED_CHILD = 'Playwright Seedlings Renamed';
  */
 const parentCard = (section: Locator) => section.locator(`li:has(> p:text-is("${PARENT}"))`);
 
+test.describe('household payday', () => {
+  test('saves an editable payday day and keeps the seeded setting intact', async ({ page }) => {
+    await page.goto('/settings');
+    const form = page.locator('form[aria-label="Household payday"]');
+    const day = form.getByLabel('Payday day of month');
+    await expect(day).toHaveValue('27');
+
+    await day.fill('31');
+    await form.getByRole('button', { name: 'Save payday' }).click();
+    await expect(form.getByRole('status')).toContainText('Household payday saved as day 31', {
+      timeout: 30_000,
+    });
+
+    // Verify the audited setting round-tripped from storage, then restore the
+    // E2E seed's day so the projects that follow see their normal fixture.
+    await page.goto('/settings');
+    const savedForm = page.locator('form[aria-label="Household payday"]');
+    await expect(savedForm.getByLabel('Payday day of month')).toHaveValue('31');
+    await savedForm.getByLabel('Payday day of month').fill('27');
+    await savedForm.getByRole('button', { name: 'Save payday' }).click();
+    await expect(savedForm.getByRole('status')).toContainText('Household payday saved as day 27', {
+      timeout: 30_000,
+    });
+    await page.goto('/settings');
+    await expect(
+      page.locator('form[aria-label="Household payday"]').getByLabel('Payday day of month'),
+    ).toHaveValue('27');
+  });
+});
+
 test.describe('category tree', () => {
   test('a new parent appears in the tree without a refresh', async ({ page }) => {
     await page.goto('/settings');

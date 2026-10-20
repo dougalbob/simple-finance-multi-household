@@ -7,7 +7,11 @@ four payoff pages). **Slice 3 is built** (the `/example` worked example, two mon
 rendered through the real engines, and the isolated-root seeding script `scripts/seed-example-household.mts`).
 The chosen shapes are recorded in §5:
 `/start` is a hub with inline short fields, never a full-screen wizard, and the worked example is
-generated from the real engines rather than written as prose.
+generated from the real engines rather than written as prose. Follow-up issues **#85 and #86** now
+clarify that the planning payday is a separate audited household setting and revise the first-run
+explanation so sign-in identities, people records, checkpoints, transfers, income and actual purchases
+are not conflated. These follow-ups shipped in stable `v1.31.0`; see `docs/RELEASE_NOTES_v1.31.0.md` and
+`docs/IMPLEMENTATION_PLAN.md` decisions 243–245.
 
 This document does not change storage, auth, tenancy or the release line, and it must not be read as
 a change to [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md).
@@ -15,8 +19,9 @@ a change to [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md).
 ## 1. The problem, measured rather than remembered
 
 A tour of empty screens is useless for the reason the household gave: there is nothing to point at.
-But the measured first-run state is worse than "empty", and it is worth stating exactly what a
-brand-new household sees (fresh data root, one household, no records):
+The original measurement below is a **2026-10-11 snapshot**, included as the rationale for Slice 1;
+the current path and copy are described in §§3, 7 and 8. Since that snapshot, the planning boundary
+has also become a separately configured household payday, rather than an income schedule.
 
 - **Home** — the "Household targets" card (people/vehicles only), the full till form with every
   category listed, a locked "Payday projection" card explaining what it needs, an empty "Due this
@@ -39,17 +44,18 @@ brand-new household sees (fresh data root, one household, no records):
 
 So there are really three gaps, and only the first is about "having data":
 
-1. **No order.** The app has a dependency chain — people → pots → checkpoints → income → bills →
-   projection figures → first purchase — and nothing states it. A new person must infer it from eight
-   separate empty states.
+1. **No order.** The app has a dependency chain — people → pots → checkpoints → household payday —
+   then optional predictable receipts, bills, projection figures and a first purchase. A new person must
+   not have to infer it from separate empty states.
 2. **No destination.** Every payoff surface (projection, Horizon, Charts, Insights) is exactly the
    thing that is blank on day one, so there is no reward for the setup work and no picture of what
    "finished" looks like. This is what a tour would have shown, and it is what we do not have.
-3. **The rules are invisible.** Checkpoint vs balance, estimate vs bank balance, income is not
-   spending (`BAC`), transfers are not spending, borrowing is not income, schedules convert and are
-   never rewritten, the projection is arithmetic on configured figures. These are the things a
-   technically minded person takes a while to absorb — none of them is discoverable from an empty
-   screen, and several only bite after a wrong assumption has already been made.
+3. **The rules are invisible.** There is no bank connection or statement import; checkpoints are
+   balances the household reads or counts and reports. Transfers between its own pots are not spending;
+   income is not spending (`BAC`), borrowing is not income, schedules convert and history is not
+   rewritten. Predictable recurring receipts are different from one-off income; the household payday
+   is independent of either. The projection is arithmetic on configured figures, not knowledge from a
+   bank. These are the assumptions the setup copy must make clear before a wrong one is made.
 
 ## 2. Principles this proposal keeps
 
@@ -74,29 +80,32 @@ field or a link), and **what appears when it is done**.
 
 ### Phase A — "Get to your first projection" (four steps, about five minutes)
 
-The minimum for the app's headline figure is one pot, one checkpoint and one income schedule. Phase A
-is exactly that, and it ends with the projection live on the home page.
+The minimum for the payday projection is one bank or cash pot, a checkpoint for each live bank/cash
+pot, and the household's configured payday. A receipt schedule is **not** required. Phase A has four
+steps and can end with the projection live on the home page; the optional recurring receipt step is in
+Phase B.
 
 | # | Step | Done when (derived) | Action |
 | --- | --- | --- | --- |
-| A1 | Name the people (one or two) | ≥ 1 person record | inline: label; second person optional |
-| A2 | Add the pots you actually have | ≥ 1 live bank or cash pot | inline: name + kind (+ owner); "a typical setup is a joint current account, a bills account and a cash pot each" |
-| A3 | Record a checkpoint for each | every live bank/cash pot has ≥ 1 checkpoint | inline: one amount per pot |
-| A4 | The money that comes in | ≥ 1 incoming schedule | inline: label, amount, pot, day of month; weekend-shift note |
+| A1 | Name the household people | ≥ 1 `people` record | inline: label; add any people needed for “Paid by” or “For”. People records have no two-record cap; only two sign-in identities may be assigned to a household. The administrator assigns them before first login; in Settings, link a person to an assigned identity. |
+| A2 | Add the pots you actually use | ≥ 1 live bank or cash pot | inline: name + kind (+ owner); add bank, credit-card, cash/wallet or savings pots as relevant. Record transfers between your own pots in Move, not as purchases. |
+| A3 | Record each pot's balance | every live bank/cash pot has ≥ 1 checkpoint | inline: enter the figure read from the account or counted by hand; no bank connection or statement import supplies it. |
+| A4 | Set the household payday | day-of-month from 1–31 configured | inline: choose the planning-cycle day; short months clamp to their last day and a Saturday/Sunday payday moves to the preceding Friday. This is audited in Settings and does not require an income schedule. |
 
-Payoff lines are literal, e.g. *"Your household total now appears on the home page"*, *"Your payday
-projection and Horizon now work — they will improve as you add bills and the figures below."*
+Payoff lines are literal, e.g. *"Your household total now appears on the home page"* and *"Your payday
+projection and Horizon now work from your checkpoints; scheduled receipts, when you add them, still count
+on their own due dates."*
 
 ### Phase B — "Fill in the rest, at your pace"
 
 | # | Step | Done when (derived) | Action |
 | --- | --- | --- | --- |
-| B1 | The bills you pay | ≥ 1 outgoing schedule | link to `/recurring` (the form is long) |
-| B2 | The figures the projection needs | weekly groceries set, and every vehicle has a monthly fuel figure (or there are no vehicles) | inline: two numbers |
-| B3 | Credit cards and renewals, if any | optional — never counted as incomplete | link to `/pots` and `/recurring` |
-| B4 | Record your first purchase | ≥ 1 purchase | link to the till (`/#quick-entry`) |
-| B5 | What to look at, and when | always shown last | no action: the review rhythm (weekly purchases/recurring, monthly insights/charts, Horizon when money is tight) |
-
+| B1 | Predictable recurring income, if any | optional — never counted as incomplete | inline schedule for predictable amounts and dates (such as regular salary); record a one-off payment, refund, gift or sale on Income instead of making a recurring schedule |
+| B2 | The bills you pay | ≥ 1 outgoing schedule | link to `/recurring` (the form is long); record expected direct debits and standing orders on their own due dates |
+| B3 | Estimate the weekly shop and vehicle fuel | weekly-shop figure set, and every vehicle has a monthly-fuel figure (or there are no vehicles) | inline: usual weekly groceries and typical monthly fuel per vehicle; estimates are not purchases |
+| B4 | Credit cards and renewals, if any | optional — never counted as incomplete | link to `/pots` and Contracts & Renewals; card debt counts in the household total but is not liquid cash |
+| B5 | Record your first purchase at the till | ≥ 1 purchase | link to the till (`/#quick-entry`); check “For” on every entry — a manually selected target is not remembered for the next one |
+| B6 | What to look at, and when | always shown last | no action: review checkpoints and purchases regularly, recurring bills weekly, Insights and Charts monthly, and Horizon when money is tight |
 ### Behaviour
 
 - Each step is three-valued: **todo / partly / done**, with visible counts ("2 of 4 pots have a
@@ -105,8 +114,8 @@ projection and Horizon now work — they will improve as you add bills and the f
   page has exactly one first-run element and nothing nags in duplicate.
 - The home card disappears once Phase A is complete; `/start` stays reachable from the nav (under a
   plain "Getting started" label) and from the footer until Phase B is complete.
-- The one-person and car-free households are handled properly: one person is a complete household,
-  and a vehicle is optional throughout. This also fixes the current permanent nag.
+- A household can keep any number of `people` attribution records; the separate admin limit is two
+  assigned sign-in identities. A one-person household is complete, and a vehicle is optional throughout.
 - No step ever blocks another. A household can create pots from the till's empty pot picker, or
   record a purchase before any of it, as today.
 
@@ -125,8 +134,8 @@ something the app cannot produce.
   Charts month views with nothing to compare against, which is the empty state this layer exists to
   remove. The seeded data is dated relative to today so the previous month is always complete.
 - Every section is captioned with the records that produced it ("two bank accounts, a cash pot each,
-  a salary on the 28th, eleven direct debits and two months of shopping") and links to the real page
-  it will become.
+  payday on the 27th, a salary receipt on the 27th, eleven direct debits and two months of shopping")
+  and links to the real page it will become.
 - It is rendered from an **in-memory database seeded with fictional data** (`src/lib/demo/`), never
   from a household database and never writing anywhere. It stays behind the sign-in gate like every
   other page, but it reads no household records.
@@ -181,10 +190,10 @@ for the first-run flow (fresh household → complete Phase A → projection visi
 
 1. **First slice scope → Slice 1, alone.** Decided 2026-10-11: build the path and the repairs first,
    review them on a preview installation, then start a new PR for Slice 2 and later Slice 3.
-2. **Phase A shape → `/start` as a hub with short inline fields.** Decided: people, pots, first
-   checkpoint amounts and the salary schedule are filled in where they are described; the long forms
-   (schedules, purchases) stay on their own pages and are linked. No full-screen wizard — it would
-   duplicate forms the app already has, and this app is one page per job.
+2. **Phase A shape → `/start` as a hub with short inline fields.** The current Phase A is people, pots,
+   checkpoints and the household payday. Predictable recurring income is an optional Phase B step;
+   one-off income is recorded on `/income`, while long bill forms and purchases stay on their own pages.
+   No full-screen wizard — it would duplicate forms the app already has, and this app is one page per job.
 3. **The worked example → built from the real engines with the shared fictional household** (Slice 3),
    not a prose page that drifts.
 4. **Version → `v1.1.0`**, a stable minor release with no schema change and no candidate, published
@@ -194,11 +203,18 @@ for the first-run flow (fresh household → complete Phase A → projection visi
    Nothing can disagree with the records either way.
 6. **Decided for Slice 2: `/guide` is reached from the footer and from links, not the navigation.** The
    household chose the footer and contextual links, so the nav stays at fifteen entries.
+7. **Follow-up issues #85 and #86 (2026-10-20; decisions 243–244).** The household payday is an audited
+   setting independent of receipt schedules. Getting Started now explicitly says that people records are
+   not capped at two (only assigned sign-in identities are), checkpoints are reported by the household, no
+   bank connection or statement import exists, transfers are not spending, recurring receipts are for
+   predictable income, one-offs belong on Income, and Quick Entry does not remember the previous “For” choice.
+   The payday planning rule and income guidance live in the Phase A/B descriptions above; no version or release
+   change is part of this follow-up.
 
 ## 8. What Slice 1 actually shipped (for the next session)
 
-- `src/lib/records/setup-path.ts` — the derivation: eight steps
-  (`people, pots, checkpoints, income, bills, figures, cards, purchases`) read from the household's own
+- `src/lib/records/setup-path.ts` — the derivation: nine steps
+  (`people, pots, checkpoints, payday, income, bills, figures, cards, purchases`) read from the household's own
   records, `SETUP_PHASE_TITLES`, and `getSetupFormData` for the inline fields. Steps are derived,
   never ticked, and nothing is gated. Unit-tested in `tests/setup-path.test.ts`.
 - `src/app/start/page.tsx` — the hub: "N of 4 done" (Phase A) and "N left" (Phase B), the inline
@@ -223,8 +239,9 @@ for the first-run flow (fresh household → complete Phase A → projection visi
 - `src/app/guide/page.tsx` — `/guide`, "How this app thinks", rendered from `GUIDE_SECTIONS`, behind the
   sign-in gate, reading no household records. Linked from the footer and from `/start`'s review rhythm.
 - `src/lib/records/page-needs.ts` — "What this page needs first": per payoff page (`projection`,
-  `horizon`, `charts`, `insights`), the setup-path steps that are not `done`. A checkpoint need is hidden
-  while the pots need is open. Optional steps and Phase B bills are never needs. Tested in
+  `horizon`, `charts`, `insights`), the setup-path steps that are not `done`. The payday projection needs
+  pots, checkpoints and the household payday; Horizon/Charts/Insights have their own record needs.
+  Optional receipt schedules and Phase B bills are never projection prerequisites. Tested in
   `tests/page-needs.test.ts` against real records through the domain APIs.
 - `src/components/needs-first.tsx` — the pattern (section or inline), server-rendered, no state, nothing
   dismissed. It renders nothing when the list is empty.

@@ -7,6 +7,7 @@ import {
   AddVehicleForm,
   CategoryTreeEditor,
   PersonSignInForm,
+  PaydaySettingForm,
   PotDefaultUsesForm,
   PotEditForm,
   TargetRenameForm,
@@ -33,13 +34,13 @@ import { categoryTree } from '@/lib/records/categories';
 import { getCommitmentCategoryPicker } from '@/lib/records/charts-view';
 import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
-import { getProjectionView } from '@/lib/records/money-view';
 import {
   getContractEndWarningLeadDays,
   getDefaultPurchasePotId,
   getDefaultSchedulePotId,
   getDefaultTransactionsPotId,
   getMonthlyFuelByVehicle,
+  getPaydayDayOfMonth,
   getRenewalWarningLeadDays,
   getWeeklyGroceriesPence,
 } from '@/lib/records/settings';
@@ -51,7 +52,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Settings (SPEC §15.2): household names, per-pot edit, the category tree
- * editor, projection figures, warning leads and the payday/income pointer.
+ * editor, projection figures, warning leads and the audited household payday.
  * Everything here is visible, editable and audited in the domain layer —
  * there are no hidden switches (blueprint §1 transparency rule).
  */
@@ -80,7 +81,6 @@ export default async function SettingsPage() {
   const defaultTransactionsPotId = getDefaultTransactionsPotId(db);
   const defaultSchedulePotId = getDefaultSchedulePotId(db);
   const commitmentPicker = getCommitmentCategoryPicker(db, true);
-  const projection = getProjectionView(db, now);
   const theme = await currentTheme();
 
   return (
@@ -359,48 +359,22 @@ export default async function SettingsPage() {
         </section>
 
         <section
+          id="payday-setting"
           aria-labelledby="payday-heading"
-          className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+          className="sf-anchor rounded-xl border border-border bg-surface p-4 shadow-sm"
         >
           <h2 id="payday-heading" className="mb-1 text-lg font-semibold">
-            Payday &amp; income
+            Household payday
           </h2>
-          <p className="mb-3 text-xs text-ink-muted">
-            The projection plans to the next expected income schedule. Income is configured as a
-            receipt schedule, not as a setting here.
+          <p className="mb-3 max-w-3xl text-xs text-ink-muted">
+            This day defines the household planning cycle used by Home, Overview, Horizon and the
+            payday-cycle chart windows. It works even when no income receipt is scheduled. Each
+            receipt still appears as income on its own due date inside a projection window; adding,
+            changing or removing receipt schedules does not move the cycle boundary.
           </p>
-          {projection !== null &&
-          projection.paydayScheduleId === null &&
-          projection.receiptLines.some((line) => line.expected === true) ? (
-            <p className="text-sm">
-              Planning to <span className="font-semibold">the next expected support payment</span> —
-              a debt&rsquo;s expected inflow won this cycle (it is owed money that is expected,
-              never received income). Add an income schedule in{' '}
-              <Link href="/recurring" className="sf-link-arrow">
-                Recurring →
-              </Link>{' '}
-              to plan to income instead.
-            </p>
-          ) : null}
-          {projection !== null && projection.paydayScheduleId !== null ? (
-            <p className="text-sm">
-              Planning to <span className="font-semibold">{projection.paydayScheduleName}</span> —{' '}
-              <Link
-                href={`/recurring#schedule-edit-${projection.paydayScheduleId}`}
-                className="sf-link-arrow"
-              >
-                edit the schedule in Recurring →
-              </Link>
-            </p>
-          ) : (
-            <p className="text-sm text-ink-soft">
-              No income schedule yet. Add one in{' '}
-              <Link href="/recurring" className="sf-link">
-                Recurring
-              </Link>{' '}
-              (kind: receipt) and the projection will plan to it.
-            </p>
-          )}
+          <div className="max-w-xl">
+            <PaydaySettingForm dayOfMonth={getPaydayDayOfMonth(db)} />
+          </div>
         </section>
       </div>
     </main>

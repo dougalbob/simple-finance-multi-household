@@ -189,6 +189,7 @@ import {
   potKindSchema,
   potLabelSchema,
   projectionSettingsEntrySchema,
+  paydaySettingEntrySchema,
   purchaseEntrySchema,
   receiptEntrySchema,
   editReceiptEntrySchema,
@@ -253,6 +254,7 @@ import {
   setDefaultSchedulePotId,
   setDefaultTransactionsPotId,
   setMonthlyFuelPence,
+  setPaydayDayOfMonth,
   setRenewalWarningLeadDays,
   setWeeklyGroceriesPence,
 } from '@/lib/records/settings';
@@ -1454,6 +1456,48 @@ export async function saveProjectionSettingsAction(
       return { status: 'error', message: err.message };
     }
     return { status: 'error', message: 'The figures could not be saved. Please try again.' };
+  }
+}
+
+export async function savePaydaySettingAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+
+  const raw = formData.get('dayOfMonth');
+  if (typeof raw !== 'string') {
+    return { status: 'error', message: 'Choose a household payday day from 1 to 31.' };
+  }
+  const text = raw.trim();
+  const dayOfMonth = text === '' ? null : Number(text);
+  const parsed = paydaySettingEntrySchema.safeParse({ dayOfMonth });
+  if (!parsed.success) {
+    return {
+      status: 'error',
+      message: firstIssue(parsed.error, 'Choose a whole day from 1 to 31.'),
+    };
+  }
+  try {
+    setPaydayDayOfMonth(user.db, parsed.data.dayOfMonth, user.email);
+    revalidatePages();
+    return {
+      status: 'ok',
+      message:
+        parsed.data.dayOfMonth === null
+          ? 'Household payday cleared. Payday-cycle projections are paused until one is set.'
+          : `Household payday saved as day ${parsed.data.dayOfMonth}. Planning windows use this setting.`,
+    };
+  } catch (err) {
+    if (err instanceof InvalidSettingValueError) {
+      return { status: 'error', message: err.message };
+    }
+    return {
+      status: 'error',
+      message: 'The household payday could not be saved. Please try again.',
+    };
   }
 }
 

@@ -6,6 +6,7 @@ import {
   editPotAction,
   renameTargetAction,
   saveCategoryAction,
+  savePaydaySettingAction,
   savePersonEmailAction,
   savePotDefaultUsesAction,
   saveWarningLeadsAction,
@@ -116,6 +117,39 @@ export function AddVehicleForm({ people }: AddVehicleFormProps) {
       </div>
       <button type="submit" disabled={pending} className={`${submitClass} mt-3`}>
         {pending ? 'Saving…' : 'Add vehicle'}
+      </button>
+      <FormMessage status={state.status} message={state.message} />
+    </form>
+  );
+}
+
+export function PaydaySettingForm({ dayOfMonth }: { dayOfMonth: number | null }) {
+  const [state, formAction, pending] = useActionState(savePaydaySettingAction, initialActionState);
+  return (
+    <form action={formAction} aria-label="Household payday" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <label htmlFor="household-payday-day" className={labelClass}>
+          Payday day of month
+        </label>
+        <input
+          id="household-payday-day"
+          name="dayOfMonth"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={31}
+          step={1}
+          defaultValue={dayOfMonth ?? ''}
+          className={`${inputClass} w-28`}
+          aria-describedby="household-payday-help"
+        />
+        <p id="household-payday-help" className="text-xs text-ink-muted">
+          Use a day from 1 to 31. Shorter months clamp to their last day; a Saturday or Sunday
+          payday moves back to Friday. Leave blank and save to clear the setting.
+        </p>
+      </div>
+      <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
+        {pending ? 'Saving…' : 'Save payday'}
       </button>
       <FormMessage status={state.status} message={state.message} />
     </form>

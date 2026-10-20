@@ -380,6 +380,16 @@ export const projectionSettingsEntrySchema = z.object({
   monthlyFuelPence: z.record(z.string(), nonNegativePenceSchema.nullable()).default({}),
 });
 
+/** Household planning-cycle boundary (Settings): blank clears the setting. */
+export const paydaySettingEntrySchema = z.object({
+  dayOfMonth: z
+    .number()
+    .int('Choose a whole day of the month.')
+    .min(1, 'Choose a day from 1 to 31.')
+    .max(31, 'Choose a day from 1 to 31.')
+    .nullable(),
+});
+
 /* ------------------------------------------------------------------ */
 /* Phase 4a — desktop review pages (SPEC §15.2, §16)                   */
 /* ------------------------------------------------------------------ */

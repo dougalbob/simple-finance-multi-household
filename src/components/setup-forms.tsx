@@ -6,10 +6,10 @@ import { initialActionState } from '@/lib/action-state';
 
 /**
  * The first step of the setup path (docs/ONBOARDING_PLAN.md, Slice 1): one
- * field and the same server action the old home card used, which already
- * enforces the one-or-two rule and audits the change. The form only adds the
- * "where am I" context — a household of one is complete, so it never asks for
- * a second person as though one were missing.
+ * field and the same server action the old home card used, which audits the
+ * change. Sign-in identities are limited separately by the registry; a
+ * household of one is complete, so it never asks for a second person as though
+ * one were missing.
  */
 export function AddPersonForm() {
   const [state, formAction, pending] = useActionState(addPersonAction, initialActionState);

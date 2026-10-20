@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { formatPence } from '@/lib/money';
 import type { CycleOutlook, CycleOutlookPot } from '@/lib/records/money-view';
 import {
@@ -6,7 +7,7 @@ import {
   toLocalDateString,
 } from '@/lib/time';
 
-/** Shared salary-window low and weekly pace (SPEC §7.7, decision 166). */
+/** Shared configured-payday low and weekly pace (SPEC §7.7, decision 166). */
 export function CycleOutlookLine({
   outlook,
   className,
@@ -14,11 +15,14 @@ export function CycleOutlookLine({
   outlook: CycleOutlook;
   className?: string;
 }) {
-  if (outlook.incomeDate === null) {
+  if (outlook.paydayDate === null) {
     return (
       <p className="rounded-lg bg-canvas px-3 py-2 text-sm text-ink-soft">
-        No salary income is scheduled yet, so there is no “lowest before pay day” figure. Add the
-        income schedule in Recurring payments and it appears here.
+        No household payday is set yet, so there is no “lowest before payday” figure. Set one in{' '}
+        <Link href="/settings#payday-setting" className="sf-link">
+          Settings
+        </Link>
+        .
       </p>
     );
   }
@@ -31,7 +35,7 @@ export function CycleOutlookLine({
   }
   const negative = outlook.freeToSpendPence < 0;
   const paydayLabel = formatOrdinalDayMonthShortLocalDate(
-    outlook.incomeDate,
+    outlook.paydayDate,
     toLocalDateString(outlook.asOf),
   );
   return (
@@ -47,26 +51,26 @@ export function CycleOutlookLine({
       {outlook.paceText}
       {negative
         ? null
-        : ` Salary on ${formatShortLocalDate(outlook.incomeDate)} is not counted as money you can spend.`}
+        : ` Receipts due on payday do not raise this before-payday low; other receipts are counted on their due dates.`}
     </p>
   );
 }
 
 /**
  * The per-pot version for the pot cards: the pot's estimate minus the bills
- * due from that pot before income lands (§7.5's watch, in the same window).
+ * due from that pot before payday (§7.5's watch, in the same window).
  * A shortfall is loud; a healthy figure is quiet context.
  */
 export function PotOutlookLine({
   pot,
-  incomeDate,
+  paydayDate,
 }: {
   pot: CycleOutlookPot | undefined;
-  incomeDate: string | null;
+  paydayDate: string | null;
 }) {
-  // No expected income, no window — nothing honest to say here.
-  if (incomeDate === null || pot === undefined || pot.spendablePence === null) return null;
-  const window = formatShortLocalDate(incomeDate);
+  // No configured payday, no window — nothing honest to say here.
+  if (paydayDate === null || pot === undefined || pot.spendablePence === null) return null;
+  const window = formatShortLocalDate(paydayDate);
   if (pot.shortfallPence !== null) {
     const first = pot.outgoing[0];
     return (
@@ -81,7 +85,7 @@ export function PotOutlookLine({
   }
   return (
     <p className="mt-2 text-xs text-ink-soft">
-      Before income lands{window === null ? '' : ` (${window})`}:{' '}
+      Before payday{window === null ? '' : ` (${window})`}:{' '}
       <span className="font-semibold tabular-nums">{formatPence(pot.spendablePence)}</span>
     </p>
   );

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { previousPaydayOccurrences } from '../src/lib/records/dates';
 import { countChromaticPixels, decodePng } from './pixels';
 
 /**
@@ -502,6 +503,14 @@ test.describe('charts', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 1400, height: 950 });
+    await page.goto('/settings');
+    const paydayDay = Number(
+      await page
+        .locator('form[aria-label="Household payday"]')
+        .getByLabel('Payday day of month')
+        .inputValue(),
+    );
+    expect(paydayDay).toBe(27);
     await page.goto('/charts#mix');
     const card = page.locator('#mix');
     await expect(card.getByRole('heading', { name: 'Where the money went' })).toBeVisible();
@@ -536,6 +545,9 @@ test.describe('charts', () => {
     const today = await to.getAttribute('max');
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     await expect(from).toHaveAttribute('max', today as string);
+    const mostRecentPayday = previousPaydayOccurrences(paydayDay, today as string, 1)[0];
+    expect(mostRecentPayday).not.toBeUndefined();
+    await expect(from).toHaveValue(mostRecentPayday as string);
 
     const quick = controls.getByRole('group', { name: 'Quick windows' });
     const sinceLastPayday = quick.getByRole('button', { name: /Since last payday$/ });

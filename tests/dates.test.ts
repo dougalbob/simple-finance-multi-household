@@ -9,6 +9,10 @@ import {
   incomeOccurrencesBetween,
   isLeapYear,
   lastOccurrenceDate,
+  nextPaydayOccurrence,
+  paydayOccurrenceInMonth,
+  paydayOccurrencesBetween,
+  previousPaydayOccurrences,
   shiftIncomeOffWeekend,
 } from '../src/lib/records/dates';
 
@@ -128,5 +132,31 @@ describe('dates: pure local-calendar arithmetic', () => {
     assert.equal(shiftIncomeOffWeekend('2026-09-26'), '2026-09-25'); // Saturday
     assert.equal(shiftIncomeOffWeekend('2026-09-27'), '2026-09-25'); // Sunday
     assert.equal(shiftIncomeOffWeekend('2026-09-28'), '2026-09-28'); // Monday
+  });
+
+  it('household payday occurrences clamp month ends and shift weekends before planning', () => {
+    assert.equal(paydayOccurrenceInMonth(27, 2026, 9), '2026-09-25'); // Sunday → Friday
+    assert.equal(paydayOccurrenceInMonth(31, 2026, 2), '2026-02-27'); // clamp 28, Saturday → Friday
+    assert.equal(paydayOccurrenceInMonth(31, 2024, 2), '2024-02-29'); // leap-year clamp
+
+    assert.equal(nextPaydayOccurrence(27, '2026-09-23'), '2026-09-25');
+    // The actual payday is strictly after today; a payday today is next month.
+    assert.equal(nextPaydayOccurrence(27, '2026-09-25'), '2026-10-27');
+    assert.equal(nextPaydayOccurrence(31, '2026-02-27'), '2026-03-31');
+
+    // The actual shifted occurrence, not the nominal day, controls membership.
+    assert.deepEqual(paydayOccurrencesBetween(10, '2026-09-26', '2026-10-09'), ['2026-10-09']);
+    // A day 1 on Saturday shifts to the preceding month and is still found.
+    assert.deepEqual(paydayOccurrencesBetween(1, '2026-07-30', '2026-07-31'), ['2026-07-31']);
+    assert.deepEqual(paydayOccurrencesBetween(31, '2026-01-31', '2026-04-30'), [
+      '2026-02-27',
+      '2026-03-31',
+      '2026-04-30',
+    ]);
+
+    assert.deepEqual(previousPaydayOccurrences(1, '2026-08-01', 2), ['2026-07-31', '2026-07-01']);
+    assert.deepEqual(previousPaydayOccurrences(31, '2026-03-27', 2), ['2026-02-27', '2026-01-30']);
+    assert.equal(nextPaydayOccurrence(0, '2026-09-23'), null);
+    assert.deepEqual(paydayOccurrencesBetween(32, '2026-01-01', '2026-12-31'), []);
   });
 });

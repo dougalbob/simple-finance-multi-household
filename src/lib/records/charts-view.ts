@@ -550,7 +550,7 @@ export interface SpendingMixView {
   /**
    * The quick windows the selector links to (issue #24): since last payday,
    * the last full payday cycle, and month to date. None ends after today. The
-   * payday ones are null when no payday is scheduled.
+   * payday ones are null when no household payday is configured.
    */
   presets: {
     payday: MixWindow | null;
@@ -652,10 +652,10 @@ export function spendingMixLines(db: Db, from: string, to: string): MixLine[] {
  * - **Last full payday cycle** (`previous-payday`) runs from the payday before
  *   that up to the day before the most recent one — a whole cycle, finished.
  *
- * The paydays come from `recentPaydayDates`, which works earlier paydays out
- * from the salary's cadence when the schedule is too new to have recorded
- * them, so the full cycle is offered from the first day. Both are null only
- * when no payday is scheduled at all.
+ * The paydays come from `recentPaydayDates`, generated from the household's
+ * configured day-of-month with month-end clamping and weekend adjustment. They
+ * are independent of receipt schedules. Both are null only when no payday is
+ * configured.
  */
 export function paydayCycleWindows(
   db: Db,
@@ -722,8 +722,7 @@ export function getSpendingMixView(
     window = cycles.payday;
   } else {
     window = month;
-    notice =
-      'No payday is scheduled yet, so this shows the month to date. Add the salary on the Money coming in page (/income) for payday windows.';
+    notice = 'No household payday is set yet, so this shows the month to date.';
   }
 
   const parentTree = categoryTree(db);

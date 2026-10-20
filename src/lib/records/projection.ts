@@ -17,10 +17,10 @@ import { addDaysLocal, daysBetween } from './dates';
  *   lands on shop/fill days and the lowest point's date is meaningful.
  * - Expected receipts and commitments (unconverted schedule instances only)
  *   apply on their due day; within a day, outgoings apply before receipts.
- *   Projected day-to-day events are the exception on an actual main salary
- *   date: they are omitted on that date only, not on other receipt dates.
+ *   Projected day-to-day events are omitted on actual configured payday dates;
+ *   a receipt arriving on another date does not make it a payday.
  * - `projected_low` = the minimum running value in the window (inclusive of
- *   the start). It normally occurs just before salary lands. The projection
+ *   the start). It normally occurs just before payday arrives. The projection
  *   includes expected income — it is not a spending-only forecast.
  *
  * The engine is generic over the window: the "payday" is only the window's
@@ -56,7 +56,7 @@ export interface ProjectionInput {
   now: Date;
   /** household_available_now (SPEC §7.1) — null when no pot is checkpointed. */
   availableNowPence: number;
-  /** Next expected-receipt due date (the planning-cycle payday, SPEC §11.3). */
+  /** Next configured household payday (the planning-cycle boundary, SPEC §7.2). */
   paydayDate: string | null;
   commitments: ProjectionScheduleLine[];
   receipts: ProjectionScheduleLine[];
@@ -69,12 +69,12 @@ export interface ProjectionInput {
   projectedGroceries: ProjectionScheduleLine[];
   projectedFuel: ProjectionScheduleLine[];
   /**
-   * Actual dates for the main salary schedule (already weekend-shifted).
+   * Actual dates for the configured household payday (already weekend-shifted).
    * Projected day-to-day items on these dates are excluded; receipts from
    * other schedules/dates do not make a day a payday. Horizon passes every
-   * occurrence of the selected main salary schedule inside its window.
+   * occurrence of the selected configured household payday inside its window.
    */
-  mainSalaryDates?: ReadonlyArray<string>;
+  paydayDates?: ReadonlyArray<string>;
   /** Overdraft warning threshold in pence (SPEC §8); null when none configured. */
   warningThresholdPence: number | null;
   potWatches: PotWatchInput[];
@@ -112,7 +112,7 @@ export interface ProjectionResult {
   dayToDayPence: number;
   totalCommitmentsPence: number;
   totalReceiptsPence: number;
-  /** null when there is no payday (no income schedule configured). */
+  /** null when the household has not configured a payday. */
   projectedLowPence: number | null;
   lowDate: string | null;
   tier: WarningTier;
@@ -121,14 +121,14 @@ export interface ProjectionResult {
   potWatches: PotWatchResult[];
 }
 
-/** Remove projected events whose date is an actual occurrence of main salary. */
-export function excludeMainSalaryDayToDay<T extends { dueDate: string }>(
+/** Remove projected events on actual configured household payday dates. */
+export function excludePaydayDayToDay<T extends { dueDate: string }>(
   events: readonly T[],
-  mainSalaryDates: ReadonlyArray<string>,
+  paydayDates: ReadonlyArray<string>,
 ): T[] {
-  if (events.length === 0 || mainSalaryDates.length === 0) return [...events];
-  const salaryDates = new Set(mainSalaryDates);
-  return events.filter((event) => !salaryDates.has(event.dueDate));
+  if (events.length === 0 || paydayDates.length === 0) return [...events];
+  const configuredPaydayDates = new Set(paydayDates);
+  return events.filter((event) => !configuredPaydayDates.has(event.dueDate));
 }
 
 export function projectToPayday(input: ProjectionInput): ProjectionResult {
@@ -137,13 +137,13 @@ export function projectToPayday(input: ProjectionInput): ProjectionResult {
   const hasWindow = input.paydayDate !== null && days > 0;
 
   // The figures used by this projection: projected shop/fill events due
-  // inside the window, except on the main salary date(s). Other receipt dates
+  // inside the window, except on the configured payday date(s). Other receipt dates
   // remain ordinary dates for day-to-day spending.
   const projectedGroceries = hasWindow
-    ? excludeMainSalaryDayToDay(input.projectedGroceries, input.mainSalaryDates ?? [])
+    ? excludePaydayDayToDay(input.projectedGroceries, input.paydayDates ?? [])
     : [];
   const projectedFuel = hasWindow
-    ? excludeMainSalaryDayToDay(input.projectedFuel, input.mainSalaryDates ?? [])
+    ? excludePaydayDayToDay(input.projectedFuel, input.paydayDates ?? [])
     : [];
   const groceriesPence = sum(projectedGroceries.map((line) => line.amountPence));
   const fuelPence = sum(projectedFuel.map((line) => line.amountPence));
@@ -172,7 +172,7 @@ export function projectToPayday(input: ProjectionInput): ProjectionResult {
       const dayToDayDue = dayToDayByDate.get(date) ?? 0;
 
       // Commitments apply before receipts on the same day (conservative).
-      // Day-to-day has already been filtered off the main salary dates.
+      // Day-to-day has already been filtered off the configured payday dates.
       const minOfDay =
         base +
         receiptsCumulative -

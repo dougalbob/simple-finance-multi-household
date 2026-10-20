@@ -15,6 +15,7 @@ import { createSchedule } from '../src/lib/records/schedules';
 import {
   setDefaultPurchasePotId,
   setMonthlyFuelPence,
+  setPaydayDayOfMonth,
   setWeeklyGroceriesPence,
 } from '../src/lib/records/settings';
 import { createSupplier } from '../src/lib/records/suppliers';
@@ -100,6 +101,7 @@ function seed(): void {
   // The till form's starting pot is a setting (v0.9.0) — the seed sets it the
   // way a household would, and the specs prove the form honours it.
   setDefaultPurchasePotId(db, main.id, ACTOR, now);
+  setPaydayDayOfMonth(db, 27, ACTOR, now);
 
   // "Signs in as" (v0.11.0, decision 146): the dev identity is Alex, so the
   // till opens with Paid by = Alex, the Fuel tab on Alex's Vehicle A, and the

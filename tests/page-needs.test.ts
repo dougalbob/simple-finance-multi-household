@@ -8,8 +8,7 @@ import { findChildCategory } from '../src/lib/records/categories';
 import { createPerson, listPeople } from '../src/lib/records/people';
 import { addCheckpoint, createPot, listPots } from '../src/lib/records/pots';
 import { createPurchase } from '../src/lib/records/purchases';
-import { cancelSchedule, createSchedule, listSchedules } from '../src/lib/records/schedules';
-import { setWeeklyGroceriesPence } from '../src/lib/records/settings';
+import { setPaydayDayOfMonth, setWeeklyGroceriesPence } from '../src/lib/records/settings';
 import { getPageNeeds, NEEDS_FIRST_TITLE, type PayoffPageId } from '../src/lib/records/page-needs';
 import { makeTempDir } from './helpers';
 
@@ -37,17 +36,7 @@ function completePhaseA(db: Db, now: Date): void {
   createPerson(db, { label: 'Alex', actor: ACTOR, now });
   const main = createPot(db, { label: 'Main account', kind: 'bank', actor: ACTOR, now });
   addCheckpoint(db, { potId: main.id, amountPence: 41235, actor: ACTOR, now });
-  createSchedule(db, {
-    name: 'Salary',
-    kind: 'receipt',
-    frequency: 'monthly',
-    dueDayOfMonth: 28,
-    amountPence: 245000,
-    potId: main.id,
-    activeFrom: '2026-10-01',
-    actor: ACTOR,
-    now,
-  });
+  setPaydayDayOfMonth(db, 28, ACTOR, now);
 }
 
 /**
@@ -92,8 +81,8 @@ describe('page needs: the payoff pages name the records they read', () => {
     const { db } = await open();
     // The checkpoint need hides behind the pots need: there is nothing to
     // record a checkpoint against yet, and the pots step says what to do
-    // first. Income and purchases are independent and stay listed.
-    assert.deepEqual(ids(db, 'projection'), ['pots', 'income']);
+    // first. The household payday and purchases are independent and stay listed.
+    assert.deepEqual(ids(db, 'projection'), ['pots', 'payday']);
     assert.deepEqual(ids(db, 'horizon'), ['pots']);
     assert.deepEqual(ids(db, 'charts'), ['pots', 'purchases']);
     assert.deepEqual(ids(db, 'insights'), ['purchases', 'figures']);
@@ -119,7 +108,7 @@ describe('page needs: the payoff pages name the records they read', () => {
   it('with pots but no checkpoint, the checkpoint need takes over from pots', async () => {
     const { db } = await open();
     createPot(db, { label: 'Main account', kind: 'bank', actor: ACTOR });
-    assert.deepEqual(ids(db, 'projection'), ['checkpoints', 'income']);
+    assert.deepEqual(ids(db, 'projection'), ['checkpoints', 'payday']);
     assert.deepEqual(ids(db, 'horizon'), ['checkpoints']);
     assert.deepEqual(ids(db, 'charts'), ['checkpoints', 'purchases']);
     // A credit card is not a liquid anchor: it never closes the pots step and
@@ -131,7 +120,7 @@ describe('page needs: the payoff pages name the records they read', () => {
   it('a card-only household is told the payoff needs a bank or cash pot', async () => {
     const { db } = await open();
     createPot(db, { label: 'Card', kind: 'credit-card', actor: ACTOR });
-    assert.deepEqual(ids(db, 'projection'), ['pots', 'income']);
+    assert.deepEqual(ids(db, 'projection'), ['pots', 'payday']);
     assert.deepEqual(ids(db, 'horizon'), ['pots']);
     assert.match(getPageNeeds(db, 'horizon')[0]!.sentence, /bank and cash pots only/);
   });
@@ -185,22 +174,14 @@ describe('page needs: the payoff pages name the records they read', () => {
     }
   });
 
-  it('undoing a record reopens the need — derivation, never a dismissed flag', async () => {
+  it('clearing the household payday reopens the projection need, never a dismissed flag', async () => {
     const { db } = await open();
     const now = new Date('2026-10-11T12:00:00Z');
     completePhaseA(db, now);
     assert.deepEqual(ids(db, 'projection', now), []);
-    // Cancelling the salary reopens the income need, exactly as the setup
-    // path reopens the step (tests/setup-path.test.ts pins the step side).
-    const [salary] = listSchedules(db, now).filter(({ schedule }) => schedule.kind === 'receipt');
-    assert.ok(salary);
-    cancelSchedule(db, {
-      id: salary.schedule.id,
-      expectedVersion: salary.schedule.version,
-      effectiveOn: '2026-10-01',
-      actor: ACTOR,
-      now,
-    });
-    assert.deepEqual(ids(db, 'projection', now), ['income']);
+    // Receipt schedules are independent: the configured payday alone closes
+    // the cycle prerequisite, and clearing it reopens the need.
+    setPaydayDayOfMonth(db, null, ACTOR, now);
+    assert.deepEqual(ids(db, 'projection', now), ['payday']);
   });
 });

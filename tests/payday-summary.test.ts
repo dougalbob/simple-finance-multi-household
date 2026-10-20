@@ -12,7 +12,7 @@ import type { ProjectionView } from '../src/lib/records/money-view';
 
 /**
  * The payday summary (v0.37.0 follow-up, decision 187): a short, plain-English card
- * with the corrected main-salary-day projection, the household low, the worst
+ * with the configured-payday projection, the household low, the worst
  * bills-only pot shortfall and a qualified day-to-day-inclusive guide. Payday
  * is the 26th; Natwest's direct debits are due on the 21st, so the five-day
  * transfer lead is the 16th.

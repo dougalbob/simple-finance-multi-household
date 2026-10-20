@@ -79,7 +79,9 @@ test.describe('income', () => {
     ).toHaveCount(0);
   });
 
-  test('a payday that lands on a weekend is expected on the Friday before', async ({ page }) => {
+  test('a scheduled income receipt due on a weekend is expected on the Friday before', async ({
+    page,
+  }) => {
     test.slow();
     // The seeded salary is due on the 27th. Move it to a day of the month
     // that falls on a weekend in the next month or two — computed here, so

@@ -1,3 +1,34 @@
+# v1.31.0 — issues #85 and #86: household payday and Getting Started (2026-10-20)
+
+**Approved stable release:** the household requested **v1.31.0** after reviewing the Arena preview,
+so they can test the release fully on the multi-household Unraid installation. Publication follows
+`docs/RELEASE_PROCESS.md`: one PR, required checks, merge to `main`, an annotated tag on that exact
+merge commit, and successful GHCR verification. This is a stable release, not an RC.
+
+**Issue #85 — household payday.** Settings stores an optional, audited payday day-of-month
+(1–31) in the existing settings table, with no schema migration. Planning occurrences clamp to
+month-end and weekend dates shift to the preceding Friday. That setting, not an income receipt
+schedule, defines projection and day-to-day windows, Horizon defaults, and Chart E's payday-cycle
+windows. A configured payday enables projections without receipt schedules; receipts remain
+separate expected income on their own due dates. Horizon uses today + 35 days only when payday is
+unset. Existing households upgrade with payday unset and should configure it before relying on the
+payday projection or cycle charts.
+
+**Issue #86 — Getting Started.** The first-run guidance distinguishes household people from the
+maximum of two assigned sign-in identities (people attribution records remain uncapped). It
+covers pots and transfers, checkpoints, no bank connection or statement import, predictable
+recurring versus one-off income, bills, shop/fuel estimates, credit cards and renewals, and the
+first till purchase. It preserves the fact that Quick Entry does not remember the prior “For who”
+selection.
+
+**Validation:** `npm run format:check`, `npm run typecheck`, `npm test` (**1090/1090 across 256
+suites**) and `npm run build` pass. Browser acceptance coverage is present, but this sandbox lacks
+Chromium; the mandatory PR `browser` check must pass before merge. The preview server uses the
+isolated fresh-household seed from `scripts/e2e-server.mts` (`E2E_FRESH=1`), stored outside Git in
+`.e2e-data-fresh`.
+
+---
+
 # v1.30.0 — issue #83: purchase receipts on All Transactions (2026-10-20)
 
 **Read decision 242 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and the updated
@@ -1928,7 +1959,7 @@ tenant backup/restore or live-data import requires its own approval and isolated
 **Continuation of:** the multi-household foundation (PR #1, merge `e3720c5`) and its delivery sequence.
 **Merged:** PR #2 merged to `main` at `ab3fda9698e078322e5cb26e604c877242f328f8`.
 **Scope of this change (approved step):** the system registry and secure identity-to-household assignment —
-households of one or two people, administrator pre-assignment, and app-side first-login denial. Nothing else:
+households with up to two assigned sign-in identities, administrator pre-assignment, and app-side first-login denial. The two-identity rule does not cap `people` attribution records. Nothing else:
 no per-household database routing, no tenant backup/restore, no support consent, no version bump, no image or
 tag, no deployment, no real data touched. The original installation (port 3007, `/mnt/user/appdata/simple-finance`,
 its route and backups) is untouched.
@@ -2052,8 +2083,9 @@ The complete active contract is [`MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN
 
 ## Approved decisions
 
-- One application installation serves separate households of **one or two people**. A one-person household is
-  complete; a third member is prohibited.
+- One application installation serves separate households. A household may have **up to two assigned sign-in
+  identities**; its `people` attribution records are separate and are not capped at two. A one-person household
+  is complete.
 - Cloudflare Access + Google verifies identities. The app's administrator pre-assigns each email to a household
   before first login; there is no self-sign-up. A Cloudflare-allowed but unassigned identity is denied by the app.
 - Each household will have its own SQLite database and documents directory. A separate central system registry

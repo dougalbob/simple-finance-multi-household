@@ -1,6 +1,6 @@
 # Simple Finance — Product Specification
 
-**Status:** original single-household requirements were agreed 2026-09-20; the multi-household direction and decisions below were approved 2026-10-10. This is the authoritative product spec for the independent multi-household edition. Implementation is in progress: the system registry, identity pre-assignment and first-login denial (§3, §19) are built; per-household storage and routing (§18), tenant-scoped backup/restore and support-consent sessions are not yet.
+**Status:** original single-household requirements were agreed 2026-09-20; the multi-household direction and decisions below were approved 2026-10-10. This is the authoritative product spec for the independent multi-household edition. The current stable product includes household-scoped storage, verified identity assignment, support consent, and tenant-scoped backup/restore. Stable release v1.31.0 includes GitHub issues #85 and #86: the audited household payday setting and revised Getting Started guidance. No schema or backup-format change.
 **Companion documents:** [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md) (active isolation, storage and release contract), `docs/HANDOFF.md` (session continuation point), and `docs/IMPLEMENTATION_PLAN.md` (phases and dated decisions). `AGENT_APP_BLUEPRINT.md` is historical and its original product-specific defaults are superseded here.
 
 > **Privacy notice — applies to this entire repository.**
@@ -15,7 +15,8 @@
 ## 1. Product purpose
 
 Simple Finance Multi-household is a private finance application for multiple independent households. Each
-household contains **one or two people** and needs to watch money carefully to avoid overdraft charges. It answers
+household may have up to **two assigned sign-in identities**; its `people` records are separate attribution
+profiles and are not capped at two. Households need to watch money carefully to avoid overdraft charges. It answers
 four questions separately for each household:
 
 1. What have we spent, and on what?
@@ -86,12 +87,12 @@ with its inputs inspectable.
 
 ## 3. People, personas and privacy
 
-- Each household has **one or two members**. One-person households are valid and complete; no household may
-  have more than two people or more than two assigned sign-in identities.
-  *As built (2026-10-10):* the system registry (`<dataDir>/system/registry.sqlite`, `src/lib/registry`)
-  enforces one-or-two assigned identities per household, one household per identity, and the pre-assignment
-  rule; the administrator surface is `/admin`. The `people`-to-verified-identity link inside each household
-  database is not yet wired to the registry assignment.
+- Each household may have **up to two assigned sign-in identities**. One-person households are valid and
+  complete. `people` records are a separate attribution list: they are not limited to two and do not themselves
+  grant a sign-in. The admin registry caps assigned identities at two; the household database links a sign-in
+  identity to a person record where applicable.
+  *As built:* the system registry (`<dataDir>/system/registry.sqlite`, `src/lib/registry`) enforces the two
+  identity limit, one household per identity, and pre-assignment; the administrator surface is `/admin`.
 - Cloudflare Access + Google sign-in is the outer identity gate; the app independently verifies the Access JWT.
   The administrator pre-creates the household and assigns each allowed email to exactly one household before
   first login. There is no self-sign-up. A verified but unassigned identity is denied by the app. The Cloudflare
@@ -224,71 +225,86 @@ checkpoint again afterwards — a credit written down later is treated as new mo
 
 ### 7.2 Projected low before payday (projection)
 
-The planning cycle is **payday-to-payday**: from Sam's salary date to the next one (configured day-of-month;
-fictional example: the 26th). Insights additionally report by **calendar month** — both are views over the
-same date-stamped records.
+The planning cycle follows the household's **configured payday day-of-month**, not an income schedule. Set it
+in Settings as a whole day from 1 to 31. It is stored and audited in the existing settings table, so this
+feature needs no schema migration. For each calendar month, clamp the day to that month's last day, then move a
+Saturday or Sunday payday back to the preceding Friday. With no payday configured, the payday projection is
+paused; receipt schedules do not create a planning cycle.
 
+The next actual configured payday strictly after today ends the projection. Its window is
+**(today, payday]** in the household's local calendar:
+
+```text
+days = payday − today   (whole local-calendar days)
+start from liquid_available_now (bank and cash pots only)
+for each date through the configured payday:
+  − expected commitments due that day (DD/SO schedule instances not yet converted)
+  − projected day-to-day events due that day (§7.3)
+  + scheduled receipt instances due that day (income, including a payday-date receipt)
+  + expected debt support due that day (§10.2; flagged expected, never received income)
+projected_low = the minimum running value in the window, including today's starting value
 ```
-days = payday − today   (whole days, local date arithmetic)
-the payday liquidity projection starts from liquid_available_now (bank and cash pots only) and applies,
-day by day until pa       (income schedules not yet converted, and a debt's expected support, §10.2)
-  − expected commitments due that day     (DD/SO schedule instances not yet converted)
-  − projected day-to-day events due that day (see 7.3)
-projected_low = the minimum running value within the window
-```
+
+Within a date, outgoings and projected day-to-day spending apply before receipts. Thus a receipt due on the
+configured payday still counts as income on its due date and in the final running balance, but it cannot raise
+the pre-receipt low on that date. Every scheduled receipt inside the window counts on its own due date.
+Zero, one or many receipt schedules never change the configured boundary; a receipt on another date is not a
+payday. A later receipt outside this payday window can still appear in a longer Horizon window.
 
 Only bank and cash pots are liquid projection inputs: card balances and scheduled card-pot movements are
 excluded even though purchases charged to a card remain ledger spending. The separate household headline
 remains net of card debt (§24).
 
-**Salary anchors the window (decision 166).** Use the next scheduled salary receipt date,
-with the existing weekend shift, never the next debt expectation. No new setting: the household's
-£1,000 monthly parental support is tracked as borrowing. Support remains inside the longer window,
-flagged as borrowed and expected, never payday or received income. Horizon's default is unchanged.
+**The payday is independent of expected money in.** A scheduled salary, benefit or other receipt can contribute
+income inside the cycle, but it does not set or move the cycle. Debt support remains flagged as borrowed and
+expected, never payday or received income; like any other expected inflow, it counts on its own date when that
+date is inside the window. Receipt schedules keep their existing rule: when their configured due day falls on a
+weekend, income is expected on the preceding Friday (§11.3). The household payday uses the same short-month and
+weekend calendar rule, but comes from its own setting.
 
-**Weekly pace:** when the low is positive, divide that low by the weeks from today to its
-**earliest** low date; floor to whole pounds, never round up. The low already subtracts planned
-shop and fuel, so the pace is explicitly **on top of the planned shop and fuel**. Spending it all
-would touch zero at the lowest point, not preserve a cushion. Protect zero, not the overdraft.
-For a negative low state the shortfall and no allowance; for zero state no allowance; when the low
-is today do not invent a weekly number. All three surfaces share the same calculation and wording.
-Phone home and Overview call `household_available_now` **Household total now** (net of card debt), with
-card debt shown separately as context. The payday and Horizon projections label their starting point
-**Liquid funds now** and exclude credit-card pots. Decision 165's estimate arithmetic is unchanged.
+**Weekly pace:** when the low is positive, divide that low by the weeks from today to its **earliest** low date;
+floor to whole pounds, never round up. The low already subtracts planned shop and fuel, so the pace is
+explicitly **on top of the planned shop and fuel**. Spending it all would touch zero at the lowest point, not
+preserve a cushion. Protect zero, not the overdraft. For a negative low state the shortfall and no allowance;
+for zero state no allowance; when the low is today do not invent a weekly number. All three surfaces share the
+same calculation and wording.
 
-**Main salary payday is the one day projected day-to-day is excluded (v0.37.0 follow-up, decision 187).**
-For every read model, the engine removes all projected grocery and fuel events dated on an actual occurrence
-of the main salary receipt — after any weekend shift — before it computes day-to-day totals, the low or the
-per-day figures. An event on another receipt date still counts. Payday projection, Quick Entry/Till's cycle,
-the phone-home summary, Overview and Horizon use the same corrected result; Horizon excludes every occurrence
-of the selected main salary schedule inside its chosen window. This is an exclusion from the forecast only:
-other dated events and all commitments still apply normally.
+Phone home and Overview call `household_available_now` **Household total now** (net of card debt), with card
+debt shown separately as context. The payday and Horizon projections label their starting point **Liquid funds
+now** and exclude credit-card pots. Decision 165's estimate arithmetic is unchanged.
 
-**The phone home shows a summary, not the panel (decisions 186–187; v0.37.0 follow-up).** Its card states the next pay
+**Projected day-to-day spending is excluded on configured payday dates (decision 243).** For every read model,
+remove projected grocery and fuel events dated on an actual occurrence of the configured household payday —
+after month-end clamping and the weekend shift — before computing day-to-day totals, the low or per-day figures.
+An event on another receipt date still counts. Horizon excludes every configured payday occurrence inside its
+selected window. This is a forecast-only exclusion: other dated events and all commitments and receipts still
+apply normally.
+
+**The phone home shows a summary, not the panel (decisions 186–187).** Its card states the next configured pay
 day, the household low, at most one transfer nudge (§7.5), and a link to Horizon. The balance in the low
 sentence is `liquid_available_now` — **bank and cash pots only**, never the card-debt net total, because that
 is the figure the low is derived from. The card has no overdraft-fees sentence. The transfer nudge names the
 pot with the greatest **bills-only** shortfall; when projected day-to-day spending is positive it may add a
 separate, qualified guide that assumes this spending also comes from that named pot, explicitly **not a strict
-pot allocation** (§7.5). The Horizon link carries the day before payday (`/horizon?through=…`). The day-by-day
-table, dated shops/fills, expected-support list, weekly pace and detail blocks live on Horizon — the phone home
-does not repeat them (decision 164's "doors, not mini copies").
+pot allocation** (§7.5). The Horizon link carries the day before the configured payday (`/horizon?through=…`).
+The day-by-day table, dated shops/fills, expected-support list, weekly pace and detail blocks live on Horizon;
+the phone home does not repeat them (decision 164's "doors, not mini copies").
 
-**Overview keeps the figures, not the expandable forecast (v0.37.0 follow-up, decision 187).** The panel
-retains its tier message, payday and liquid-funds figures, projected day-to-day totals, commitments, receipts
-and the same worst-pot transfer nudge. It no longer has expandable forecast sections or a day-by-day table;
-its Horizon link opens on the day before payday. Horizon owns the dated detail. Quick Entry/Till remains beside
-the projection on `/overview`.
+**Overview keeps the figures, not the expandable forecast.** The panel retains its tier message, configured
+payday and liquid-funds figures, projected day-to-day totals, commitments, receipts and the same worst-pot
+transfer nudge. It has no expandable forecast sections or day-by-day table; its Horizon link opens on the day
+before configured payday. Horizon owns the dated detail. Quick Entry/Till remains beside the projection on
+`/overview`.
 
-`projected_low` normally occurs just before salary lands. The projection **includes** expected income; it is
-not a spending-only forecast.
+`projected_low` normally occurs just before the configured payday receipt, if one is due then. The projection
+includes every expected receipt on its due date; it is not a spending-only forecast.
 
 **A shifted expectation belongs to the window it lands in (v0.7.0).** A debt's expected support counts while
 **either** its configured day-of-month **or** the Friday it shifts to (§11.3, decision 7) falls inside the
 window — so a payment configured for Saturday the 10th dates Friday the 9th and counts in the window that
 ends on Friday the 9th, rather than vanishing because its configured day sat one day outside. Nothing else
-about the cadence changes: the crossing date shown is the shifted one, and the recorded Borrow is still
-recorded on whichever day it actually lands.
+about the cadence changes: the crossing date shown is the shifted one, and a Borrow record is created only
+when the money is actually received; projections never write debt movements.
 
 ### 7.3 Projected day-to-day spending as episodic events (anchor-reset) — v0.6.0
 
@@ -320,12 +336,12 @@ once in the estimate, once in the smoothed allowance — for the whole cadence w
 carried today's date.)
 
 The events join the projection engine as ordinary expected outgoings with due dates (§7.2): within a day they
-apply before receipts, like commitments, except that all projected day-to-day events on the main salary date
-are omitted. Other receipt dates do not suppress them. Two consequences the household can see: the **lowest
-point's date is meaningful with day-to-day included** (it lands on a shop day, a fill day, or a commitment day
-— not always "today"), and Horizon lists the dated events it counts. The home summary and Overview retain the
-corrected day-to-day totals without repeating the dated list. Events are household-level: pot scoping on the
-horizon does not filter them, and the §7.5 pot watch still excludes them.
+apply before receipts, like commitments, except that all projected day-to-day events on an actual configured
+household payday are omitted. Other receipt dates do not suppress them. Two consequences the household can see:
+the **lowest point's date is meaningful with day-to-day included** (it lands on a shop day, a fill day, or a
+commitment day — not always "today"), and Horizon lists the dated events it counts. The home summary and
+Overview retain the corrected day-to-day totals without repeating the dated list. Events are household-level:
+pot scoping on the horizon does not filter them, and the §7.5 pot watch still excludes them.
 
 **Honesty loop:** Insights show recent actuals (e.g. last 4–8 weeks of Groceries and per-vehicle Fuel) against
 these configured figures, so drift is visible and the config can be corrected. The projection panel lists
@@ -372,9 +388,9 @@ projection (groceries/fuel vary by pot and payment method and would muddy a tran
 The payday projection answers "will we reach payday without dipping below zero?" The **horizon** answers a
 different question: **"if we only paid what is already expected, where would we land on date D — and how low
 would we go on the way?"** It is the same arithmetic as §7.2 with the window freed from the payday: the user
-picks any date up to 400 days ahead, and the engine runs to that date instead of to the next salary. The
-field **opens on the day before the next scheduled income** (v0.13.0, decision 150), so the out-of-the-box view
-answers *"where would we land the day before the salary lands?"*.
+picks any date up to 400 days ahead, and the engine runs to that date instead of the next configured payday.
+The field opens on the day before the next configured payday; only when no household payday is set does it
+fall back to today + 35 days. Receipt schedules never set or move this date.
 
 ```days = throughDate − today             (whole days, local date arithmetic, today < throughDate ≤ today + 400)
 where_we'd_land = liquid_available_now (selected bank and cash pots)
@@ -401,16 +417,12 @@ where_we'd_land = liquid_available_now (selected bank and cash pots)
   recorded and the balance brought to zero or below — expects nothing, while a debt with no movements yet is
   *not* settled and projects from the day the plan was set (fixing the v0.5.0 gap where a brand-new debt, £0
   and no movements, projected nothing at all).
-- **The default date (v0.13.0, decision 150).** With no `?through=` (whatever else is in the URL), the date is
-  **the day before the next scheduled income** — the earliest upcoming instance of a *receipt schedule* into
-  a bank or cash pot, already moved off a weekend (§11.3). A card-pot receipt cannot anchor a liquidity payday.
-  Only scheduled income counts: a debt's expected support is borrowed
-  money, never income (§10.2), so it never sets the default, even when it lands first. The payday window (§7.2) and till (§7.7) now share this salary anchor, while still including support within their windows. The default is
-  clamped into the selectable window: income **tomorrow** ⇒ tomorrow (the income day itself, so that window
-  includes the salary — preferred to jumping to five weeks); income **beyond 400 days** ⇒ today + 400. With
-  **no scheduled income at all** the long-standing default stands: five weeks ahead (today + 35). An explicit
-  `?through=` that is valid and in range is always used as named. An annual-only income makes the default a
-  long window, so the detail blocks start collapsed (> 60 days) — honest, if heavier.
+- **The default date (decision 243; decision 150's date field behaviour remains).** With no `?through=`
+  (whatever else is in the URL), use **the day before the next configured household payday**, clamped into the
+  selectable window. The household setting is independent of receipt schedules and expected debt support.
+  If no payday is configured, use today + 35 days; a receipt schedule alone never replaces that fallback.
+  An explicit `?through=` that is valid and in range is always used as named. The date remains bounded to
+  today + 1…today + 400 so the browser never blocks a value the app selected.
 - **Form order and applying (v0.13.0, decision 150).** The form reads top to bottom: **pots → Day-to-day →
   "Look ahead to" date → "Look ahead" button**. Changing the **date** applies the look-ahead itself (the form
   submits on the date's `change`), carrying the pots and Day-to-day chosen above it. Pots and Day-to-day do
@@ -422,7 +434,7 @@ where_we'd_land = liquid_available_now (selected bank and cash pots)
 - **Search-params persistence:** the through date, pot selection and day-to-day toggle ride in the URL
   (`?through=…&pots=…&daytoday=…`), so a look-ahead can be shared and survives a refresh. The chosen date is
   clamped to the window on load, exactly as the transaction window clamps its dates. An empty pot selection
-  means *every* pot, so unticking every pot and applying counts every pot again (the page says sod applying counts every pot again (the page says so under the
+  means *every* pot, so unticking every pot and applying counts every pot again (the page says so under the
   checkboxes).
 - **Detail blocks** (commitments, expected money in with the `expected` flag, day-by-day table) stay
   `<details open>` for windows of 60 days or less and start collapsed beyond that, so the honest inputs are
@@ -437,21 +449,21 @@ where_we'd_land = liquid_available_now (selected bank and cash pots)
 ### 7.7 Lowest before pay day (the till figure) — v0.22.0
 
 The till and Overview use **the identical projected low and earliest low date from §7.2's engine**,
-not a separate spending-only subtraction. The window ends on the next salary receipt schedule,
-never on a debt's expected support. Borrowed support inside that window remains included and flagged
-as expected, never received income. The salary itself is not counted as money you can spend: the
-engine applies outgoings before receipts, including on salary day.
+not a separate spending-only subtraction. The window ends on the next configured household payday,
+never on a receipt schedule or debt's expected support. Borrowed support inside that window remains included
+and flagged as expected, never received income. Receipts due on payday remain income on their due dates, but
+the pre-receipt low applies that day's outgoings first.
 
-Quick Entry/Till shows the same low and pace on `/` and `/overview`; its heading includes the scheduled
-payday as an ordinal day and abbreviated month (for example, “Lowest before 26th Oct pay day”). Positive
-and zero-low guidance is unchanged. For a negative low, the pace text states the shortfall and that no
-discretionary spending is available (for example, *"Projected shortfall: -£413.57 before payday. No
-discretionary spending is available at this time."*). That negative-low presentation omits “No weekly
-allowance”, the salary-not-counted sentence, and the projected-liquid-funds disclaimer. No salary schedule
-or no checkpoint means no figure, not zero. The home payday card states the low without the weekly pace;
-Overview retains the projection figures and tier message (§7.2).
+Quick Entry/Till shows the same low and pace on `/` and `/overview`; its heading includes the configured
+payday as an ordinal day and abbreviated month (for example, “Lowest before 26th Oct pay day”). Positive and
+zero-low guidance is unchanged. For a negative low, the pace text states the shortfall and that no discretionary
+spending is available (for example, *"Projected shortfall: -£413.57 before payday. No discretionary spending
+is available at this time."*). That negative-low presentation omits “No weekly allowance”, the sentence about
+income due on payday, and the projected-liquid-funds disclaimer. No configured payday or no checkpoint means
+no figure, not zero. The home payday card states the low without the weekly pace; Overview retains the
+projection figures and tier message (§7.2).
 
-Per-pot bills-only signals remain `estimate(P) − commitments from P`, in the same salary window. They
+Per-pot bills-only signals remain `estimate(P) − commitments from P`, in the same configured-payday window. They
 exclude household shops/fuel and receipts: these are transfer-planning signals, not the household spending
 allowance. Quick Entry labels its selected-pot signal **Bills-only shortfall** and shows that pot's last
 checkpoint labelled **Last checkpoint**, with its age and the existing local date/time format. For a
@@ -719,39 +731,39 @@ CONVERTED (actual record, tagged "from schedule")
 - **Late or missed payment:** the converted record is simply edited (new date) or voided (never happened).
   The schedule itself can be ended with a cancellation effective date; instances after that date stop
   existing, instances before it are history.
-- **Weekends/bank holidays:** v1 uses the configured due date as-is (UK banks shift collection dates
-  themselves; the assume-cleared checkpoint cycle absorbs small timing slop). A per-schedule
-  "shift to previous working day if weekend/bank holiday" toggle is proposed for income schedules
-  (salaries commonly pay on the last working day) — flagged as an open question in the plan; no automatic
-  shifting for DDs/SOs, and nothing in the UI implies that changing a date in the app changes a bank
-  instruction. It does not; the app only ever changes its own expectation.
+- **Weekends/bank holidays:** DD/SO schedules use the configured due date as-is (UK banks shift collection
+  dates themselves; the assume-cleared checkpoint cycle absorbs small timing slop). Scheduled income receipts
+  shift from a Saturday or Sunday to the preceding Friday (§11.3), as does the separate household payday
+  boundary (§7.2). No automatic weekend shifting is applied to DDs/SOs, and nothing in the UI implies that
+  changing a date in the app changes a bank instruction. It does not; the app only changes its own expectation.
 
 ### 11.3 Income: expected receipts and one-off money
 
-**Scheduled income.** Sam's salary is a schedule of kind *expected receipt*: fixed amount, monthly, due into
-the Salary account on the configured payday. It enters `projected_low` as a receipt (§7.2) and converts to an
-actual receipt record on the day, exactly mirroring §11.2. The payday that defines the planning cycle is this
-schedule's due date.
+**Scheduled income.** A predictable receipt (for example, Sam's regular salary) is a schedule of kind *expected
+receipt*: amount, cadence, due date and destination pot. It contributes income to projections on its own due
+dates inside the selected window and converts to an actual receipt record on that date, exactly mirroring
+§11.2. It does not define the planning cycle; the separate household payday setting does (§7.2). A household
+may have no receipt schedule and still use payday projections, or have multiple receipts without moving the
+cycle boundary.
 
-**Payday never waits for the weekend.** When an income schedule's configured day falls on a **Saturday or
-Sunday**, the money is expected on the **previous Friday** — that is when it actually lands. The rule applies
-to income schedules only: a direct debit or standing order leaves on the date the household configured. A
-shifted payday can therefore fall in the previous month (a salary configured for the 1st pays on the last
-Friday of the month before), and one calendar month can hold two paydays. Bank holidays are **not** handled —
-the app keeps no holiday calendar and will not guess one, so a Good Friday payday still expects the money on
-that day; the receipt can be corrected by hand.
+**Weekend rule for scheduled income.** When an income schedule's configured due day falls on a **Saturday or
+Sunday**, the receipt is expected on the **previous Friday** — that is when it actually lands. This rule applies
+to income schedules only: a direct debit or standing order remains on the date the household configured. A
+shifted receipt can therefore fall in the previous month (a schedule configured for the 1st may be expected on
+the last Friday of the month before), and one calendar month can hold two shifted receipts. Bank holidays are
+**not** handled — the app keeps no holiday calendar and will not guess one, so a Good Friday receipt is still
+expected on that date; the receipt can be corrected by hand. The household payday setting independently uses
+the same month-end clamp and preceding-Friday weekend shift (§7.2).
 
-**One-off income.** Anything that arrives once is recorded by hand on the Income page (§15.2): the bicycle
-sold for cash, the bank transfer from a buyer, a refund from a third party, a gift, a one-off job. Cash or
-bank transfer is simply which pot it landed in. Each record is an amount, a pot, a date, an optional
-**source** ("Sale of bicycle") and an optional note — and nothing else: income carries no category and no
-target because it is not spending, and it never enters an insight (§12, §16).
+**One-off income.** Anything that arrives once is recorded by hand on the Income page (§15.2): the bicycle sold
+for cash, the bank transfer from a buyer, a refund from a third party, a gift, a one-off job. Cash or bank
+transfer is simply which pot it landed in. Each record is an amount, a pot, a date, an optional **source**
+("Sale of bicycle") and an optional note — and nothing else: income carries no category and no target because
+it is not spending, and it never enters an insight (§12, §16).
 
 Income records raise their pot's estimate like any other credit (§7.1) and appear in All Transactions as
 `BAC` (§15.3). Borrowed money is never income (§10.2). Income *analysis* — income-versus-spending, a category
 breakdown of receipts — remains out of scope.
-
-**Scheduled income will slot**
 
 ## 12. Categories — two-level tree (approved 2026-09-20)
 
@@ -841,11 +853,11 @@ Home = four big actions:
 1. **Add Purchase (redesigned v0.9.0, re-laid out v0.11.0)**. Two cards.
    - **Card 1, record it:** pot first, then the two balance figures (§7.7): the selected bank pot's
      **last reported checkpoint**, with its age and existing local date/time label (cash shows no balance),
-     the household **"free to spend before income lands"** headline, and the selected pot's explicitly
-     **bills-only shortfall** when its own commitments outrun it. The low uses the same salary-day
-     exclusion as the payday projection; a negative low says **"Projected shortfall: -£413.57 before
-     payday. No discretionary spending is available at this time."** The negative presentation omits
-     “No weekly allowance”, the salary-not-counted sentence, and the projected-liquid-funds disclaimer.
+     the household's **lowest before payday** figure, and the selected pot's explicitly **bills-only
+     shortfall** when its own commitments outrun it. The low uses the same configured-payday day-to-day
+     exclusion as the payday projection; a negative low says **"Projected shortfall: -£413.57 before payday.
+     No discretionary spending is available at this time."** The negative presentation omits “No weekly
+     allowance”, the income-due-on-payday sentence, and the projected-liquid-funds disclaimer.
      Positive and zero-low guidance is unchanged. Then supplier (typeahead: recents
      first, filtered as you type, inline rows, no browser popup; tapping a suggestion fills the name, applies
      the remembered category and moves to Amount) → amount → "+ Note" collapsed out of the way → a full-width
@@ -1017,19 +1029,19 @@ Menu pages:
 
 | Page | Contents |
 |---|---|
-| **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; payday projection panel retaining its date, tier, liquid funds, day-to-day total, commitments and receipts, plus the worst-pot bills-only transfer nudge (§7.5), but **no expandable forecast sections or day-by-day table** (v0.37.0 follow-up, decision 187). Horizon owns the dated shops/fills, expected-support list and day-by-day detail; the panel links there, opening on the day before payday. Quick Entry/Till stays visible beside the projection. Due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
+| **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; payday projection panel retaining its date, tier, liquid funds, day-to-day total, commitments and receipts, plus the worst-pot bills-only transfer nudge (§7.5), but **no expandable forecast sections or day-by-day table** (v0.37.0 follow-up, decision 187). Horizon owns the dated shops/fills, expected-support list and day-by-day detail; the panel links there, opening on the day before configured payday. Quick Entry/Till stays visible beside the projection. Due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
 | **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); the four record-kind boxes — **Purchases** (anything not from a schedule), **From schedule**, **Refunds**, **Voided** — are show toggles, all on by default so the full history including voided records is shown, and unticking one hides that kind (a record with two tags is hidden if either is off; decision 205); the result heading shows the number of entries and their **net total** from the rows actually displayed (up to 500 newest matches): whole purchases count once even if a category filter matched one line, refunds subtract, and voided history adds nothing; rows alternate plain/tinted (`bg-canvas`) so neighbouring records are easy to tell apart; the supplier name links to that supplier's expanded card on Suppliers (decision 149's link); inline editing; the line editor puts **Spent for** and **Amount** on its first row and **Category** full-width on the second (plus **Which** when a person/vehicle is chosen), with slightly shorter controls; refund/void/correct with audit trail visible — a refund is its own negative record in the same category and target as the original, linked to it, with the original's pot, supplier and payer unless the form says otherwise; its lines total the refund exactly, so a partial refund is simply a smaller amount (§9.5); split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
 | **All Transactions** | Activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. Nothing is added here, and nothing is edited or voided here **except a purchase and an internal transfer**, which open in place — their correction and void forms in a panel directly beneath their row (decisions 225 and 226, GitHub issues #55 and #57; §15.3). A refund keeps its link to Purchases. |
 | **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance and state); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. Provider agreements and their review dates live on Contracts & Renewals, with an optional link from a schedule. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below and a link card to Contracts & Renewals beside projection. On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row, below the sticky site header (every hash target in the app spends the measured `sf-anchor` offset, so a link works at any window width whatever the nav wraps to — decision 216, re-opened issue #34; and the scroll pass verifies each landing against the real header, correcting once a settled landing a browser left behind the bar — decision 222, issue #43). Cancelled schedules show by default; a Hide cancelled toggle (`?hideCancelled=1`, with a count of those hidden) removes them from the list while keeping the calendar and history (decision 212); the hide-cancelled preference is remembered across page navigations via a device cookie (decision 214). An in-place filter search box with Clear button filters schedules by name or supplier, revealing matching cancelled schedules even when cancelled schedules are hidden (decision 215). **When adding a new schedule (GitHub issue #78)** the supplier field is a searchable picker over the **whole directory in A–Z order** (not just the most recently used names), filtering on any part of a supplier name and keeping **Add a new supplier…** and a standing order's "no supplier / household transfer" choice as pinned rows; the Edit schedule form uses the same picker. The **Pot** field starts on the household's **new-schedule default** when one is ticked (§15.2 Settings, GitHub issue #79) and otherwise on the first pot. |
-| **Horizon** | "How far the money would go" (§7.6): pick a date up to 400 days ahead (opens on the day before the next scheduled income; a date change applies itself, v0.13.0), scope by pot (all selected by default) and toggle day-to-day; the free-to-spend headline, the always-shown lowest point with its date and tier, and detail blocks for the commitments, expected money in (debts' expected support flagged `expected`), the projected day-to-day events (dated shops/fills, v0.6.0) and the day-by-day table, whose heading counts its days and totals **out** (commitments plus projected day-to-day) and **in** (expected money in) from the rows beneath it — the same count-and-total reading as the other two cards (GitHub issue #77). Same engine as the payday projection; laptop-shaped by the household's choice. |
+| **Horizon** | "How far the money would go" (§7.6): pick a date up to 400 days ahead (opens on the day before configured payday, or today + 35 days when none is set; a date change applies itself), scope by pot (all selected by default) and toggle day-to-day; the free-to-spend headline, the always-shown lowest point with its date and tier, and detail blocks for the commitments, expected money in (debts' expected support flagged `expected`), the projected day-to-day events (dated shops/fills, v0.6.0) and the day-by-day table, whose heading counts its days and totals **out** (commitments plus projected day-to-day) and **in** (expected money in) from the rows beneath it — the same count-and-total reading as the other two cards (GitHub issue #77). Same engine as the payday projection; laptop-shaped by the household's choice. |
 | **Long-term forecast** (v1.26.0, decisions 233–235) | The multi-decade projection (§28, `LONGTERM_FORECASTING.md`): the household's own questions first — income in a chosen year and income at a chosen age, each carrying both an age and a year — with "does the money last?" beside them; the selected year line by line; the three-rate comparison (`?rate=cautious\|middle\|optimistic`); the same pension pot as drawdown vs annuity; every calendar year in future and today's money; and one assumptions editor in which every pot value, rate, amount and date is editable. The plan is one `longterm_plans` row per household (validated JSON behind a version counter, audited on create/save/reset), seeded from records as a draft. A £0 "everything else" line and other missing figures are flagged before the figures; a temporary gap is named separately from a run-out; every screen says the figures are arithmetic on the household's assumptions, never a bank forecast or financial advice. |
-| **Income** | Money coming in: the scheduled income (salary) that converts itself, editable in place from the next instance onward; one-off income recorded by hand with an optional source; and one list of everything received — scheduled and one-off together, with inline correction, void and the retained history. Income is desktop-shaped by the household's choice: it is not a till-side task, so nothing here is squeezed into the mobile quick-entry panel. |
+| **Income** | Money coming in: predictable recurring receipts that convert on their own due dates, editable in place from the next instance onward; one-off income recorded by hand with an optional source; and one list of everything received — scheduled and one-off together, with inline correction, void and the retained history. Income is desktop-shaped by the household's choice: it is not a till-side task, so nothing here is squeezed into the mobile quick-entry panel. |
 | **Suppliers** | Supplier list + detail: contact card (phone, email, website, address, label→value reference pairs such as policy numbers, notes; directly below Address, connected recurring schedules link to `/recurring?q=<name>#schedule-<id>` or indicate no scheduled payments relate to the supplier; decision 215), interaction log with "+ Create Interaction", linked purchases (§21), including removing a receipt from a linked purchase (§23.4). Tap-to-call on mobile. |
 | **Contracts & Renewals** | The agreement register groups explicit insurance policies (regardless of provider auto-renew status), service contracts and other reminders. It owns renewal/review and separate fee-free switch dates, independent per-date in-app leads, provider auto-renew status for insurance, notes and optional recurring-schedule links. It also retains credit-card payment reviews and supplier follow-ups. |
 | **Accounts, Pots & Checkpoints** (was **Accounts & Pots**; renamed v0.28.0) | Leads with the **Record a balance checkpoint** card, then **Add a pot** (both v0.28.0, decision 178 — recording is the page's most frequent job), then a card per pot: reported figure, estimate, owner (decision 178), checkpoint timeline, edit form; **cash pot cards show no overdraft or warning threshold** (decision 178); staleness of every pot; **no transfer list** — internal transfers are recorded in Quick Entry → Move and corrected or voided in place on All Transactions (decision 225, which retired the "Transfers between pots" card of decisions 164 and 218), and an old `/pots?transfer={id}` link redirects there with that transfer open; overdraft context (limit, threshold) for the Main account; then the two **boundary money** recording cards (**Swap with someone outside** — `#swaps` — and **Other money in & out**) and one **Recent swaps & other money** history panel beneath them (`#swap-history`): each swap is one nested object with its two legs, its net and its void-both, each leg with inline Edit and Void, and each other-money record a single row with the same controls (issue #65, decision 231, which retired the "Recent swaps" list inside the swap card and, since the ledger moved away in decision 228, the redundant "Owed & owing" signpost the household asked to lose — borrowing is reached from the menu, from the history panel's own link, and from an old `/pots?external={id}` loan link or `#debt-{id}` bookmark, which still forward); archiving for empty pots. |
 | **Borrowing** (issues #60 and #63, decisions 228 and 230) | Everything informal borrowing on one page. A per-person summary strip: each IOU's honest status word (Awaiting first payment / we owe £X / owed to us £X / Nothing owing / overpaid — issue #68), the derived balance beside its movements, an optional expected-support plan (amount, day-of-month, until date — editable forward-looking, v0.7.0), Edit, (for an empty mistaken setup, decision 167) Delete, and **inline recording** right on the person's card (`Record borrowing` / `Record a repayment` or `Record a loan out` / `Record what they repaid` — only Pot, Amount, When and Note, auto-collapsing 2 seconds after save; decision 230, which retired the standalone bottom "Record money in or out" card). One **combined ledger** — history and **only the plan's next** greyed expected row (badged "expected — not recorded yet", with a one-click prefilled "Record this month's £X" that opens that person's inline form at `#debt-{id}` — issue #68: the ledger is a history of what happened, and the whole plan is already on the person's card) **newest first** by default with an oldest-first toggle (issue #68) and **the reader's scroll position kept** when the order or the filter changes; **Date / From-To / Money in / Money out / Balance**, the balance per arrangement signed **− we owe, + owed to us** (never netted across two IOUs with one person); clicking an amount opens the detail **beneath its row** (pot in plain words, note, who entered it, link to the pot around that date, and Correct it / Void it side by side from md up) — one row open at a time, the open record in `?external=`. A **From/To filter** groups the ledger to one person and personalises the column captions. Below the ledger sits **Setup new Borrowing or lending**, collapsed by default with a down-arrow disclosure and dedicated to new people only (auto-collapsing 2 seconds after save). When an arrangement owes nothing, its **repayment** action is greyed out (issue #68) — there is nothing to repay, and the offer would only be refused. Repayments and outflows carry three sanity checks (decision 230): repayments exceeding the current owed balance (`balancePence`) are hard-blocked; cash-pot outflows exceeding the pot's estimated balance are hard-blocked; bank-account outflows taking the estimated balance below zero show an amber warning while still allowing submission. Formal borrowing is not this page (the footer says where it is: a loan agreement is a Contract, a credit card is a credit-card pot). No schema change: loans remain external movements of kind `loan` bound to a debt (§10.2). |
 | **Insights** | §16 panels. |
-| **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; payday/income config; legacy default warning leads for standalone renewal rows/unlinked schedule ends; agreement reminders have per-date leads; **the default pot for each use, ticked on the pot's own card** (GitHub issue #79, superseding the detached Quick entry and All Transactions cards of v0.9.0 and issue #44): **Till** (Quick Entry purchases), **Transactions** (All Transactions' initial target) and **New DD/SO** (a new Recurring schedule's pot), one account per use — ticking a second account moves the default, unticking clears it only on the account that holds it, and every change is audited against its own setting key. An explicit choice, never a guess from a pot's label; with none ticked each form keeps its documented fallback; **"Signs in as"** per person (the verified identity assigned to that household in the app registry; drives the till's Paid by and Fuel vehicle defaults; audited and unique across household membership); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
+| **Settings** | Household labels; pots (each with an optional Owner, decision 178 — cash pots use it for the till's Checkpoint cash card, and cash pots show no overdraft/threshold fields); category-tree editor; projection figures; thresholds; the audited household payday day-of-month (1–31, clearable, no migration; Home/Overview/Horizon/Chart E use it independently of receipt schedules); legacy default warning leads for standalone renewal rows/unlinked schedule ends; agreement reminders have per-date leads; **the default pot for each use, ticked on the pot's own card** (GitHub issue #79, superseding the detached Quick entry and All Transactions cards of v0.9.0 and issue #44): **Till** (Quick Entry purchases), **Transactions** (All Transactions' initial target) and **New DD/SO** (a new Recurring schedule's pot), one account per use — ticking a second account moves the default, unticking clears it only on the account that holds it, and every change is audited against its own setting key. An explicit choice, never a guess from a pot's label; with none ticked each form keeps its documented fallback; **"Signs in as"** per person (the verified identity assigned to that household in the app registry; drives the till's Paid by and Fuel vehicle defaults; audited and unique across household membership); each vehicle's Owner shown. (Suppliers live on their own page.) All private numbers live here at runtime — never in the repo. |
 
 **Calendar (agreed: read-only month view).** A month grid on Recurring Payments showing due DD/SO instances and
 expected receipts — another view of the same schedule data, never a second database. Each populated day keeps
@@ -1454,10 +1466,10 @@ in v1.10.0 (issue #24): **no window runs past today**.
   compact **`i`** summary button until clicked.
 - **Quick windows** (decisions 208, 229): **Since last payday** (the default — the most recent payday up to today),
   **Last full payday cycle** (the payday before that up to the day before the most recent one) and **Month to
-  date** (the 1st up to today). A weekend payday counts as the Friday before (decision 112). The payday dates
-  come from the main salary's recorded instances, and when the salary schedule is too new to have recorded the
-  earlier payday, it is worked out from the salary's cadence, so both payday windows are offered from the first
-  day. With no salary scheduled at all, the chart shows month to date and says why.
+  date** (the 1st up to today). A weekend payday counts as the Friday before; short months clamp to their
+  last day. Both payday windows come from the household's configured payday day-of-month, independent of
+  recorded or scheduled receipts. With no household payday set, the chart shows month to date, says why and
+  links to Settings → Payday.
 - **Custom windows** need both dates, running forwards, and a start no later than today. Both date pickers carry
   `max` = today. An end date after today (typed into the URL, say) is brought back to today with a sentence
   saying so. Typed dates that match a quick window light that window's button.
@@ -1875,7 +1887,8 @@ live household installation.
 ## 20. Agreed decisions vs open questions
 
 The multi-household decisions recorded 2026-10-10 supersede conflicting single-household assumptions earlier
-in this inherited specification: one or two members per household; a pre-provisioned email-to-household roster;
+in this inherited specification: at most two assigned sign-in identities per household (independent of the
+number of attribution `people` records); a pre-provisioned email-to-household roster;
 per-household SQLite and documents; per-household backups; app-level consent-based support access; the new
 appdata root and host port. See [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md). Earlier examples and
 historical release references remain domain examples, not permission to share records across households.

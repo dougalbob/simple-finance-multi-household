@@ -13,6 +13,7 @@ import { createSchedule, editSchedule, listSchedules } from '../src/lib/records/
 import {
   setDefaultPurchasePotId,
   setMonthlyFuelPence,
+  setPaydayDayOfMonth,
   setWeeklyGroceriesPence,
 } from '../src/lib/records/settings';
 import { createSupplier, findSupplierByName } from '../src/lib/records/suppliers';
@@ -58,7 +59,7 @@ const bills = [
 /**
  * Prepare the isolated, fictional E2E installation for the payday card.
  * Suppliers are created before their DD schedules. The day-to-day fuel event
- * is anchored 30 days before salary so its £90 projection lands on payday;
+ * is anchored 30 days before the configured payday so its £90 projection lands on payday;
  * every other projected day-to-day figure is set to zero to make the exclusion
  * visible in the Overview and Horizon as well as in the shared projection.
  */
@@ -109,6 +110,7 @@ export async function seedPaydayScenario(): Promise<{
     // A preview may have changed the configured default pot manually; pin the
     // fixture to Main so the payday assertion starts from the known balance.
     setDefaultPurchasePotId(db, main.id, ACTOR, now);
+    setPaydayDayOfMonth(db, 26, ACTOR, now);
 
     const schedules = listSchedules(db, now);
     const salarySchedule = required(
@@ -119,8 +121,8 @@ export async function seedPaydayScenario(): Promise<{
     ).schedule;
 
     // The income spec leaves the seeded salary on a computed weekend day, and
-    // adds Car allowance. Restore the requested salary day and keep it as the
-    // only receipt schedule anchoring this scenario.
+    // adds Car allowance. Restore Salary's receipt date for this fixture; the
+    // household's independently configured payday above remains the window boundary.
     for (const { schedule } of schedules) {
       if (schedule.cancelledAt !== null) continue;
       if (schedule.id === salarySchedule.id) continue;
@@ -250,17 +252,17 @@ export async function seedPaydayScenario(): Promise<{
 
     let projection = getProjectionView(db, now);
     if (projection === null || projection.result.paydayDate === null) {
-      throw new Error('Payday E2E fixture could not find its salary date');
+      throw new Error('Payday E2E fixture could not find its configured payday');
     }
     let paydayDate = projection.result.paydayDate;
     const fuelAnchorDate = addDaysLocal(paydayDate, -30);
     const lastFuelDate = lastFuelDatesByVehicle(db).get(exampleVehicle.id) ?? null;
     if (lastFuelDate !== fuelAnchorDate) {
       if (lastFuelDate !== null && lastFuelDate > fuelAnchorDate) {
-        throw new Error('Payday E2E fixture has a later fuel anchor than the salary-day example');
+        throw new Error('Payday E2E fixture has a later fuel anchor than the configured payday');
       }
       // `createPurchase` correctly rejects future-dated real entries. On the
-      // rare calendar days when salary-30 is tomorrow, advance only the
+      // rare calendar days when payday-30 is tomorrow, advance only the
       // fictional fixture clock for this anchor; the E2E database is isolated.
       const anchorNow = fuelAnchorDate > today ? new Date(`${fuelAnchorDate}T12:00:00.000Z`) : now;
       createPurchase(db, {
@@ -284,7 +286,7 @@ export async function seedPaydayScenario(): Promise<{
 
     projection = getProjectionView(db, now);
     if (projection === null || projection.result.projectedLowPence === null) {
-      throw new Error('Payday E2E fixture could not calculate its salary-window low');
+      throw new Error('Payday E2E fixture could not calculate its configured-payday low');
     }
     paydayDate = projection.result.paydayDate ?? paydayDate;
     const energy = required(

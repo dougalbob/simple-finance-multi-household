@@ -10,7 +10,11 @@ import { createPurchase } from '../src/lib/records/purchases';
 import { createRenewal } from '../src/lib/records/renewals';
 import { cancelSchedule, createSchedule } from '../src/lib/records/schedules';
 import { getSetupPath, SETUP_STEP_COPY, type SetupStepId } from '../src/lib/records/setup-path';
-import { setMonthlyFuelPence, setWeeklyGroceriesPence } from '../src/lib/records/settings';
+import {
+  setMonthlyFuelPence,
+  setPaydayDayOfMonth,
+  setWeeklyGroceriesPence,
+} from '../src/lib/records/settings';
 import { createVehicle } from '../src/lib/records/vehicles';
 import { makeTempDir } from './helpers';
 
@@ -50,10 +54,10 @@ describe('setup path: derived from the records, never ticked', () => {
   it('a brand-new household has every step open and starts at the people', async () => {
     const { db } = await open();
     const view = getSetupPath(db);
-    assert.equal(view.steps.length, 8);
+    assert.equal(view.steps.length, 9);
     assert.deepEqual(
       view.steps.map((entry) => entry.state),
-      ['todo', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo'],
+      ['todo', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo'],
     );
     assert.deepEqual(view.phaseA, { done: 0, total: 4, complete: false });
     assert.equal(view.nextStepId, 'people');
@@ -93,12 +97,26 @@ describe('setup path: derived from the records, never ticked', () => {
     assert.equal(step(db, 'checkpoints').state, 'done');
   });
 
-  it('completes Phase A at the first income schedule, and a cancelled schedule reopens it', async () => {
+  it('completes Phase A at the configured payday without a receipt schedule', async () => {
     const { db } = await open();
     const now = new Date('2026-10-11T12:00:00Z');
     createPerson(db, { label: 'Alex', actor: ACTOR });
     const main = createPot(db, { label: 'Main account', kind: 'bank', actor: ACTOR });
     addCheckpoint(db, { potId: main.id, amountPence: 41235, actor: ACTOR, now });
+
+    assert.equal(step(db, 'income', now).optional, true);
+    assert.equal(getSetupPath(db, now).nextStepId, 'payday');
+    setPaydayDayOfMonth(db, 28, ACTOR, now);
+    const view = getSetupPath(db, now);
+    assert.deepEqual(view.phaseA, { done: 4, total: 4, complete: true });
+    assert.equal(view.nextStepId, null);
+    assert.equal(step(db, 'payday', now).detail, 'Household payday set to day 28');
+    assert.equal(
+      step(db, 'income', now).detail,
+      'No recurring income scheduled — add it only if predictable',
+    );
+    assert.equal(view.phaseBOutstanding, 3, 'recurring income is optional for the planning cycle');
+
     const salary = createSchedule(db, {
       name: 'Salary',
       kind: 'receipt',
@@ -110,11 +128,7 @@ describe('setup path: derived from the records, never ticked', () => {
       actor: ACTOR,
       now,
     }).schedule;
-    const view = getSetupPath(db, now);
-    assert.deepEqual(view.phaseA, { done: 4, total: 4, complete: true });
-    assert.equal(view.nextStepId, null);
     assert.equal(step(db, 'income', now).detail, 'Salary scheduled');
-
     cancelSchedule(db, {
       id: salary.id,
       expectedVersion: salary.version,
@@ -123,7 +137,11 @@ describe('setup path: derived from the records, never ticked', () => {
       now,
     });
     assert.equal(step(db, 'income', now).state, 'todo');
-    assert.equal(getSetupPath(db, now).nextStepId, 'income');
+    assert.equal(getSetupPath(db, now).phaseA.complete, true);
+
+    setPaydayDayOfMonth(db, null, ACTOR, now);
+    assert.equal(getSetupPath(db, now).phaseA.complete, false);
+    assert.equal(getSetupPath(db, now).nextStepId, 'payday');
   });
 
   it('separates bills from income when counting schedules', async () => {
@@ -214,6 +232,7 @@ describe('setup path: derived from the records, never ticked', () => {
       'people',
       'pots',
       'checkpoints',
+      'payday',
       'income',
       'bills',
       'figures',

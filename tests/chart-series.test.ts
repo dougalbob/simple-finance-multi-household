@@ -379,7 +379,7 @@ describe('chart series: personal spending (C)', () => {
     assert.match(series.headline, /Alex £125\.00, Sam £20\.00, Household £30\.00/);
   });
 
-  it('never splits a household line between the two people', () => {
+  it('never splits a household line across person series', () => {
     const series = personalSpendSeries(lines, people, { today: TODAY, months: 1, parentNames });
     const household = series.totals.find((total) => total.key === 'household');
     assert.equal(household?.amountPence, 3000);

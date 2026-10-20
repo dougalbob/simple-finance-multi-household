@@ -11,7 +11,8 @@ export const metadata = { title: 'Getting started' };
  *
  * The one place that states the dependency chain a brand-new household
  * otherwise has to infer from fourteen empty pages: people → pots →
- * checkpoints → income, then bills, figures and the first purchase. Every
+ * checkpoints → household payday, then optional recurring income, bills,
+ * figures and the first purchase. Every
  * state is derived from the household's records, so nothing here can drift
  * from what is actually stored, and the page stays useful after setup as the
  * place that says what to look at, and when.

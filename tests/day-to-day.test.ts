@@ -8,7 +8,11 @@ import {
   projectDayToDayEvents,
   type ProjectedDayToDayEvent,
 } from '../src/lib/records/day-to-day';
-import { setMonthlyFuelPence, setWeeklyGroceriesPence } from '../src/lib/records/settings';
+import {
+  setMonthlyFuelPence,
+  setPaydayDayOfMonth,
+  setWeeklyGroceriesPence,
+} from '../src/lib/records/settings';
 import { getHorizonProjectionView, getProjectionView } from '../src/lib/records/money-view';
 import { createSchedule } from '../src/lib/records/schedules';
 import { addCheckpoint } from '../src/lib/records/pots';
@@ -299,6 +303,7 @@ describe('day-to-day: anchor-reset projected shops and fills (v0.6.0)', () => {
     const { pots, vehicles } = fixture;
     setWeeklyGroceriesPence(db, p(90), ACTOR);
     setMonthlyFuelPence(db, vehicles.vehicleA.id, p(75), ACTOR);
+    setPaydayDayOfMonth(db, 26, ACTOR, NOW);
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(1000), actor: ACTOR, now: NOW });
     createSchedule(db, {
       name: 'Salary',

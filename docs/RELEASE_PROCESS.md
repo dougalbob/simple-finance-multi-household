@@ -4,6 +4,15 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.31.0 stable release — issues #85 and #86 (2026-10-20)
+
+The household reviewed the Arena preview and requested stable **v1.31.0** for full testing on its
+multi-household Unraid installation. This release contains the audited household payday setting and
+revised Getting Started guidance, with no schema or backup-format change. Existing households must
+set a payday after upgrading. Keep the complete implementation, version files, release notes and
+handoff in one PR; require `gates`, `browser` and `docker` before merge, then tag the exact `main`
+merge commit, publish and verify the GHCR tags/digest as below.
+
 ## Issue #73 release approval (2026-10-17)
 
 The interim hold is complete: the household explicitly approved publishing **v1.27.0** for
@@ -11,7 +20,7 @@ own-data testing in Unraid. The browser acceptance slice completes #73; use the 
 release process below. Sex remains household-chosen, as agreed in #73; survivor transfer
 remains a follow-up. No other feature is added to this release.
 
-**v1.30.0 stable release:** GitHub issue #83, decision 242. On **All Transactions** (`/transactions`), the inline **Correct it** panel for a purchase (`PUR`, `DD`, `SO`) now includes the Purchases page's receipt attachment block (`AttachmentForm`) — attach a receipt, view an existing receipt in the modal viewer, or remove one via two-step confirmation without leaving the transactions list. No schema, migration or backup-format change. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.30.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.30.0.md`.
+**Previous stable release — v1.30.0:** GitHub issue #83, decision 242. On **All Transactions** (`/transactions`), the inline **Correct it** panel for a purchase (`PUR`, `DD`, `SO`) now includes the Purchases page's receipt attachment block (`AttachmentForm`) — attach a receipt, view an existing receipt in the modal viewer, or remove one via two-step confirmation without leaving the transactions list. No schema, migration or backup-format change. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.30.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.30.0.md`.
 
 Previous release — **v1.29.0**: GitHub issue #81, decision 241. A **Sync to Spending mix** toggle on Charts' Spending trends: while on, each month bar (and the table twin's month name) hands the Spending mix that whole calendar month with the preset's categories, landing on a signposted pie; disengaging, or the signpost's "Return to since last payday", is the full reset. No Chart E → Chart D sync. Nothing on Chart D opens Purchases while synced; Chart E's Show takes control of the window only by re-submitting something different; Chart E's controls no longer drop `?preset=`. The trends verdict now compares the latest complete month with the month immediately before it (was three months earlier). No schema, migration or backup-format change. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.29.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.29.0.md`.
 

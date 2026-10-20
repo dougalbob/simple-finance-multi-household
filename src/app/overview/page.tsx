@@ -40,8 +40,8 @@ export default async function OverviewPage() {
 
   const money = getMoneySnapshot(db, now);
   const projection = getProjectionView(db, now);
-  // "Before income lands" per pot (SPEC §7.7, v0.9.0): the same figure the
-  // quick-entry balance shows at the till, so review and entry agree.
+  // Before configured payday per pot (SPEC §7.7, v0.9.0): the same figure
+  // the quick-entry balance shows at the till, so review and entry agree.
   const outlook = getCycleOutlook(db, now, money);
   const dueThisWeek = getUpcomingCommitments(db, addDaysLocal(today, 7), now);
   const keyDates = getKeyDateAlerts(db, now).map((alert) => ({
@@ -86,9 +86,13 @@ export default async function OverviewPage() {
               </h2>
               <p className="mt-1 text-sm text-ink-soft">
                 The liquidity projection appears once a bank or cash pot has a balance checkpoint
-                and an expected income schedule (for example a monthly salary). Record a checkpoint
-                in Quick Entry → Checkpoint or on Accounts, Pots &amp; Checkpoints, then add the
-                income schedule in Recurring.
+                and the household payday is set. Receipt schedules are optional; any scheduled
+                receipt is counted on its own due date. Record a checkpoint in Quick Entry →
+                Checkpoint or on Accounts, Pots &amp; Checkpoints, then set the payday in{' '}
+                <Link href="/settings#payday-setting" className="sf-link">
+                  Settings → Payday
+                </Link>
+                .
               </p>
             </section>
           )}
@@ -207,7 +211,7 @@ function MoneyRow({
               )}
               <PotOutlookLine
                 pot={outlook.pots.find((entry) => entry.potId === view.pot.id)}
-                incomeDate={outlook.incomeDate}
+                paydayDate={outlook.paydayDate}
               />
             </li>
           ))}

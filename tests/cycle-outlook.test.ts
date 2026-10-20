@@ -10,13 +10,17 @@ import {
   getMoneySnapshot,
   getProjectionView,
 } from '../src/lib/records/money-view';
-import { setDefaultPurchasePotId, setWeeklyGroceriesPence } from '../src/lib/records/settings';
+import {
+  setDefaultPurchasePotId,
+  setPaydayDayOfMonth,
+  setWeeklyGroceriesPence,
+} from '../src/lib/records/settings';
 
 const p = (value: number) => Math.round(value * 100);
 const ACTOR = 'alex@example.com';
 
 /**
- * The cycle outlook (SPEC §7.7, v0.9.0): what is left before income lands.
+ * The cycle outlook (SPEC §7.7, v0.9.0): what is left before the configured payday.
  *
  * The motivating case is the household's own: a healthy checkpoint in the
  * spending account, a mortgage leaving three days before payday, and a shop
@@ -25,15 +29,16 @@ const ACTOR = 'alex@example.com';
  * and the per-pot one, and the agreement with the projection engine (§7.2)
  * that the two surfaces cannot drift.
  */
-describe('cycle outlook: what is left before income lands', () => {
+describe('cycle outlook: what is left before the configured payday', () => {
   let fixture: HouseholdFixture;
   const now = new Date('2026-09-20T17:00:00Z'); // Sunday 20 September, 18:00 local
 
   after(() => fixture.close());
 
-  it('counts every bill due before income, and nothing coming in', async () => {
+  it('counts every bill due before the configured payday with no receipt schedule', async () => {
     fixture = await createHouseholdFixture(ACTOR, now);
     const { db, pots } = fixture;
+    setPaydayDayOfMonth(db, 30, ACTOR, now);
 
     // £500 in the spending pot, £300 parked in the salary account.
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(500), actor: ACTOR, now });
@@ -53,27 +58,14 @@ describe('cycle outlook: what is left before income lands', () => {
       actor: ACTOR,
       now,
     });
-    createSchedule(db, {
-      name: 'Salary',
-      kind: 'receipt',
-      frequency: 'monthly',
-      dueDayOfMonth: 30,
-      amountPence: p(2150),
-      potId: pots.salary.id,
-      activeFrom: '2026-09-01',
-      actor: ACTOR,
-      now,
-    });
-
     const outlook = getCycleOutlook(db, now);
 
-    assert.equal(outlook.incomeDate, '2026-09-30');
-    assert.equal(outlook.incomeSource, 'Salary');
+    assert.equal(outlook.paydayDate, '2026-09-30');
     assert.equal(outlook.days, 10);
     assert.equal(outlook.householdAvailablePence, p(800));
     assert.equal(outlook.commitmentsPence, p(600));
     assert.equal(outlook.dayToDayPence, 0);
-    // The household is £200 up before the salary lands — but see the pot below.
+    // The household is £200 up before payday — but see the pot below.
     assert.equal(outlook.freeToSpendPence, p(200));
     assert.equal(outlook.lowDate, '2026-09-27');
 
@@ -96,7 +88,7 @@ describe('cycle outlook: what is left before income lands', () => {
   it('agrees with the projection engine (the low point before payday)', () => {
     const { db } = fixture;
     const projection = getProjectionView(db, now);
-    assert.ok(projection, 'the projection exists once a checkpoint and income schedule do');
+    assert.ok(projection, 'the projection exists once a checkpoint and household payday are set');
     // Same window, same arithmetic: with no other receipts in the window the
     // engine's low is exactly the outlook's "free to spend".
     assert.equal(projection.result.days, getCycleOutlook(db, now).days);
@@ -163,16 +155,28 @@ describe('cycle outlook: what is left before income lands', () => {
     assert.equal(main.shortfallPence, p(220));
   });
 
-  it('says nothing it cannot know: no income, no window, no figure', async () => {
-    const { db, pots } = await createHouseholdFixture(ACTOR, now);
+  it('a receipt schedule without a configured payday does not create a window', async () => {
+    fixture = await createHouseholdFixture(ACTOR, now);
+    const { db, pots } = fixture;
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(500), actor: ACTOR, now });
+    createSchedule(db, {
+      name: 'Salary',
+      kind: 'receipt',
+      frequency: 'monthly',
+      dueDayOfMonth: 30,
+      amountPence: p(2150),
+      potId: pots.salary.id,
+      activeFrom: '2026-09-01',
+      actor: ACTOR,
+      now,
+    });
 
     const outlook = getCycleOutlook(db, now);
-    assert.equal(outlook.incomeDate, null);
+    assert.equal(outlook.paydayDate, null);
     assert.equal(outlook.freeToSpendPence, null);
     assert.equal(outlook.lowDate, null);
     assert.equal(outlook.commitmentsPence, 0);
-    // Without a window there is no "before income lands" figure per pot
+    // Without a window there is no "before payday" figure per pot
     // either — the estimate on the review pages is the honest one.
     assert.equal(outlook.pots.find((pot) => pot.potId === pots.main.id)?.spendablePence, null);
 
@@ -197,6 +201,7 @@ describe('quick entry data: default pot and balance context', () => {
   it('starts on the configured pot, with both figures and no cash balance', async () => {
     fixture = await createHouseholdFixture(ACTOR, now);
     const { db, pots } = fixture;
+    setPaydayDayOfMonth(db, 30, ACTOR, now);
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(500), actor: ACTOR, now });
     addCheckpoint(db, { potId: pots.alexCash.id, amountPence: p(42.1), actor: ACTOR, now });
     createSchedule(db, {
@@ -236,21 +241,21 @@ describe('quick entry data: default pot and balance context', () => {
     assert.equal(cash.estimatePence, p(42.1));
 
     // The household headline rides along for the panel.
-    assert.equal(data.cycle.incomeDate, '2026-09-30');
-    assert.equal(data.cycle.incomeDateLabel, 'Wed 30 Sept');
+    assert.equal(data.cycle.paydayDate, '2026-09-30');
     assert.equal(data.cycle.freeToSpendPence, p(542.1));
     const snapshot = getMoneySnapshot(db, now);
     assert.equal(data.cycle.householdAvailablePence, snapshot.householdAvailablePence);
   });
 });
 
-describe('salary window with parental borrowing (decision 166)', () => {
+describe('configured payday window with parental borrowing (decision 166)', () => {
   it('includes the 12th support and 21st–22nd bills; all surfaces share the low and pace', async () => {
     const { createDebt, editDebt } = await import('../src/lib/records/debts');
     const now = new Date('2026-10-03T12:00:00Z');
     const fixture = await createHouseholdFixture(ACTOR, now);
     const { db, pots } = fixture;
     try {
+      setPaydayDayOfMonth(db, 26, ACTOR, now);
       addCheckpoint(db, { potId: pots.main.id, amountPence: p(2000), actor: ACTOR, now });
       createSchedule(db, {
         name: 'Salary',
@@ -293,7 +298,7 @@ describe('salary window with parental borrowing (decision 166)', () => {
       });
       const view = getProjectionView(db, now)!;
       const till = getCycleOutlook(db, now);
-      assert.equal(till.incomeDate, '2026-10-26');
+      assert.equal(till.paydayDate, '2026-10-26');
       assert.equal(till.commitmentsPence, p(2400));
       assert.equal(till.freeToSpendPence, p(600)); // 2000 + support 1000 − bills 2400
       assert.equal(till.lowDate, '2026-10-22');

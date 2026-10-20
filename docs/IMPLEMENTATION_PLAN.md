@@ -2,17 +2,18 @@
 
 > **ACTIVE PLAN (approved 2026-10-10):** this repository is the independent multi-household edition. The concise
 > binding contract is [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md); the product requirements are in
-> [`docs/SPEC.md`](SPEC.md). Current source version remains inherited v0.39.0. The registry, `/admin` assignment,
-> first-login denial and per-household request contexts/database handles are implemented. Explicit support
-> consent, the verified identity-to-`people` link, tenant backup/restore and migration of live data remain
-> unimplemented. The inherited backup/restore API is disabled until household-scoped recovery is separately
-> approved. Do not treat the legacy v0.x release notes, source tags, project profile or session plan below as
-> current.
+> [`docs/SPEC.md`](SPEC.md). The current stable release is `v1.31.0` (issues #85 and #86). Household-scoped storage, verified identity
+> assignment, support consent, tenant-scoped backup/restore, registry recovery and per-request tenant contexts are
+> implemented. Live import of the owner's pre-existing single-household data remains unimplemented and requires a
+> separately approved isolated-copy rehearsal. Decisions below preserve the delivery history; issues #85 and #86 were released as stable
+> `v1.31.0` under decision 245. Do not treat legacy v0.x release
+> notes, source tags, project profile or the old session plan as current.
 
 ## Current multi-household decisions
 
-- **Product:** one app container serves multiple private households; each household has one or two people. One
-  person is a complete household; a third person is rejected.
+- **Product:** one app container serves multiple private households. Each household may have up to two assigned
+  sign-in identities; `people` attribution records are separate and are not limited to two. A one-person household
+  is complete.
 - **Repository and registry:** only `dougalbob/simple-finance-multi-household` and
   `ghcr.io/dougalbob/simple-finance-multi-household` are permitted. The publish workflow hard-fails for any other
   GitHub repository/image. Never publish to the original `ghcr.io/dougalbob/simple-finance` package.
@@ -3992,3 +3993,32 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       (5/5) green. The household reviewed the Arena preview and approved publishing as stable
       **v1.30.0**; the release files and `docs/RELEASE_NOTES_v1.30.0.md` are in this slice.
 
+243. **Issue #85 — the household payday is a separate, audited planning-cycle setting (2026-10-20).** The
+    household chooses a day from 1–31 in Settings. Store it in the existing audited `settings` table; `null`
+    or an empty/missing setting means unset, so no schema migration is required. For each month, clamp to the
+    last calendar day when needed and move a Saturday/Sunday payday to the preceding Friday. Use that actual
+    occurrence—not receipt schedules—to bound the payday projection, exclude projected day-to-day spending,
+    drive Home/Overview/Till and Horizon defaults, and derive Chart E's payday-cycle windows. Receipts remain
+    independent expected income on their own due dates. A configured payday enables the projection with no
+    receipt schedule; Horizon uses today + 35 days only when no payday is configured. This change is not a
+    release or version bump.
+
+244. **Issue #86 — Getting Started distinguishes sign-ins, records and money events (2026-10-20).** The
+    first-run path names household people separately from the maximum of two assigned sign-in identities;
+    the number of `people` attribution records is not capped. Phase A is people, liquid pots, checkpoints and
+    the household payday. Predictable recurring receipts are optional Phase B; one-off receipts are recorded
+    on Income. The guidance explains that the app has no bank connection or statement import, that transfers
+    between the household's own pots are not spending, and that checkpoints are household-reported balances.
+    It also covers recurring bills, weekly-shop and vehicle-fuel estimates, optional credit cards/renewals and
+    the first till purchase. Quick Entry does not carry a manually chosen “For” value into the next entry; that
+    must remain explicit. No schema, version or release change is part of this work.
+
+
+245. **Stable release v1.31.0 — issues #85 and #86 (2026-10-20).** After reviewing the Arena
+    preview, the household requested a stable `v1.31.0` release so it can test the payday setting
+    and updated onboarding fully on its Unraid installation. This supersedes the implementation-slice
+    notes in decisions 243–244 that no version bump was then part of those changes. No schema,
+    migration or backup-format change. Existing households must set a payday after upgrading. The
+    release PR must pass `gates`, `browser` and `docker` (including the container and applicable
+    upgrade smoke) before merge; tag the exact `main` merge commit and publish only to
+    `ghcr.io/dougalbob/simple-finance-multi-household`.

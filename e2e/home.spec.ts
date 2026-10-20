@@ -535,13 +535,13 @@ test.describe('mobile quick entry', () => {
     await expect(checkpoint).toContainText(/current account balance £[\d,]+\.\d{2}/);
 
     // ...and the figure that stops the mortgage being a surprise three days
-    // before payday: what is left when everything expected to leave has left,
-    // counting expected support but not spendable salary (SPEC §7.7).
+    // before the configured payday: what is left when everything expected to
+    // leave has left, counting support but not receipts due on payday (SPEC §7.7).
     await expect(
       entry.getByText(/Lowest before \d{1,2}(?:st|nd|rd|th) [A-Z][a-z]{2}(?: \d{4})? pay day/),
     ).toBeVisible();
     await expect(
-      entry.getByText(/Salary on .* is not counted as money you can spend/),
+      entry.getByText(/Income due on payday is not counted in this before-payday low/),
     ).toBeVisible();
     await expect(entry.getByText(/never a bank balance/).first()).toBeVisible();
 
@@ -621,7 +621,7 @@ test.describe('mobile quick entry', () => {
     ).toBeGreaterThan(0);
 
     // Everything the card shows in its first paint is there without a tap:
-    // the type tabs, the pot, and what is left before income lands.
+    // the type tabs, the pot, and what is left before the configured payday.
     await expect(entry.getByRole('tab', { name: 'Purchase' })).toBeVisible();
     await expect(entry.getByLabel('Pot').locator('option:checked')).toHaveText('Main account');
     await expect(
@@ -966,9 +966,9 @@ test.describe('mobile quick entry', () => {
   test('the payday card states the facts and opens Horizon the day before payday', async ({
     page,
   }) => {
-    // Isolated fictional household: Main £242.22, salary due on the 26th,
-    // Natwest direct debits on the 21st, and a projected £90 fuel item on
-    // payday to prove that the shared filter applies to every read surface.
+    // Isolated fictional household: Main £242.22, payday configured for the
+    // 26th, Salary due on the same day, Natwest direct debits on the 21st, and
+    // a projected £90 fuel item on payday to prove the shared filter applies.
     const { paydayDate, natwestBillsOnlyShortfallPence } = await seedPaydayScenario();
     const dayBefore = addDaysIso(paydayDate, -1);
 
@@ -986,9 +986,9 @@ test.describe('mobile quick entry', () => {
       'Projected shortfall: -£96.35 before payday. No discretionary spending is available at this time.',
     );
     await expect(till.getByText(/No weekly allowance/)).toHaveCount(0);
-    await expect(till.getByText(/Salary on .* is not counted as money you can spend/)).toHaveCount(
-      0,
-    );
+    await expect(
+      till.getByText(/Income due on payday is not counted in this before-payday low/),
+    ).toHaveCount(0);
     await expect(till.getByText(/Projected liquid funds across bank and cash pots/)).toHaveCount(0);
 
     const card = page.locator('section[aria-labelledby="payday-summary-heading"]');
@@ -1011,7 +1011,7 @@ test.describe('mobile quick entry', () => {
     await expect(till).toContainText('Last checkpoint £312.00');
     await expect(till).toContainText('current account balance £312.00');
     await expect(till).toContainText(
-      `Bills-only shortfall: Natwest would be ${formatPence(natwestBillsOnlyShortfallPence)} short before income lands.`,
+      `Bills-only shortfall: Natwest would be ${formatPence(natwestBillsOnlyShortfallPence)} short before payday.`,
     );
     await expect(till).not.toContainText('Scenario Council Tax');
     await expect(till).not.toContainText(
@@ -1019,7 +1019,7 @@ test.describe('mobile quick entry', () => {
     );
 
     // Overview keeps the payday figures, but its day-to-day total excludes the
-    // £90 event on salary day. Horizon excludes that same event on the same day.
+    // £90 event on configured payday. Horizon excludes that same event there.
     await page.goto('/overview');
     const projection = page.locator('section[aria-labelledby="projection-heading"]');
     await expect(projection).toContainText('Projected day-to-day');

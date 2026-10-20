@@ -243,3 +243,110 @@ export function incomeOccurrencesBetween(
   }
   return result;
 }
+
+/**
+ * The actual household payday occurrence for one configured calendar month:
+ * clamp the chosen day to the month's end, then move a Saturday or Sunday
+ * back to the preceding Friday. Unlike receipt schedules, this date is a
+ * planning boundary and is generated directly from the household setting.
+ */
+export function paydayOccurrenceInMonth(dayOfMonth: number, year: number, month: number): string {
+  return shiftIncomeOffWeekend(clampedDueDate(dayOfMonth, year, month));
+}
+
+/** The next actual household payday strictly after the local `today`, or null for invalid input. */
+export function nextPaydayOccurrence(dayOfMonth: number, today: string): string | null {
+  if (
+    !isValidLocalDate(today) ||
+    !Number.isInteger(dayOfMonth) ||
+    dayOfMonth < 1 ||
+    dayOfMonth > 31
+  ) {
+    return null;
+  }
+  const date = checkedLocalDate(today);
+  const currentMonthIndex = date.year * 12 + date.month - 1;
+  // If this month's actual payday has passed (including a weekend shift that
+  // moved it before today), the next occurrence is in a later month.
+  for (let offset = 0; offset <= 2; offset += 1) {
+    const month = monthFromIndex(currentMonthIndex + offset);
+    const candidate = paydayOccurrenceInMonth(dayOfMonth, month.year, month.month);
+    if (candidate > today) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Actual configured payday occurrences in (afterDate, throughDate], sorted
+ * oldest first. The extra nominal month catches a day 1 or 2 shifted back
+ * onto the final days of the preceding month. Membership is based on the
+ * shifted payday itself, never on a receipt's date or the unshifted nominal
+ * date.
+ */
+export function paydayOccurrencesBetween(
+  dayOfMonth: number,
+  afterDate: string,
+  throughDate: string,
+): string[] {
+  if (
+    !isValidLocalDate(afterDate) ||
+    !isValidLocalDate(throughDate) ||
+    !Number.isInteger(dayOfMonth) ||
+    dayOfMonth < 1 ||
+    dayOfMonth > 31 ||
+    throughDate <= afterDate
+  ) {
+    return [];
+  }
+  const from = checkedLocalDate(afterDate);
+  const through = checkedLocalDate(throughDate);
+  const firstMonthIndex = from.year * 12 + from.month - 1;
+  const lastMonthIndex = through.year * 12 + through.month; // one month past `throughDate`
+  const occurrences = new Set<string>();
+  for (let monthIndex = firstMonthIndex; monthIndex <= lastMonthIndex; monthIndex += 1) {
+    const month = monthFromIndex(monthIndex);
+    const candidate = paydayOccurrenceInMonth(dayOfMonth, month.year, month.month);
+    if (candidate > afterDate && candidate <= throughDate) occurrences.add(candidate);
+  }
+  return [...occurrences].sort();
+}
+
+/**
+ * The most recent actual household payday occurrences on or before today,
+ * newest first. A configured day can shift into the previous calendar month;
+ * stepping by nominal month still visits that occurrence and its neighbours.
+ */
+export function previousPaydayOccurrences(
+  dayOfMonth: number,
+  today: string,
+  count: number,
+): string[] {
+  if (
+    !isValidLocalDate(today) ||
+    !Number.isInteger(dayOfMonth) ||
+    dayOfMonth < 1 ||
+    dayOfMonth > 31 ||
+    !Number.isInteger(count) ||
+    count <= 0
+  ) {
+    return [];
+  }
+  const date = checkedLocalDate(today);
+  const currentMonthIndex = date.year * 12 + date.month - 1;
+  const occurrences = new Set<string>();
+  // One configured occurrence exists per nominal month, so this small margin
+  // covers a current-month payday that has not happened yet and weekend dates
+  // that fell into the preceding calendar month.
+  for (let offset = 0; offset < count + 3; offset += 1) {
+    const month = monthFromIndex(currentMonthIndex - offset);
+    const candidate = paydayOccurrenceInMonth(dayOfMonth, month.year, month.month);
+    if (candidate <= today) occurrences.add(candidate);
+  }
+  return [...occurrences].sort((a, b) => b.localeCompare(a)).slice(0, count);
+}
+
+function monthFromIndex(index: number): { year: number; month: number } {
+  const year = Math.floor(index / 12);
+  const month = (((index % 12) + 12) % 12) + 1;
+  return { year, month };
+}

@@ -9,9 +9,8 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.30.0 is the stable production release and moves :latest (issue #83:
-  purchase receipts can be attached, viewed and removed inside the inline
-  "Correct it" panel on All Transactions).
+  v1.31.0 is the stable production release and moves :latest (issues #85 and
+  #86: an audited household payday setting and revised Getting Started guidance).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -25,7 +24,8 @@
   <Project>https://github.com/dougalbob/simple-finance-multi-household</Project>
   <Overview>
     Private finance app for multiple separate households. Each household has
-    one or two members, its own SQLite database and its own documents directory.
+    up to two assigned sign-in identities, its own SQLite database and its own documents directory.
+    People records for attribution are separate and are not capped at two.
     The administrator pre-assigns Cloudflare-authenticated email identities
     before first sign-in; there is no self-sign-up. Cross-household financial
     access is denied unless that household explicitly grants a visible,
@@ -47,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.30.0 is the stable production release and moves :latest. On All Transactions, the inline "Correct it" panel for a purchase now includes the Purchases page's receipt attachment block — attach a receipt, open an existing receipt in the modal viewer, or remove one in place without leaving the transactions list.
+    v1.31.0 is the stable production release and moves :latest. It adds an audited household payday setting that independently drives payday-cycle planning, plus revised Getting Started guidance for sign-ins, money records, and everyday use.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.
