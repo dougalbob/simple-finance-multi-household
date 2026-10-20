@@ -571,6 +571,67 @@ test.describe('all transactions', () => {
     await expect(page.locator(`#${rowId}`)).toHaveCount(0);
   });
 
+  test('a purchase receipt is attached, viewed and removed in place on All Transactions (issue #83)', async ({
+    page,
+  }) => {
+    await recordPurchase(page, { supplier: 'Corner Foods', amount: '18.75' });
+
+    await page.goto('/transactions');
+    const row = purchaseRows(page).filter({ hasText: '£18.75' }).first();
+    const rowId = await row.getAttribute('id');
+    expect(rowId).toMatch(/^purchase-\d+$/);
+    const liveRow = page.locator(`#${rowId}`);
+    await waitForPurchaseToggle(liveRow);
+    await liveRow.getByRole('button', { name: /Corner Foods — Open this purchase/ }).click();
+    const panel = page.locator(`#${rowId}-panel`);
+    await expect(panel.getByRole('heading', { name: 'Correct it' })).toBeVisible();
+    const attachForm = panel.locator('form:has(input[type="file"])');
+    const attachControl = attachForm.locator('label[for^="attachment-file-"]', {
+      hasText: 'Attach receipt',
+    });
+    await expect(attachControl).toBeVisible();
+    await expect(attachForm.locator('button[type="submit"]')).toBeHidden();
+
+    const tinyPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    await attachForm.locator('input[type="file"]').setInputFiles({
+      name: 'tx-till-slip.png',
+      mimeType: 'image/png',
+      buffer: tinyPng,
+    });
+    const viewLink = panel.getByRole('link', { name: /tx-till-slip\.png/ });
+    await expect(viewLink).toBeVisible({ timeout: 30_000 });
+
+    // Viewing the existing attachment opens the receipt modal without leaving All Transactions.
+    await viewLink.click();
+    const viewer = page.getByRole('dialog', { name: 'Document: tx-till-slip.png' });
+    await expect(viewer).toBeVisible();
+    await expect(viewer.getByRole('img', { name: 'tx-till-slip.png' })).toBeVisible();
+    await viewer.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(viewer).toHaveCount(0);
+
+    // Two-step removal mirrors the Purchases page.
+    await panel.getByRole('button', { name: 'Remove receipt tx-till-slip.png' }).click();
+    await expect(
+      panel.getByRole('button', { name: 'Confirm remove receipt tx-till-slip.png' }),
+    ).toBeVisible();
+    await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(viewLink).toBeVisible();
+
+    await panel.getByRole('button', { name: 'Remove receipt tx-till-slip.png' }).click();
+    await panel.getByRole('button', { name: 'Confirm remove receipt tx-till-slip.png' }).click();
+    await expect(viewLink).toHaveCount(0, { timeout: 30_000 });
+
+    // Leave the ledger as it was: void it from the same panel.
+    await panel.getByLabel(/Why are you voiding this/).fill('Receipt test on All Transactions');
+    await panel.getByRole('button', { name: 'Void purchase' }).click();
+    await expect(panel).toContainText('Voided', { timeout: 30_000 });
+    await panel.getByRole('button', { name: 'Close' }).click();
+    await expect(page.locator(`#${rowId}`)).toHaveCount(0);
+  });
+
   test('expected support appears from its due date and gives way to the recorded borrowing', async ({
     page,
   }) => {

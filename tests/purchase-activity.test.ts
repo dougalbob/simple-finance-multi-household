@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import {
   listPotActivity,
@@ -8,6 +10,7 @@ import {
   type ActivityEntry,
   type ActivityRow,
 } from '../src/lib/records/activity';
+import { deleteAttachment, storeAttachment } from '../src/lib/records/attachments';
 import { activityWindowContaining, parseOpenRowParams } from '../src/lib/records/in-place-activity';
 import {
   createPurchase,
@@ -331,12 +334,89 @@ describe('the purchase row carries the forms’ own facts', () => {
       // The pinned-row projector reads the same record the same way.
       const projected = purchaseActivityRow(fx.db, shop.purchase, fx.pots.main.id, window);
       assert.deepEqual(projected, row, 'live and pinned rows are one projection');
+      assert.deepEqual(row.purchase?.attachments, [], 'starts with no stored receipts');
       assert.equal(
         purchaseActivityOrder(shop.purchase).key,
         row.key,
         'and sort by the same position',
       );
     } finally {
+      fx.close();
+    }
+  });
+
+  it('projects a purchase’s stored receipts for both live and pinned rows, omitting removed ones (issue #83)', async () => {
+    const fx = await createHouseholdFixture('alex@example.com', new Date('2026-10-01T12:00:00Z'));
+    const documentsDir = mkdtempSync(path.join(tmpdir(), 'sf-tx-receipts-'));
+    const pngBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    try {
+      const groceries = fx.categoryId('Groceries', 'Weekly Shop');
+      const shop = createPurchase(fx.db, {
+        supplierName: 'Corner Foods',
+        potId: fx.pots.main.id,
+        totalPence: 2_500,
+        occurredDate: '2026-10-14',
+        lines: [{ amountPence: 2_500, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: new Date('2026-10-14T18:00:00Z'),
+      });
+      const firstReceipt = await storeAttachment({
+        db: fx.db,
+        purchaseId: shop.purchase.id,
+        originalName: 'till-slip-1.png',
+        bytes: pngBytes,
+        actor: 'alex@example.com',
+        documentsDir,
+      });
+      const secondReceipt = await storeAttachment({
+        db: fx.db,
+        purchaseId: shop.purchase.id,
+        originalName: 'till-slip-2.png',
+        bytes: pngBytes,
+        actor: 'alex@example.com',
+        documentsDir,
+      });
+
+      const withBoth = listPotActivity(fx.db, { potId: fx.pots.main.id, ...window });
+      const liveBoth = withBoth.entries.find(
+        (candidate) =>
+          candidate.kind === 'row' &&
+          candidate.row.family === 'purchase' &&
+          candidate.row.recordId === shop.purchase.id,
+      );
+      assert.ok(liveBoth !== undefined && liveBoth.kind === 'row');
+      assert.deepEqual(liveBoth.row.purchase?.attachments, [firstReceipt, secondReceipt]);
+      assert.deepEqual(
+        purchaseActivityRow(fx.db, shop.purchase, fx.pots.main.id, window),
+        liveBoth.row,
+        'pinned-row projector carries the same stored receipts',
+      );
+
+      await deleteAttachment({
+        db: fx.db,
+        id: firstReceipt.id,
+        actor: 'alex@example.com',
+        documentsDir,
+      });
+
+      const afterRemove = listPotActivity(fx.db, { potId: fx.pots.main.id, ...window });
+      const liveAfter = afterRemove.entries.find(
+        (candidate) =>
+          candidate.kind === 'row' &&
+          candidate.row.family === 'purchase' &&
+          candidate.row.recordId === shop.purchase.id,
+      );
+      assert.ok(liveAfter !== undefined && liveAfter.kind === 'row');
+      assert.deepEqual(liveAfter.row.purchase?.attachments, [secondReceipt]);
+      assert.deepEqual(
+        purchaseActivityRow(fx.db, shop.purchase, fx.pots.main.id, window),
+        liveAfter.row,
+      );
+    } finally {
+      rmSync(documentsDir, { recursive: true, force: true });
       fx.close();
     }
   });
@@ -577,9 +657,19 @@ describe('the wiring: the page gives a purchase the Purchases page’s own forms
     assert.ok(row.includes('data-purchase-ready'), 'the decision 131 ready signal');
     assert.ok(row.includes('aria-expanded'), 'a disclosure, announced as one');
     assert.ok(row.includes('PurchaseEditForm'), 'the Purchases page’s edit form');
+    assert.ok(
+      row.includes('<AttachmentForm purchaseId={purchaseId} attachments={facts.attachments} />'),
+      'and the Purchases page’s receipt attachment block (issue #83)',
+    );
     assert.ok(row.includes('VoidForm'), 'and its void form');
     assert.ok(row.includes('kind="purchase"'), 'the void form tells the domain it is a purchase');
     assert.doesNotMatch(row, /history\.replaceState\(/, 'never behind the router’s back');
+    const actions = repoFile('src/app/actions.ts');
+    assert.match(
+      actions,
+      /function revalidateAttachmentPages\(\): void \{[\s\S]*?revalidatePath\('\/transactions'\);[\s\S]*?\}/,
+      'attaching or removing a receipt revalidates All Transactions too',
+    );
   });
 
   it('keeps a refund out of the panel in the projection itself', () => {

@@ -3965,3 +3965,30 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       (`length - 2` in `commitmentSeries`), and a lone complete month states itself without a
       comparison. `tests/chart-series.test.ts` pins both shapes; SPEC §16.7 D now names the rule.
       The rest of the sync was accepted as-is ("other than this it looks good").
+
+242. **Issue #83 — purchase receipts in the All Transactions "Correct it" panel (2026-10-20).**
+    The in-place purchase panel on `/transactions` (decision 226) already gave `PUR`, `DD` and
+    `SO` rows the Purchases page's `PurchaseEditForm` and `VoidForm`, but attaching, viewing or
+    removing a receipt still required leaving All Transactions for `/purchases`. Issue #83 asks to
+    mirror the Purchases page's attachment block inside that "Correct it" column:
+    - **Projection carries stored receipts.** `listStoredPurchaseAttachments(db, purchaseIds)` in
+      `src/lib/records/attachments.ts` batches the `stored` receipts for every purchase in the
+      activity window in one query (oldest first, matching `listStoredAttachments`), and
+      `purchaseActivityRow` reads `listStoredAttachments(db, purchase.id)` for a pinned purchase,
+      so `ActivityPurchaseFacts.attachments` is identical whether a purchase row is live or pinned.
+    - **Same `AttachmentForm`, same actions, revalidated in place.** `PurchaseActivityRow` renders
+      `<AttachmentForm purchaseId={purchaseId} attachments={facts.attachments} />` beneath
+      `PurchaseEditForm` in the "Correct it" column — offering the single-control `Attach receipt`
+      picker, the `AttachmentViewer` modal on existing receipt chips, and the two-step `Remove` /
+      `Confirm` / `Cancel` flow. `revalidateAttachmentPages()` in `src/app/actions.ts` now also
+      revalidates `/transactions`, so uploading or removing a receipt refreshes the open row in
+      place while `?purchase={id}#purchase-{id}` keeps the panel open.
+    - **Files.** `src/lib/records/attachments.ts`, `src/lib/records/activity.ts`,
+      `src/components/purchase-activity-row.tsx`, `src/app/actions.ts`,
+      `tests/purchase-activity.test.ts`, `e2e/transactions.spec.ts`, `docs/SPEC.md` (§15.3, §23.4).
+      No schema, migration or backup-format change.
+    - **Evidence.** `npm run test` 1089/1089 across 257 suites, `format:check`, `typecheck`,
+      `next build` and Playwright `e2e/transactions.spec.ts` (12/12) + `e2e/attachments.spec.ts`
+      (5/5) green. The household reviewed the Arena preview and approved publishing as stable
+      **v1.30.0**; the release files and `docs/RELEASE_NOTES_v1.30.0.md` are in this slice.
+

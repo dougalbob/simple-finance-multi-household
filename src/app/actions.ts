@@ -422,9 +422,10 @@ export async function uploadAttachmentAction(
   }
 }
 
-/** Every page that lists documents: purchases (receipts), income (payslips), suppliers. */
+/** Every page that lists documents: purchases (receipts), All Transactions (in-place purchase panel), income (payslips), suppliers. */
 function revalidateAttachmentPages(): void {
   revalidatePath('/purchases');
+  revalidatePath('/transactions');
   revalidatePath('/overview');
   revalidatePath('/suppliers');
   revalidatePath('/income');

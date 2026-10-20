@@ -12,6 +12,11 @@ import {
 } from '../db/schema';
 import { formatPence } from '../money';
 import { endOfLocalDate, isValidLocalDate, toLocalDateString } from '../time';
+import {
+  listStoredAttachments,
+  listStoredPurchaseAttachments,
+  type StoredAttachment,
+} from './attachments';
 import { categoryTree } from './categories';
 import { addDaysLocal } from './dates';
 import { expectedInflowOccurrences, expectedInflowPotId, listDebts } from './debts';
@@ -166,6 +171,8 @@ export interface ActivityPurchaseFacts {
   voidReason: string | null;
   /** The allocation lines the correction form starts from, in their stored order. */
   lines: ActivityPurchaseLine[];
+  /** Stored receipts and invoices attached to this purchase (issue #83). */
+  attachments: StoredAttachment[];
 }
 
 /** One allocation line, as the correction form wants it (no display labels). */
@@ -334,6 +341,10 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
     db,
     purchaseRows.map((row) => row.scheduleInstanceId).filter((id): id is number => id !== null),
   );
+  const attachmentsByPurchase = listStoredPurchaseAttachments(
+    db,
+    purchaseRows.map((row) => row.id),
+  );
 
   for (const purchase of purchaseRows) {
     const lines = linesByPurchase.get(purchase.id) ?? [];
@@ -355,6 +366,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         code: purchaseActivityCode(purchase.refundOfPurchaseId !== null, schedule?.kind),
         scheduleId: schedule?.scheduleId ?? null,
         summary: purchaseLineSummary(lines, categoryNames, names),
+        attachments: attachmentsByPurchase.get(purchase.id) ?? [],
       }),
       movement: {
         key: `purchase-${purchase.id}`,
@@ -1004,6 +1016,7 @@ export function purchaseActivityRow(
     code: purchaseActivityCode(purchase.refundOfPurchaseId !== null, schedule?.kind),
     scheduleId: schedule?.scheduleId ?? null,
     summary: purchaseLineSummary(lines, categoryNames, names),
+    attachments: listStoredAttachments(db, purchase.id),
   });
 }
 
@@ -1054,6 +1067,8 @@ interface PurchaseRowDetail {
   scheduleId: number | null;
   /** The first allocation's label, and how many lines follow it. */
   summary: { label: string; extraLines: number };
+  /** Stored receipts and invoices attached to this purchase (issue #83). */
+  attachments: StoredAttachment[];
 }
 
 /** One purchase row, from facts the caller already has (the projection and the pinned row both use it). */
@@ -1103,6 +1118,7 @@ function purchaseActivityRowFrom(
               targetKind: line.targetKind,
               targetId: line.targetId,
             })),
+            attachments: detail.attachments,
           },
   };
 }

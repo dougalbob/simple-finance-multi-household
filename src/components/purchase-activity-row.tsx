@@ -9,6 +9,7 @@ import {
   useKeepPinnedPanelInView,
   useRowToggleReady,
 } from '@/components/activity-open-row';
+import { AttachmentForm } from '@/components/attachment-form';
 import { PurchaseEditForm, VoidForm, type EntryLineState } from '@/components/record-forms';
 import { formatPence } from '@/lib/money';
 import type { ActivityLink, ActivityRow } from '@/lib/records/activity';
@@ -268,6 +269,7 @@ export function PurchaseActivityRow({
                   people={people}
                   vehicles={vehicles}
                 />
+                <AttachmentForm purchaseId={purchaseId} attachments={facts.attachments} />
               </div>
               <div className="min-w-0 md:border-l md:border-border-hairline md:pl-6">
                 <h4 className="text-sm font-semibold text-ink">Void it</h4>
