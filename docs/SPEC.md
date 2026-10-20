@@ -1344,7 +1344,8 @@ picker in Settings. Not one page, component or chart changed to make that possib
 6. **Fuel economy (v0.10.0, §16.6)** — per vehicle mpg and fuel cost per mile from the litres and odometer
    readings recorded with fuel purchases.
 7. **Charts (v0.14.0, §16.7)** — the same figures drawn, on their own page at `/charts`: the month ahead,
-   the weekly shop, personal spending, the fixed commitments, and (v1.4.0) three months by category.
+   the weekly shop, personal spending, the fixed commitments, (v1.4.0) three months by category, and
+   (decision 246) two months' spending pace compared day by day.
    Insights keeps the tables; the two always agree, because they read the same records.
 
 ### 16.6 Fuel economy — how mpg is worked out (v0.10.0)
@@ -1370,7 +1371,8 @@ picker in Settings. Not one page, component or chart changed to make that possib
 ### 16.7 Charts — the drawings, and the rules they all keep (v0.14.0)
 
 `/charts` answers one question per picture: the month ahead, the weekly shop, personal spending, the fixed
-commitments, where the money went (E), and how the last three months compare (F). Every figure on it is the same arithmetic the tables
+commitments, where the money went (E), how the last three months compare (F), and how spending builds
+through two months (G). Every figure on it is the same arithmetic the tables
 on `/insights` use, over the same records, so the two can never disagree.
 
 **A. Where the balance goes, today to a month ahead.** A step area of the **household total** (every pot,
@@ -1534,6 +1536,55 @@ come from the same read as the Insights table, so the two views cannot drift.
   enhancement documented as decision 201): the drawing and its scroll still work with JavaScript off, and
   the scroll frame keeps the page itself from panning at any width.
 
+**G. Spending pace — how spending builds through two months (issue #89, decision 246).** Two overlapping
+line areas, full width like A: each month's recorded **net spending added up day by day** from its 1st,
+drawn over the other so the pace of one month reads against the other — “by day 15 we had spent more than
+by day 15 last month”. The issue's second half (the same drawing toggled to a household balance) was
+shelved by the household in design discussion; nothing here draws a historic balance.
+
+- **Only qualifying months can be chosen.** A month qualifies when spending recording covers it **from
+  the 1st**. Recording is taken to begin on the **earliest dated spending entry of any kind** — manual or
+  schedule-generated (`firstSpendingEntryDate`), deliberately **not** decision 183's hand-entered-only
+  start: spending is always a mixture of recurring bills and other purchases, so a scheduled entry in a
+  month is evidence enough the household was recording then, and recording is assumed complete from that
+  date on. The first qualifying month is the entry's own month when it falls on the 1st, otherwise the
+  following month; the part-recorded month in which recording began can never be selected, because it
+  would forever look artificially cheap in its opening days. A qualifying month with no spending in
+  scope is still qualifying — its line stays flat at £0. **Until one qualifying month has completed the
+  card draws nothing** and says when it will: “Recording began on 15 August 2026, so August 2026 was only
+  part-recorded and cannot be used for a fair comparison. September 2026 is your first full recorded
+  month; this comparison will be available from 1 October 2026, once September 2026 is complete.”
+- **Two month selectors, submitted together by Show** (the Chart E pattern, plain GET with the rest of
+  the page's state in hidden inputs): **Compare** and **With**, defaulting to the month being lived
+  against the latest completed qualifying month. The current month is drawn through today — labelled
+  “(so far)” — even when nothing has been spent in it yet; it qualifies by being covered from its 1st,
+  incomplete only at its end. Naming the same month twice draws nothing and says so. An ineligible or
+  future month in the URL falls back to the default **with a notice naming both months** (“…recording
+  did not cover it from the 1st, so it cannot be compared fairly — so October 2026 is shown instead”).
+  The whole state is URL state: `?cmpA=YYYY-MM&cmpB=YYYY-MM&cmpPreset=…#pace`.
+- **The category scope borrows the saved presets.** One **Categories** selector applies the same scope
+  to both lines (anything else would not be a comparison): a built-in **All spending** (the default —
+  no filter, so categories created later are counted automatically, which a saved “everything” preset
+  would miss) or any household preset from Settings, under this chart's own `cmpPreset` parameter so
+  Chart D's `preset` is never disturbed. That is also the answer to one huge category flattening the
+  lines: the household fine-tunes a preset. An explicitly empty preset draws nothing (Chart D's honest
+  empty state); a deleted one falls back to All spending with a notice. Create/Edit links to the same
+  Settings section as Chart D.
+- **The drawing.** Each series opens at £0 at the start of the 1st and carries a point at the **end of
+  each day** (net spending from the 1st to that day; refunds net off on the day they land, so a line can
+  dip). The household chose **straight lines joining the daily points** over Chart A's steps —
+  trajectory over day-boundary precision — with **no curve smoothing**, so a line can never rise above a
+  total the household never reached; the caption says the points are end-of-day totals and the table
+  carries the exact figures. Semi-transparent fills overlap; the primary month is a solid line and the
+  comparison a dashed one (colour is never the only signal), each ending in a dot and a short
+  “Oct 26 · £404.06” label. A shorter month's line ends at its own last day and is never stretched. The
+  **verdict compares the two at their last common drawn day** (“By day 20, October 2026 has spent
+  £404.06 — £10.30 less than September 2026 at the same point”), then states a finished total separately
+  when spending moved after that day — a part-month is never set against a finished total as if they
+  were the same kind of figure. The drawing itself is **not a link** (two series share every day); the
+  table twin is the drill-down: one row per day, each month's spend that day (a real link to that day's
+  purchases under the same scope), each month's running total, and the signed difference between them.
+
 **Rules every chart keeps.**
 
 - **Hand-rolled SVG, server-rendered** (`src/components/charts/`), no chart library and no client
@@ -1565,7 +1616,7 @@ come from the same read as the Insights table, so the two views cannot drift.
   chosen by CSS. Neither pans the page sideways at 320px, or at 360px with 130% text.
 
 Later candidates (explicitly **not** v1): supplier top-N, category trends beyond the three months of F,
-cash-vs-card mix, seasonal comparisons.
+cash-vs-card mix.
 
 ## 17. Worked examples (all figures fictional)
 

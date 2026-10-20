@@ -2,6 +2,7 @@ import { formatPence, roundHalfUpDivide } from '../money';
 import { formatShortLocalDate } from '../time';
 import { addDaysLocal, addMonthsClamped, checkedLocalDate } from './dates';
 import {
+  checkedMonthRef,
   firstOfLocalMonth,
   formatMonthLabel,
   isRecordedWeek,
@@ -15,9 +16,10 @@ import {
 import type { ProjectionDay } from './projection';
 
 /**
- * The chart resolvers (docs/SPEC.md §16.7, v0.14.0): the five pure series
- * behind the Charts page — forecast, weekly buckets, monthly buckets,
- * personal spending per person and the tracked fixed commitments.
+ * The chart resolvers (docs/SPEC.md §16.7, v0.14.0): the pure series behind
+ * the Charts page — forecast, weekly buckets, monthly buckets, personal
+ * spending per person, the tracked fixed commitments, and (decision 246)
+ * the two-month cumulative comparison.
  *
  * Pure, framework-free, integer-pence — exactly like `insights.ts`, and for
  * the same reason: the drawing layer must not be able to invent a number.
@@ -777,4 +779,254 @@ function describeCommitments(
   }
   const direction = deltaPence < 0 ? 'down' : 'up';
   return `${headline} — ${direction} ${formatPence(Math.abs(deltaPence))} on ${compared.label}.`;
+}
+
+/* ------------------------------------------------------------------ */
+/* G. Spending pace — cumulative spending, two months compared         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The two-month cumulative comparison (issue #89, decision 246).
+ *
+ * Only **qualifying months** may be compared: a month counts when spending
+ * recording covers it from the 1st. Recording is taken to begin on the
+ * earliest dated spending entry of any kind — manual or schedule-generated
+ * (`firstSpendingEntryDate` in recording.ts, deliberately not the
+ * hand-entered-only rule of decision 183: the household's position is that
+ * spending is always a mixture of recurring bills and other purchases, so
+ * a scheduled entry in a month is evidence enough that the household was
+ * recording then). A month in which recording began part-way through can
+ * never qualify — it would forever look artificially cheap in its opening
+ * days — so the first qualifying month is the entry's own month when the
+ * entry falls on the 1st, and the following month otherwise. A qualifying
+ * month with no spending at all is still qualifying: its line stays at £0.
+ */
+
+export interface QualifyingMonth {
+  month: MonthRef;
+  /** 'YYYY-MM' — the month selector's value. */
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+  /** False for the month containing `today` — it is still being lived. */
+  complete: boolean;
+}
+
+/** 'YYYY-MM' for a calendar month — the selectors' and the URL's spelling. */
+export function monthKey(ref: MonthRef): string {
+  const { year, month } = checkedMonthRef(ref);
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+}
+
+/** The month named by a 'YYYY-MM' key, or null when the key names none. */
+export function parseMonthKey(key: string): MonthRef | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(key);
+  if (match === null) return null;
+  const ref: MonthRef = { year: Number(match[1]), month: Number(match[2]) };
+  try {
+    return checkedMonthRef(ref);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The first month recording covers from the 1st, given the earliest dated
+ * spending entry: the entry's own month when it falls on the 1st, otherwise
+ * the month after it.
+ */
+export function firstQualifyingMonth(firstEntryDate: string): MonthRef {
+  const entry = checkedLocalDate(firstEntryDate);
+  if (entry.day === 1) return { year: entry.year, month: entry.month };
+  return monthOfLocalDate(addMonthsClamped(firstOfLocalMonth(firstEntryDate), 1));
+}
+
+/**
+ * Every qualifying month from the first one up to and including the month
+ * containing `today`, oldest first. Empty while nothing has been recorded.
+ * A completed qualifying month existing is what makes a comparison
+ * possible at all — until then the chart has nothing fair to set against
+ * the month being lived.
+ */
+export function qualifyingMonths(firstEntryDate: string | null, today: string): QualifyingMonth[] {
+  checkedLocalDate(today);
+  if (firstEntryDate === null) return [];
+  const currentFirst = firstOfLocalMonth(today);
+  const months: QualifyingMonth[] = [];
+  let cursor = monthRange(firstQualifyingMonth(firstEntryDate)).from;
+  // A century of months is bound enough; a pathological backdated history
+  // must not be able to loop this forever.
+  for (let guard = 0; cursor <= currentFirst && guard < 1200; guard += 1) {
+    const ref = monthOfLocalDate(cursor);
+    const { from, to } = monthRange(ref);
+    months.push({
+      month: ref,
+      key: monthKey(ref),
+      label: formatMonthLabel(ref),
+      from,
+      to,
+      complete: to < today,
+    });
+    cursor = addMonthsClamped(cursor, 1);
+  }
+  return months;
+}
+
+export interface CumulativeDayPoint {
+  /** Day of month, 1-based. */
+  day: number;
+  date: string;
+  /** Net spending on that day alone (a refund day can be negative). */
+  spentPence: number;
+  /** Net spending from the 1st up to and including that day. */
+  cumulativePence: number;
+}
+
+export interface CumulativeMonthSeries {
+  month: MonthRef;
+  key: string;
+  label: string;
+  from: string;
+  /** The calendar month-end. */
+  to: string;
+  /** The last day drawn: the month-end, or today for the month being lived. */
+  drawnTo: string;
+  /** False for the month containing `today`. */
+  complete: boolean;
+  days: CumulativeDayPoint[];
+  /** The cumulative figure at the last drawn day (0 when nothing is drawn). */
+  totalPence: number;
+}
+
+export interface CumulativeMonthOptions {
+  month: MonthRef;
+  today: string;
+  /** Child category ids to count; null (the default) counts every category. */
+  categoryIds?: readonly number[] | null;
+}
+
+/**
+ * One month's net spending added up day by day. Every day from the 1st to
+ * the last drawn day gets a point — a day with no spending carries the
+ * running total forward flat, which is exactly what the pace question
+ * asks. The month being lived stops at today and never reaches into its
+ * own future; a future month draws nothing.
+ */
+export function cumulativeMonthSeries(
+  lines: readonly SpendingLineInput[],
+  options: CumulativeMonthOptions,
+): CumulativeMonthSeries {
+  checkedLocalDate(options.today);
+  const ref = checkedMonthRef(options.month);
+  const { from, to } = monthRange(ref);
+  const complete = to < options.today;
+  const drawnTo = complete ? to : options.today;
+  const wanted =
+    options.categoryIds === undefined || options.categoryIds === null
+      ? null
+      : new Set(options.categoryIds);
+  const perDay = new Map<string, number>();
+  for (const line of lines) {
+    if (line.occurredDate < from || line.occurredDate > to) continue;
+    if (wanted !== null && !wanted.has(line.categoryId)) continue;
+    perDay.set(line.occurredDate, (perDay.get(line.occurredDate) ?? 0) + line.amountPence);
+  }
+  const days: CumulativeDayPoint[] = [];
+  let cumulative = 0;
+  for (let date = from; date <= drawnTo; date = addDaysLocal(date, 1)) {
+    const spentPence = perDay.get(date) ?? 0;
+    cumulative += spentPence;
+    days.push({ day: days.length + 1, date, spentPence, cumulativePence: cumulative });
+  }
+  return {
+    month: ref,
+    key: monthKey(ref),
+    label: formatMonthLabel(ref),
+    from,
+    to,
+    drawnTo: days.length === 0 ? drawnTo : (days[days.length - 1] as CumulativeDayPoint).date,
+    complete,
+    days,
+    totalPence: cumulative,
+  };
+}
+
+export interface CumulativeComparison {
+  primary: CumulativeMonthSeries;
+  comparison: CumulativeMonthSeries;
+  /** The last day both months have drawn (0 when either drew nothing). */
+  commonDay: number;
+  primaryAtCommonPence: number;
+  comparisonAtCommonPence: number;
+  /** Primary − comparison at the common day. */
+  deltaPence: number;
+  /** One sentence: the chart's aria-label and the verdict above it. */
+  headline: string;
+}
+
+/**
+ * Two cumulative months set against each other. The verdict compares the
+ * two at their **last common drawn day** — October on day 20 against
+ * September on day 20 — never a part-month against a finished total. A
+ * finished total is stated separately when the common day is not already
+ * that month's end.
+ */
+export function cumulativeComparison(
+  primary: CumulativeMonthSeries,
+  comparison: CumulativeMonthSeries,
+): CumulativeComparison {
+  const commonDay = Math.min(primary.days.length, comparison.days.length);
+  const atCommon = (series: CumulativeMonthSeries): number =>
+    commonDay === 0 ? 0 : (series.days[commonDay - 1] as CumulativeDayPoint).cumulativePence;
+  const primaryAtCommonPence = atCommon(primary);
+  const comparisonAtCommonPence = atCommon(comparison);
+  const result: CumulativeComparison = {
+    primary,
+    comparison,
+    commonDay,
+    primaryAtCommonPence,
+    comparisonAtCommonPence,
+    deltaPence: primaryAtCommonPence - comparisonAtCommonPence,
+    headline: '',
+  };
+  result.headline = describeCumulative(result);
+  return result;
+}
+
+function describeCumulative(comparison: CumulativeComparison): string {
+  const { primary, comparison: other, commonDay, deltaPence } = comparison;
+  if (commonDay === 0) return 'There is nothing to compare yet.';
+  const relation =
+    deltaPence === 0
+      ? `exactly the same as ${other.label}`
+      : deltaPence > 0
+        ? `${formatPence(deltaPence)} more than ${other.label}`
+        : `${formatPence(-deltaPence)} less than ${other.label}`;
+  const bothFinished =
+    primary.complete &&
+    other.complete &&
+    commonDay === primary.days.length &&
+    commonDay === other.days.length;
+  if (bothFinished) {
+    return `${primary.label} finished at ${formatPence(primary.totalPence)} — ${relation} (${formatPence(other.totalPence)}).`;
+  }
+  let headline = `By day ${commonDay}, ${primary.label} ${primary.complete ? 'had spent' : 'has spent'} ${formatPence(comparison.primaryAtCommonPence)} — ${relation} at the same point.`;
+  // A finished total is only news when spending moved after the common
+  // day; repeating the same figure twice in one sentence is noise.
+  if (
+    other.complete &&
+    other.days.length > commonDay &&
+    other.totalPence !== comparison.comparisonAtCommonPence
+  ) {
+    headline += ` ${other.label} finished at ${formatPence(other.totalPence)}.`;
+  }
+  if (
+    primary.complete &&
+    primary.days.length > commonDay &&
+    primary.totalPence !== comparison.primaryAtCommonPence
+  ) {
+    headline += ` ${primary.label} finished at ${formatPence(primary.totalPence)}.`;
+  }
+  return headline;
 }

@@ -7,21 +7,38 @@ import { addDaysLocal, addMonthsClamped } from './dates';
 import { categoryTree, findParentCategory } from './categories';
 import {
   commitmentSeries,
+  cumulativeComparison,
+  cumulativeMonthSeries,
+  firstQualifyingMonth,
   forecastSeries,
   groceriesSeries,
+  monthKey,
+  parseMonthKey,
   personalSpendSeries,
+  qualifyingMonths,
   type ChartSpendingLine,
   type CommitmentSeries,
+  type CumulativeComparison,
+  type CumulativeMonthSeries,
   type ForecastSeries,
   type GroceriesSeries,
   type PersonalSeries,
+  type QualifyingMonth,
 } from './chart-series';
-import { firstOfLocalMonth, startOfWeekLocal, GROCERIES_PARENT, type PersonRef } from './insights';
+import {
+  firstOfLocalMonth,
+  formatMonthLabel,
+  monthOfLocalDate,
+  monthRange,
+  startOfWeekLocal,
+  GROCERIES_PARENT,
+  type PersonRef,
+} from './insights';
 import { ensureScheduleState, getHorizonProjectionView, recentPaydayDates } from './money-view';
 import { getMonthComparisonView } from './insights-view';
 import { spendingMix, type MixLine, type SpendingMix } from './spending-mix';
 import { listVehicles } from './vehicles';
-import { firstRecordedPurchaseDate } from './recording';
+import { firstRecordedPurchaseDate, firstSpendingEntryDate } from './recording';
 import { listPeople } from './people';
 import { getCommitmentCategoryIds, getWeeklyGroceriesPence } from './settings';
 
@@ -901,4 +918,184 @@ export function getCategoryMonthsView(
     heavyParentId: heavyParent === null ? null : heavyParent.id,
     excludeHeavy,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* G. Spending pace — cumulative spending, two months compared         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What the cumulative lines count: every category (the built-in default),
+ * or one of the household's saved category presets — the same presets
+ * Chart D reads, under this chart's own selection (`cmpPreset`), so
+ * changing one chart never silently changes the other.
+ */
+export type CumulativeScope =
+  | { kind: 'all'; presetId: 'all'; label: 'All spending'; categoryIds: null }
+  | { kind: 'preset'; presetId: string; label: string; categoryIds: number[] };
+
+export interface CumulativeComparisonView {
+  today: string;
+  /** The earliest dated spending entry of any kind (decision 246). */
+  firstEntryDate: string | null;
+  /** Every qualifying month, oldest first; the selectors' options. */
+  qualifying: QualifyingMonth[];
+  /** True once a completed qualifying month exists to compare against. */
+  available: boolean;
+  /** Why nothing can be drawn yet, in plain words — null when available. */
+  unavailableText: string | null;
+  /** The saved presets the Categories selector offers, after All spending. */
+  presets: SpendingPreset[];
+  scope: CumulativeScope;
+  /** The resolved month selections (after fallbacks); null while unavailable. */
+  primaryKey: string | null;
+  comparisonKey: string | null;
+  /** Both selectors name the same month — there is nothing to compare. */
+  sameMonth: boolean;
+  /** Fallbacks the reader should be told about (an ineligible month, a deleted preset). */
+  notices: string[];
+  /** The drawn comparison; null while unavailable, same-month, or an empty preset. */
+  comparison: CumulativeComparison | null;
+}
+
+export interface CumulativeComparisonOptions {
+  /** 'YYYY-MM' keys from the URL; anything ineligible falls back with a notice. */
+  primary?: string | null;
+  comparison?: string | null;
+  /** 'all', a saved preset id, or absent for the default (all spending). */
+  presetId?: string | null;
+}
+
+/**
+ * Two months' spending added up day by day (issue #89, decision 246).
+ *
+ * Defaults: the current month against the latest completed qualifying
+ * month, counting all spending. Only qualifying months can be selected —
+ * recording covers them from the 1st (`qualifyingMonths`, over
+ * `firstSpendingEntryDate`) — and until one qualifying month has
+ * completed there is nothing fair to draw, so the view explains itself
+ * instead. Each month's lines come from the one query every chart reads,
+ * so a line's final figure is the same net total Charts D/F and Insights
+ * print for that month (under the same category scope).
+ */
+export function getCumulativeComparisonView(
+  db: Db,
+  options: CumulativeComparisonOptions = {},
+  nowArg?: Date,
+): CumulativeComparisonView {
+  const now = nowArg ?? new Date();
+  ensureScheduleState(db, now);
+  const today = toLocalDateString(now);
+  const firstEntryDate = firstSpendingEntryDate(db);
+  const qualifying = qualifyingMonths(firstEntryDate, today);
+  const completedQualifying = qualifying.filter((month) => month.complete);
+  const available = completedQualifying.length > 0;
+  const notices: string[] = [];
+
+  const presetsState = getSpendingPresets(db);
+  const askedPreset = options.presetId ?? null;
+  let scope: CumulativeScope = {
+    kind: 'all',
+    presetId: 'all',
+    label: 'All spending',
+    categoryIds: null,
+  };
+  if (askedPreset !== null && askedPreset !== '' && askedPreset !== 'all') {
+    const preset = presetsState.presets.find((entry) => entry.id === askedPreset);
+    if (preset === undefined) {
+      notices.push('That category preset no longer exists, so this shows all spending.');
+    } else {
+      scope = {
+        kind: 'preset',
+        presetId: preset.id,
+        label: preset.name,
+        categoryIds: preset.categoryIds,
+      };
+    }
+  }
+
+  const base: CumulativeComparisonView = {
+    today,
+    firstEntryDate,
+    qualifying,
+    available,
+    unavailableText: available ? null : cumulativeUnavailableText(firstEntryDate),
+    presets: presetsState.presets,
+    scope,
+    primaryKey: null,
+    comparisonKey: null,
+    sameMonth: false,
+    notices,
+    comparison: null,
+  };
+  if (!available) return base;
+
+  const byKey = new Map(qualifying.map((month) => [month.key, month]));
+  const currentKey = monthKey(monthOfLocalDate(today));
+  const latestComplete = completedQualifying[completedQualifying.length - 1] as QualifyingMonth;
+  // A completed qualifying month exists, so the current month qualifies
+  // too (its 1st falls after that month's); the fallback is belt and braces.
+  const defaultPrimary = byKey.get(currentKey) ?? latestComplete;
+
+  const resolveMonth = (asked: string | null, fallback: QualifyingMonth): QualifyingMonth => {
+    if (asked === null || asked === '') return fallback;
+    const hit = byKey.get(asked);
+    if (hit !== undefined) return hit;
+    notices.push(cumulativeFallbackNotice(asked, fallback, today));
+    return fallback;
+  };
+  const primary = resolveMonth(options.primary ?? null, defaultPrimary);
+  const other = resolveMonth(options.comparison ?? null, latestComplete);
+  base.primaryKey = primary.key;
+  base.comparisonKey = other.key;
+  base.sameMonth = primary.key === other.key;
+  // An empty preset draws nothing — the honest outcome Chart D already
+  // shows — rather than silently widening to all spending.
+  if (base.sameMonth || (scope.categoryIds !== null && scope.categoryIds.length === 0)) {
+    return base;
+  }
+
+  const seriesFor = (month: QualifyingMonth): CumulativeMonthSeries =>
+    cumulativeMonthSeries(chartSpendingLines(db, month.from, month.complete ? month.to : today), {
+      month: month.month,
+      today,
+      categoryIds: scope.categoryIds,
+    });
+  base.comparison = cumulativeComparison(seriesFor(primary), seriesFor(other));
+  return base;
+}
+
+/** Why an asked-for month was replaced, naming both months (decision 246). */
+function cumulativeFallbackNotice(asked: string, fallback: QualifyingMonth, today: string): string {
+  const ref = parseMonthKey(asked);
+  if (ref === null) {
+    return `That month was not recognised, so ${fallback.label} is shown instead.`;
+  }
+  const { from } = monthRange(ref);
+  const reason =
+    from > firstOfLocalMonth(today)
+      ? 'it is in the future'
+      : 'recording did not cover it from the 1st, so it cannot be compared fairly';
+  return `${formatMonthLabel(ref)} cannot be used here — ${reason} — so ${fallback.label} is shown instead.`;
+}
+
+/**
+ * The empty state's explanation: when recording began, which month that
+ * disqualifies, and the date the comparison becomes available (the 1st of
+ * the month after the first full recorded month completes).
+ */
+function cumulativeUnavailableText(firstEntryDate: string | null): string {
+  if (firstEntryDate === null) {
+    return 'Nothing has been recorded yet, so there are no months to compare.';
+  }
+  const entryMonth = monthOfLocalDate(firstEntryDate);
+  const entryDay = Number(firstEntryDate.slice(8, 10));
+  const firstFull = firstQualifyingMonth(firstEntryDate);
+  const firstFullLabel = formatMonthLabel(firstFull);
+  const availableFrom = monthOfLocalDate(addMonthsClamped(monthRange(firstFull).from, 1));
+  const availableText = `this comparison will be available from 1 ${formatMonthLabel(availableFrom)}, once ${firstFullLabel} is complete`;
+  if (entryDay > 1) {
+    return `Recording began on ${entryDay} ${formatMonthLabel(entryMonth)}, so ${formatMonthLabel(entryMonth)} was only part-recorded and cannot be used for a fair comparison. ${firstFullLabel} is your first full recorded month; ${availableText}.`;
+  }
+  return `Recording began on 1 ${formatMonthLabel(entryMonth)}. ${firstFullLabel} is your first full recorded month; ${availableText}.`;
 }

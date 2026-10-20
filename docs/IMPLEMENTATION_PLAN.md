@@ -4022,3 +4022,55 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     release PR must pass `gates`, `browser` and `docker` (including the container and applicable
     upgrade smoke) before merge; tag the exact `main` merge commit and publish only to
     `ghcr.io/dougalbob/simple-finance-multi-household`.
+
+246. **Issue #89 — Chart G, Spending pace: two months' cumulative spending compared day by day
+    (2026-10-20).** Designed with the household in conversation before any code: calendar months
+    (not payday cycles), cumulative spending only, straight lines over steps, and the issue's
+    household-balance toggle **shelved** for separate thought — a historic daily balance would
+    have to be rebuilt from checkpoints and the household parked that question rather than
+    ship a placeholder. What landed is "G · Spending pace" at `#pace`: two overlapping
+    semi-transparent line areas, each month's recorded net spending added up from its 1st, so
+    the pace of one month reads against the other.
+    - **Qualifying months only.** A month can be selected only when recording covers it from the
+      1st. Recording is taken to begin on the **earliest dated spending entry of any kind**
+      (`firstSpendingEntryDate`, manual or schedule-generated) — deliberately not decision 183's
+      hand-entered-only start, which the honesty loop keeps: the household's position is that a
+      reasonable user recording a scheduled entry in a month was recording the rest of their
+      spending too, so completeness is assumed from that date on. The first qualifying month is
+      the entry's month when it falls on the 1st, otherwise the next month; the part-recorded
+      first month can never be selected. Until one qualifying month completes, the card draws
+      nothing and names the date the comparison becomes available.
+    - **Controls and state.** Compare/With month selectors plus a Categories selector, submitted
+      together by Show as a plain GET carrying the page's other state in hidden inputs;
+      defaults are the current month (drawn to today, "(so far)", even while still £0) against
+      the latest completed qualifying month. The scope is a built-in **All spending** or any
+      saved Settings preset, under this chart's own `cmpPreset` so Chart D's `preset` is never
+      disturbed; an empty preset draws nothing, a deleted one falls back to All spending with a
+      notice, and an ineligible or future month in the URL falls back with a notice naming both
+      months. Naming the same month twice draws nothing and says so.
+    - **The drawing.** A new `LineAreaChart`: £0 at the start of the 1st, a point at each day's
+      end carrying the cumulative total, straight joins (the household's explicit choice —
+      trajectory over Chart A's day-boundary steps) with no smoothing, solid vs dashed strokes
+      beside colour, end dots and labels. The verdict compares at the **last common drawn
+      day**, stating a finished total only when spending moved after it. The drawing is not a
+      link (two series share every day); the table twin's daily figures link to that day's
+      purchases under the same scope, alongside running totals and the signed difference.
+    - **Files.** Pure resolvers `qualifyingMonths` / `cumulativeMonthSeries` /
+      `cumulativeComparison` in `src/lib/records/chart-series.ts`; `firstSpendingEntryDate` in
+      `src/lib/records/recording.ts`; `getCumulativeComparisonView` in
+      `src/lib/records/charts-view.ts` (lines from the one `chartSpendingLines` query, so a
+      line's final figure is the net total Charts D/F and Insights print);
+      `src/components/charts/line-area-chart.tsx`; the section in `src/app/charts/page.tsx`;
+      SPEC §16.7 G. No schema, migration or backup-format change. The worked example is not
+      mirrored — it never carried Chart F either.
+    - **Evidence.** `npm test` **1112/1112 across 261 suites** (+22 tests: the pure pace suite
+      in `tests/chart-series.test.ts` and `tests/cumulative-comparison-view.test.ts`, including
+      the schedule-entry-starts-the-clock case reconciled against `listPurchases`),
+      `typecheck`, `format:check` and `next build` green. Browser: the local Playwright
+      `charts` project (SANDBOX entry 8) **13/13**, including the new pace journey (defaults,
+      day-link drill-down, month and preset changes in the URL, `cmpPreset` leaving Chart D's
+      `preset` alone, the ineligible-month notice, the same-month state); `'pace'` joined the
+      shared phone/laptop figure list, so the 320px / 360px@130% no-pan checks cover it. The
+      chart was screenshot-checked at desktop and phone widths against the seeded household
+      before handover. **Awaiting the household's Arena preview acceptance before any release;
+      issue #89 stays open until then.**

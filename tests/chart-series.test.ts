@@ -2,12 +2,18 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   commitmentSeries,
+  cumulativeComparison,
+  cumulativeMonthSeries,
   describeForecast,
+  firstQualifyingMonth,
   forecastSeries,
   groceriesSeries,
+  monthKey,
   monthlyBuckets,
+  parseMonthKey,
   personalSpendSeries,
   purchasesHref,
+  qualifyingMonths,
   weeklyBuckets,
   type ChartSpendingLine,
 } from '../src/lib/records/chart-series';
@@ -647,5 +653,178 @@ describe('chart geometry', () => {
     assert.equal(formatAxisPence(8500), '£85');
     assert.equal(formatAxisPence(-250000), '-£2.5k');
     assert.equal(formatAxisPence(123456), '£1.2k');
+  });
+});
+
+describe('chart series: spending pace (G)', () => {
+  it('names the first qualifying month from the earliest entry', () => {
+    assert.deepEqual(firstQualifyingMonth('2026-08-15'), { year: 2026, month: 9 });
+    assert.deepEqual(firstQualifyingMonth('2026-08-01'), { year: 2026, month: 8 });
+    assert.deepEqual(firstQualifyingMonth('2026-12-31'), { year: 2027, month: 1 });
+  });
+
+  it('lists qualifying months oldest first, the lived month incomplete', () => {
+    const months = qualifyingMonths('2026-08-15', '2026-10-11');
+    assert.deepEqual(
+      months.map((month) => month.key),
+      ['2026-09', '2026-10'],
+    );
+    assert.equal(months[0]?.complete, true);
+    assert.equal(months[0]?.label, 'September 2026');
+    assert.equal(months[1]?.complete, false);
+    // While the first qualifying month is still being lived there is no
+    // completed month to compare against.
+    const early = qualifyingMonths('2026-08-15', '2026-09-20');
+    assert.deepEqual(
+      early.map((month) => month.key),
+      ['2026-09'],
+    );
+    assert.equal(
+      early.some((month) => month.complete),
+      false,
+    );
+    assert.deepEqual(qualifyingMonths(null, '2026-10-11'), []);
+  });
+
+  it('round-trips month keys and refuses the ones that name no month', () => {
+    assert.equal(monthKey({ year: 2026, month: 9 }), '2026-09');
+    assert.deepEqual(parseMonthKey('2026-09'), { year: 2026, month: 9 });
+    assert.equal(parseMonthKey('2026-13'), null);
+    assert.equal(parseMonthKey('2026-9'), null);
+    assert.equal(parseMonthKey('garbage'), null);
+  });
+
+  it('adds spending up day by day, carrying quiet days forward flat', () => {
+    const series = cumulativeMonthSeries(
+      [
+        line({ occurredDate: '2026-09-01', amountPence: 1000, categoryId: 1 }),
+        line({ occurredDate: '2026-09-03', amountPence: 500, categoryId: 2 }),
+        // A refund lands as a negative line and can pull the day backwards.
+        line({ occurredDate: '2026-09-03', amountPence: -200, categoryId: 1 }),
+        line({ occurredDate: '2026-09-30', amountPence: 100, categoryId: 2 }),
+        // Outside the month: ignored.
+        line({ occurredDate: '2026-08-31', amountPence: 9999 }),
+      ],
+      { month: { year: 2026, month: 9 }, today: '2026-10-11' },
+    );
+    assert.equal(series.days.length, 30);
+    assert.equal(series.complete, true);
+    assert.equal(series.drawnTo, '2026-09-30');
+    assert.deepEqual(series.days[0], {
+      day: 1,
+      date: '2026-09-01',
+      spentPence: 1000,
+      cumulativePence: 1000,
+    });
+    assert.equal(series.days[1]?.spentPence, 0);
+    assert.equal(series.days[1]?.cumulativePence, 1000);
+    assert.equal(series.days[2]?.spentPence, 300);
+    assert.equal(series.days[2]?.cumulativePence, 1300);
+    assert.equal(series.totalPence, 1400);
+  });
+
+  it('counts only the chosen categories when a scope is given', () => {
+    const series = cumulativeMonthSeries(
+      [
+        line({ occurredDate: '2026-09-01', amountPence: 1000, categoryId: 1 }),
+        line({ occurredDate: '2026-09-03', amountPence: 500, categoryId: 2 }),
+        line({ occurredDate: '2026-09-03', amountPence: -200, categoryId: 1 }),
+      ],
+      { month: { year: 2026, month: 9 }, today: '2026-10-11', categoryIds: [1] },
+    );
+    assert.equal(series.totalPence, 800);
+  });
+
+  it('stops the month being lived at today, and draws nothing for a future month', () => {
+    const current = cumulativeMonthSeries(
+      [
+        line({ occurredDate: '2026-10-02', amountPence: 500 }),
+        // Dated later this month but not yet reached: never counted early.
+        line({ occurredDate: '2026-10-12', amountPence: 700 }),
+      ],
+      { month: { year: 2026, month: 10 }, today: '2026-10-11' },
+    );
+    assert.equal(current.days.length, 11);
+    assert.equal(current.complete, false);
+    assert.equal(current.drawnTo, '2026-10-11');
+    assert.equal(current.totalPence, 500);
+
+    const future = cumulativeMonthSeries([], {
+      month: { year: 2026, month: 11 },
+      today: '2026-10-11',
+    });
+    assert.equal(future.days.length, 0);
+    assert.equal(future.totalPence, 0);
+    assert.equal(future.complete, false);
+  });
+
+  it('gives February its real length, leap years included', () => {
+    assert.equal(
+      cumulativeMonthSeries([], { month: { year: 2026, month: 2 }, today: '2026-10-11' }).days
+        .length,
+      28,
+    );
+    assert.equal(
+      cumulativeMonthSeries([], { month: { year: 2024, month: 2 }, today: '2026-10-11' }).days
+        .length,
+      29,
+    );
+  });
+
+  it('compares at the last common day, then states the finished total', () => {
+    const october = cumulativeMonthSeries(
+      [line({ occurredDate: '2026-10-01', amountPence: 184200 })],
+      { month: { year: 2026, month: 10 }, today: '2026-10-20' },
+    );
+    const september = cumulativeMonthSeries(
+      [
+        line({ occurredDate: '2026-09-01', amountPence: 162900 }),
+        line({ occurredDate: '2026-09-25', amountPence: 98100 }),
+      ],
+      { month: { year: 2026, month: 9 }, today: '2026-10-20' },
+    );
+    const comparison = cumulativeComparison(october, september);
+    assert.equal(comparison.commonDay, 20);
+    assert.equal(comparison.primaryAtCommonPence, 184200);
+    assert.equal(comparison.comparisonAtCommonPence, 162900);
+    assert.equal(comparison.deltaPence, 21300);
+    assert.equal(
+      comparison.headline,
+      'By day 20, October 2026 has spent £1,842.00 — £213.00 more than September 2026 at the same point. September 2026 finished at £2,610.00.',
+    );
+  });
+
+  it('reads two finished months as finished, and equal pace as equal', () => {
+    const july = cumulativeMonthSeries(
+      [line({ occurredDate: '2026-07-02', amountPence: 100000 })],
+      {
+        month: { year: 2026, month: 7 },
+        today: '2026-10-11',
+      },
+    );
+    const august = cumulativeMonthSeries(
+      [line({ occurredDate: '2026-08-02', amountPence: 90000 })],
+      { month: { year: 2026, month: 8 }, today: '2026-10-11' },
+    );
+    assert.equal(
+      cumulativeComparison(july, august).headline,
+      'July 2026 finished at £1,000.00 — £100.00 more than August 2026 (£900.00).',
+    );
+
+    const current = cumulativeMonthSeries(
+      [line({ occurredDate: '2026-10-01', amountPence: 5000 })],
+      { month: { year: 2026, month: 10 }, today: '2026-10-05' },
+    );
+    const earlier = cumulativeMonthSeries(
+      [
+        line({ occurredDate: '2026-09-01', amountPence: 5000 }),
+        line({ occurredDate: '2026-09-20', amountPence: 3000 }),
+      ],
+      { month: { year: 2026, month: 9 }, today: '2026-10-05' },
+    );
+    const level = cumulativeComparison(current, earlier);
+    assert.equal(level.deltaPence, 0);
+    assert.match(level.headline, /exactly the same as September 2026 at the same point/);
+    assert.match(level.headline, /September 2026 finished at £80\.00\./);
   });
 });
