@@ -2,11 +2,11 @@
 
 > **ACTIVE PLAN (approved 2026-10-10):** this repository is the independent multi-household edition. The concise
 > binding contract is [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md); the product requirements are in
-> [`docs/SPEC.md`](SPEC.md). The current stable release is `v1.32.0` (issue #89). Household-scoped storage, verified identity
+> [`docs/SPEC.md`](SPEC.md). The current stable release is `v1.32.1` (issue #87). Household-scoped storage, verified identity
 > assignment, support consent, tenant-scoped backup/restore, registry recovery and per-request tenant contexts are
 > implemented. Live import of the owner's pre-existing single-household data remains unimplemented and requires a
 > separately approved isolated-copy rehearsal. Decisions below preserve the delivery history; issues #85 and #86 were released as stable
-> `v1.31.0` under decision 245, and issue #89 as stable `v1.32.0` under decision 247. Do not treat legacy v0.x release
+> `v1.31.0` under decision 245, issue #89 as stable `v1.32.0` under decision 247, and issue #87 as stable `v1.32.1` under decision 249. Do not treat legacy v0.x release
 > notes, source tags, project profile or the old session plan as current.
 
 ## Current multi-household decisions
@@ -4111,3 +4111,11 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       with the document count moving 1 → 2; with the change both pass. `npm test`, `typecheck`,
       `format:check` and `next build` run green. Browser via SANDBOX entry 8. No schema,
       migration or backup-format change.
+
+249. **Stable release v1.32.1 — issue #87 (2026-10-20).** The household reviewed the Arena preview
+    of the synced-month in-place navigation, approved it unchanged and requested a stable `v1.32.1`
+    so it can test fully on the multi-household Unraid installation. This supersedes decision 248's
+    awaiting-acceptance note. No schema, migration or backup-format change. The release PR must pass
+    `gates`, `browser` and `docker` (including the container and applicable upgrade smoke) before
+    merge; tag the exact `main` merge commit and publish only to
+    `ghcr.io/dougalbob/simple-finance-multi-household`.

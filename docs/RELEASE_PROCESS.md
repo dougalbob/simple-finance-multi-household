@@ -4,6 +4,15 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.32.1 stable patch — issue #87 (2026-10-20)
+
+The household reviewed the Arena preview of the Chart D → E sync fix, approved it and asked for a
+stable **v1.32.1** so it can test fully on its multi-household Unraid installation. This release
+contains the in-place synced-month navigation only (decision 248), with no schema, migration or
+backup-format change. Keep the implementation, tests, version files, release notes and handoff in
+one PR; require `gates`, `browser` and `docker` before merge, then tag the exact `main` merge commit,
+publish and verify the GHCR tags/digest as below.
+
 ## v1.32.0 stable release — issue #89 (2026-10-20)
 
 The household designed Chart G in conversation, reviewed the Arena preview and requested stable
