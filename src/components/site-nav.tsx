@@ -111,7 +111,7 @@ function XMarkIcon({ className = 'h-5 w-5' }: { className?: string }) {
  *   with an independent slide-out drawer accessible via hamburger button
  *   and edge-swipe gesture (from extreme left edge < 30px to avoid till conflict).
  */
-export function SiteNav() {
+export function SiteNav({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
@@ -274,6 +274,19 @@ export function SiteNav() {
                   {item.label}
                 </Link>
               ))}
+              {showAdmin ? (
+                <Link
+                  href="/admin"
+                  aria-current={isActive('/admin') ? 'page' : undefined}
+                  className={`rounded-md px-2.5 py-1.5 font-medium transition-colors ${
+                    isActive('/admin')
+                      ? 'bg-till text-till-ink'
+                      : 'border border-border-strong bg-accent/10 text-accent hover:bg-accent/20'
+                  }`}
+                >
+                  Admin
+                </Link>
+              ) : null}
             </nav>
             <Bell />
           </div>
@@ -372,6 +385,24 @@ export function SiteNav() {
                     </Link>
                   </li>
                 ))}
+                {/* Admin is env-gated (issue #91): only the
+                    REGISTRY_ADMIN_EMAIL identity ever sees this entry. */}
+                {showAdmin && group.title === 'More' ? (
+                  <li>
+                    <Link
+                      href="/admin"
+                      onClick={() => setIsOpen(false)}
+                      aria-current={isActive('/admin') ? 'page' : undefined}
+                      className={`flex min-h-[44px] items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        isActive('/admin')
+                          ? 'bg-till text-till-ink'
+                          : 'border border-border-strong bg-accent/10 text-accent hover:bg-accent/20'
+                      }`}
+                    >
+                      Admin
+                    </Link>
+                  </li>
+                ) : null}
               </ul>
             </div>
           ))}
