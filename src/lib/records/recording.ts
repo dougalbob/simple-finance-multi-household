@@ -21,3 +21,27 @@ export function firstRecordedPurchaseDate(db: Db): string | null {
     .get();
   return row?.first ?? null;
 }
+
+/**
+ * The local date of the earliest dated spending entry of **any** kind —
+ * hand-entered or schedule-generated (the two-month comparison chart,
+ * decision 246).
+ *
+ * Deliberately different from `firstRecordedPurchaseDate` above: for the
+ * qualifying-month rule the household's position is that spending is
+ * always a mixture of recurring bills and other purchases, so a scheduled
+ * entry dated in a month is evidence enough that the household was
+ * recording its spending then. Recording is taken to be complete from
+ * this date onwards. The honesty loop's stricter hand-entered-only rule
+ * (decision 183) is unchanged.
+ *
+ * Null when nothing has been recorded yet.
+ */
+export function firstSpendingEntryDate(db: Db): string | null {
+  const row = db
+    .select({ first: sql<string | null>`min(${purchases.occurredDate})` })
+    .from(purchases)
+    .where(isNull(purchases.voidedAt))
+    .get();
+  return row?.first ?? null;
+}

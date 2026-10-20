@@ -17,7 +17,7 @@ import { countChromaticPixels, decodePng } from './pixels';
  * Settings, keeping all changes inside the isolated E2E seed.
  */
 
-const CHARTS = ['forecast', 'groceries', 'personal', 'commitments', 'months'] as const;
+const CHARTS = ['forecast', 'groceries', 'personal', 'commitments', 'months', 'pace'] as const;
 
 /** The figure CSS is actually showing at this width. */
 function figure(page: Page, chart: string, variant: 'phone' | 'laptop'): Locator {
@@ -61,6 +61,28 @@ function poundsIn(text: string): number[] {
   return [...text.matchAll(/(-?)£([\d,]+\.\d{2})/g)].map(
     (match) => Number(match[2]?.replace(/,/g, '') ?? '0') * (match[1] === '-' ? -1 : 1),
   );
+}
+
+/** A calendar month relative to the household's current one (Europe/London). */
+function londonMonth(offset: number): { key: string; label: string } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: 'numeric',
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const date = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  return {
+    key: `${y}-${String(m).padStart(2, '0')}`,
+    label: new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'UTC',
+      month: 'long',
+      year: 'numeric',
+    }).format(date),
+  };
 }
 
 test.describe('charts', () => {
@@ -708,6 +730,83 @@ test.describe('charts', () => {
     const after = await barLinks(drawing);
     expect(after.length).toBe(drilldowns.length);
     expect(new URL(after[0]!, 'http://example.test').pathname).toBe('/purchases');
+  });
+
+  test('spending pace compares two qualifying months day by day (issue #89)', async ({ page }) => {
+    test.slow();
+    await page.setViewportSize({ width: 1400, height: 950 });
+    await page.goto('/charts#pace');
+    const pace = page.locator('#pace');
+    await expect(
+      pace.getByRole('heading', { name: 'How spending builds through two months' }),
+    ).toBeVisible();
+
+    const current = londonMonth(0);
+    const previous = londonMonth(-1);
+    const twoBack = londonMonth(-2);
+
+    // Defaults: the month being lived against the latest completed month.
+    const compareSelect = pace.getByLabel('Compare month');
+    const withSelect = pace.getByLabel('With month');
+    await expect(compareSelect).toHaveValue(current.key);
+    await expect(withSelect).toHaveValue(previous.key);
+    // Months from before recording began are not offered at all.
+    await expect(compareSelect.locator('option[value="2020-01"]')).toHaveCount(0);
+
+    const laptop = figure(page, 'pace', 'laptop');
+    await expect(laptop.locator('[data-chart-headline]')).toContainText(
+      new RegExp(`By day \\d+, ${current.label} has spent £`),
+    );
+    await expect(laptop.locator('svg[role="img"]')).toHaveAttribute(
+      'aria-label',
+      new RegExp(`${previous.label}`),
+    );
+
+    // The table twin carries every drawn day; a day's spend opens that
+    // day's purchases.
+    await laptop.getByText(/^Show the numbers/).click();
+    const table = laptop.locator('table[data-chart-table="pace"]');
+    await expect(table).toBeVisible();
+    await expect(table.locator('tbody tr').first().locator('td').first()).toHaveText('1');
+    const firstDayLink = table.locator('tbody tr').first().locator('a[href]').first();
+    await expect(firstDayLink).toHaveAttribute(
+      'href',
+      new RegExp(`/purchases\\?from=${current.key}-01&to=${current.key}-01`),
+    );
+
+    // Choosing another comparison month redraws against it, in the URL.
+    await withSelect.selectOption(twoBack.key);
+    await pace.getByRole('button', { name: 'Show' }).click();
+    await page.waitForURL(new RegExp(`cmpB=${twoBack.key}`));
+    await expect(page.locator('#pace [data-chart-headline]').first()).toContainText(twoBack.label);
+
+    // The category scope is this chart's own: choosing a saved preset
+    // sets cmpPreset and leaves Chart D's `preset` parameter alone.
+    const paceAfter = page.locator('#pace');
+    const categories = paceAfter.getByLabel('Categories to count');
+    const presetOption = categories.locator('option').nth(1);
+    const presetValue = await presetOption.getAttribute('value');
+    const presetLabel = (await presetOption.innerText()).trim();
+    expect(presetValue).not.toBeNull();
+    await categories.selectOption(presetValue ?? '');
+    await paceAfter.getByRole('button', { name: 'Show' }).click();
+    await page.waitForURL(/cmpPreset=/);
+    const url = new URL(page.url());
+    expect(url.searchParams.get('cmpPreset')).toBe(presetValue);
+    expect(url.searchParams.get('preset')).toBeNull();
+    await expect(page.locator('#pace')).toContainText(`${presetLabel}: recorded net spending`);
+
+    // A part-recorded month asked for by URL is refused in plain words,
+    // and naming the same month twice draws nothing.
+    await page.goto('/charts?cmpB=2020-01#pace');
+    await expect(page.locator('#pace')).toContainText(
+      'January 2020 cannot be used here — recording did not cover it from the 1st',
+    );
+    await page.goto(`/charts?cmpA=${previous.key}&cmpB=${previous.key}#pace`);
+    await expect(page.locator('#pace')).toContainText(
+      `Both month selectors are set to ${previous.label}.`,
+    );
+    await noOverflow(page, '1400px: spending pace states');
   });
 
   test('Charts is reachable from the navigation and from the home page', async ({ page }) => {

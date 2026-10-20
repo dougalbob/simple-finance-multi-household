@@ -8,6 +8,7 @@ import {
   ChartLegend,
   ChartScroller,
   GroupedBarChart,
+  LineAreaChart,
   MixScopes,
   abbrevCategory,
   PieChart,
@@ -18,6 +19,7 @@ import {
   type ChartTableRow,
   type GroupedBand,
   type GroupedSeries,
+  type LineAreaSeries,
   type PieSlice,
   type StackedGroup,
 } from '@/components/charts';
@@ -35,11 +37,13 @@ import {
   PIE_SPLIT_PARENTS,
   getSpendingTrendsView,
   getCategoryMonthsView,
+  getCumulativeComparisonView,
   getForecastChartView,
   getGroceriesChartView,
   getPersonalChartView,
   getSpendingMixView,
   type CategoryMonthsView,
+  type CumulativeComparisonView,
   type SpendingTrendsView,
   type ForecastChartView,
   type GroceriesChartView,
@@ -49,6 +53,7 @@ import {
 import { getPageNeeds, type PageNeed } from '@/lib/records/page-needs';
 import {
   purchasesHref,
+  type CumulativeMonthSeries,
   type GroceriesSeries,
   type PersonalSeries,
   type WeekBucket,
@@ -65,7 +70,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Charts (SPEC §16.7, v0.14.0) — the visual layer over the same numbers
- * `/insights` prints. Six charts, one under another on a phone, a
+ * `/insights` prints. Seven charts, one under another on a phone, a
  * two-column grid on a laptop with the forecast across the top.
  *
  * Every drawing on this page is server-rendered SVG and is on the screen in
@@ -95,6 +100,14 @@ interface SearchParams {
   mixvia?: string;
   /** Three months by category (F): exclude the Housing parent. */
   noHousing?: string;
+  /**
+   * Spending pace (G, decision 246): the two compared months as 'YYYY-MM'
+   * keys, and the category scope — 'all' or a saved preset id, under this
+   * chart's own parameter so Chart D's `preset` is never disturbed.
+   */
+  cmpA?: string;
+  cmpB?: string;
+  cmpPreset?: string;
 }
 
 const PHONE_WIDTH = 320;
@@ -138,6 +151,15 @@ export default async function ChartsPage({
   );
   const sliceKey = typeof params.slice === 'string' ? params.slice : null;
   const monthsView = getCategoryMonthsView(db, { excludeHeavy: params.noHousing === '1' }, now);
+  const paceView = getCumulativeComparisonView(
+    db,
+    {
+      primary: params.cmpA ?? null,
+      comparison: params.cmpB ?? null,
+      presetId: params.cmpPreset ?? null,
+    },
+    now,
+  );
   // The D → E sync's signpost (decision 241), computed where both views exist.
   const syncNotice = mixSyncNotice(params, commitments, mixView);
 
@@ -147,10 +169,10 @@ export default async function ChartsPage({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Charts</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">The money, drawn</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          Six questions: where the balance goes next month, where the money went since payday,
+          Seven questions: where the balance goes next month, where the money went since payday,
           whether the shopping is creeping up, whose discretionary spending is moving, whether the
-          fixed bills are coming down, and how the last three months compare. Every chart carries
-          its numbers underneath —{' '}
+          fixed bills are coming down, how the last three months compare, and how quickly spending
+          builds through two months. Every chart carries its numbers underneath —{' '}
           <Link href="/insights" className="sf-link">
             Insights
           </Link>{' '}
@@ -177,6 +199,7 @@ export default async function ChartsPage({
               syncNotice={syncNotice}
             />
             <MonthsSection view={monthsView} params={params} />
+            <PaceSection view={paceView} params={params} />
           </>
         ) : (
           <NeedsFirst
@@ -1521,6 +1544,275 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
       <div className="hidden lg:block">{drawing('laptop', LAPTOP_WIDTH, 300)}</div>
     </ChartCard>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* G. Spending pace — cumulative spending, two months compared         */
+/* ------------------------------------------------------------------ */
+
+const PACE_SELECT_CLASS =
+  'min-w-0 max-w-full rounded border border-border-strong bg-surface px-3 py-2 text-sm text-ink-body';
+
+function PaceSection({ view, params }: { view: CumulativeComparisonView; params: SearchParams }) {
+  return (
+    <ChartCard
+      id="pace"
+      eyebrow="G · Spending pace"
+      title="How spending builds through two months"
+      className="lg:col-span-2"
+    >
+      {view.available ? <PaceControls view={view} params={params} /> : null}
+      {view.notices.map((notice) => (
+        <p
+          key={notice}
+          className="mb-3 rounded-lg border border-dashed border-border-strong bg-canvas p-3 text-xs text-ink-soft"
+        >
+          {notice}
+        </p>
+      ))}
+      <PaceBody view={view} />
+    </ChartCard>
+  );
+}
+
+/**
+ * The two month selectors and the category scope, submitted together by
+ * Show (the Chart E pattern): the reader lines up both months and the
+ * preset, then redraws once. Only qualifying months are offered — the
+ * server resolves anything else typed into the URL with a notice. The
+ * form is a plain GET carrying the rest of the page's state in hidden
+ * inputs (decision 241's rule), and the preset choice is this chart's own
+ * (`cmpPreset`), never Chart D's.
+ */
+function PaceControls({ view, params }: { view: CumulativeComparisonView; params: SearchParams }) {
+  const monthOptions = [...view.qualifying].reverse();
+  const monthSelect = (name: 'cmpA' | 'cmpB', label: string, value: string | null) => (
+    <label className="flex min-w-0 flex-col gap-1 text-xs text-ink-soft">
+      {label}
+      <select
+        name={name}
+        defaultValue={value ?? ''}
+        className={PACE_SELECT_CLASS}
+        aria-label={`${label} month`}
+      >
+        {monthOptions.map((month) => (
+          <option key={month.key} value={month.key}>
+            {month.label}
+            {month.complete ? '' : ' (so far)'}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  return (
+    <form method="get" action="/charts#pace" className="mb-3 flex flex-wrap items-end gap-3">
+      {paramEntries(params)
+        .filter(([key]) => !['cmpA', 'cmpB', 'cmpPreset'].includes(key))
+        .map(([name, value], index) => (
+          <input key={`${name}-${index}`} type="hidden" name={name} value={value} />
+        ))}
+      {monthSelect('cmpA', 'Compare', view.primaryKey)}
+      {monthSelect('cmpB', 'With', view.comparisonKey)}
+      <label className="flex min-w-0 flex-col gap-1 text-xs text-ink-soft">
+        Categories
+        <select
+          name="cmpPreset"
+          defaultValue={view.scope.presetId}
+          className={PACE_SELECT_CLASS}
+          aria-label="Categories to count"
+        >
+          <option value="all">All spending</option>
+          {view.presets.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" className="rounded bg-till px-4 py-2 text-sm font-medium text-till-ink">
+        Show
+      </button>
+      <Link href="/settings#commitment-categories" className="text-xs sf-link-arrow">
+        Create/Edit category presets →
+      </Link>
+    </form>
+  );
+}
+
+function PaceBody({ view }: { view: CumulativeComparisonView }) {
+  if (!view.available) {
+    return <p className="text-sm text-ink-soft">{view.unavailableText}</p>;
+  }
+  if (view.scope.categoryIds !== null && view.scope.categoryIds.length === 0) {
+    return (
+      <p className="text-sm text-ink-soft">
+        The “{view.scope.label}” preset has no categories ticked, so there is nothing to add up.
+        Choose <strong>All spending</strong> or another preset above, or{' '}
+        <Link href="/settings#commitment-categories" className="sf-link">
+          edit the preset in Settings
+        </Link>
+        .
+      </p>
+    );
+  }
+  if (view.sameMonth || view.comparison === null) {
+    const label =
+      view.qualifying.find((month) => month.key === view.primaryKey)?.label ?? 'that month';
+    return (
+      <p className="text-sm text-ink-soft">
+        Both month selectors are set to {label}. Choose a different month in one of them to compare
+        against it.
+      </p>
+    );
+  }
+
+  const comparison = view.comparison;
+  const primary = comparison.primary;
+  const other = comparison.comparison;
+  const primaryColour: string = CHART_COLOURS.series[0];
+  const otherColour: string = CHART_COLOURS.series[1];
+  // The comparison paints first so the primary month's line sits on top.
+  const lineSeries: LineAreaSeries[] = [
+    {
+      key: other.key,
+      colour: otherColour,
+      dashed: true,
+      pointsPence: other.days.map((day) => day.cumulativePence),
+      endLabel: `${monthTick(other.label)} · ${formatPence(other.totalPence)}`,
+    },
+    {
+      key: primary.key,
+      colour: primaryColour,
+      pointsPence: primary.days.map((day) => day.cumulativePence),
+      endLabel: `${monthTick(primary.label)} · ${formatPence(primary.totalPence)}`,
+    },
+  ];
+  const domain = chartDomain(
+    [
+      ...primary.days.map((day) => day.cumulativePence),
+      ...other.days.map((day) => day.cumulativePence),
+    ],
+    { targetTicks: 4 },
+  );
+  const maxDays = Math.max(primary.days.length, other.days.length);
+  const caption = `${view.scope.label}: recorded net spending added up from the 1st of each month — refunds net off on the day they land, so a line can dip. Each point is the total spent by the end of that day, and the straight lines join the daily points to show the pace; the exact figures are in the table underneath. Only months recording covers from the 1st can be chosen — recording is taken to begin on the earliest dated spending entry, manual or scheduled — and the month being lived stops at today.`;
+
+  const dayPoint = (series: CumulativeMonthSeries, day: number) => series.days[day - 1];
+  const spentCell = (series: CumulativeMonthSeries, day: number) => {
+    const point = dayPoint(series, day);
+    if (point === undefined) return '—';
+    return (
+      <a
+        href={purchasesHref({
+          from: point.date,
+          to: point.date,
+          categoryIds: view.scope.categoryIds ?? undefined,
+        })}
+        className="sf-link"
+      >
+        {formatPence(point.spentPence)}
+      </a>
+    );
+  };
+  const columns = [
+    { key: 'day', label: 'Day' },
+    { key: 'a-spent', label: `${monthTick(primary.label)} spent`, align: 'right' as const },
+    { key: 'a-total', label: `${monthTick(primary.label)} so far`, align: 'right' as const },
+    { key: 'b-spent', label: `${monthTick(other.label)} spent`, align: 'right' as const },
+    { key: 'b-total', label: `${monthTick(other.label)} so far`, align: 'right' as const },
+    { key: 'diff', label: 'Difference', align: 'right' as const },
+  ];
+  const rows: ChartTableRow[] = Array.from({ length: maxDays }, (_, index) => {
+    const day = index + 1;
+    const a = dayPoint(primary, day);
+    const b = dayPoint(other, day);
+    return {
+      key: String(day),
+      cells: [
+        String(day),
+        spentCell(primary, day),
+        a === undefined ? '—' : formatPence(a.cumulativePence),
+        spentCell(other, day),
+        b === undefined ? '—' : formatPence(b.cumulativePence),
+        a === undefined || b === undefined
+          ? '—'
+          : signedPence(a.cumulativePence - b.cumulativePence),
+      ],
+    };
+  });
+  const totals = [
+    'Total',
+    formatPence(primary.totalPence),
+    '',
+    formatPence(other.totalPence),
+    '',
+    '',
+  ];
+
+  const legend = (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
+      {[
+        { series: primary, colour: primaryColour, dashed: false },
+        { series: other, colour: otherColour, dashed: true },
+      ].map(({ series, colour, dashed }) => (
+        <li key={series.key} className="flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className="inline-block w-6 border-t-2"
+            style={{ borderColor: colour, borderTopStyle: dashed ? 'dashed' : 'solid' }}
+          />
+          <span>
+            {series.label}
+            {series.complete ? '' : ' (so far)'}{' '}
+            <span className="text-ink-faint">({formatPence(series.totalPence)})</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const figure = (variant: 'phone' | 'laptop', width: number, height: number) => (
+    <ChartFigure
+      chart="pace"
+      variant={variant}
+      headline={comparison.headline}
+      basis="Reported"
+      caption={caption}
+      columns={columns}
+      rows={rows}
+      totals={totals}
+      footer={legend}
+    >
+      <LineAreaChart
+        series={lineSeries}
+        domain={domain}
+        width={width}
+        height={height}
+        ariaLabel={`Cumulative spending by day of month, ${primary.label} compared with ${other.label}. ${comparison.headline}`}
+        xTicks={paceDayTicks(maxDays)}
+      />
+    </ChartFigure>
+  );
+
+  return (
+    <>
+      <div className="lg:hidden">{figure('phone', PHONE_WIDTH, 220)}</div>
+      <div className="hidden lg:block">{figure('laptop', LAPTOP_WIDTH, 300)}</div>
+    </>
+  );
+}
+
+/** Weekly day-of-month ticks, plus the last drawn day when it is not crowded. */
+function paceDayTicks(maxDays: number): Array<{ index: number; label: string }> {
+  const days = [1, 8, 15, 22, 29].filter((day) => day <= maxDays);
+  const last = days[days.length - 1] ?? 0;
+  if (maxDays - last >= 4) days.push(maxDays);
+  return days.map((day) => ({ index: day - 1, label: String(day) }));
+}
+
+/** "+£213.00" / "-£5.00" / "£0.00" — a difference reads better signed. */
+function signedPence(pence: number): string {
+  return pence > 0 ? `+${formatPence(pence)}` : formatPence(pence);
 }
 
 /* ------------------------------------------------------------------ */

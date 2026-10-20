@@ -1,6 +1,8 @@
 # Multi-household edition — active product and safety contract
 
-**v1.31.0 stable release:** GitHub issues #85 and #86 (decisions 243–245). An audited household payday day-of-month defines projection, day-to-day exclusions, Horizon defaults and Chart E payday-cycle windows independently of receipt schedules. Getting Started distinguishes the two assigned sign-in identities from uncapped `people` attribution records and explains the household's actual setup workflow. No schema, migration or backup-format change; existing households must set the new payday after upgrade. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.31.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.31.0.md`.
+**v1.32.0 stable release:** GitHub issue #89 (decisions 246–247). Charts gains G, Spending pace — two fully recorded months' cumulative spending compared day by day, scoped by all spending or saved category presets. No schema, migration or backup-format change. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.32.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.32.0.md`.
+
+Previous release — **v1.31.0:** GitHub issues #85 and #86 (decisions 243–245). An audited household payday day-of-month defines projection, day-to-day exclusions, Horizon defaults and Chart E payday-cycle windows independently of receipt schedules. Getting Started distinguishes the two assigned sign-in identities from uncapped `people` attribution records and explains the household's actual setup workflow. No schema, migration or backup-format change; existing households must set the new payday after upgrade. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.31.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.31.0.md`.
 
 Previous release — **v1.30.0:** GitHub issue #83 (decision 242). Purchase receipts can be viewed, added and removed in the in-place correction panel on All Transactions. No schema, migration or backup-format change. See `docs/RELEASE_NOTES_v1.30.0.md`.
 
@@ -11,7 +13,7 @@ Previous release — **v1.28.0**: GitHub issues #76–#79. The till's category f
 Previous release — **v1.27.0**: issue #73 corrects State Pension uprating before its start date, labels part-years, adds inflation-linked earnings (or an override), indexes tax thresholds at an editable 1.0% default, and adds per-person sex, life expectancy and plan-to ages. Saved forecasts change numbers under these defaults; no schema migration or backup-format change. Back up before updating. Image `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or `:v1.27.0`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.27.0.md`.
 
 
-**Status:** Approved direction recorded 2026-10-10. The current stable release is **`v1.31.0`** (issues #85 and #86).
+**Status:** Approved direction recorded 2026-10-10. The current stable release is **`v1.32.0`** (issue #89).
 The tenant registry, verified identity assignment, per-household storage and request isolation, support consent,
 per-household backup/restore and registry recovery are implemented. Live import of the owner's earlier
 single-household data still requires a separately approved isolated-copy rehearsal. Issues #85 and #86 are

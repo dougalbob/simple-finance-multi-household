@@ -9,8 +9,8 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.31.0 is the stable production release and moves :latest (issues #85 and
-  #86: an audited household payday setting and revised Getting Started guidance).
+  v1.32.0 is the stable production release and moves :latest (issue #89:
+  Chart G, Spending pace — two months' cumulative spending compared day by day).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.31.0 is the stable production release and moves :latest. It adds an audited household payday setting that independently drives payday-cycle planning, plus revised Getting Started guidance for sign-ins, money records, and everyday use.
+    v1.32.0 is the stable production release and moves :latest. It adds Chart G, Spending pace, on the Charts page: two qualifying months' cumulative spending compared day by day, scoped by all spending or the household's saved category presets.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

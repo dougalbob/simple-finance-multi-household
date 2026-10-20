@@ -8,6 +8,6 @@
  */
 export const APP_NAME = 'Simple Finance';
 
-export const APP_VERSION = '1.31.0';
+export const APP_VERSION = '1.32.0';
 
 export const APP_RELEASE_STAGE = 'stable';

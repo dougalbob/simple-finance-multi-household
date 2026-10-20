@@ -1,3 +1,29 @@
+# v1.32.0 — issue #89: Chart G "Spending pace" (2026-10-20)
+
+**Approved stable release:** the household reviewed the Arena preview, approved Chart G unchanged
+(“exactly what I was looking for”) and requested stable **v1.32.0** for full testing on the
+multi-household Unraid installation. Publication follows `docs/RELEASE_PROCESS.md`: one PR,
+required checks, merge to `main`, an annotated tag on that exact merge commit, and successful
+GHCR verification. This is a stable release, not an RC.
+
+**Read decisions 246–247 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC
+§16.7 G first.** The household designed this in conversation (calendar months, cumulative
+spending only, straight lines, preset scope) and shelved the issue's household-balance toggle
+for separate thought — do not resurrect it inside this chart.
+
+**Delivered (decision 246):** qualifying-month rule over the earliest dated spending entry of any kind
+(`firstSpendingEntryDate`, decision 246's deliberate divergence from decision 183), the pure
+resolvers and `getCumulativeComparisonView`, the `LineAreaChart` component, the full-width
+`#pace` section with Compare/With/Categories selectors under `cmpA`/`cmpB`/`cmpPreset`, and the
+verdict at the last common drawn day. The worked example is not mirrored (it never carried
+Chart F either). No schema, migration or backup-format change.
+
+**Validation:** `npm test` **1112/1112 across 261 suites**, `typecheck`, `format:check` and
+`next build` green; the local Playwright `charts` project passes **13/13** including the new
+pace journey; desktop and phone screenshots checked against the seeded household.
+
+---
+
 # v1.31.0 — issues #85 and #86: household payday and Getting Started (2026-10-20)
 
 **Approved stable release:** the household requested **v1.31.0** after reviewing the Arena preview,
