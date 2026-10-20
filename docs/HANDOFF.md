@@ -1,3 +1,30 @@
+# Issue #87 — a synced month redraws Chart E in place (2026-10-20) — unreleased
+
+**Approved? Not yet — this is a fix awaiting the household's preview acceptance, not a release.**
+No version bump, tag or publish is part of it.
+
+**Read decision 248 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC §16.7 D.**
+
+**The defect (issue #87):** with “Sync to Spending mix” on, tapping a month on Chart D caused a
+brief flash of the top of the charts page. The synced month links were plain document anchors, so
+the browser reloaded `/charts`, painted the new document at scroll 0, then the `#mix` fragment
+scroll landed the reader back at the D/E row 20–30 ms later. The update itself was correct.
+
+**The fix:** a synced month — a bar, and the table twin's month name — is now a soft `next/link`
+with `scroll: false` and `prefetch: false`. The client router rewrites the page's own query
+without a document load, so the viewport stays exactly where the reader was standing while Chart E
+redraws. The hrefs are unchanged (still shareable, still signposted, still the full reset with
+JavaScript off — the links are ordinary anchors underneath). Non-synced bars still open
+`/purchases` as document links.
+
+**Validation:** `npm test`, `typecheck`, `format:check` and `next build` green. The local Playwright
+`charts` project (SANDBOX entry 8) passes the issue #81 journey and a new issue #87 journey at
+390px and 1400px: both assert no extra document load and no scroll movement when a synced month is
+tapped; the new test fails against the old anchors (document count 1 → 2). No schema, migration or
+backup-format change.
+
+---
+
 # v1.32.0 — issue #89: Chart G "Spending pace" (2026-10-20)
 
 **Approved stable release:** the household reviewed the Arena preview, approved Chart G unchanged

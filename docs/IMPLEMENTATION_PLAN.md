@@ -4083,3 +4083,31 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     release PR must pass `gates`, `browser` and `docker` (including the container and applicable
     upgrade smoke) before merge; tag the exact `main` merge commit and publish only to
     `ghcr.io/dougalbob/simple-finance-multi-household`.
+
+248. **Issue #87 — a synced month redraws Chart E in place, with no scroll flash (2026-10-20).**
+    Tapping a month bar on Chart D while "Sync to Spending mix" was on rewrote this page's URL
+    through a plain document anchor, so the browser reloaded `/charts`: the fresh document painted
+    at the top of the page for a frame before its `#mix` fragment scroll landed the reader back at
+    the D/E row. The URLs, the signpost and the reset were right; only the navigation mechanism was
+    wrong.
+    - **Soft links for same-page months.** A synced month link — every bar and the table twin's
+      month name, so the keyboard path matches the drawing — is now `next/link` with
+      `scroll: false` and `prefetch: false`. The client router rewrites the query without tearing
+      down the document, so the viewport never moves while Chart E redraws. `BarDatum.soft` marks
+      the bars; the table cell picks a `Link` only while the sync is on. `prefetch: false` keeps a
+      hover from re-running every chart query for a month the reader may not tap.
+    - **No change to the contract.** The hrefs are byte-for-byte the same as before (same
+      `mixsync`, `mixvia`, `preset`, window, `catset`/`cat`, `#mix`), so a synced view is still
+      shareable, still lands on Chart E on reload, and still degrades to the old full load with
+      JavaScript off — every soft link is an ordinary `<a>` underneath. Non-synced bars still open
+      `/purchases` through ordinary anchors; the drill-down behaviour is untouched.
+    - **Files.** `src/components/charts/bar-chart.tsx` (`soft` on `BarDatum`, `Link` around the
+      bar's `<rect>`), `src/app/charts/page.tsx` (the soft flag and the table twin's `Link`),
+      `src/lib/charts-sync.ts` (the sync contract comment), SPEC §16.7 D.
+    - **Evidence.** The `charts` Playwright journey gained an issue #87 test at 390px and 1400px:
+      it counts documents through `sessionStorage` (a soft navigation keeps one; a reload starts
+      another) and measures `window.scrollY` before and after tapping a drawn bar. The issue #81
+      journey's table-twin tap now asserts the same. Against the pre-fix anchors the new test fails
+      with the document count moving 1 → 2; with the change both pass. `npm test`, `typecheck`,
+      `format:check` and `next build` run green. Browser via SANDBOX entry 8. No schema,
+      migration or backup-format change.
