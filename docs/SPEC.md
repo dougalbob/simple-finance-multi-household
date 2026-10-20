@@ -1454,6 +1454,14 @@ chip: a toggle that changed nothing visible would be a small lie. There is delib
 Chart E → Chart D sync** and no date fields on Chart D — payday cycles are weeks, and monthly trend
 bars over them are thin; the one-way bridge is the month bar itself.
 
+**A synced month redraws Chart E in place (issue #87).** The month links are soft navigations:
+the client router rewrites this page's query with scrolling disabled, so the document is never
+torn down and the reader's viewport stays exactly where it was while Chart E updates beneath.
+Before the fix the links were plain document anchors, so a tap on a bar reloaded `/charts`, painted
+the top of the page for a frame, then the browser's `#mix` fragment scroll landed the reader back
+at the D/E row. The URL is unchanged (shareable, and shown on reload), and with JavaScript off the
+links remain ordinary anchors: a tap still performs the old full load and lands on Chart E.
+
 **E. Where the money went (decisions 195, 207, 208, 229).** A pie of **net spending by parent category**
 over a window the household chooses, so the question "what share of our money went on each thing" has a picture.
 It counts **money already spent, never a projection**, which is why it was renamed from "Where the money goes"

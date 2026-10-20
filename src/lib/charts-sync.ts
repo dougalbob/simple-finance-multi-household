@@ -19,6 +19,14 @@
  *   E's own Show keeps it only when it re-submits exactly what the sync
  *   set; anything else and the household took control of the window.
  *
+ * Every link a synced bar produces is a **soft** navigation (issue #87):
+ * Next's client router rewrites this page's query with `scroll: false`, so
+ * Chart E redraws in place and the reader's viewport never moves. A plain
+ * document load used to paint the top of the page for a frame before the
+ * browser's `#mix` fragment scroll landed them back at the D/E row. The
+ * URLs are unchanged, and with JavaScript off each link is still an ordinary
+ * anchor that performs that full load — the same behaviour as before.
+ *
  * The one builder here (`chartsQuery`) is the page's and the scopes panel's
  * shared way to rewrite `/charts` query parameters without dropping the
  * other charts' state (`preset`, `who`, `noHousing`, the sync params) —

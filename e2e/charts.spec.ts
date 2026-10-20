@@ -634,6 +634,12 @@ test.describe('charts', () => {
   test('chart D syncs a month into the spending mix, and back again (issue #81)', async ({
     page,
   }) => {
+    // A full document load runs this again; a soft navigation does not (issue
+    // #87 — the table twin must update Chart E in place, like the bars).
+    await page.addInitScript(() => {
+      const key = 'sf-e2e-document-loads';
+      sessionStorage.setItem(key, String(Number(sessionStorage.getItem(key) ?? '0') + 1));
+    });
     await page.setViewportSize({ width: 1400, height: 950 });
     await page.goto('/charts#commitments');
     const card = page.locator('#commitments');
@@ -687,14 +693,23 @@ test.describe('charts', () => {
     if (!(await drawing.locator('table').first().isVisible())) {
       await drawing.getByText(/^Show the numbers/).click();
     }
-    await drawing
-      .locator('table a[href]')
-      .nth(synced.length - 2)
-      .click();
+    const tableLink = drawing.locator('table a[href]').nth(synced.length - 2);
+    await tableLink.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(100);
+    const loadsBefore = await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads'));
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await tableLink.click();
     await expect(page).toHaveURL(/#mix$/);
     const mix = page.locator('#mix');
     await expect(mix.getByText(/set from Spending trends/)).toBeVisible();
     await expect(mix.getByText(/^Showing \w+ \d{4} with /)).toBeVisible();
+    // Issue #87: the keyboard path keeps the document and the reader's place.
+    await page.waitForTimeout(450);
+    expect(
+      await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads')),
+      'a full document load',
+    ).toBe(loadsBefore);
+    expect(Math.abs((await page.evaluate(() => window.scrollY)) - scrollBefore)).toBeLessThan(8);
     // E's pickers show the month the bar stood for.
     await mix.getByRole('button', { name: 'Change chart scopes' }).click();
     await expect(mix.getByLabel('From', { exact: true })).toHaveValue(
@@ -730,6 +745,63 @@ test.describe('charts', () => {
     const after = await barLinks(drawing);
     expect(after.length).toBe(drilldowns.length);
     expect(new URL(after[0]!, 'http://example.test').pathname).toBe('/purchases');
+  });
+
+  test('a synced month updates the mix in place, without a page load or a scroll jump (issue #87)', async ({
+    page,
+  }) => {
+    test.slow();
+    // A soft navigation keeps `window`; a full document load runs this script
+    // again. Session storage survives either, so the count only rises when the
+    // page really reloaded.
+    await page.addInitScript(() => {
+      const key = 'sf-e2e-document-loads';
+      sessionStorage.setItem(key, String(Number(sessionStorage.getItem(key) ?? '0') + 1));
+    });
+
+    for (const width of [390, 1400]) {
+      await page.setViewportSize({ width, height: 950 });
+      await page.goto('/charts?mixsync=1#commitments');
+      const drawing = figure(page, 'commitments', width < 1024 ? 'phone' : 'laptop');
+      await expect(drawing).toBeVisible();
+      // The bar links are inert anchors until the router has hydrated; a
+      // click before then falls back to a full document load (decision #39).
+      await page.waitForFunction(() =>
+        Boolean(document.documentElement.style.getPropertyValue('--sf-anchor-offset')),
+      );
+      // Let the cold-load #commitments landing settle before measuring.
+      await page.waitForTimeout(500);
+
+      // The SVG <a> itself has no client rect of its own in Chromium, and a
+      // month with no spending is a zero-height bar — pick the first drawn
+      // <rect>, which is the pointer target that carries the click up to it.
+      const rects = drawing.locator('svg a[href] rect');
+      const drawn = await rects.evaluateAll((nodes) =>
+        nodes.findIndex((node) => node.getBoundingClientRect().height > 4),
+      );
+      expect(drawn, 'a drawn month bar').toBeGreaterThanOrEqual(0);
+      const bar = rects.nth(drawn);
+      await bar.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(100);
+      const before = await page.evaluate(() => window.scrollY);
+      const loadsBefore = await page.evaluate(() =>
+        sessionStorage.getItem('sf-e2e-document-loads'),
+      );
+      expect(before).toBeGreaterThan(100);
+
+      await bar.click();
+      await expect(page).toHaveURL(/mixvia=1/);
+      await expect(page.getByText(/set from Spending trends/)).toBeVisible();
+      await page.waitForTimeout(450);
+
+      // The same document, still where the reader was standing: no reload to
+      // paint the top of the page, and no fragment scroll after the redraw.
+      expect(
+        await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads')),
+        'a full document load',
+      ).toBe(loadsBefore);
+      expect(Math.abs((await page.evaluate(() => window.scrollY)) - before)).toBeLessThan(8);
+    }
   });
 
   test('spending pace compares two qualifying months day by day (issue #89)', async ({ page }) => {

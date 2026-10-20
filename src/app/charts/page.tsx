@@ -899,6 +899,10 @@ function CommitmentsSection({ view, params }: { view: SpendingTrendsView; params
     href: monthHref(month),
     hint: monthHint(month),
     muted: !month.complete,
+    // While synced the link rewrites this page's own query, so it rides the
+    // client router without scrolling (issue #87): Chart E updates in place
+    // instead of the document reloading and flashing the top of the page.
+    soft: synced,
   }));
   const domain = chartDomain(
     bars.map((bar) => bar.valuePence),
@@ -912,10 +916,25 @@ function CommitmentsSection({ view, params }: { view: SpendingTrendsView; params
     key: month.from,
     muted: !month.complete,
     cells: [
-      <a key="link" href={monthHref(month)} className="sf-link">
-        {month.label}
-        {month.complete ? '' : ' (so far)'}
-      </a>,
+      // The table twin is the keyboard path, so it takes the same in-place
+      // navigation as the bars while the sync is on (issue #87).
+      synced ? (
+        <Link
+          key="link"
+          href={monthHref(month)}
+          scroll={false}
+          prefetch={false}
+          className="sf-link"
+        >
+          {month.label}
+          {month.complete ? '' : ' (so far)'}
+        </Link>
+      ) : (
+        <a key="link" href={monthHref(month)} className="sf-link">
+          {month.label}
+          {month.complete ? '' : ' (so far)'}
+        </a>
+      ),
       formatPence(month.amountPence),
     ],
   }));

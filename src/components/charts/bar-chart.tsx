@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { bandWidth, bandX, yFor, type ChartDomain, type Plot } from './scale';
 import {
   BandLabels,
@@ -16,6 +17,13 @@ import {
  * tab, and can be sent to the other person — which a click handler and a
  * router push cannot do.
  *
+ * A **soft** bar (`soft: true`) is the one exception, and it is still a real
+ * anchor: Chart D's synced month links rewrite this same page's query, so
+ * they ride Next's client router with `scroll={false}` instead of reloading
+ * the document (issue #87). That keeps the reader's exact place while Chart
+ * E redraws beneath — the full-document load used to paint the top of the
+ * page for a frame before the `#mix` fragment landed them back at Chart D.
+ *
  * The SVG carries `role="img"`, so its subtree is one image to a screen
  * reader; the same links are repeated as ordinary links in the table twin,
  * which is the accessible (and keyboard) path. The bar anchors are therefore
@@ -28,6 +36,12 @@ export interface BarDatum {
   valuePence: number;
   /** `/purchases?...` — the purchases behind this bar. */
   href?: string;
+  /**
+   * Same-page link (Chart D's synced month, issue #87): navigate through the
+   * client router without touching the scroll position, so Chart E updates
+   * where the reader is standing instead of after a full-document reload.
+   */
+  soft?: boolean;
   /** Native tooltip text. */
   hint?: string;
   /** An in-progress period: drawn hatched, never counted in an average. */
@@ -137,12 +151,33 @@ export function BarChart({
           <rect x={x} y={y} width={barWidth} height={barHeight} style={{ fill: colour }} rx={1} />
         );
         const title = bar.hint === undefined ? null : <title>{bar.hint}</title>;
-        return bar.href === undefined ? (
-          <g key={bar.key}>
-            {title}
-            {rect}
-          </g>
-        ) : (
+        if (bar.href === undefined) {
+          return (
+            <g key={bar.key}>
+              {title}
+              {rect}
+            </g>
+          );
+        }
+        if (bar.soft === true) {
+          return (
+            <Link
+              key={bar.key}
+              href={bar.href}
+              scroll={false}
+              // This link rewrites the chart's own query: prefetching a
+              // dozen month variants would re-run every chart query on a
+              // hover, for a click the reader may never make.
+              prefetch={false}
+              tabIndex={-1}
+              aria-hidden="true"
+            >
+              {title}
+              {rect}
+            </Link>
+          );
+        }
+        return (
           <a key={bar.key} href={bar.href} tabIndex={-1} aria-hidden="true">
             {title}
             {rect}
