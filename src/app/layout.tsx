@@ -4,6 +4,9 @@ import type { ReactNode } from 'react';
 import { SiteNav } from '@/components/site-nav';
 import { ScrollHashIntoView } from '@/components/scroll-hash';
 import { SupportBanner } from '@/components/support-banner';
+import { appSessionFromRequest } from '@/lib/auth/next';
+import { isRegistryAdminSession } from '@/lib/auth/current-user';
+import { loadAppConfig } from '@/lib/config';
 import { currentTheme } from '@/lib/theme/next';
 import { APP_NAME, APP_RELEASE_STAGE, APP_VERSION } from '@/lib/version';
 import './globals.css';
@@ -38,10 +41,22 @@ export async function generateViewport(): Promise<Viewport> {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const theme = await currentTheme();
+  // Admin menu visibility (issue #91): strictly the REGISTRY_ADMIN_EMAIL
+  // identity. Computed here in the server layout; SiteNav stays a client
+  // component and just receives the boolean.
+  let showAdmin = false;
+  try {
+    const config = loadAppConfig();
+    const session = await appSessionFromRequest();
+    showAdmin = isRegistryAdminSession(session, config);
+  } catch {
+    // Any session/config failure hides the admin entry (fail closed).
+    showAdmin = false;
+  }
   return (
     <html lang="en-GB" data-theme={theme.id}>
       <body className="sf-app-canvas min-h-screen bg-canvas text-ink antialiased">
-        <SiteNav />
+        <SiteNav showAdmin={showAdmin} />
         <SupportBanner />
         {/* Every page's `#hash` targets land below the measured header. */}
         <ScrollHashIntoView />

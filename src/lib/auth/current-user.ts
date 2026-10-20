@@ -1,7 +1,7 @@
 import { isAuthConfigComplete, type AppConfig } from '../config';
 import { getRegistry, type RegistryDb } from '../registry/db';
 import { resolveIdentity } from '../registry/domain';
-import { verifyAccessJwt } from './verify';
+import { isEmailOnEnvAllowlist, verifyAccessJwt } from './verify';
 
 /**
  * Framework-free identity resolution — testable without Next.js.
@@ -9,8 +9,10 @@ import { verifyAccessJwt } from './verify';
  *
  * Two separate checks, deliberately (SPEC §3, §19; MULTI_HOUSEHOLD_PLAN §2):
  *
- *  1. Authentication: the Cloudflare Access JWT is verified and its email must
- *     be on the Access allowlist (Cloudflare's own policy, mirrored).
+ *  1. Authentication: the Cloudflare Access JWT is verified. Since issue #91
+ *     the env allowlist is a fallback — any email that already has a registry
+ *     assignment is considered allowlisted, so adding a user is Cloudflare
+ *     rule + `/admin` assignment, no duplicate comma list.
  *  2. Assignment: the verified email must already have an active
  *     identity-to-household assignment in the system registry. Cloudflare
  *     deciding someone may reach the hostname is NOT application access — the
@@ -19,7 +21,7 @@ import { verifyAccessJwt } from './verify';
  *     handler already calls. There is no self-sign-up.
  *
  * Any failure — missing token, bad signature, wrong issuer/audience, expired,
- * identity not on the allowlist, unassigned, household deactivated, registry
+ * not on the combined allowlist, unassigned, household deactivated, registry
  * unreadable, or auth not configured at all — resolves to null. Fail closed,
  * always. `describeSession` reports the same decisions with the reason, for
  * the sign-in/denial pages and platform administration.
@@ -45,12 +47,13 @@ export interface HeaderSource {
 
 /**
  * Step 1 only: verify the request's identity. Returns the normalised email of
- * a verified (or development-bypass) identity, or null. Registry assignment is
- * checked separately — see `describeSession`.
+ * a verified (or development-bypass) identity, or null. Registry assignment
+ * and allowlist are checked separately — see `describeSession`.
  */
 async function authenticateRequest(
   headerSource: HeaderSource,
   config: AppConfig,
+  registry?: RegistryDb,
 ): Promise<{ email: string } | null> {
   if (config.auth.devBypass && config.auth.devIdentityEmail !== null) {
     return { email: config.auth.devIdentityEmail };
@@ -64,7 +67,23 @@ async function authenticateRequest(
   }
   try {
     const identity = await verifyAccessJwt(token, config.auth);
-    return { email: identity.email };
+    // Combined allowlist (issue #91): env fallback OR any assigned identity.
+    // If the registry is readable and already knows this email, it is
+    // considered allowlisted even when AUTH_ALLOWED_EMAILS does not list it.
+    if (isEmailOnEnvAllowlist(identity.email, config.auth)) {
+      return { email: identity.email };
+    }
+    try {
+      const raw = registry ?? getRegistry(config);
+      const match = resolveIdentity(raw, identity.email);
+      // A roster row allows the identity even when its household is
+      // deactivated (recovery is a later gate) — resolveIdentity returns the
+      // row regardless of household status.
+      if (match !== null) return { email: identity.email };
+    } catch {
+      // Registry unreadable → fall back to env allowlist only.
+    }
+    return null;
   } catch {
     return null;
   }
@@ -80,7 +99,7 @@ export async function describeSession(
   config: AppConfig,
   registry?: RegistryDb,
 ): Promise<SessionState> {
-  const authenticated = await authenticateRequest(headerSource, config);
+  const authenticated = await authenticateRequest(headerSource, config, registry);
   if (authenticated === null) return { status: 'not-signed-in' };
 
   let match: ReturnType<typeof resolveIdentity>;
@@ -122,4 +141,20 @@ export async function getCurrentUser(
 ): Promise<User | null> {
   const state = await describeSession(headerSource, config);
   return state.status === 'ok' ? state.user : null;
+}
+
+/**
+ * Strict admin-menu gate for issue #91: only the bootstrap env email
+ * (`REGISTRY_ADMIN_EMAIL`) sees the Admin link. This is intentionally
+ * strict — a promoted `platform_admin` does not get the menu unless the
+ * env email matches. Change this to `role === 'platform_admin'` if the
+ * policy ever relaxes.
+ */
+export function isRegistryAdminSession(session: SessionState, config: AppConfig): boolean {
+  const adminEmail = config.registryBootstrap.adminEmail;
+  if (adminEmail === null) return false;
+  if (session.status === 'ok' || session.status === 'household-deactivated') {
+    return session.user.email.toLowerCase() === adminEmail.toLowerCase();
+  }
+  return false;
 }

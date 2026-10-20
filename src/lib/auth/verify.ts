@@ -43,18 +43,18 @@ function getJwks(certsUrl: string): ReturnType<typeof createRemoteJWKSet> {
 }
 
 /**
- * Verify a Cloudflare Access assertion and enforce the allowlist.
- * Throws AuthConfigError when authentication is not fully configured
- * (fail closed) and AuthVerificationError for any rejected token.
+ * Verify a Cloudflare Access assertion.
+ * Throws AuthConfigError when issuer/audience/certsUrl are missing (fail
+ * closed) and AuthVerificationError for any rejected token (bad signature,
+ * wrong issuer/audience, expired, missing email claim).
+ *
+ * Allowlist enforcement is no longer done here (issue #91): the env
+ * allowlist is a fallback and the registry roster auto-derives it.
+ * `current-user.ts` enforces the combined allowlist after this returns.
  */
 export async function verifyAccessJwt(token: string, auth: AuthConfig): Promise<VerifiedIdentity> {
-  if (
-    auth.issuer === null ||
-    auth.audience === null ||
-    auth.certsUrl === null ||
-    auth.allowedEmails.length === 0
-  ) {
-    throw new AuthConfigError('Authentication is not configured (issuer/audience/allowlist)');
+  if (auth.issuer === null || auth.audience === null || auth.certsUrl === null) {
+    throw new AuthConfigError('Authentication is not configured (issuer/audience)');
   }
 
   try {
@@ -69,12 +69,19 @@ export async function verifyAccessJwt(token: string, auth: AuthConfig): Promise<
     if (email === null || email === '') {
       throw new Error('token carries no identity email claim');
     }
-    if (!auth.allowedEmails.includes(email)) {
-      throw new Error(`identity ${email} is not on the allowlist`);
-    }
     const sub = typeof payload.sub === 'string' && payload.sub !== '' ? payload.sub : email;
     return { email, sub };
   } catch (err) {
+    if (err instanceof AuthConfigError) throw err;
     throw new AuthVerificationError('Access token rejected', err);
   }
+}
+
+/**
+ * Check the env allowlist synchronously (fallback). Used by the session gate
+ * before the registry is consulted; the registry-derived allowlist is checked
+ * there too (issue #91).
+ */
+export function isEmailOnEnvAllowlist(email: string, auth: AuthConfig): boolean {
+  return auth.allowedEmails.includes(email.toLowerCase());
 }

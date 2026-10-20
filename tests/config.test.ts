@@ -73,13 +73,19 @@ describe('loadAppConfig', () => {
     );
   });
 
-  it('marks auth incomplete until issuer, audience and allowlist are all present', () => {
+  it('marks auth incomplete until issuer and audience are both present (issue #91)', () => {
+    // The allowlist is no longer required: the registry roster auto-derives
+    // it and AUTH_ALLOWED_EMAILS is only a fallback.
     assert.equal(isAuthConfigComplete(loadAppConfig({}).auth), false);
     assert.equal(
       isAuthConfigComplete(
         loadAppConfig({ AUTH_ISSUER: 'https://x', AUTH_ALLOWED_EMAILS: 'a@example.com' }).auth,
       ),
       false,
+    );
+    assert.equal(
+      isAuthConfigComplete(loadAppConfig({ AUTH_ISSUER: 'https://x', AUTH_AUDIENCE: 'aud' }).auth),
+      true,
     );
     assert.equal(
       isAuthConfigComplete(
@@ -90,6 +96,17 @@ describe('loadAppConfig', () => {
         }).auth,
       ),
       true,
+    );
+  });
+
+  it('reads the Cloudflare Access rule shortcut (issue #91)', () => {
+    assert.equal(loadAppConfig({}).auth.cloudflareAccessUrl, null);
+    const config = loadAppConfig({
+      CLOUDFLARE_ACCESS_URL: 'https://dash.cloudflare.com/abc/access/apps/xyz',
+    });
+    assert.equal(
+      config.auth.cloudflareAccessUrl,
+      'https://dash.cloudflare.com/abc/access/apps/xyz',
     );
   });
 

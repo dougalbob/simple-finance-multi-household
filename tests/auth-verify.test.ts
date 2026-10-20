@@ -6,8 +6,9 @@ import { startMockAccessAuthority, type MockAccessAuthority } from './helpers';
 
 /**
  * Exercises the real jose verification path against a local JWKS endpoint:
- * signature, issuer, audience, expiry and allowlist — the fail-closed rules
- * from AGENT_APP_BLUEPRINT.md §4.
+ * signature, issuer, audience and expiry — the fail-closed rules from
+ * AGENT_APP_BLUEPRINT.md §4. Allowlist enforcement moved to the session gate
+ * (issue #91: env allowlist is a fallback; the registry roster auto-derives).
  */
 describe('verifyAccessJwt', () => {
   let authority: MockAccessAuthority;
@@ -20,6 +21,7 @@ describe('verifyAccessJwt', () => {
       audience: authority.audience,
       certsUrl: authority.certsUrl,
       allowedEmails: ['alex@example.com', 'sam@example.com'],
+      cloudflareAccessUrl: null,
       devBypass: false,
       devIdentityEmail: null,
     };
@@ -61,9 +63,13 @@ describe('verifyAccessJwt', () => {
     await assert.rejects(() => verifyAccessJwt(token, auth), AuthVerificationError);
   });
 
-  it('rejects identities that are not on the allowlist', async () => {
+  it('returns the identity even when the env allowlist does not list it (issue #91)', async () => {
+    // The allowlist is enforced by the session gate (registry roster OR env
+    // fallback), not here — a verified token for a stranger resolves fine and
+    // is denied later if no roster row or env entry allows it.
     const token = await authority.mintToken({ email: 'stranger@example.com' });
-    await assert.rejects(() => verifyAccessJwt(token, auth), AuthVerificationError);
+    const identity = await verifyAccessJwt(token, auth);
+    assert.equal(identity.email, 'stranger@example.com');
   });
 
   it('rejects signatures from a key that is not in the JWKS', async () => {
@@ -79,7 +85,11 @@ describe('verifyAccessJwt', () => {
     const token = await authority.mintToken();
     await assert.rejects(() => verifyAccessJwt(token, { ...auth, issuer: null }), AuthConfigError);
     await assert.rejects(
-      () => verifyAccessJwt(token, { ...auth, allowedEmails: [] }),
+      () => verifyAccessJwt(token, { ...auth, audience: null }),
+      AuthConfigError,
+    );
+    await assert.rejects(
+      () => verifyAccessJwt(token, { ...auth, certsUrl: null }),
       AuthConfigError,
     );
   });

@@ -23,6 +23,11 @@ export interface AuthConfig {
   /** The Cloudflare Access email policy, mirrored at the app boundary. */
   readonly allowedEmails: readonly string[];
   /**
+   * Convenience link to the Cloudflare Access rule (issue #91): a plain URL
+   * the admin UI shows as "Open Cloudflare". Not used for auth.
+   */
+  readonly cloudflareAccessUrl: string | null;
+  /**
    * Development identity bypass. Computed as false whenever NODE_ENV is
    * production, no matter what the environment says — production must never
    * honour it (blueprint §4.6).
@@ -54,7 +59,10 @@ export interface AppConfig {
 }
 
 export function isAuthConfigComplete(auth: AuthConfig): boolean {
-  return auth.issuer !== null && auth.audience !== null && auth.allowedEmails.length > 0;
+  // `allowedEmails` is now a fallback: the registry roster auto-derives it
+  // (issue #91). Auth is complete when the Cloudflare Access binding exists;
+  // an empty allowlist no longer blocks startup — the roster will allow.
+  return auth.issuer !== null && auth.audience !== null;
 }
 
 function trimmed(value: string | undefined): string | null {
@@ -89,12 +97,21 @@ export function loadAppConfig(env: EnvSource = process.env): AppConfig {
 
   const devIdentityEmail = trimmed(env.AUTH_DEV_IDENTITY_EMAIL)?.toLowerCase() ?? null;
   const devBypass = env.AUTH_DEV_BYPASS === 'true' && !isProduction && devIdentityEmail !== null;
+  const cloudflareAccessUrl = trimmed(env.CLOUDFLARE_ACCESS_URL) ?? null;
 
   return {
     isProduction,
     dataDir,
     registryPath,
     registryBootstrap,
-    auth: { issuer, audience, certsUrl, allowedEmails, devBypass, devIdentityEmail },
+    auth: {
+      issuer,
+      audience,
+      certsUrl,
+      allowedEmails,
+      cloudflareAccessUrl,
+      devBypass,
+      devIdentityEmail,
+    },
   };
 }

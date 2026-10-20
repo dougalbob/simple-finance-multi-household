@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { getCurrentUser } from '../src/lib/auth/current-user';
+import { describeSession, getCurrentUser } from '../src/lib/auth/current-user';
 import { loadAppConfig } from '../src/lib/config';
 import { openRegistry } from '../src/lib/registry/db';
 import { assignIdentity, createHousehold } from '../src/lib/registry/domain';
@@ -117,6 +117,39 @@ describe('getCurrentUser (fail-closed resolution)', () => {
     const token = await authority.mintToken({ email: 'sam@example.com' });
     const user = await getCurrentUser(headerSource({ 'cf-access-jwt-assertion': token }), config);
     assert.deepEqual(user, { email: 'sam@example.com', householdId, role: 'member' });
+  });
+
+  it('auto-derives the allowlist from the registry roster (issue #91)', async () => {
+    // sam@example.com is assigned in the registry but is NOT on the env
+    // allowlist here — the roster row alone must be enough.
+    const config = loadAppConfig({
+      NODE_ENV: 'production',
+      DATA_DIR: dataDir,
+      AUTH_ISSUER: authority.issuer,
+      AUTH_AUDIENCE: authority.audience,
+      AUTH_CERTS_URL: authority.certsUrl,
+      AUTH_ALLOWED_EMAILS: 'alex@example.com',
+    });
+    const token = await authority.mintToken({ email: 'sam@example.com' });
+    const user = await getCurrentUser(headerSource({ 'cf-access-jwt-assertion': token }), config);
+    assert.deepEqual(user, { email: 'sam@example.com', householdId, role: 'member' });
+  });
+
+  it('still allows env-allowlisted identities that the roster has not assigned (fallback)', async () => {
+    // The reverse half of the combined allowlist: alex@example.com is on the
+    // env list but has no roster row, so the session is 'unassigned' — the
+    // allowlist passed, the assignment gate denied.
+    const config = loadAppConfig({
+      NODE_ENV: 'production',
+      DATA_DIR: dataDir,
+      AUTH_ISSUER: authority.issuer,
+      AUTH_AUDIENCE: authority.audience,
+      AUTH_CERTS_URL: authority.certsUrl,
+      AUTH_ALLOWED_EMAILS: 'alex@example.com',
+    });
+    const token = await authority.mintToken({ email: 'alex@example.com' });
+    const state = await describeSession(headerSource({ 'cf-access-jwt-assertion': token }), config);
+    assert.deepEqual(state, { status: 'unassigned', email: 'alex@example.com' });
   });
 
   it('returns null for a verified token whose identity is not allowlisted', async () => {

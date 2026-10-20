@@ -65,7 +65,7 @@ export interface RegistryAuditEntry {
 
 export const MAX_IDENTITIES_PER_HOUSEHOLD = 2;
 
-type AuditInput = {
+export type AuditInput = {
   actor: string;
   action: string;
   email?: string | null;
@@ -74,7 +74,8 @@ type AuditInput = {
   now: Date;
 };
 
-function recordAudit(raw: RawDatabase, input: AuditInput): void {
+/** Exported for control-plane actions outside the roster (e.g. `config.update`). */
+export function recordAudit(raw: RawDatabase, input: AuditInput): void {
   raw
     .prepare(
       'INSERT INTO registry_audit (at, actor, action, email, household_id, detail) VALUES (?, ?, ?, ?, ?, ?)',

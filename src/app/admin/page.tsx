@@ -7,8 +7,12 @@ import {
   SetHouseholdStatusForm,
   UnassignIdentityForm,
 } from '@/components/admin-forms';
+import { AdminSettings } from '@/components/admin-settings';
 import { RegistryBackup } from '@/components/registry-backup';
 import { appSessionFromRequest } from '@/lib/auth/next';
+import { isRegistryAdminSession } from '@/lib/auth/current-user';
+import { loadAppConfig } from '@/lib/config';
+import { envDrift, readEnvFile } from '@/lib/env-file';
 import { getRegistry } from '@/lib/registry/db';
 import {
   listHouseholds,
@@ -37,6 +41,7 @@ const AUDIT_WORDS: Record<string, string> = {
   'identity.assign': 'Identity assigned',
   'identity.unassign': 'Identity unassigned',
   'identity.role': 'Role changed',
+  'config.update': 'Server settings changed',
 };
 
 function auditWords(action: string): string {
@@ -79,6 +84,20 @@ export default async function AdminPage() {
   const households = listHouseholds(registry);
   const identities = listIdentities(registry);
   const audit = listRegistryAudit(registry, 25);
+
+  // Server settings (issue #91): the env-file editor is strictly the
+  // REGISTRY_ADMIN_EMAIL identity — a promoted platform_admin does not see it.
+  const config = loadAppConfig();
+  const showEnvEditor = isRegistryAdminSession(session, config);
+  const envFile = readEnvFile(config);
+  const settingsValues = {
+    issuer: envFile.values.AUTH_ISSUER ?? config.auth.issuer ?? '',
+    audience: envFile.values.AUTH_AUDIENCE ?? config.auth.audience ?? '',
+    certsUrl: envFile.values.AUTH_CERTS_URL ?? '',
+    allowedEmails: envFile.values.AUTH_ALLOWED_EMAILS ?? config.auth.allowedEmails.join(','),
+    cloudflareAccessUrl:
+      envFile.values.CLOUDFLARE_ACCESS_URL ?? config.auth.cloudflareAccessUrl ?? '',
+  };
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:py-8">
@@ -232,6 +251,16 @@ export default async function AdminPage() {
             {audit.length === 0 ? <li className="text-sm text-ink-muted">Nothing yet.</li> : null}
           </ol>
         </section>
+
+        {showEnvEditor ? (
+          <AdminSettings
+            initialValues={settingsValues}
+            envPath={envFile.path}
+            fileExists={envFile.exists}
+            readError={envFile.readError}
+            drift={envDrift(envFile, config)}
+          />
+        ) : null}
 
         <RegistryBackup />
       </div>
