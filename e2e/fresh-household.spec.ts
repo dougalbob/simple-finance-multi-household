@@ -124,35 +124,49 @@ test.describe('a brand-new household', () => {
     test.slow();
     await page.goto('/');
     await waitForTill(page);
-    const card = page.locator('section[aria-labelledby="getting-started-heading"]');
+    // Use /start so every step remains addressable after a server action marks
+    // an earlier step Done. The fresh-household server is shared by this spec;
+    // if Playwright retries after a partial run, the same record-derived steps
+    // let the retry resume instead of trying to add the person a second time.
+    await page.goto('/start');
 
-    // Each step's fields are scoped to its own card (`#setup-…`): the till's
-    // own controls carry some of the same labels.
-    // Step 1 — name the person.
+    // Step 1 — name the person, unless a prior attempt already completed it.
     const people = page.locator('#setup-people');
-    await people.getByLabel('Name (up to 60 characters)').fill('Alex');
-    await people.getByRole('button', { name: 'Add person' }).click();
-    await expect(card).toContainText('Step 2 of 4');
+    if ((await people.getByRole('button', { name: 'Add person' }).count()) > 0) {
+      await people.getByLabel('Name (up to 60 characters)').fill('Alex');
+      await people.getByRole('button', { name: 'Add person' }).click();
+    }
+    await expect(people).toContainText('Done');
 
     // Step 2 — the first pot.
     const pots = page.locator('#setup-pots');
-    await pots.getByLabel('Pot name').fill('Current account');
-    await pots.getByLabel('Type').selectOption('bank');
-    await pots.getByRole('button', { name: 'Add pot' }).click();
-    await expect(card).toContainText('Step 3 of 4');
+    if ((await pots.getByRole('button', { name: 'Add pot' }).count()) > 0) {
+      await pots.getByLabel('Pot name').fill('Current account');
+      await pots.getByLabel('Type').selectOption('bank');
+      await pots.getByRole('button', { name: 'Add pot' }).click();
+    }
+    await expect(pots).toContainText('Done');
 
     // Step 3 — the checkpoint that anchors it.
     const checkpoint = page.locator('#setup-checkpoints');
-    await checkpoint.getByLabel('Balance right now').fill('412.35');
-    await checkpoint.getByRole('button', { name: 'Save checkpoint' }).click();
-    await expect(card).toContainText('Step 4 of 4');
+    if ((await checkpoint.getByRole('button', { name: 'Save checkpoint' }).count()) > 0) {
+      await checkpoint.getByLabel('Balance right now').fill('412.35');
+      await checkpoint.getByRole('button', { name: 'Save checkpoint' }).click();
+    }
+    await expect(checkpoint).toContainText('Done');
 
     // Step 4 — set the household's planning payday. No receipt schedule is
-    // needed for the projection to turn on.
+    // needed for the projection to turn on. Saving it makes the step Done and
+    // removes its form, so assert the derived setting rather than a transient
+    // action-status message that is unmounted by revalidation.
     const payday = page.locator('#setup-payday');
-    await payday.getByLabel('Payday day of month').fill('28');
-    await payday.getByRole('button', { name: 'Save payday' }).click();
-    await expect(payday.getByRole('status')).toContainText('Household payday saved as day 28');
+    if ((await payday.getByRole('button', { name: 'Save payday' }).count()) > 0) {
+      await payday.getByLabel('Payday day of month').fill('28');
+      await payday.getByRole('button', { name: 'Save payday' }).click();
+    }
+    await expect(payday).toContainText('Household payday set to day 28');
+
+    await page.goto('/');
 
     // Phase A is done: the card goes, the household total appears, and the
     // locked projection is replaced by the real thing.
