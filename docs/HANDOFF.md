@@ -1,3 +1,28 @@
+# v1.33.0 — issue #91: server settings, the Admin menu and the Cloudflare shortcut (2026-10-20)
+
+**Approved stable feature:** the household agreed the issue #91 design (strict
+`REGISTRY_ADMIN_EMAIL` admin gate, direct `/data/.env` editing with a restart banner,
+roster-derived allowlist, Cloudflare rule URL shortcut), reviewed the Arena preview and
+requested merge and publication for full testing on the multi-household Unraid installation.
+Publication follows `docs/RELEASE_PROCESS.md`: one PR, required checks, merge to
+`main`, an annotated tag on that exact merge commit, and successful GHCR verification.
+
+**What shipped:** the /admin **Server settings** panel (editable `AUTH_ISSUER`,
+`AUTH_AUDIENCE`, `AUTH_CERTS_URL`, `AUTH_ALLOWED_EMAILS`, `CLOUDFLARE_ACCESS_URL`; quoted
+shell literals, atomic writes, `.bak` copy, 0600 permissions, registry audit rows, restart
+banner), the env-gated **Admin** menu entry, the **Open Cloudflare ↗** shortcut, and a
+combined allowlist (registry roster OR the env fallback). No schema, migration or
+backup-format change.
+
+**Validation:** `npm test` **1129/1129 across 264 suites** (including the new
+`tests/env-file.test.ts`), `typecheck`, `format:check` and `next build` green. The release
+PR's `gates`, `browser` and `docker` checks are the publication gate.
+
+**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
+GHCR digest for `v1.33.0` (the workflow prints them and creates the GitHub release).
+
+---
+
 # v1.32.1 — issue #87: a synced month redraws Chart E in place (2026-10-20)
 
 **Approved stable patch:** the household reviewed the Arena preview of the Chart D → E sync fix,
