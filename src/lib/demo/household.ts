@@ -12,6 +12,7 @@ import { createSchedule } from '../records/schedules';
 import {
   setDefaultPurchasePotId,
   setMonthlyFuelPence,
+  setPaydayDayOfMonth,
   setWeeklyGroceriesPence,
 } from '../records/settings';
 import { createSupplier } from '../records/suppliers';
@@ -143,6 +144,9 @@ export function seedDemoHousehold(
   // The till form's starting pot is a setting — the seed sets it the
   // way a household would, and the specs prove the form honours it.
   setDefaultPurchasePotId(db, main.id, ACTOR, now);
+  // The planning boundary is an explicit household setting, independent of
+  // the matching monthly salary receipt below.
+  setPaydayDayOfMonth(db, 27, ACTOR, now);
 
   // "Signs in as" (v0.11.0): the dev identity is Alex, so the till opens with
   // Paid by = Alex, the Fuel tab on Alex's Vehicle A, and the Checkpoint cash
@@ -404,7 +408,7 @@ export function seedDemoHousehold(
   // - Phone plan (so) must have a conversion INSIDE the 30-day activity window.
   //   `recentMonthlyDueDay` lands it about a week behind today on every day
   //   of the year, and never on the 21st.
-  // - Salary (receipt) on the 27th — the payday the projection plans to.
+  // - Household payday and Salary receipt are both set for the 27th in this example.
   // - Annual insurance renewal.
   const dueDay = Math.min(Number(todayIso.slice(8, 10)) + 2, 28);
   createSchedule(db, {

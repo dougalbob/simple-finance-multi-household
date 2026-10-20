@@ -89,8 +89,10 @@ export default async function AdminPage() {
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Households &amp; sign-in</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
           Pre-assign each sign-in email to exactly one household before its first login — there is
-          no self sign-up. Households hold one or two people. This page shows operational metadata
-          only; household financial records stay in each household and are never visible here.
+          no self sign-up. Each household can have up to two sign-in identities; its people records
+          for attribution are separate and are not capped at two. This page shows operational
+          metadata only; household financial records stay in each household and are never visible
+          here.
         </p>
         <p className="mt-2 text-sm">
           <Link href="/support" className="font-medium sf-link">
@@ -161,7 +163,7 @@ export default async function AdminPage() {
                     </div>
                   ) : (
                     <p className="mt-3 text-xs text-ink-muted">
-                      Two identities assigned — the one-or-two person limit is reached. Unassign one
+                      Two sign-in identities assigned — the household limit is reached. Unassign one
                       first to swap.
                     </p>
                   )}

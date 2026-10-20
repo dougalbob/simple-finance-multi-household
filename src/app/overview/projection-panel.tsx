@@ -20,10 +20,10 @@ export function ProjectionSection({ projection }: { projection: ProjectionView }
         : 'border-positive-200 bg-positive-50 text-positive-800';
   const tierText =
     tier === 'warning'
-      ? `Liquid funds would reach ${formatPence(result.projectedLowPence ?? 0)} — below the configured bank warning threshold of ${formatPence(result.warningThresholdPence ?? 0)}. Review before pay day.`
+      ? `Liquid funds would reach ${formatPence(result.projectedLowPence ?? 0)} — below the configured bank warning threshold of ${formatPence(result.warningThresholdPence ?? 0)}. Review before payday.`
       : tier === 'heads-up'
-        ? `This week’s low would reach ${formatPence(result.projectedLowPence ?? 0)} before pay lands — you would be below £0. No overdraft expected if nothing else changes.`
-        : `Projected to stay above zero until pay day (lowest ${result.projectedLowPence !== null ? formatPence(result.projectedLowPence) : '—'}).`;
+        ? `This week’s low would reach ${formatPence(result.projectedLowPence ?? 0)} before payday — you would be below £0. No overdraft expected if nothing else changes.`
+        : `Projected to stay above zero through payday (lowest ${result.projectedLowPence !== null ? formatPence(result.projectedLowPence) : '—'}).`;
   return (
     <section
       aria-labelledby="projection-heading"

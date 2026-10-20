@@ -91,13 +91,13 @@ test.describe('platform administration', () => {
       page.getByRole('heading', { name: 'Households & sign-in', level: 1 }),
     ).toBeVisible();
 
-    // The seeded household is full: two identities, no assign form, and the
-    // one-or-two person limit explained instead.
+    // The seeded household is full: two sign-in identities, no assign form, and
+    // the identity limit explained instead.
     const seeded = householdCard(page, 'Alex & Sam');
     await expect(seeded.getByText('alex@example.com', { exact: true })).toBeVisible();
     await expect(seeded.getByText('sam@example.com', { exact: true })).toBeVisible();
     await expect(seeded.getByText('2 of 2 sign-in identities assigned')).toBeVisible();
-    await expect(seeded.getByText(/Two identities assigned/)).toBeVisible();
+    await expect(seeded.getByText(/Two sign-in identities assigned/)).toBeVisible();
     await expect(seeded.getByLabel(/Sign-in email to assign/)).toHaveCount(0);
 
     // Administration is metadata only — the page says so where the household

@@ -1232,6 +1232,16 @@ function MixSection({
       {notice === null ? null : (
         <p className="mb-3 rounded-lg border border-dashed border-border-strong bg-canvas p-3 text-xs text-ink-soft">
           {notice}
+          {view.presets.payday === null ? (
+            <>
+              {' '}
+              Set it in{' '}
+              <Link href="/settings#payday-setting" className="sf-link">
+                Settings → Payday
+              </Link>{' '}
+              to enable payday-cycle windows.
+            </>
+          ) : null}
         </p>
       )}
       {syncNotice === null ? null : (

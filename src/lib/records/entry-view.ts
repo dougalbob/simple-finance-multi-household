@@ -39,8 +39,8 @@ import type { QuickEntryData } from '../../components/quick-entry';
  * Each pot carries its **last checkpoint** (what the bank showed when the
  * household last checked, with its age), the ledger-derived current account
  * balance shown by All Transactions, and its bills-only shortfall before
- * income lands. The household-wide outlook includes projected day-to-day
- * spending and powers the form's separate, conditional guide. These are
+ * the configured payday. The household-wide outlook includes projected
+ * day-to-day spending and powers the form's separate, conditional guide. These are
  * read-only context; the checkpoint is never editable in the till form.
  */
 export interface EntryDefaultsInput {
@@ -170,12 +170,9 @@ export function buildEntryData(db: Db, nowArg?: Date, viewerEmail?: string | nul
     defaultVehicleId: defaults.vehicleId,
     today: toLocalDateString(now),
     cycle: {
-      incomeDate: outlook.incomeDate,
-      incomeSource: outlook.incomeSource,
+      paydayDate: outlook.paydayDate,
       days: outlook.days,
       householdAvailablePence: outlook.householdAvailablePence,
-      incomeDateLabel:
-        outlook.incomeDate === null ? null : formatShortLocalDate(outlook.incomeDate),
       commitmentsPence: outlook.commitmentsPence,
       dayToDayPence: outlook.dayToDayPence,
       freeToSpendPence: outlook.freeToSpendPence,

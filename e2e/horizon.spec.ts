@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { nextPaydayOccurrence } from '../src/lib/records/dates';
 import { addDaysIso, londonToday } from './support';
 
 /**
@@ -64,15 +65,18 @@ test.describe('horizon', () => {
     await expect(page.getByText(/Fuel — Vehicle [AB] \(projected\)/).first()).toBeVisible();
   });
 
-  test('opens on the day before the next scheduled payday (decision 150)', async ({ page }) => {
-    // The Income page's "Next payday" is scheduled income only (receipt
-    // schedules, weekend-shifted) — the same definition Horizon uses, and the
-    // seeded support from Mum never counts. Reading it there duplicates no
-    // date logic in the spec.
-    await page.goto('/income');
-    const summary = page.locator('section[aria-label="Income summary"]');
-    const payday = /(\d{4}-\d{2}-\d{2}) · into/.exec(await summary.innerText())?.[1] ?? '';
-    expect(payday).not.toBe('');
+  test('opens on the day before the configured household payday (decision 150)', async ({
+    page,
+  }) => {
+    // The seeded household configures day 27. Its receipt schedule may change
+    // independently; Horizon's default is the configured payday, weekend-shifted.
+    await page.goto('/settings');
+    const paydaySetting = page.locator('form[aria-label="Household payday"]');
+    const day = Number(await paydaySetting.getByLabel('Payday day of month').inputValue());
+    expect(day).toBe(27);
+    const payday = nextPaydayOccurrence(day, londonToday());
+    expect(payday).not.toBeNull();
+    if (payday === null) throw new Error('configured payday has no next occurrence');
 
     const tomorrow = futureDate(1);
     const dayBefore = addDaysIso(payday, -1);

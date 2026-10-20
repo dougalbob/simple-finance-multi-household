@@ -32,12 +32,14 @@ import {
   getDefaultPurchasePotId,
   getDefaultSchedulePotId,
   getDefaultTransactionsPotId,
+  getPaydayDayOfMonth,
   getRenewalWarningLeadDays,
   InvalidSettingValueError,
   setContractEndWarningLeadDays,
   setDefaultPurchasePotId,
   setDefaultSchedulePotId,
   setDefaultTransactionsPotId,
+  setPaydayDayOfMonth,
   setRenewalWarningLeadDays,
 } from '../src/lib/records/settings';
 import { createPurchase } from '../src/lib/records/purchases';
@@ -373,6 +375,53 @@ describe('settings: target renames and warning leads', () => {
     setContractEndWarningLeadDays(db, 0, ACTOR, NOW);
     assert.equal(getRenewalWarningLeadDays(db), 30);
     assert.equal(getContractEndWarningLeadDays(db), 0);
+  });
+});
+
+describe('settings: household payday', () => {
+  let fixture: HouseholdFixture;
+  after(() => fixture.close());
+  before(async () => {
+    fixture = await createHouseholdFixture();
+  });
+
+  it('is unset until the household chooses a day, then stores and clears it', () => {
+    const { db } = fixture;
+    assert.equal(getPaydayDayOfMonth(db), null);
+    setPaydayDayOfMonth(db, 27, ACTOR, NOW);
+    assert.equal(getPaydayDayOfMonth(db), 27);
+    setPaydayDayOfMonth(db, 31, ACTOR, NOW);
+    assert.equal(getPaydayDayOfMonth(db), 31);
+    setPaydayDayOfMonth(db, null, ACTOR, NOW);
+    assert.equal(getPaydayDayOfMonth(db), null);
+  });
+
+  it('accepts only whole days 1–31 and audits set, change and clear without a migration', () => {
+    const { db } = fixture;
+    const existingAuditCount = db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, 'payday_day_of_month'))
+      .all().length;
+    for (const invalid of [0, 32, 1.5, Number.NaN]) {
+      assert.throws(() => setPaydayDayOfMonth(db, invalid, ACTOR, NOW), InvalidSettingValueError);
+    }
+
+    setPaydayDayOfMonth(db, 26, ACTOR, NOW);
+    setPaydayDayOfMonth(db, 27, ACTOR, new Date(NOW.getTime() + 1));
+    setPaydayDayOfMonth(db, null, ACTOR, new Date(NOW.getTime() + 2));
+    const rows = db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, 'payday_day_of_month'))
+      .all();
+    assert.equal(rows.length, existingAuditCount + 3);
+    const changes = rows.slice(existingAuditCount);
+    assert.ok(changes.every((row) => row.action === 'setting.update' && row.actor === ACTOR));
+    assert.deepEqual(
+      changes.map((row) => JSON.parse(row.after ?? 'null')),
+      [{ value: '26' }, { value: '27' }, { value: '' }],
+    );
   });
 });
 

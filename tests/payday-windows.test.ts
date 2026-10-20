@@ -6,35 +6,25 @@ import {
   createSchedule,
   type Schedule,
 } from '../src/lib/records/schedules';
-import { recentPaydayDates, recentScheduledIncomeDates } from '../src/lib/records/money-view';
+import { recentPaydayDates } from '../src/lib/records/money-view';
 import { getSpendingMixView, paydayCycleWindows } from '../src/lib/records/charts-view';
+import { setPaydayDayOfMonth } from '../src/lib/records/settings';
 
-/**
- * Chart E's payday quick windows when the salary schedule is new (issue #24).
- *
- * The household reported seeing only two quick windows: the "previous payday
- * cycle" never appeared. The windows were bracketed by the salary's
- * *recorded* instances, and a salary schedule added this month has only one
- * payday on record, so the full cycle before it was silently missing. The
- * earlier paydays are now worked out from the salary's cadence.
- *
- * The household's own case: today is Wednesday 14 October 2026, payday is the
- * 25th (Friday 25 September was the last one), so the last full cycle is
- * 25 August to 24 September and "since last payday" is 25 September to today.
- */
+/** Chart E's payday quick windows come from the household payday setting. */
 
 const ACTOR = 'alex@example.com';
 const NOW = new Date('2026-10-14T11:00:00Z');
 const TODAY = '2026-10-14';
 
-function addSalary(
+function addReceipt(
   fixture: HouseholdFixture,
+  name: string,
   activeFrom: string,
-  dueDayOfMonth = 25,
+  dueDayOfMonth: number,
   now: Date = NOW,
 ): Schedule {
   return createSchedule(fixture.db, {
-    name: 'Salary',
+    name,
     kind: 'receipt',
     frequency: 'monthly',
     dueDayOfMonth,
@@ -47,25 +37,15 @@ function addSalary(
   }).schedule;
 }
 
-describe('payday windows: a salary schedule added this month (issue #24)', () => {
+describe('Chart E payday windows use the configured household payday', () => {
   let fixture: HouseholdFixture;
-
-  before(async () => {
-    fixture = await createHouseholdFixture(ACTOR, NOW);
-    // Started a few days before September's payday: one payday on record.
-    addSalary(fixture, '2026-09-20');
-  });
   after(() => fixture.close());
 
-  it('has only one recorded payday, which is what hid the full cycle', () => {
-    assert.deepEqual(recentScheduledIncomeDates(fixture.db, TODAY, 2), ['2026-09-25']);
-  });
+  it('offers both windows from the setting even with no receipt schedules', async () => {
+    fixture = await createHouseholdFixture(ACTOR, NOW);
+    setPaydayDayOfMonth(fixture.db, 25, ACTOR, NOW);
 
-  it('works the payday before it out from the cadence', () => {
     assert.deepEqual(recentPaydayDates(fixture.db, TODAY, 2), ['2026-09-25', '2026-08-25']);
-  });
-
-  it('offers since last payday and the last full payday cycle, both ending by today', () => {
     const cycles = paydayCycleWindows(fixture.db, TODAY);
     assert.deepEqual(cycles.payday, { kind: 'payday', from: '2026-09-25', to: TODAY });
     assert.deepEqual(cycles.previousPayday, {
@@ -73,49 +53,35 @@ describe('payday windows: a salary schedule added this month (issue #24)', () =>
       from: '2026-08-25',
       to: '2026-09-24',
     });
-  });
 
-  it('draws the chart for since last payday by default, with no fallback notice', () => {
     const view = getSpendingMixView(fixture.db, {}, NOW);
     assert.equal(view.window.kind, 'payday');
     assert.equal(view.window.from, '2026-09-25');
     assert.equal(view.window.to, TODAY);
     assert.equal(view.notice, null);
-    assert.deepEqual(view.presets.month, { kind: 'month', from: '2026-10-01', to: TODAY });
   });
-});
 
-describe('payday windows: a salary schedule whose first payday is still to come', () => {
-  let fixture: HouseholdFixture;
-
-  before(async () => {
+  it('multiple mismatched receipt schedules do not move either window', async () => {
     fixture = await createHouseholdFixture(ACTOR, NOW);
-    addSalary(fixture, '2026-10-20');
-  });
-  after(() => fixture.close());
+    setPaydayDayOfMonth(fixture.db, 25, ACTOR, NOW);
+    addReceipt(fixture, 'Salary on the 15th', '2026-09-01', 15);
+    addReceipt(fixture, 'Benefit on the 20th', '2026-09-01', 20);
 
-  it('still knows the salary rhythm, so both payday windows are offered', () => {
-    assert.deepEqual(recentScheduledIncomeDates(fixture.db, TODAY, 2), []);
-    const cycles = paydayCycleWindows(fixture.db, TODAY);
-    assert.deepEqual(cycles.payday, { kind: 'payday', from: '2026-09-25', to: TODAY });
-    assert.deepEqual(cycles.previousPayday, {
-      kind: 'previous-payday',
-      from: '2026-08-25',
-      to: '2026-09-24',
+    assert.deepEqual(recentPaydayDates(fixture.db, TODAY, 2), ['2026-09-25', '2026-08-25']);
+    assert.deepEqual(paydayCycleWindows(fixture.db, TODAY), {
+      payday: { kind: 'payday', from: '2026-09-25', to: TODAY },
+      previousPayday: { kind: 'previous-payday', from: '2026-08-25', to: '2026-09-24' },
     });
+    assert.equal(getSpendingMixView(fixture.db, {}, NOW).window.from, '2026-09-25');
   });
-});
 
-describe('payday windows: no salary scheduled', () => {
-  let fixture: HouseholdFixture;
-
-  before(async () => {
+  it('without a setting, receipt schedules do not invent payday windows', async () => {
     fixture = await createHouseholdFixture(ACTOR, NOW);
-  });
-  after(() => fixture.close());
+    addReceipt(fixture, 'Salary', '2026-09-20', 25);
 
-  it('offers no payday windows and falls back to month to date, saying why', () => {
     assert.deepEqual(recentPaydayDates(fixture.db, TODAY, 2), []);
+    const cycles = paydayCycleWindows(fixture.db, TODAY);
+    assert.deepEqual(cycles, { payday: null, previousPayday: null });
     const view = getSpendingMixView(fixture.db, {}, NOW);
     assert.equal(view.presets.payday, null);
     assert.equal(view.presets.previousPayday, null);
@@ -124,13 +90,13 @@ describe('payday windows: no salary scheduled', () => {
   });
 });
 
-describe('cadenceDatesOnOrBefore', () => {
+describe('cadenceDatesOnOrBefore (receipt-schedule helper)', () => {
   let fixture: HouseholdFixture;
   let salary: Schedule;
 
   before(async () => {
     fixture = await createHouseholdFixture(ACTOR, NOW);
-    salary = addSalary(fixture, '2026-09-20');
+    salary = addReceipt(fixture, 'Salary', '2026-09-20', 25);
   });
   after(() => fixture.close());
 
@@ -147,7 +113,6 @@ describe('cadenceDatesOnOrBefore', () => {
   });
 
   it("brings next month's weekend payday back into this month", () => {
-    // Saturday 1 August 2026 is paid on Friday 31 July.
     const firstOfMonth: Schedule = { ...salary, dueDayOfMonth: 1 };
     assert.deepEqual(cadenceDatesOnOrBefore(firstOfMonth, '2026-07-31', 2), [
       '2026-07-31',
@@ -165,7 +130,6 @@ describe('cadenceDatesOnOrBefore', () => {
 
   it('handles an annual cadence', () => {
     const annual: Schedule = { ...salary, frequency: 'annual', dueMonth: 3, dueDayOfMonth: 31 };
-    // 31 March 2026 is a Tuesday; 31 March 2025 a Monday.
     assert.deepEqual(cadenceDatesOnOrBefore(annual, '2026-10-14', 2), ['2026-03-31', '2025-03-31']);
   });
 

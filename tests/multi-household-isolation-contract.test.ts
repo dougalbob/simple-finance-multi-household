@@ -60,7 +60,8 @@ describe('multi-household isolation contract', () => {
     const handoff = repoFile('docs/HANDOFF.md');
     const releaseProcess = repoFile('docs/RELEASE_PROCESS.md');
     const activePlan = repoFile('docs/MULTI_HOUSEHOLD_PLAN.md');
-    assert.match(activePlan, /one or two people/);
+    assert.match(activePlan, /up to two assigned sign-in identities/);
+    assert.match(activePlan, /not a limit on `people` records/);
     assert.match(activePlan, /pre-creates a household and assigns each allowed sign-in email/);
     assert.match(activePlan, /An authenticated but unassigned identity is denied/);
     const documents: Record<string, string> = {

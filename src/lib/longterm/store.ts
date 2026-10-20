@@ -3,8 +3,8 @@
  * (LONGTERM_FORECASTING.md §9, slice 2).
  *
  * One `longterm_plans` row holds the whole plan as a validated JSON payload.
- * The draft is built from what the records already know — the two people, the
- * active recurring commitments (monthly-equivalent) and the groceries/fuel
+ * The draft is built from what the records already know — the household's
+ * people records, active recurring commitments (monthly-equivalent) and groceries/fuel
  * basis — and from the reviewed defaults in `rates.ts` for everything the
  * records cannot know (birth years, pension pot dates, the inheritance). Every
  * figure it produces is editable in the assumptions panel; nothing in the
@@ -70,8 +70,8 @@ export function buildDraftPlan(db: Db, options: { today: string }): LongTermPlan
 
   const birthYears = peopleSource.map((_, index) => {
     const supplied = HOUSEHOLD_DEFAULTS.birthYears[index];
-    // Beyond the two people the app allows, keep the draft generic rather
-    // than inventing this household's dates for another household's person.
+    // Beyond the supplied fictional defaults, keep the draft generic rather
+    // than inventing this household's dates for an additional person.
     return supplied ?? 1970 + index * 10;
   });
   const youngestIndex = birthYears.indexOf(Math.max(...birthYears));

@@ -16,7 +16,11 @@ import {
   getProjectionView,
   landPenceOf,
 } from '../src/lib/records/money-view';
-import { setMonthlyFuelPence, setWeeklyGroceriesPence } from '../src/lib/records/settings';
+import {
+  setMonthlyFuelPence,
+  setPaydayDayOfMonth,
+  setWeeklyGroceriesPence,
+} from '../src/lib/records/settings';
 
 const p = (value: number) => Math.round(value * 100);
 
@@ -53,6 +57,7 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
     fixture = await createHouseholdFixture(ACTOR, now);
     const { db, pots } = fixture;
     const actor = ACTOR;
+    setPaydayDayOfMonth(db, 26, actor, now);
 
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(500), actor, now });
     addCheckpoint(db, { potId: pots.salary.id, amountPence: p(200), actor, now });
@@ -206,9 +211,9 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
     assert.equal(snapshot.householdAvailablePence, p(820));
   });
 
-  it('support lands inside the salary window without becoming payday', async () => {
+  it('support lands inside the configured-payday window without defining payday', async () => {
     const { db } = await setUp(24);
-    // Support on the 24th remains inside the window ending at salary on the 25th.
+    // Support on the 24th remains inside the configured window ending on the 25th.
     const view = getProjectionView(db, now);
     assert.ok(view);
     assert.equal(view.result.paydayDate, '2026-09-25');
@@ -262,8 +267,8 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
 
   it('reproduces the window arithmetic by hand, to the penny', async () => {
     const { db, pots } = await setUp();
-    // This later receipt is inside the horizon, but not from the main Salary
-    // schedule. Day-to-day on its date must still count.
+    // This later receipt is inside the horizon, but not on a configured payday.
+    // Day-to-day on its date must still count.
     createSchedule(db, {
       name: 'Other income',
       kind: 'receipt',
@@ -328,10 +333,10 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
     //   Energy DD (25th, monthly) — 25 Sep AND 25 Oct  → £169.10
     //   Salary (26th → weekend shift) — 26 Sep is Saturday → Friday 25 Sep,
     //       and Monday 26 Oct  → £4,300
-    //   Other income (20th) — 20 Oct  → £50; not a main salary date
+    //   Other income (20th) — 20 Oct  → £50; not a configured payday
     //   Support (12th) — Monday 12 Oct  → £1,000, flagged expected
     //   Weekly shops — every 7 days from the 21st → 28/9, 5/10, 12/10,
-    //       19/10, 26/10; the main-salary-day shop is excluded → 4 × £90 = £360
+    //       19/10, 26/10; the configured-payday shop is excluded → 4 × £90 = £360
     //   Fuel A — 20/9 + 30 → 20/10  → £75;   Fuel B — 5/9 + 30 → 5/10  → £60
     const through = '2026-10-26';
     const view = getHorizonProjectionView(db, through, [], true, now);
@@ -370,7 +375,7 @@ describe('horizon: expected inflow and the horizon read model (v0.5.0)', () => {
       ['2026-10-05', '2026-10-20'],
     );
 
-    // The weekly shop projected for 26 Oct is the main salary-day item, so it
+    // The weekly shop projected for 26 Oct is on the configured payday, so it
     // is absent from the Horizon list and final-day total too.
     const lastDay = result.perDay[result.perDay.length - 1];
     assert.ok(lastDay);

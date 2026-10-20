@@ -5,14 +5,14 @@ import { listPeople } from './people';
 import { latestCheckpointPerPot, listPots, type PotKind } from './pots';
 import { listRenewals } from './renewals';
 import { listSchedules } from './schedules';
-import { getMonthlyFuelByVehicle, getWeeklyGroceriesPence } from './settings';
+import { getMonthlyFuelByVehicle, getPaydayDayOfMonth, getWeeklyGroceriesPence } from './settings';
 import { listVehicles } from './vehicles';
 
 /**
  * The first-run setup path (docs/ONBOARDING_PLAN.md, Slice 1).
  *
  * A brand-new household meets fourteen pages and one dependency chain —
- * people → pots → checkpoints → income → bills → figures → first purchase —
+ * people → pots → checkpoints → household payday → bills → figures → first purchase —
  * and nothing stated it. This module states it, derived entirely from the
  * household's own records: there is no onboarding flag, no "dismissed"
  * marker and no tick a person could tick dishonestly. Undo a record and the
@@ -23,7 +23,15 @@ import { listVehicles } from './vehicles';
  */
 
 export type SetupStepId =
-  'people' | 'pots' | 'checkpoints' | 'income' | 'bills' | 'figures' | 'cards' | 'purchases';
+  | 'people'
+  | 'pots'
+  | 'checkpoints'
+  | 'payday'
+  | 'income'
+  | 'bills'
+  | 'figures'
+  | 'cards'
+  | 'purchases';
 
 /**
  * `partly` is an honest middle: some pots anchored, some figures set — the
@@ -37,9 +45,9 @@ export interface SetupStepStatus {
   readonly id: SetupStepId;
   readonly phase: SetupPhase;
   /**
-   * A step that may simply not apply to this household (credit cards and
-   * renewals). Optional steps are shown, never counted as outstanding, and
-   * complete when the household has recorded one of either.
+   * A step that may simply not apply to this household (predictable recurring
+   * income, credit cards or renewals). Optional steps are shown, never counted
+   * as outstanding, and complete when relevant records exist.
    */
   readonly optional: boolean;
   readonly state: SetupStepState;
@@ -75,6 +83,7 @@ export interface SetupFormData {
   readonly pots: Array<{ id: number; label: string; kind: PotKind }>;
   readonly vehicles: Array<{ id: number; label: string }>;
   readonly weeklyGroceriesPence: number | null;
+  readonly paydayDayOfMonth: number | null;
   readonly monthlyFuelPence: Array<{
     vehicleId: number;
     label: string;
@@ -93,6 +102,7 @@ export function getSetupFormData(db: Db, nowArg?: Date): SetupFormData {
     pots: listPots(db).map(({ id, label, kind }) => ({ id, label, kind })),
     vehicles: vehicles.map(({ id, label }) => ({ id, label })),
     weeklyGroceriesPence: getWeeklyGroceriesPence(db),
+    paydayDayOfMonth: getPaydayDayOfMonth(db),
     monthlyFuelPence: vehicles.map((vehicle) => ({
       vehicleId: vehicle.id,
       label: vehicle.label,
@@ -104,44 +114,58 @@ export function getSetupFormData(db: Db, nowArg?: Date): SetupFormData {
 
 export const SETUP_STEP_COPY: Record<SetupStepId, SetupStepCopy> = {
   people: {
-    title: 'Name the people',
-    why: 'Every “paid by” and “for” chip on the till uses these names, and the by-person insight attributes only what is marked for someone. A household of one is complete — add a second person only if there is one.',
-    payoff: 'Purchases can be marked for a person, and Insights can attribute them.',
+    title: 'Add the people in your household',
+    why: 'Add a person record for each household member you want to use for “Paid by” and “For”; people records are not limited to two. Sign-in is separate: an administrator assigns up to two sign-in identities to the household before first login. In Settings, link a person to an assigned sign-in if you want that identity prefilled as “Paid by”. Choose “For” on every purchase too — a manually chosen value is not carried into the next entry, which uses its category default. Household versus individual purchases is what makes the by-person Insights and Charts useful.',
+    payoff:
+      'The till can identify who paid and who a purchase was for; Insights and Charts can separate household and individual spending.',
   },
   pots: {
-    title: 'Add the pots you actually have',
-    why: 'A pot is any place money sits: a bank account, a credit card, a wallet or a jar. A typical setup is a joint current account, a bills account and a cash pot each — add only the ones you use.',
-    payoff: 'The household total on the home page and the till’s pot picker start working.',
+    title: 'Add the pots you actually use',
+    why: 'A pot can be a bank account, credit card, cash or wallet, or a savings jar. Add only the ones you use. Record transfers between your own pots in Move so the money is not mistaken for spending and the pot balances stay accurate.',
+    payoff:
+      'The household total, pot balances and till’s “Paid from” choices reflect where your money actually sits.',
   },
   checkpoints: {
-    title: 'Record what each pot holds',
-    why: 'A checkpoint is the only anchor to reality the app has: one number you read from the bank or counted by hand. It never guesses a balance, so a pot with no checkpoint shows no estimate.',
-    payoff: 'Each pot gets an estimate, the household total appears, and Horizon can project.',
+    title: 'Record each pot’s balance',
+    why: 'There is no bank connection, statement import or automatic knowledge of cash. A checkpoint is the balance you read from an account or count yourself; it re-establishes that pot’s balance, and later recorded activity updates it from that point. Without a checkpoint the app does not guess.',
+    payoff:
+      'Each checked bank or cash pot gets an estimate, the household total appears, and projections have a real starting point.',
+  },
+  payday: {
+    title: 'Set the household payday',
+    why: 'Choose the household’s usual payday day of the month. It defines the planning-cycle boundary for Home, Overview, Horizon’s default and the payday charts, even if no income receipt is scheduled. Short months clamp to their last day, and a weekend payday moves back to Friday.',
+    payoff:
+      'The payday projection can work from your checkpoints without a receipt schedule; scheduled receipts still count on their own due dates.',
   },
   income: {
-    title: 'Add the money that comes in',
-    why: 'The salary that repeats — its day of the month defines the payday-to-payday cycle everything is planned around. A due day on a weekend is expected on the Friday before.',
-    payoff: 'The payday projection and “lowest before pay day” appear on the home page.',
+    title: 'Add predictable recurring income',
+    why: 'Create a receipt schedule only for income with a predictable amount and date, such as a regular salary. The household payday setting—not the schedule—defines the planning cycle. For one-offs such as a windfall or sale, record the money on Income instead of making a recurring schedule.',
+    payoff:
+      'Predictable future receipts appear in projections on their own due dates; one-off income stays a one-off record.',
   },
   bills: {
-    title: 'Add the bills you pay',
-    why: 'Direct debits and standing orders, each with its day of the month. Add the ones you know now; add the rest as they appear on the statement — nothing is assumed until you record it.',
-    payoff: '“Due this week”, the month calendar, and contract ends and renewal warnings.',
+    title: 'Add recurring bills',
+    why: 'Record the direct debits and standing orders you expect, with their amounts and due dates. When a bill is due, its schedule creates the transaction history. If the actual transaction differs, edit that transaction; if future bills change, edit the schedule.',
+    payoff:
+      'The projection and month calendar include upcoming bills, and due payments build a history you can correct.',
   },
   figures: {
-    title: 'The figures the projection needs',
-    why: 'Your weekly shop and each vehicle’s monthly fuel. These are reported figures, not measured ones — Insights compares them with what actually happened, so a wrong figure is visible rather than hidden.',
-    payoff: 'Day-to-day spending joins the projection and the groceries chart starts drawing.',
+    title: 'Estimate the weekly shop and vehicle fuel',
+    why: 'Set a usual weekly-shop amount and a typical monthly fuel amount for each vehicle. These are projection estimates, not purchases or a record of what you spent. Keep recording actual till purchases and fuel; Insights compares them with the estimates.',
+    payoff:
+      'The projection includes estimated day-to-day spending, while actual purchases remain distinct in Insights and Charts.',
   },
   cards: {
     title: 'Credit cards and renewals, if you have them',
-    why: 'A card balance is money owed, not money available: it counts in the household total but never in the liquidity projection. A renewal raises a warning before it falls due.',
-    payoff: 'The Contracts & Renewals page tracks payment days, contract ends and renewals.',
+    why: 'A credit-card balance counts in the household total but is not liquid money available to spend. Add renewal dates for policies and contracts so the app can warn you before they are due.',
+    payoff:
+      'The household total includes card debt without treating it as cash, and Contracts & Renewals can surface upcoming renewals.',
   },
   purchases: {
-    title: 'Record your first purchase',
-    why: 'The till is the daily tool: supplier, total, split so the lines match, paid by, date, and an optional receipt photo. Record it while it is fresh — or at the laptop afterwards.',
-    payoff: 'Purchases, Insights and the charts fill in, and the honesty loop gets its first week.',
+    title: 'Record your first purchase at the till',
+    why: 'Enter the supplier, total, split the lines so they add up, choose “Paid by” and “For”, set the date, and optionally attach a receipt photo. Check “For” on each new entry: the till does not remember a manually selected target for the next purchase. Record the purchase while it is fresh, or at the laptop afterwards.',
+    payoff:
+      'Purchases, Insights and Charts start reflecting what the household actually bought and for whom.',
   },
 };
 
@@ -225,14 +249,26 @@ export function getSetupPath(db: Db, nowArg?: Date): SetupPathView {
         : `${anchors} of ${bankOrCash.length} pot${bankOrCash.length === 1 ? '' : 's'} have a checkpoint`,
   };
 
-  const incomeStep: SetupStepStatus = {
-    id: 'income',
+  const paydayDayOfMonth = getPaydayDayOfMonth(db);
+  const paydayStep: SetupStepStatus = {
+    id: 'payday',
     phase: 'A',
     optional: false,
+    state: paydayDayOfMonth === null ? 'todo' : 'done',
+    detail:
+      paydayDayOfMonth === null
+        ? 'No household payday set yet'
+        : `Household payday set to day ${paydayDayOfMonth}`,
+  };
+
+  const incomeStep: SetupStepStatus = {
+    id: 'income',
+    phase: 'B',
+    optional: true,
     state: incomeSchedules.length > 0 ? 'done' : 'todo',
     detail:
       incomeSchedules.length === 0
-        ? 'No income scheduled yet'
+        ? 'No recurring income scheduled — add it only if predictable'
         : incomeSchedules.map(({ schedule }) => schedule.name).join(', ') + ' scheduled',
   };
 
@@ -283,6 +319,7 @@ export function getSetupPath(db: Db, nowArg?: Date): SetupPathView {
     peopleStep,
     potsStep,
     checkpointsStep,
+    paydayStep,
     incomeStep,
     billsStep,
     figuresStep,

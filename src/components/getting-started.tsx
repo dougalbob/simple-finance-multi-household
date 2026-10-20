@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { IncomeScheduleForm } from '@/components/income-forms';
 import { AddCheckpointForm, CreatePotForm } from '@/components/pot-forms';
 import { ProjectionSettingsForm } from '@/components/recurring';
-import { AddVehicleForm } from '@/components/settings-forms';
+import { AddVehicleForm, PaydaySettingForm } from '@/components/settings-forms';
 import { AddPersonForm } from '@/components/setup-forms';
 import {
   SETUP_PHASE_TITLES,
@@ -118,8 +118,9 @@ export function GettingStartedPath({
           </span>
         </div>
         <p className="mt-1 max-w-3xl text-sm text-ink-soft">
-          Four short steps — a pot, what it holds, and the money that comes in is all the payday
-          projection needs. Skip any that do not apply; a household of one is complete.
+          Four short steps — household people, a bank or cash pot, its checkpoint and the household
+          payday. A recurring income schedule is separate and optional: the projection works without
+          one, and scheduled receipts still count on their due dates.
         </p>
         <ol className="mt-3 space-y-3">
           {phaseA.map((step) => (
@@ -328,8 +329,18 @@ function StepAction({ id, forms }: { id: SetupStepId; forms: SetupFormData }) {
       return <CreatePotForm people={forms.people} />;
     case 'checkpoints':
       return <AddCheckpointForm pots={liquidPots} />;
+    case 'payday':
+      return <PaydaySettingForm dayOfMonth={forms.paydayDayOfMonth} />;
     case 'income':
-      return <IncomeScheduleForm idPrefix="setup-income" pots={liquidPots} today={forms.today} />;
+      return (
+        <div className="space-y-2">
+          <IncomeScheduleForm idPrefix="setup-income" pots={liquidPots} today={forms.today} />
+          <p className="text-sm text-ink-muted">
+            A one-off windfall or sale is not recurring — record it on{' '}
+            <StepLink href="/income">Income →</StepLink>
+          </p>
+        </div>
+      );
     case 'bills':
       return (
         <StepLink href="/recurring">Add a direct debit or standing order on Recurring →</StepLink>

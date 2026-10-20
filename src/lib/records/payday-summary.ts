@@ -57,7 +57,7 @@ export interface PaydayTransferWatch {
 export interface PaydaySummaryInput {
   /** The household's local today, 'YYYY-MM-DD'. */
   today: string;
-  /** The next scheduled income date — the planning cycle's payday. */
+  /** The next configured household payday — independent of receipt schedules. */
   paydayDate: string;
   /** Whole days from today to payday (the engine's `days`). */
   paydayDays: number;

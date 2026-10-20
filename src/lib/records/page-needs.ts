@@ -44,7 +44,7 @@ export const NEEDS_FIRST_TITLE = 'What this page needs first';
  * this module decides *what* to say.
  */
 const PAGE_PREREQUISITES: Record<PayoffPageId, readonly SetupStepId[]> = {
-  projection: ['pots', 'checkpoints', 'income'],
+  projection: ['pots', 'checkpoints', 'payday'],
   horizon: ['pots', 'checkpoints'],
   charts: ['pots', 'checkpoints', 'purchases'],
   insights: ['purchases', 'figures'],
@@ -70,11 +70,11 @@ const NEED_COPY: Record<PayoffPageId, Partial<Record<SetupStepId, NeedCopy>>> = 
       actionLabel: 'Record what each pot holds',
       guideAnchor: 'checkpoint',
     },
-    income: {
+    payday: {
       sentence:
-        'And it needs the money coming in: a salary or other income schedule, whose day of the month defines your payday cycle.',
-      actionLabel: 'Add the money that comes in',
-      guideAnchor: 'income',
+        'Set a household payday to define this planning window. A receipt schedule is optional; any scheduled receipt still counts on its own due date.',
+      actionLabel: 'Set the household payday',
+      guideAnchor: 'projection',
     },
   },
   horizon: {

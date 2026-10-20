@@ -7,7 +7,7 @@ import {
   getProjectionView,
   getHorizonProjectionView,
   landPenceOf,
-  nextScheduledIncomeDate,
+  nextPaydayDate,
 } from '@/lib/records/money-view';
 import {
   getForecastChartView,
@@ -100,8 +100,8 @@ export default async function ExamplePage() {
 
   // Horizon view
   const pots = listPots(db).filter((pot) => pot.kind !== 'credit-card');
-  const nextIncomeDate = nextScheduledIncomeDate(db, todayIso);
-  const throughDate = nextIncomeDate ?? addDaysLocal(todayIso, 35);
+  const nextHouseholdPayday = nextPaydayDate(db, todayIso);
+  const throughDate = nextHouseholdPayday ?? addDaysLocal(todayIso, 35);
   const horizon = getHorizonProjectionView(db, throughDate, [], true, seedNow);
 
   // Setup path (for the "Getting started" card - shows as complete)

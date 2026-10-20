@@ -102,10 +102,13 @@ export default async function IncomePage({
         className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
       >
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Next payday</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+            Next scheduled receipt
+          </p>
           {summary.nextPayday === null ? (
             <p className="mt-1 text-sm text-ink-soft">
-              No scheduled income yet — add one below and the projection plans around it.
+              No scheduled income yet. The household payday sets the planning window; a receipt
+              schedule is optional.
             </p>
           ) : (
             <>

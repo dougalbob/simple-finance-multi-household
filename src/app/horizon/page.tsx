@@ -10,7 +10,7 @@ import {
   ensureScheduleState,
   getHorizonProjectionView,
   landPenceOf,
-  nextScheduledIncomeDate,
+  nextPaydayDate,
 } from '@/lib/records/money-view';
 import { getPageNeeds } from '@/lib/records/page-needs';
 import { listPots } from '@/lib/records/pots';
@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 /** The furthest the household can look ahead (a planning figure, not a promise). */
 const HORIZON_MAX_DAYS = 400;
-/** The default window when no scheduled income is ahead (five weeks). */
+/** The default window when no household payday is configured (five weeks). */
 const HORIZON_FALLBACK_DAYS = 35;
 
 interface SearchParams {
@@ -68,14 +68,13 @@ export default async function HorizonPage({
   const maxSelectable = addDaysLocal(today, HORIZON_MAX_DAYS);
 
   // The chosen date (decision 150): a valid `?through=` inside the window is
-  // used as given; otherwise the day before the next scheduled income (the
-  // salary — a debt's expected support never counts), clamped into the
-  // window; with no scheduled income at all, five weeks ahead. Never trusted
-  // from the client.
+  // used as given; otherwise use the day before the configured household
+  // payday. Only when no payday is configured, fall back to five weeks ahead.
+  // Receipt schedules never alter this planning-cycle boundary.
   const { date: throughDate } = resolveHorizonThrough({
     today,
     requested: typeof params.through === 'string' ? params.through : null,
-    nextIncomeDate: nextScheduledIncomeDate(db, today),
+    nextPaydayDate: nextPaydayDate(db, today),
     minDate: minSelectable,
     maxDate: maxSelectable,
     fallbackDays: HORIZON_FALLBACK_DAYS,

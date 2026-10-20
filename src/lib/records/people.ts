@@ -6,8 +6,8 @@ import { VersionConflictError } from './errors';
 
 /**
  * Household members (SPEC §3): the people behind paid-by and for-person
- * attribution. Labels are configured privately; exactly two in this
- * household, but the table does not hard-code that cardinality.
+ * attribution. People records are not cardinality-limited here; the registry
+ * separately allows up to two sign-in identities per household.
  */
 
 export type Person = typeof people.$inferSelect;

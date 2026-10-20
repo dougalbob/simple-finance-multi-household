@@ -11,7 +11,13 @@ import {
   transfers,
 } from '../db/schema';
 import { toLocalDateString } from '../time';
-import { addDaysLocal, daysBetween } from './dates';
+import {
+  addDaysLocal,
+  daysBetween,
+  nextPaydayOccurrence,
+  paydayOccurrencesBetween,
+  previousPaydayOccurrences,
+} from './dates';
 import { expectedInflowOccurrences, expectedInflowPotId, listDebts } from './debts';
 import {
   projectDayToDayEvents,
@@ -26,19 +32,17 @@ import {
 } from './estimates';
 import { computeKeyDateAlerts, type KeyDateAlert, type KeyDateItem } from './keydates';
 import {
-  excludeMainSalaryDayToDay,
+  excludePaydayDayToDay,
   projectToPayday,
   type PotWatchInput,
   type ProjectionResult,
   type ProjectionScheduleLine,
 } from './projection';
-import { getContractEndWarningLeadDays } from './settings';
+import { getContractEndWarningLeadDays, getPaydayDayOfMonth } from './settings';
 import { advanceDueRenewals, listRenewals } from './renewals';
 import { advanceDueAgreementRenewals, listAgreements } from './agreements';
 import { debtsSummary, type DebtsSummary } from './debts';
 import {
-  cadenceDatesOnOrBefore,
-  getSchedule,
   listSchedules,
   materializeAndConvert,
   MATERIALIZATION_HORIZON_DAYS,
@@ -240,9 +244,6 @@ export interface ProjectionView {
   snapshot: MoneySnapshot;
   result: ProjectionResult;
   paceText: string;
-  /** The income schedule defining the planning cycle (SPEC §11.3). */
-  paydayScheduleName: string | null;
-  paydayScheduleId: number | null;
   commitmentLines: ProjectionLine[];
   receiptLines: ProjectionLine[];
   /**
@@ -251,7 +252,7 @@ export interface ProjectionView {
    * the panel can list exactly which events it is counting and when.
    */
   dayToDayEvents: ProjectedDayToDayEvent[];
-  /** Estimates of pots other than each watch pot — for the "Salary account holds £X" clause. */
+  /** Estimates of other pots — for the "{pot} holds £X" clause in the transfer guidance. */
   potLabels: Map<number, string>;
   otherPotEstimates: Map<number, number>;
 }
@@ -273,26 +274,12 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
   );
   const potLabel = new Map(snapshot.pots.map((pot) => [pot.pot.id, pot.pot.label]));
 
-  // Salary receipts anchor the cycle; borrowed support stays inside it (decision 166).
-  const income = nextExpectedIncome(db, today);
-  if (income === null) {
-    // No expected-receipt schedule → no planning
-    // cycle → no projection. The estimate still exists; the UI says exactly
-    // what is missing.
-    return null;
-  }
-  const paydayDate = income.date;
-  const payday = income.scheduleId === null ? null : { scheduleId: income.scheduleId };
+  // The configured household payday is the cycle boundary. Receipt schedules
+  // remain independent and are counted below on their own due dates.
+  const paydayDate = nextPaydayDate(db, today);
+  if (paydayDate === null) return null;
 
   const windowUpper = paydayDate;
-  const windowLower = addDaysLocal(today, 1);
-  const inWindow =
-    windowUpper === null
-      ? undefined
-      : and(
-          gte(scheduleInstances.dueDate, windowLower),
-          lte(scheduleInstances.dueDate, windowUpper),
-        );
 
   const toLines = (rows: WindowLineRow[]): ProjectionLine[] =>
     rows.map((row) => ({
@@ -344,11 +331,12 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
   // Projected day-to-day spending (SPEC §7.3, v0.6.0): episodic events
   // anchored on when the household last actually shopped or filled up, so a
   // fresh £55 at the pumps suppresses projected fuel for its cooldown
-  // instead of being double-counted alongside a smooth allowance.
-  const mainSalaryDates = [paydayDate];
-  const dayToDayEvents = excludeMainSalaryDayToDay(
+  // instead of being double-counted alongside a smooth allowance. The
+  // household's actual payday date(s), not receipt schedules, are excluded.
+  const paydayDates = paydayDatesInWindow(db, today, windowUpper);
+  const dayToDayEvents = excludePaydayDayToDay(
     projectDayToDayEvents(db, today, windowUpper),
-    mainSalaryDates,
+    paydayDates,
   );
   const dayToDaySplit = splitDayToDayEvents(dayToDayEvents);
 
@@ -368,7 +356,7 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
     receipts: receiptLines,
     projectedGroceries: dayToDayEventsToLines(dayToDaySplit.groceries),
     projectedFuel: dayToDayEventsToLines(dayToDaySplit.fuel),
-    mainSalaryDates,
+    paydayDates,
     warningThresholdPence,
     potWatches,
   });
@@ -377,8 +365,6 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
     snapshot,
     result,
     paceText: weeklyPaceText(today, result.lowDate, result.projectedLowPence),
-    paydayScheduleName: income.scheduleName,
-    paydayScheduleId: payday === null ? null : payday.scheduleId,
     commitmentLines: toLines(commitmentRows),
     receiptLines: [...toLines(receiptRows), ...expectedReceipts],
     dayToDayEvents,
@@ -392,13 +378,13 @@ export function getProjectionView(db: Db, nowArg?: Date): ProjectionView | null 
 }
 
 /* ------------------------------------------------------------------ */
-/* The cycle outlook: what is safe to spend before income lands (v0.9.0) */
+/* The cycle outlook: what is safe to spend before the configured payday (v0.9.0) */
 /* ------------------------------------------------------------------ */
 
 export interface CycleOutlookPot {
   potId: number;
   estimatePence: number | null;
-  /** Σ of this pot's unconverted commitments due before income lands. */
+  /** Σ of this pot's unconverted commitments due before the configured payday. */
   commitmentsPence: number;
   /** estimate − commitments; null when the pot has no estimate (no checkpoint). */
   spendablePence: number | null;
@@ -408,20 +394,19 @@ export interface CycleOutlookPot {
   outgoing: Array<{ name: string; amountPence: number; dueDate: string }>;
 }
 
-/** Salary-window household low, shared with the payday engine (decision 166).
+/** Configured-payday household low, shared with the projection engine.
  * Per-pot watches remain bills-only transfer signals. */
 export interface CycleOutlook {
   asOf: Date;
-  /** The next expected income (SPEC §11.3) — null when none is scheduled. */
-  incomeDate: string | null;
-  incomeSource: string | null;
-  /** Whole days from today to income; 0 when nothing is expected. */
+  /** The next configured household payday, or null until one is set. */
+  paydayDate: string | null;
+  /** Whole days from today to payday; 0 when no payday is configured. */
   days: number;
   /** household_available_now (SPEC §7.1); null when no pot is checkpointed. */
   householdAvailablePence: number | null;
   commitmentsPence: number;
   dayToDayPence: number;
-  /** The shared engine’s lowest point, including support inside the salary window. */
+  /** The shared engine’s lowest point, including receipts due inside the payday window. */
   freeToSpendPence: number | null;
   paceText: string;
   /** Earliest day sharing the projected low, including today; null without a projection. */
@@ -445,23 +430,23 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
   const now = nowArg ?? new Date();
   const snapshot = snapshotArg ?? getMoneySnapshot(db, now);
   const today = toLocalDateString(now);
-  const income = nextExpectedIncome(db, today);
+  const paydayDate = nextPaydayDate(db, today);
   const potLabel = new Map(snapshot.pots.map((entry) => [entry.pot.id, entry.pot.label]));
 
   const liquidPotIds = new Set(
     snapshot.pots.filter((entry) => entry.pot.kind !== 'credit-card').map((entry) => entry.pot.id),
   );
   const commitmentRows =
-    income === null
+    paydayDate === null
       ? []
-      : windowLines(db, 'commitment', today, income.date).filter((row) =>
+      : windowLines(db, 'commitment', today, paydayDate).filter((row) =>
           liquidPotIds.has(row.potId),
         );
-  const mainSalaryDates = income === null ? [] : [income.date];
+  const paydayDates = paydayDate === null ? [] : paydayDatesInWindow(db, today, paydayDate);
   const dayToDayEvents =
-    income === null
+    paydayDate === null
       ? []
-      : excludeMainSalaryDayToDay(projectDayToDayEvents(db, today, income.date), mainSalaryDates);
+      : excludePaydayDayToDay(projectDayToDayEvents(db, today, paydayDate), paydayDates);
   const commitments = commitmentRows.map((row) => ({
     name: row.name,
     amountPence: row.amountPence,
@@ -475,11 +460,11 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
   const pots: CycleOutlookPot[] = snapshot.pots.map((entry) => {
     const own = commitments.filter((line) => line.potId === entry.pot.id);
     const ownPence = sumPence(own);
-    // No expected income → no window → no "before income lands" figure. The
-    // estimate still shows on the review pages; this one stays silent rather
-    // than pretending an endless window.
+    // No configured payday → no window → no pre-payday figure. The estimate
+    // still shows on the review pages; this stays silent rather than
+    // pretending an endless window.
     const spendablePence =
-      income === null || entry.pot.kind === 'credit-card' || entry.estimatePence === null
+      paydayDate === null || entry.pot.kind === 'credit-card' || entry.estimatePence === null
         ? null
         : entry.estimatePence - ownPence;
     return {
@@ -497,9 +482,8 @@ export function getCycleOutlook(db: Db, nowArg?: Date, snapshotArg?: MoneySnapsh
 
   return {
     asOf: now,
-    incomeDate: income?.date ?? null,
-    incomeSource: income?.source ?? null,
-    days: income === null ? 0 : daysBetween(today, income.date),
+    paydayDate,
+    days: paydayDate === null ? 0 : daysBetween(today, paydayDate),
     householdAvailablePence: snapshot.householdAvailablePence,
     commitmentsPence,
     dayToDayPence,
@@ -645,148 +629,30 @@ function windowLines(
     }));
 }
 
-/** The next scheduled salary receipt; debt expectations never define payday. */
-interface NextIncome {
-  date: string;
-  /** The salary receipt schedule's name. */
-  source: string;
-  /** The receipt schedule defining payday. */
-  scheduleId: number | null;
-  scheduleName: string | null;
+/** The next configured household payday after today, or null until it is set. */
+export function nextPaydayDate(db: Db, today: string): string | null {
+  const dayOfMonth = getPaydayDayOfMonth(db);
+  return dayOfMonth === null ? null : nextPaydayOccurrence(dayOfMonth, today);
 }
 
 /**
- * The earliest unconverted **receipt schedule** instance into a bank or cash
- * pot strictly after today — scheduled income only (the salary), already
- * weekend-shifted. Card-pot receipts are not liquid payday anchors. Shared by
- * `nextExpectedIncome` and `nextScheduledIncomeDate` so there is one query.
+ * Every actual configured household payday in (today, throughDate], oldest
+ * first. An unset payday means there are no payday dates to exclude from
+ * Horizon's day-to-day forecast.
  */
-function nextReceiptScheduleInstance(
-  db: Db,
-  today: string,
-): { dueDate: string; scheduleId: number; scheduleName: string } | undefined {
-  return db
-    .select({
-      dueDate: scheduleInstances.dueDate,
-      scheduleId: schedules.id,
-      scheduleName: schedules.name,
-    })
-    .from(scheduleInstances)
-    .innerJoin(schedules, eq(schedules.id, scheduleInstances.scheduleId))
-    .innerJoin(pots, eq(pots.id, schedules.potId))
-    .where(
-      and(
-        eq(scheduleInstances.state, 'upcoming'),
-        eq(schedules.kind, 'receipt'),
-        or(eq(pots.kind, 'bank'), eq(pots.kind, 'cash')),
-        gte(scheduleInstances.dueDate, addDaysLocal(today, 1)),
-      ),
-    )
-    .orderBy(asc(scheduleInstances.dueDate), asc(scheduleInstances.id))
-    .limit(1)
-    .get();
+export function paydayDatesInWindow(db: Db, today: string, throughDate: string): string[] {
+  const dayOfMonth = getPaydayDayOfMonth(db);
+  return dayOfMonth === null ? [] : paydayOccurrencesBetween(dayOfMonth, today, throughDate);
 }
 
 /**
- * The main salary schedule's actual (weekend-shifted) occurrences in a window.
- * Other receipt schedules are deliberately not included: a benefit or refund
- * arriving inside Horizon does not turn that date into payday.
- */
-function mainSalaryDatesInWindow(db: Db, today: string, throughDate: string): string[] {
-  if (throughDate <= today) return [];
-  const mainSalary = nextReceiptScheduleInstance(db, today);
-  if (mainSalary === undefined) return [];
-  return db
-    .select({ dueDate: scheduleInstances.dueDate })
-    .from(scheduleInstances)
-    .where(
-      and(
-        eq(scheduleInstances.scheduleId, mainSalary.scheduleId),
-        eq(scheduleInstances.state, 'upcoming'),
-        gte(scheduleInstances.dueDate, addDaysLocal(today, 1)),
-        lte(scheduleInstances.dueDate, throughDate),
-      ),
-    )
-    .orderBy(asc(scheduleInstances.dueDate))
-    .all()
-    .map((row) => row.dueDate);
-}
-
-/**
- * The next **scheduled income** date (Horizon's default, SPEC §7.6, decision
- * 150): receipt schedules only. Like `nextExpectedIncome` (§7.2/§7.7), a
- * debt's expected support never counts — the household anchors the horizon
- * on the salary, and borrowed money is never income (§10.2). null when no
- * receipt schedule has an upcoming instance.
- */
-export function nextScheduledIncomeDate(db: Db, today: string): string | null {
-  return nextReceiptScheduleInstance(db, today)?.dueDate ?? null;
-}
-
-/**
- * The main salary's dates on or before `today`, newest first — the paydays
- * the household has already lived through. Only the schedule that defines the
- * next payday counts, so a benefit or refund never moves the cycle (the same
- * rule as `nextScheduledIncomeDate`). Empty when no payday is scheduled.
- */
-export function recentScheduledIncomeDates(db: Db, today: string, count: number): string[] {
-  const mainSalary = nextReceiptScheduleInstance(db, today);
-  if (mainSalary === undefined || count <= 0) return [];
-  return db
-    .select({ dueDate: scheduleInstances.dueDate })
-    .from(scheduleInstances)
-    .where(
-      and(
-        eq(scheduleInstances.scheduleId, mainSalary.scheduleId),
-        lte(scheduleInstances.dueDate, today),
-      ),
-    )
-    .orderBy(desc(scheduleInstances.dueDate))
-    .limit(count)
-    .all()
-    .map((row) => row.dueDate);
-}
-
-/** How far before the oldest recorded payday a derived one must fall. */
-const PAYDAY_MIN_GAP_DAYS = 14;
-
-/**
- * The paydays already lived through, newest first — like
- * `recentScheduledIncomeDates`, but never short of history (issue #24). The
- * salary's own recorded instances come first; when the schedule started too
- * recently to have `count` of them (the household began telling the app about
- * the salary this month), the earlier paydays are worked out from the
- * salary's cadence. That is what lets the spending-mix chart offer "Last full
- * payday cycle" on day one instead of quietly hiding it. Empty only when no
- * payday is scheduled at all.
+ * The actual household payday dates already lived through, newest first.
+ * Chart E derives both quick windows from this setting, never from receipt
+ * schedules or their recorded instances.
  */
 export function recentPaydayDates(db: Db, today: string, count: number): string[] {
-  const mainSalary = nextReceiptScheduleInstance(db, today);
-  if (mainSalary === undefined || count <= 0) return [];
-  const recorded = recentScheduledIncomeDates(db, today, count);
-  if (recorded.length >= count) return recorded;
-  const oldest = recorded[recorded.length - 1];
-  // A derived payday must sit a clear fortnight before the oldest recorded
-  // one: when the due day was edited, the old cadence's instance and the new
-  // cadence's date for the same period must not both count as paydays.
-  const before = oldest === undefined ? today : addDaysLocal(oldest, -PAYDAY_MIN_GAP_DAYS);
-  const schedule = getSchedule(db, mainSalary.scheduleId);
-  const derived = cadenceDatesOnOrBefore(schedule, before, count - recorded.length);
-  return [...recorded, ...derived];
-}
-
-function nextExpectedIncome(db: Db, today: string): NextIncome | null {
-  const schedule = nextReceiptScheduleInstance(db, today);
-  const scheduleOption: NextIncome | null =
-    schedule === undefined
-      ? null
-      : {
-          date: schedule.dueDate,
-          source: schedule.scheduleName,
-          scheduleId: schedule.scheduleId,
-          scheduleName: schedule.scheduleName,
-        };
-  return scheduleOption;
+  const dayOfMonth = getPaydayDayOfMonth(db);
+  return dayOfMonth === null ? [] : previousPaydayOccurrences(dayOfMonth, today, count);
 }
 
 /**
@@ -1079,12 +945,11 @@ export function getHorizonProjectionView(
   // Projected day-to-day spending (SPEC §7.3, v0.6.0): episodic events
   // anchored on actual shops/fills, household-level like the configured
   // figures were — pot scoping filters commitments and receipts, never the
-  // day-to-day events. Only actual dates belonging to the main salary schedule
-  // are excluded; other receipt dates remain ordinary days. "Bills only"
-  // passes no events at all.
-  const mainSalaryDates = mainSalaryDatesInWindow(db, today, windowUpper);
+  // day-to-day events. Exclude configured payday occurrences, independent of
+  // receipt schedules. "Bills only" passes no events at all.
+  const paydayDates = paydayDatesInWindow(db, today, windowUpper);
   const dayToDayEvents = includeDayToDay
-    ? excludeMainSalaryDayToDay(projectDayToDayEvents(db, today, windowUpper), mainSalaryDates)
+    ? excludePaydayDayToDay(projectDayToDayEvents(db, today, windowUpper), paydayDates)
     : [];
   const dayToDaySplit = splitDayToDayEvents(dayToDayEvents);
 
@@ -1217,7 +1082,7 @@ export function getHorizonProjectionView(
     receipts,
     projectedGroceries: dayToDayEventsToLines(dayToDaySplit.groceries),
     projectedFuel: dayToDayEventsToLines(dayToDaySplit.fuel),
-    mainSalaryDates,
+    paydayDates,
     warningThresholdPence,
     potWatches,
   });

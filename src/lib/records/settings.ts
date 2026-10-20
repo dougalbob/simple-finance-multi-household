@@ -23,6 +23,7 @@ export class InvalidSettingValueError extends Error {
 
 const KEY_WEEKLY_GROCERIES = 'weekly_groceries_pence';
 const KEY_FUEL_PREFIX = 'monthly_fuel_pence:';
+const KEY_PAYDAY_DAY_OF_MONTH = 'payday_day_of_month';
 const KEY_RENEWAL_LEAD = 'renewal_warning_lead_days';
 const KEY_CONTRACT_END_LEAD = 'contract_end_warning_lead_days';
 const KEY_DEFAULT_PURCHASE_POT = 'default_purchase_pot_id';
@@ -32,6 +33,42 @@ const KEY_COMMITMENT_CATEGORIES = 'commitment_category_ids';
 
 export const DEFAULT_RENEWAL_WARNING_LEAD_DAYS = 21;
 export const DEFAULT_CONTRACT_END_WARNING_LEAD_DAYS = 21;
+
+/**
+ * The household's configured payday day-of-month (1–31). null = no payday has
+ * been set; the setting uses the existing audited key/value table (no schema
+ * migration). Dates are clamped and weekend-shifted by the date helpers.
+ */
+export function getPaydayDayOfMonth(db: Db): number | null {
+  const row = settingRow(db, KEY_PAYDAY_DAY_OF_MONTH);
+  if (row === null || row.value === '') return null;
+  const day = Number(row.value);
+  if (!Number.isInteger(day) || day < 1 || day > 31) {
+    throw new InvalidSettingValueError(
+      'The stored household payday setting is not a day from 1 to 31.',
+    );
+  }
+  return day;
+}
+
+export function setPaydayDayOfMonth(
+  db: Db,
+  dayOfMonth: number | null,
+  actor: string,
+  now?: Date,
+): void {
+  if (dayOfMonth !== null && (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31)) {
+    throw new InvalidSettingValueError('The household payday must be a whole day from 1 to 31.');
+  }
+  upsertSetting(
+    db,
+    KEY_PAYDAY_DAY_OF_MONTH,
+    dayOfMonth === null ? '' : String(dayOfMonth),
+    actor,
+    'payday',
+    now,
+  );
+}
 
 /** Projected weekly groceries (SPEC §7.3). null = not configured yet. */
 export function getWeeklyGroceriesPence(db: Db): number | null {

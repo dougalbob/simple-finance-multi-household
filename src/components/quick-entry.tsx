@@ -91,31 +91,28 @@ export interface EntryPotOption {
   cashLastCountedLabel: string | null;
   /** Available now (SPEC §7.1); null when the pot has no checkpoint. */
   estimatePence: number | null;
-  /** What is left after this pot's own bills leave, before income lands (SPEC §7.7). */
+  /** What is left after this pot's own bills leave before the configured payday (SPEC §7.7). */
   spendablePence: number | null;
   /** How far short of its own bills the pot would be; null when it covers them. */
   shortfallPence: number | null;
 }
 
 /**
- * The household-wide half of the balance display (SPEC §7.7): what is left
- * once everything already expected to leave before the next income has left.
- * Deliberately excludes the income itself — the dip before it lands is the
- * number that decides whether a card bounces.
+ * The household-wide half of the balance display (SPEC §7.7): the lowest
+ * projected liquid balance through the next configured payday. Receipts still
+ * count on their own due dates, but outgoings apply first when both fall on the
+ * same date, so a payday-date receipt cannot lift that day's pre-receipt low.
  */
 export interface EntryCycleOutlook {
-  incomeDate: string | null;
-  incomeSource: string | null;
+  paydayDate: string | null;
   days: number;
   householdAvailablePence: number | null;
-  /** Bills (DD/SO) due before income lands. */
+  /** Bills (DD/SO) due before payday. */
   commitmentsPence: number;
-  /** Projected weekly shop / fuel events due before income lands (SPEC §7.3). */
+  /** Projected weekly shop / fuel events due before payday (SPEC §7.3). */
   dayToDayPence: number;
   freeToSpendPence: number | null;
   paceText: string;
-  /** Rendered on the server, e.g. "Tue 30 Sep". */
-  incomeDateLabel: string | null;
   lowDate: string | null;
   lowDateLabel: string | null;
 }
@@ -1471,7 +1468,7 @@ function PotBalance({ pot, cycle }: { pot: EntryPotOption | null; cycle: EntryCy
       {pot.shortfallPence !== null ? (
         <p className="mt-1.5 rounded-md bg-warning-100 px-2 py-1 text-xs font-semibold text-warning-900">
           Bills-only shortfall: {pot.label} would be {formatPence(pot.shortfallPence)} short before
-          income lands
+          payday
           {cycle.dayToDayPence > 0
             ? ` — If projected day-to-day spending also comes from ${pot.label}, the guide shortfall is about ${formatPence(pot.shortfallPence + cycle.dayToDayPence)}`
             : '.'}
@@ -1481,17 +1478,20 @@ function PotBalance({ pot, cycle }: { pot: EntryPotOption | null; cycle: EntryCy
   );
 }
 
-/** The shared salary-window low and pace, not a separate spending-only sum. */
+/** The shared configured-payday low and pace, not a separate spending-only sum. */
 function CycleSummary({ cycle, today }: { cycle: EntryCycleOutlook; today: string }) {
-  if (cycle.incomeDate === null) {
+  if (cycle.paydayDate === null) {
     return (
       <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
-        No salary income is scheduled yet, so there is no “lowest before pay day” figure. Add it in
-        Recurring payments and it appears here.
+        No household payday is set yet, so there is no “lowest before payday” figure. Set one in{' '}
+        <Link href="/settings#payday-setting" className="sf-link">
+          Settings
+        </Link>
+        .
       </p>
     );
   }
-  const paydayLabel = formatOrdinalDayMonthShortLocalDate(cycle.incomeDate, today);
+  const paydayLabel = formatOrdinalDayMonthShortLocalDate(cycle.paydayDate, today);
   if (cycle.freeToSpendPence === null) {
     return (
       <p className="rounded-lg bg-canvas p-2.5 text-xs text-ink-soft">
@@ -1519,7 +1519,7 @@ function CycleSummary({ cycle, today }: { cycle: EntryCycleOutlook; today: strin
         {cycle.paceText}
         {negative
           ? null
-          : ` Salary on ${cycle.incomeDateLabel} is not counted as money you can spend.`}
+          : ` Income due on payday is not counted in this before-payday low; other receipts are counted on their own due dates.`}
       </p>
       {negative ? null : (
         <p className="mt-1 text-xs text-ink-muted">

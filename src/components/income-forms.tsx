@@ -269,10 +269,11 @@ export function IncomeEditForm({
 }
 
 /**
- * Add scheduled income (SPEC §11.3): the expected receipt that defines the
- * payday-to-payday planning cycle and converts itself on its due date. A
- * due day that lands on a weekend is expected on the previous Friday — the
- * household's rule, stated on the form rather than silently applied.
+ * Add scheduled income (SPEC §11.3): a predictable receipt that the projection
+ * counts on its own due date. The household payday setting independently
+ * defines the planning cycle. A due day that lands on a weekend is expected on
+ * the previous Friday — the household's rule, stated on the form rather than
+ * silently applied.
  */
 export function IncomeScheduleForm({
   idPrefix,

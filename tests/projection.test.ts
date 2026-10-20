@@ -25,7 +25,7 @@ import {
  *                  = £135.00
  *   salary       = £2,150.00 on the 26th
  *   projected_low = −£571.26 on the 25th (the last weekly shop of the
- *   cycle, just before salary lands)
+ *   cycle, just before payday arrives)
  *   tier         = warning (−571.26 ≤ −250.00)
  *   pot_watch(Main) = £348.88 − £1,014.96 = −£666.08 (day-to-day events
  *   never enter the pot watch, §7.5)
@@ -249,7 +249,7 @@ describe('projection: day-to-day events and edge cases', () => {
     assert.equal(result.tier, 'none');
   });
 
-  it('excludes every projected day-to-day item on main salary day', () => {
+  it('excludes every projected day-to-day item on the configured payday', () => {
     const result = projectToPayday({
       now: NOW,
       availableNowPence: p(1000),
@@ -276,11 +276,11 @@ describe('projection: day-to-day events and edge cases', () => {
           dueDate: '2026-10-26',
         },
       ],
-      mainSalaryDates: ['2026-10-26'],
+      paydayDates: ['2026-10-26'],
       warningThresholdPence: null,
       potWatches: [],
     });
-    // Neither the projected shop nor fill lowers the low before salary lands.
+    // Neither the projected shop nor fill lowers the low before payday arrives.
     assert.equal(result.projectedLowPence, p(1000));
     assert.equal(result.lowDate, '2026-09-27'); // today remains the lowest point
     assert.equal(result.perDay.at(-1)?.runningPence, p(1500));
@@ -330,7 +330,7 @@ describe('projection: day-to-day events and edge cases', () => {
           dueDate: '2026-10-26',
         },
       ],
-      mainSalaryDates: ['2026-10-26'],
+      paydayDates: ['2026-10-26'],
       warningThresholdPence: null,
       potWatches: [],
     });

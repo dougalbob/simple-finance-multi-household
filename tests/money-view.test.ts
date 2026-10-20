@@ -18,6 +18,7 @@ import {
   getMonthlyFuelPence,
   getWeeklyGroceriesPence,
   setMonthlyFuelPence,
+  setPaydayDayOfMonth,
   setWeeklyGroceriesPence,
 } from '../src/lib/records/settings';
 
@@ -38,6 +39,7 @@ describe('money view: E8 end to end over the database', () => {
     fixture = await createHouseholdFixture();
     const { db, pots } = fixture;
     const actor = 'alex@example.com';
+    setPaydayDayOfMonth(db, 26, actor, new Date('2026-09-01T09:00:00Z'));
 
     // — Schedules: the five DDs from Main + the monthly salary receipt.
     const dd = (name: string, amountPence: number, dueDay: number, categoryId: number) =>
@@ -178,7 +180,6 @@ describe('money view: E8 end to end over the database', () => {
 
     const view = getProjectionView(db, now);
     assert.ok(view, 'projection view expected once pots are checkpointed');
-    assert.equal(view.paydayScheduleName, 'Salary');
     assert.equal(view.result.paydayDate, '2026-10-26');
     assert.equal(view.result.days, 29);
     assert.equal(view.result.availableNowPence, p(938.7));
@@ -231,10 +232,12 @@ describe('money view: E8 end to end over the database', () => {
     assert.equal(getMonthlyFuelPence(db, fixture.vehicles.vehicleA.id), p(75.0));
   });
 
-  it('payday is the earliest unconverted receipt instance; none → null view with estimates', async () => {
+  it('configured payday defines the cycle independently of receipt schedules', async () => {
     fixture = await createHouseholdFixture();
     const { db, pots } = fixture;
     const actor = 'alex@example.com';
+    const paydayNow = new Date('2026-09-27T20:00:00+01:00');
+    setPaydayDayOfMonth(db, 26, actor, paydayNow);
     addCheckpoint(db, {
       potId: pots.main.id,
       amountPence: p(100),
@@ -242,12 +245,14 @@ describe('money view: E8 end to end over the database', () => {
       now: new Date('2026-09-20T09:00:00Z'),
     });
 
-    // No income schedule → estimates exist, the projection does not.
-    assert.ok(getProjectionView(db, new Date('2026-09-27T20:00:00+01:00')) === null);
+    // A configured payday with no receipt schedules still produces a projection.
+    const withoutReceipts = getProjectionView(db, paydayNow);
+    assert.ok(withoutReceipts);
+    assert.equal(withoutReceipts.result.paydayDate, '2026-10-26');
+    assert.deepEqual(withoutReceipts.receiptLines, []);
 
-    // Two income schedules: the earliest wins the planning cycle.
-    // Active from 29 September, so its first instance (28 November) is
-    // after Salary's 26 October — the earliest one must win.
+    // Multiple receipt schedules never change the configured cycle boundary.
+    // The second receipt falls after the configured payday and should stay outside the window.
     const late = createSchedule(db, {
       name: 'Late benefit',
       kind: 'receipt',
@@ -273,17 +278,17 @@ describe('money view: E8 end to end over the database', () => {
     });
     const view = getProjectionView(db, new Date('2026-09-27T20:00:00+01:00'));
     assert.ok(view);
-    assert.equal(view.paydayScheduleName, 'Salary');
     assert.equal(view.result.paydayDate, '2026-10-26');
     void salary;
   });
 
-  it('excludes projected groceries and fuel only on main salary dates in every read model', async () => {
+  it('excludes projected groceries and fuel only on configured payday dates in every read model', async () => {
     fixture = await createHouseholdFixture('alex@example.com', new Date('2026-10-31T12:00:00Z'));
     const { db, pots, vehicles, people } = fixture;
     const actor = 'alex@example.com';
     const now = new Date('2026-10-31T12:00:00Z');
     const fuelCategory = fixture.categoryId('Vehicle Running', 'Fuel');
+    setPaydayDayOfMonth(db, 26, actor, now);
 
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(1000), actor, now });
     createSchedule(db, {
@@ -297,8 +302,8 @@ describe('money view: E8 end to end over the database', () => {
       actor,
       now,
     });
-    // A separate receipt after salary is not a payday. The projected fill on
-    // its date must still count in a longer Horizon window.
+    // A separate receipt after the configured payday does not move the cycle.
+    // The projected fill on its date still counts in a longer Horizon window.
     createSchedule(db, {
       name: 'Other income',
       kind: 'receipt',
@@ -372,7 +377,7 @@ describe('money view: E8 end to end over the database', () => {
     assert.equal(payday.result.projectedLowPence, p(730));
 
     const till = getCycleOutlook(db, now);
-    assert.equal(till.incomeDate, '2026-11-26');
+    assert.equal(till.paydayDate, '2026-11-26');
     assert.equal(till.dayToDayPence, p(270));
     assert.equal(till.freeToSpendPence, payday.result.projectedLowPence);
 
@@ -420,6 +425,7 @@ describe('money view: expected support before the first borrowing (v0.7.0)', () 
     fixture = await createHouseholdFixture(actor, new Date('2026-09-24T19:30:00+01:00'));
     const { db, pots } = fixture;
     const now = new Date('2026-09-24T19:30:00+01:00');
+    setPaydayDayOfMonth(db, 26, actor, now);
     addCheckpoint(db, { potId: pots.main.id, amountPence: p(500), actor, now });
     addCheckpoint(db, { potId: pots.salary.id, amountPence: p(200), actor, now });
     createSchedule(db, {
@@ -447,13 +453,13 @@ describe('money view: expected support before the first borrowing (v0.7.0)', () 
 
   it('projects the first payment before any borrowing exists, and moves no money', async () => {
     const { db } = await setUp();
-    // The morning after payday: the September salary (Fri 25 Sep) has landed,
-    // so the next receipt is Monday 26 October — and the 10th's support is
-    // earlier than that, but never ends the salary window.
+    // The morning after the configured September payday (Fri 25 Sep): the next
+    // configured occurrence is Monday 26 October. Support on the 10th is earlier,
+    // but expected debt support never defines the planning-cycle boundary.
     const at = new Date('2026-09-26T10:00:00+01:00');
     const view = getProjectionView(db, at);
     assert.ok(view);
-    assert.equal(view.result.paydayDate, '2026-10-26'); // salary, not borrowed support
+    assert.equal(view.result.paydayDate, '2026-10-26'); // configured payday, not borrowed support
     const expected = view.receiptLines.filter((line) => line.expected === true);
     assert.equal(expected.length, 1);
     assert.equal(expected[0]?.dueDate, '2026-10-09');

@@ -11,7 +11,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: { default: APP_NAME, template: `%s · ${APP_NAME}` },
   description:
-    'Private household spending tracker for two people watching money carefully. Self-hosted; protected by Cloudflare Access.',
+    'Private household spending tracker for households with up to two assigned sign-in identities. Self-hosted; protected by Cloudflare Access.',
   robots: { index: false, follow: false },
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: APP_NAME },

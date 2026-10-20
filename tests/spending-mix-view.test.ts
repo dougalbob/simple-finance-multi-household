@@ -16,6 +16,7 @@ import {
   spendingMixLines,
 } from '../src/lib/records/charts-view';
 import { summarizeSpending } from '../src/lib/records/insights';
+import { setPaydayDayOfMonth } from '../src/lib/records/settings';
 import { categories } from '../src/lib/db/schema';
 import type { Db } from '../src/lib/db/client';
 
@@ -297,6 +298,7 @@ function parentId(db: Db, name: string): number {
 
 function seed(fixture: HouseholdFixture): void {
   const { db, people, pots } = fixture;
+  setPaydayDayOfMonth(db, 27, ACTOR, NOW);
   const groceries = fixture.categoryId('Groceries', 'Weekly Shop');
   const topUp = fixture.categoryId('Groceries', 'Top-up Shops');
   const clothing = fixture.categoryId('Personal', 'Clothing & Shoes');
