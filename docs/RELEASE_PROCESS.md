@@ -4,6 +4,16 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.33.0 stable release — issue #91 (2026-10-20)
+
+The household agreed the issue #91 design (strict `REGISTRY_ADMIN_EMAIL` admin gate, direct
+`/data/.env` editing with a restart banner, roster-derived allowlist, Cloudflare rule URL
+shortcut), reviewed the Arena preview and asked for merge and publication for full testing on
+its multi-household Unraid installation. This release contains the Admin page improvements only,
+with no schema, migration or backup-format change. Keep the implementation, tests, version files,
+release notes and handoff in one PR; require `gates`, `browser` and `docker` before merge, then
+tag the exact `main` merge commit, publish and verify the GHCR tags/digest as below.
+
 ## v1.32.1 stable patch — issue #87 (2026-10-20)
 
 The household reviewed the Arena preview of the Chart D → E sync fix, approved it and asked for a
