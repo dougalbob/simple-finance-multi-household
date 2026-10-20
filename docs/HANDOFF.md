@@ -1,13 +1,17 @@
-# Issue #89 — Chart G "Spending pace": built, awaiting preview acceptance (2026-10-20)
+# v1.32.0 — issue #89: Chart G "Spending pace" (2026-10-20)
 
-**Read decision 246 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC §16.7 G
-first.** The household designed this in conversation (calendar months, cumulative spending only,
-straight lines, preset scope) and shelved the issue's household-balance toggle for separate
-thought — do not resurrect it inside this chart. **This is not a release**: no version bump, PR or
-tag. The household reviews the Arena preview (seeded server on port 3100, `#pace` on `/charts`)
-before any publish decision; issue #89 stays open until then.
+**Approved stable release:** the household reviewed the Arena preview, approved Chart G unchanged
+(“exactly what I was looking for”) and requested stable **v1.32.0** for full testing on the
+multi-household Unraid installation. Publication follows `docs/RELEASE_PROCESS.md`: one PR,
+required checks, merge to `main`, an annotated tag on that exact merge commit, and successful
+GHCR verification. This is a stable release, not an RC.
 
-**Delivered:** qualifying-month rule over the earliest dated spending entry of any kind
+**Read decisions 246–247 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC
+§16.7 G first.** The household designed this in conversation (calendar months, cumulative
+spending only, straight lines, preset scope) and shelved the issue's household-balance toggle
+for separate thought — do not resurrect it inside this chart.
+
+**Delivered (decision 246):** qualifying-month rule over the earliest dated spending entry of any kind
 (`firstSpendingEntryDate`, decision 246's deliberate divergence from decision 183), the pure
 resolvers and `getCumulativeComparisonView`, the `LineAreaChart` component, the full-width
 `#pace` section with Compare/With/Categories selectors under `cmpA`/`cmpB`/`cmpPreset`, and the

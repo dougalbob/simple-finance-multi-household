@@ -4,6 +4,15 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.32.0 stable release — issue #89 (2026-10-20)
+
+The household designed Chart G in conversation, reviewed the Arena preview and requested stable
+**v1.32.0** for full testing on its multi-household Unraid installation. This release contains the
+Spending pace chart only (decision 246), with no schema, migration or backup-format change. Keep
+the complete implementation, version files, release notes and handoff in one PR; require `gates`,
+`browser` and `docker` before merge, then tag the exact `main` merge commit, publish and verify
+the GHCR tags/digest as below.
+
 ## v1.31.0 stable release — issues #85 and #86 (2026-10-20)
 
 The household reviewed the Arena preview and requested stable **v1.31.0** for full testing on its

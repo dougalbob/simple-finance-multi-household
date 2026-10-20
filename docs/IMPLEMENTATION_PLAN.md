@@ -2,11 +2,11 @@
 
 > **ACTIVE PLAN (approved 2026-10-10):** this repository is the independent multi-household edition. The concise
 > binding contract is [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md); the product requirements are in
-> [`docs/SPEC.md`](SPEC.md). The current stable release is `v1.31.0` (issues #85 and #86). Household-scoped storage, verified identity
+> [`docs/SPEC.md`](SPEC.md). The current stable release is `v1.32.0` (issue #89). Household-scoped storage, verified identity
 > assignment, support consent, tenant-scoped backup/restore, registry recovery and per-request tenant contexts are
 > implemented. Live import of the owner's pre-existing single-household data remains unimplemented and requires a
 > separately approved isolated-copy rehearsal. Decisions below preserve the delivery history; issues #85 and #86 were released as stable
-> `v1.31.0` under decision 245. Do not treat legacy v0.x release
+> `v1.31.0` under decision 245, and issue #89 as stable `v1.32.0` under decision 247. Do not treat legacy v0.x release
 > notes, source tags, project profile or the old session plan as current.
 
 ## Current multi-household decisions
@@ -4072,5 +4072,14 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       `preset` alone, the ineligible-month notice, the same-month state); `'pace'` joined the
       shared phone/laptop figure list, so the 320px / 360px@130% no-pan checks cover it. The
       chart was screenshot-checked at desktop and phone widths against the seeded household
-      before handover. **Awaiting the household's Arena preview acceptance before any release;
-      issue #89 stays open until then.**
+      before handover. The household reviewed the Arena preview, approved it unchanged
+      (“exactly what I was looking for”) and requested stable **v1.32.0** for full testing on
+      Unraid; decision 247 records that release.
+
+247. **Stable release v1.32.0 — issue #89 (2026-10-20).** After reviewing the Arena preview, the
+    household approved Chart G unchanged and requested a stable `v1.32.0` release so it can test
+    it fully on the multi-household Unraid installation. This supersedes the awaiting-acceptance
+    note decision 246 was first written with. No schema, migration or backup-format change. The
+    release PR must pass `gates`, `browser` and `docker` (including the container and applicable
+    upgrade smoke) before merge; tag the exact `main` merge commit and publish only to
+    `ghcr.io/dougalbob/simple-finance-multi-household`.
