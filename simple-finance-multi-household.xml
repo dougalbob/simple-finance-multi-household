@@ -9,9 +9,9 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.34.0 is the stable production release and moves :latest (issue #94:
-  Charts B, C and F open their line items in line beneath the chart, as
-  Chart E already did).
+  v1.35.0 is the stable production release and moves :latest (issue #96:
+  explicit partial refunds, locked refund line identities, and linked
+  refund signposting on Purchases and All Transactions).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -48,7 +48,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.34.0 is the stable production release and moves :latest. On Charts, tapping a Groceries week, a Personal spending segment or a Three months bar opens that figure's line items beneath its own chart — summing exactly to the bar tapped — with Open these purchases onward to the filtered list, all without a page reload or scroll jump.
+    v1.35.0 is the stable production release and moves :latest. A linked refund now starts with blank amount boxes and Originally £X placeholders: enter each refunded amount explicitly, leave lines with no refund blank, and see the original and refund signpost each other. Refund categories and spent-for targets are read-only line headings in creation and correction, so only amounts can be changed.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

@@ -382,8 +382,16 @@ test.describe('all transactions', () => {
     const original = page.locator(`#${originalId}`);
     await original.locator('summary', { hasText: 'Edit' }).click();
     await original.getByRole('button', { name: 'Refund', exact: true }).click();
+    // Issue #96: nothing is pre-filled for the household to misread. A full
+    // refund is now stated explicitly, line by line, against the
+    // "Originally £X" placeholders.
+    await original.getByPlaceholder('Originally £41.98').fill('41.98');
+    await original.getByPlaceholder('Originally £21.49').fill('21.49');
+    await expect(
+      original.getByText(/Refund total £63\.47 of the £63\.47 paid — the whole purchase/),
+    ).toBeVisible();
     await original.getByRole('button', { name: 'Record refund' }).click();
-    await expect(original.getByRole('status')).toContainText(/refund of £63\.47 saved/i, {
+    await expect(original).toContainText(/refund of £63\.47 saved/i, {
       timeout: 30_000,
     });
 
@@ -395,6 +403,11 @@ test.describe('all transactions', () => {
       .locator('tr', { has: page.getByRole('cell', { name: /^REF/ }) })
       .first();
     await expect(refundRow).toContainText('+£63.47');
+    const originalPurchaseId = Number(originalId?.slice('purchase-'.length));
+    await expect(refundRow).toContainText(`for purchase #${originalPurchaseId}`);
+    await expect(
+      refundRow.getByRole('link', { name: `Original purchase #${originalPurchaseId}` }),
+    ).toBeVisible();
     await expect(refundRow.locator('button[aria-expanded]')).toHaveCount(0);
     const refundLink = refundRow.getByRole('link', { name: /Corner Foods/ });
     await expect(refundLink).toHaveAttribute(
@@ -436,6 +449,136 @@ test.describe('all transactions', () => {
     await expect(
       table.locator('tr', { has: page.getByRole('cell', { name: /^REF/ }) }),
     ).toHaveCount(0);
+  });
+
+  test('a partial refund enters one line and leaves the other blank (issue #96)', async ({
+    page,
+  }) => {
+    // Issue #96, decision 252 as revised after the household rejected a
+    // pre-filled preview: the seeded shop splits into Groceries £41.98
+    // (household) and Fuel £21.49 (Vehicle A). The amount boxes start blank;
+    // £10 is explicitly entered for groceries and fuel is left blank, which
+    // means no refund for that line. Neither "Add a line" nor a remove
+    // control is offered — a refund only enters money back on the lines the
+    // original purchase already has.
+    await page.goto('/purchases');
+    const results = page.locator('section[aria-labelledby="results-heading"]');
+    // The sibling spec above leaves a voided £63.47 refund on this list, and
+    // it sorts ahead of the seeded shop — the live original is the
+    // £63.47 row that is not voided.
+    const originalId = await results
+      .locator('tr[id^="purchase-"]', { hasText: '£63.47' })
+      .filter({ hasNotText: 'Voided' })
+      .first()
+      .getAttribute('id');
+    const original = page.locator(`#${originalId}`);
+    await original.locator('summary', { hasText: 'Edit' }).click();
+    await original.getByRole('button', { name: 'Refund', exact: true }).click();
+
+    const description = original.getByText(/For any line item where there has been a refund/);
+    await expect(description).toBeVisible();
+    await expect(description.locator('strong')).toHaveText('refunded');
+    await expect(original.getByLabel(/Enter the amount to be refunded/)).toHaveCount(2);
+    await expect(original.getByText('Add a line')).toHaveCount(0);
+    await expect(original.getByRole('button', { name: /remove line/i })).toHaveCount(0);
+    // Category and spent-for are inherited from the original lines: shown
+    // to identify each line, never as controls that could re-file it.
+    const refundForm = original.locator('form', {
+      has: page.getByRole('button', { name: 'Record refund' }),
+    });
+    await expect(refundForm.locator('select')).toHaveCount(0);
+    await expect(refundForm).toContainText('Groceries / Weekly Shop (household)');
+    await expect(refundForm).toContainText('Vehicle Running / Fuel (Vehicle A)');
+
+    // Both boxes start blank, with the original amounts as placeholders
+    // only. Submitting that blank form records nothing and says why.
+    const groceriesAmount = original.getByPlaceholder('Originally £41.98');
+    const fuelAmount = original.getByPlaceholder('Originally £21.49');
+    await expect(groceriesAmount).toHaveValue('');
+    await expect(fuelAmount).toHaveValue('');
+    await expect(original.getByText(/Refund total £0\.00/)).toBeVisible();
+    await original.getByRole('button', { name: 'Record refund' }).click();
+    await expect(original).toContainText(/Enter the amount to be refunded on at least one line/);
+
+    // Enter the groceries money that came back; fuel stays blank and is not
+    // part of this refund.
+    await groceriesAmount.fill('10.00');
+    await expect(fuelAmount).toHaveValue('');
+    await expect(
+      original.getByText(/Refund total £10\.00 of the £63\.47 paid — a partial refund/),
+    ).toBeVisible();
+    await expect(original.getByText(/The blank line will not be included/)).toBeVisible();
+
+    await original.getByRole('button', { name: 'Record refund' }).click();
+    await expect(original).toContainText(/refund of £10\.00 saved/i, {
+      timeout: 30_000,
+    });
+
+    // The original now signposts the refund in its status and details, and
+    // reopening Refund warns the next person before they can enter the
+    // same money again. Reload from Purchases so this is a fresh form,
+    // not the one that has just been submitted.
+    await page.goto('/purchases');
+    await expect(original).toContainText('£10.00 refunded');
+    await expect(original).toContainText(/Refund recorded: £10\.00 back/);
+    await expect(original).toContainText('£53.47 still refundable');
+    const refundLink = original.getByRole('link', { name: /Refund #\d+/ });
+    await refundLink.click();
+    await expect(page).toHaveURL(/\/purchases\?.*#purchase-\d+/);
+    const refundPurchaseId = new URL(page.url()).hash.slice(1);
+    const refundPurchaseRow = page.locator(`tr[id="${refundPurchaseId}"]`);
+    const originalPurchaseId = Number(originalId?.slice('purchase-'.length));
+    await expect(refundPurchaseRow).toContainText(`Refund · for #${originalPurchaseId}`);
+    await expect(refundPurchaseRow).toContainText(`purchase #${originalPurchaseId}`);
+
+    // Correcting the refund itself changes only the amount refunded. Its
+    // parent/child category and spent-for are read-only line identity,
+    // there is no Add a line, and 12.00 is entered as a positive amount
+    // back rather than as -12.00.
+    await refundPurchaseRow.locator('summary', { hasText: 'Edit' }).click();
+    await refundPurchaseRow.getByRole('button', { name: 'Edit', exact: true }).click();
+    const refundEditForm = refundPurchaseRow.locator('form', {
+      has: page.getByRole('button', { name: 'Save refund' }),
+    });
+    await expect(refundEditForm.locator('select')).toHaveCount(0);
+    await expect(refundEditForm.getByText('Add a line')).toHaveCount(0);
+    await expect(refundEditForm).toContainText('Groceries / Weekly Shop (household)');
+    await expect(refundEditForm.getByLabel(/Amount refunded/)).toHaveValue('10.00');
+    await refundEditForm.getByLabel(/Amount refunded/).fill('12.00');
+    await refundEditForm.getByRole('button', { name: 'Save refund' }).click();
+    await expect(refundPurchaseRow).toContainText('-£12.00', { timeout: 30_000 });
+    await expect(refundPurchaseRow).toContainText('Groceries / Weekly Shop');
+
+    await page.goto('/purchases');
+    await expect(original).toContainText('£12.00 refunded');
+    await expect(original).toContainText('£51.47 still refundable');
+    await original.locator('summary', { hasText: 'Edit' }).click();
+    await original.getByRole('button', { name: 'Refund', exact: true }).click();
+    await expect(original).toContainText('Refund already recorded for this purchase.');
+    await expect(original).toContainText('£51.47 of the £63.47 purchase still refundable');
+    await expect(original.getByPlaceholder('Originally £41.98')).toHaveValue('');
+
+    // Leave the ledger as it was (the rule its sibling refund spec follows):
+    // follow the REF row back to Purchases and void the refund there.
+    await page.goto('/transactions');
+    const table = page.locator('section[aria-labelledby="activity-heading"] table');
+    const refundRow = table
+      .locator('tr', { has: page.getByRole('cell', { name: /^REF/ }) })
+      .first();
+    await expect(refundRow).toContainText('+£12.00');
+    await expect(refundRow).toContainText(`for purchase #${originalPurchaseId}`);
+    await expect(
+      refundRow.getByRole('link', { name: `Original purchase #${originalPurchaseId}` }),
+    ).toBeVisible();
+    await refundRow.getByRole('link', { name: /Corner Foods/ }).click();
+    await expect(page).toHaveURL(/\/purchases\?.*#purchase-\d+/);
+    const anchoredId = new URL(page.url()).hash.slice(1);
+    const row = page.locator(`tr[id="${anchoredId}"]`);
+    await row.locator('summary', { hasText: 'Edit' }).click();
+    await row.getByRole('button', { name: 'Void', exact: true }).click();
+    await row.getByLabel(/Why are you voiding this/).fill('Browser-test partial refund, put back');
+    await row.getByRole('button', { name: 'Void purchase' }).click();
+    await expect(row).toContainText('Voided', { timeout: 30_000 });
   });
 
   test('a purchase recorded at the till is corrected in place, then voided (issue #57)', async ({

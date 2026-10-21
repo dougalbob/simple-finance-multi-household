@@ -549,6 +549,18 @@ scenario and confirmed household-level granularity is all they need.)
 - A **refund** is its own negative record in the same category/target as the original, optionally linked to it
   (partial refunds are just a smaller negative amount). Refunds net off in insights and increase the pot
   estimate (§7.1).
+- Recording a linked refund is **explicit** (issue #96, decision 252): the form shows the original lines with
+  blank amount boxes and `Originally £X` placeholders. For each line with a refund, the household enters the
+  **refunded** amount — not the amount remaining after that refund — under **Enter the amount _to be
+  refunded_**; a line left blank has had no refund and is omitted, and an all-blank form records nothing.
+  The refund form offers no add-line or remove-line control. In both refund creation and refund
+  correction, each line's parent/child category and spent-for target are inherited from the original
+  purchase and shown only as a read-only heading — there are no controls with which to change them.
+  A correction edits positive **Amount refunded** magnitudes and preserves the refund's line count,
+  order, categories and targets exactly; a refund filed against the wrong original line is voided
+  and recorded again. Both linked records signpost each other on Purchases: the original shows the
+  live amount already refunded and still refundable (and offers no further refund once fully
+  refunded), while the refund names and links its original purchase.
 - A **mistake** is corrected by edit (audit-logged) or **void** (retained, marked void, excluded from totals).
   Nothing is silently deleted. A purchase record is never deleted. Removing a receipt (§23.4) is a
   deliberate, audited removal of that file — not a silent deletion of the purchase, and not an undelete.
@@ -1086,7 +1098,9 @@ may — is the disclosure button, opening the Purchases page's own `PurchaseEdit
 stored receipts that page offers.
 A **refund** (`REF`) is deliberately not one of them: it is a purchase record too, but its amount lives
 in the negative, its form belongs beside the original it was refunded against, and it can only be
-recorded, corrected and voided on Purchases — so its row keeps its link there. Correcting a converted
+recorded, corrected and voided on Purchases — so its row keeps its link there. Its row also names and
+links the original purchase (`for purchase #id · date · amount`), and a purchase row/panel with live
+refunds against it carries that refund state (`£X refunded` / `Fully refunded`, issue #96). Correcting a converted
 `DD` / `SO` record never touches the schedule that produced it (§11.1), and the schedule link stays
 beside the code.
 

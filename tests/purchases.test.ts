@@ -19,6 +19,8 @@ import {
   findPossibleDuplicates,
   getPurchaseWithLines,
   listPurchases,
+  refundOriginalsById,
+  refundSummariesForPurchases,
   sumListedPurchasesPence,
   voidPurchase,
   InvalidPurchaseInputError,
@@ -944,6 +946,28 @@ describe('refunds (SPEC §9.5)', () => {
       assert.equal(partial.purchase.supplierId, original.purchase.supplierId);
       assert.equal(partial.purchase.paidByPersonId, original.purchase.paidByPersonId);
 
+      // The Purchases/Transactions signposts read this one live summary:
+      // the original can say £21.49 is back and name the refund record,
+      // while the refund can name the purchase it belongs to (issue #96).
+      const summaryAfterPartial = refundSummariesForPurchases(fx.db, [original.purchase.id]).get(
+        original.purchase.id,
+      );
+      assert.equal(summaryAfterPartial?.refundedPence, 2149);
+      assert.deepEqual(
+        summaryAfterPartial?.refunds.map((refund) => [
+          refund.id,
+          refund.amountPence,
+          refund.potId,
+          refund.occurredDate,
+          refund.enteredBy,
+        ]),
+        [[partial.purchase.id, 2149, original.purchase.potId, '2026-09-20', 'sam@example.com']],
+      );
+      assert.equal(
+        refundOriginalsById(fx.db, [original.purchase.id]).get(original.purchase.id)?.totalPence,
+        6347,
+      );
+
       // Net effect across the pair: £41.98 of live spending.
       const live = listPurchases(fx.db, { includeVoided: false });
       assert.equal(
@@ -960,6 +984,12 @@ describe('refunds (SPEC §9.5)', () => {
         now: new Date('2026-09-20T19:00:00Z'),
       });
       assert.equal(rest.purchase.totalPence, -4198);
+      assert.equal(
+        refundSummariesForPurchases(fx.db, [original.purchase.id]).get(original.purchase.id)
+          ?.refundedPence,
+        6347,
+        'both live refunds count toward a fully refunded original',
+      );
       assert.throws(
         () =>
           createRefund(fx.db, {
@@ -968,6 +998,145 @@ describe('refunds (SPEC §9.5)', () => {
             lines: [{ amountPence: -1, categoryId: groceries, targetKind: 'household' }],
             actor: 'alex@example.com',
             now: new Date('2026-09-20T19:30:00Z'),
+          }),
+        RefundLinkError,
+      );
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('signposts only live refunds — a voided refund is not money back', async () => {
+    const fx = await createHouseholdFixture();
+    try {
+      const groceries = fx.categoryId('Groceries', 'Weekly Shop');
+      const original = createPurchase(fx.db, {
+        potId: fx.pots.main.id,
+        totalPence: 1200,
+        occurredDate: '2026-09-20',
+        lines: [{ amountPence: 1200, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: new Date('2026-09-20T12:00:00Z'),
+      });
+      const refund = createRefund(fx.db, {
+        refundOfPurchaseId: original.purchase.id,
+        totalPence: -500,
+        occurredDate: '2026-09-21',
+        lines: [{ amountPence: -500, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: new Date('2026-09-21T12:00:00Z'),
+      });
+      assert.equal(
+        refundSummariesForPurchases(fx.db, [original.purchase.id]).get(original.purchase.id)
+          ?.refundedPence,
+        500,
+      );
+      voidPurchase(fx.db, {
+        id: refund.purchase.id,
+        expectedVersion: refund.purchase.version,
+        reason: 'Recorded against the wrong shop',
+        actor: 'alex@example.com',
+        now: new Date('2026-09-21T13:00:00Z'),
+      });
+      assert.equal(
+        refundSummariesForPurchases(fx.db, [original.purchase.id]).has(original.purchase.id),
+        false,
+      );
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('lets a refund correction change amounts but never its category or spent-for lines', async () => {
+    const fx = await createHouseholdFixture();
+    try {
+      const groceries = fx.categoryId('Groceries', 'Weekly Shop');
+      const fuel = fx.categoryId('Vehicle Running', 'Fuel');
+      const original = createPurchase(fx.db, {
+        potId: fx.pots.main.id,
+        totalPence: 6347,
+        paidByPersonId: fx.people.alex.id,
+        occurredAt: new Date('2026-09-20T12:00:00Z'),
+        lines: [
+          { amountPence: 4198, categoryId: groceries, targetKind: 'household' },
+          {
+            amountPence: 2149,
+            categoryId: fuel,
+            targetKind: 'vehicle',
+            targetId: fx.vehicles.vehicleA.id,
+          },
+        ],
+        actor: 'alex@example.com',
+        now: new Date('2026-09-20T12:00:00Z'),
+      });
+      const refund = createRefund(fx.db, {
+        refundOfPurchaseId: original.purchase.id,
+        totalPence: -2500,
+        occurredDate: '2026-09-21',
+        lines: [{ amountPence: -2500, categoryId: groceries, targetKind: 'household' }],
+        actor: 'alex@example.com',
+        now: new Date('2026-09-21T12:00:00Z'),
+      });
+
+      // The household's own correction: £25.00 was actually £30.00 back,
+      // on exactly the same parent/child category and target.
+      const corrected = editPurchase(fx.db, {
+        id: refund.purchase.id,
+        expectedVersion: refund.purchase.version,
+        actor: 'alex@example.com',
+        now: new Date('2026-09-21T12:05:00Z'),
+        patch: {
+          totalPence: -3000,
+          lines: [{ amountPence: -3000, categoryId: groceries, targetKind: 'household' }],
+        },
+      });
+      assert.equal(corrected.purchase.totalPence, -3000);
+      assert.deepEqual(
+        corrected.allocations.map((line) => [line.amountPence, line.categoryId, line.targetKind]),
+        [[-3000, groceries, 'household']],
+      );
+
+      // Even another line that does belong to the original purchase is not
+      // an edit: re-filing the refund there would rewrite what it refunds.
+      assert.throws(
+        () =>
+          editPurchase(fx.db, {
+            id: refund.purchase.id,
+            expectedVersion: corrected.purchase.version,
+            actor: 'alex@example.com',
+            patch: {
+              totalPence: -3000,
+              lines: [
+                {
+                  amountPence: -3000,
+                  categoryId: fuel,
+                  targetKind: 'vehicle',
+                  targetId: fx.vehicles.vehicleA.id,
+                },
+              ],
+            },
+          }),
+        RefundLinkError,
+      );
+      // Nor can an edit grow the refund a second line.
+      assert.throws(
+        () =>
+          editPurchase(fx.db, {
+            id: refund.purchase.id,
+            expectedVersion: corrected.purchase.version,
+            actor: 'alex@example.com',
+            patch: {
+              totalPence: -3000,
+              lines: [
+                { amountPence: -1500, categoryId: groceries, targetKind: 'household' },
+                {
+                  amountPence: -1500,
+                  categoryId: fuel,
+                  targetKind: 'vehicle',
+                  targetId: fx.vehicles.vehicleA.id,
+                },
+              ],
+            },
           }),
         RefundLinkError,
       );

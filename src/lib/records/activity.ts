@@ -23,6 +23,12 @@ import { expectedInflowOccurrences, expectedInflowPotId, listDebts } from './deb
 import { SWAP_HISTORY_ANCHOR } from './external-history';
 import { listPeople } from './people';
 import { listPotsIncludingArchived } from './pots';
+import {
+  refundOriginalsById,
+  refundSummariesForPurchases,
+  type Purchase,
+  type PurchaseRefundSummary,
+} from './purchases';
 import { listSuppliers } from './suppliers';
 import { purchaseLineSummary, targetNames } from './targets';
 import { ACTIVITY_FAMILY_RANK, compareActivityOrder, type ActivityOrder } from './activity-order';
@@ -121,9 +127,9 @@ export interface ActivityRow {
   direction: 'in' | 'out';
   note: string;
   link: ActivityLink;
-  /** DD/SO → the schedule; a swap leg → the paired swap list. */
+  /** DD/SO → the schedule; a swap leg → the paired swap list; REF → its original purchase. */
   secondaryLink: ActivityLink | null;
-  /** Swap pairing state, or null. */
+  /** Swap pairing state, a purchase's live refund state, or the original a refund belongs to. */
   badge: string | null;
   /** Running balance after this movement, anchored on checkpoints (null when no anchor). */
   runningBalancePence: number | null;
@@ -345,6 +351,18 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
     db,
     purchaseRows.map((row) => row.id),
   );
+  const refundSummaries = refundSummariesForPurchases(
+    db,
+    purchaseRows
+      .filter((purchase) => purchase.refundOfPurchaseId === null)
+      .map((purchase) => purchase.id),
+  );
+  const refundOriginals = refundOriginalsById(
+    db,
+    purchaseRows.flatMap((purchase) =>
+      purchase.refundOfPurchaseId === null ? [] : [purchase.refundOfPurchaseId],
+    ),
+  );
 
   for (const purchase of purchaseRows) {
     const lines = linesByPurchase.get(purchase.id) ?? [];
@@ -367,6 +385,17 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
         scheduleId: schedule?.scheduleId ?? null,
         summary: purchaseLineSummary(lines, categoryNames, names),
         attachments: attachmentsByPurchase.get(purchase.id) ?? [],
+        badge: purchaseRefundBadge(
+          purchase,
+          refundSummaries.get(purchase.id),
+          purchase.refundOfPurchaseId === null
+            ? undefined
+            : refundOriginals.get(purchase.refundOfPurchaseId),
+        ),
+        refundOriginal:
+          purchase.refundOfPurchaseId === null
+            ? null
+            : (refundOriginals.get(purchase.refundOfPurchaseId) ?? null),
       }),
       movement: {
         key: `purchase-${purchase.id}`,
@@ -1008,6 +1037,15 @@ export function purchaseActivityRow(
     ),
   );
   const names = targetNames({ people: listPeople(db), vehicles: listVehicles(db) });
+  const refundSummary =
+    purchase.refundOfPurchaseId === null
+      ? refundSummariesForPurchases(db, [purchase.id]).get(purchase.id)
+      : undefined;
+  const refundOriginal =
+    purchase.refundOfPurchaseId === null
+      ? null
+      : (refundOriginalsById(db, [purchase.refundOfPurchaseId]).get(purchase.refundOfPurchaseId) ??
+        null);
   return purchaseActivityRowFrom(purchase, lines, {
     potId,
     dateFrom: window.dateFrom,
@@ -1017,6 +1055,8 @@ export function purchaseActivityRow(
     scheduleId: schedule?.scheduleId ?? null,
     summary: purchaseLineSummary(lines, categoryNames, names),
     attachments: listStoredAttachments(db, purchase.id),
+    badge: purchaseRefundBadge(purchase, refundSummary, refundOriginal ?? undefined),
+    refundOriginal,
   });
 }
 
@@ -1056,6 +1096,29 @@ function purchaseActivityCode(
   return 'PUR';
 }
 
+/**
+ * Refund signposting in All Transactions (issue #96): an original purchase
+ * names the live money already back against it, and a refund names its
+ * original purchase and that purchase's date. Detailed remaining amounts
+ * and the individual refund records live on Purchases, which both rows
+ * link to; this badge is the at-a-glance warning not to refund it twice.
+ */
+function purchaseRefundBadge(
+  purchase: Purchase,
+  summary: PurchaseRefundSummary | undefined,
+  original: Purchase | undefined,
+): string | null {
+  if (purchase.refundOfPurchaseId !== null) {
+    return original === undefined
+      ? `for purchase #${purchase.refundOfPurchaseId}`
+      : `for purchase #${original.id} · ${original.occurredDate} · ${formatPence(original.totalPence)}`;
+  }
+  if (summary === undefined || summary.refundedPence === 0) return null;
+  return summary.refundedPence >= Math.abs(purchase.totalPence)
+    ? 'Fully refunded'
+    : `${formatPence(summary.refundedPence)} refunded`;
+}
+
 interface PurchaseRowDetail {
   potId: number;
   dateFrom: string;
@@ -1069,6 +1132,10 @@ interface PurchaseRowDetail {
   summary: { label: string; extraLines: number };
   /** Stored receipts and invoices attached to this purchase (issue #83). */
   attachments: StoredAttachment[];
+  /** Live refund signposting for this row, or null. */
+  badge: string | null;
+  /** For a refund: its original purchase, linked as the row's secondary link. */
+  refundOriginal: Purchase | null;
 }
 
 /** One purchase row, from facts the caller already has (the projection and the pinned row both use it). */
@@ -1094,13 +1161,18 @@ function purchaseActivityRowFrom(
       label: 'Open this purchase',
     },
     secondaryLink:
-      detail.scheduleId === null
-        ? null
-        : {
-            href: `/recurring#schedule-${detail.scheduleId}`,
-            label: 'Open the schedule',
-          },
-    badge: null,
+      detail.refundOriginal !== null
+        ? {
+            href: `/purchases?potId=${detail.refundOriginal.potId}&from=${detail.refundOriginal.occurredDate}&to=${detail.refundOriginal.occurredDate}#purchase-${detail.refundOriginal.id}`,
+            label: `Original purchase #${detail.refundOriginal.id}`,
+          }
+        : detail.scheduleId === null
+          ? null
+          : {
+              href: `/recurring#schedule-${detail.scheduleId}`,
+              label: 'Open the schedule',
+            },
+    badge: detail.badge,
     runningBalancePence: null,
     transfer: null,
     purchase:

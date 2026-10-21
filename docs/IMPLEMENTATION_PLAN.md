@@ -4173,3 +4173,51 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     change. The release PR must pass `gates`, `browser` and `docker` (including the container and
     applicable upgrade smoke) before merge; tag the exact `main` merge commit and publish only to
     `ghcr.io/dougalbob/simple-finance-multi-household`.
+
+252. **Refund form: explicit refund amounts, blank means no refund, and both linked records
+    signpost each other — issue #96 (2026-10-21, approved for stable v1.35.0).** A first preview kept
+    the original amounts pre-filled and asked the household to remove lines that were not
+    refunded; the household rejected that direction on sight: most users would not grasp that
+    an unchanged-looking line must be removed. The settled model is explicit entry. Every
+    refund amount box starts blank with only **Originally £X** as its placeholder. The form
+    says: "For any line item where there has been a refund, enter the **refunded** amount (not
+    the amount that remains after the refund is applied). Leave any line with no refund blank."
+    Each box is labelled **Enter the amount _to be refunded_**. Blank lines are omitted before
+    `addRefundAction`; submitting all blanks records nothing and asks for an amount on at least
+    one line. A refund offers neither **Add a line** nor line removal — it enters money back on
+    the original purchase's existing lines. (The shared `LineEditor` retains its new remove
+    control for purchase edits, whose split lines could not previously leave an edit either.)
+    A live total still names a partial versus whole/rest-of-purchase refund and warns beyond
+    the amount still refundable. The household then corrected a £25.00 preview refund to
+    £30.00 and found the refund's own edit still reusing the ordinary purchase editor. Refund
+    creation and refund correction now share the locked line presentation: each parent/child
+    category and spent-for target is a read-only heading inherited from the original purchase,
+    with no **Spent for**, **Category** or **Which** select and no add or remove control. The
+    correction box holds a positive **Amount refunded** (`30.00`, not `-30.00`) and submits it
+    as the negative refund record. `editPurchase` enforces the same rule with
+    `assertRefundLineIdentitiesUnchanged`: a refund edit preserves its line count, order,
+    categories and targets exactly; a refund filed against the wrong part of a purchase is
+    voided and recorded again instead of being reallocated by an edit.
+
+    The preview also exposed missing signposting, now closed with read-only summaries of live
+    linked refunds (`refundSummariesForPurchases`/`refundOriginalsById`, no schema change):
+    a Purchases original carries **£X refunded** or **Fully refunded**, lists each refund
+    record with a link, and opens its refund form behind a "Refund already recorded" notice
+    naming the amount still refundable; a fully refunded original offers no further refund.
+    A refund row reads **Refund · for #id** and links **Refund for purchase #id …** back to
+    the original. In All Transactions, the original's `PUR`/`DD`/`SO` row and opened panel
+    carry the same refund state, while its `REF` row says **for purchase #id · date · amount**
+    and carries an **Original purchase #id** secondary link. Creation needed no domain
+    loosening: `createRefund`/`assertRefundLink` already allowed subset lines and capped
+    cumulative refunds at the original total; the one domain tightening is the refund-edit
+    line-identity lock above. The household reviewed the fresh-origin refund-correction
+    preview, approved the entire change and requested stable `v1.35.0`; decision 253 records
+    that release.
+
+253. **Stable release v1.35.0 — issue #96 (2026-10-21).** The household approved the explicit
+    partial-refund form, bidirectional refund signposting and locked refund line identities
+    after testing them in the Arena preview, and requested stable `v1.35.0` for full testing
+    on the multi-household Unraid installation. No schema, migration or backup-format change.
+    The release PR must pass `gates`, `browser` and `docker` (including the container and
+    applicable upgrade smoke) before merge; tag the exact `main` merge commit and publish only
+    to `ghcr.io/dougalbob/simple-finance-multi-household`.

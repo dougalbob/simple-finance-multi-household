@@ -371,6 +371,17 @@ describe('All Transactions projection (SPEC §15.3)', () => {
       assert.equal(purchase?.note, 'Weekly shop');
       assert.equal(purchase?.amountPence, 1200);
       assert.equal(purchase?.extraLines, 0);
+      assert.equal(purchase?.badge, '£5.00 refunded', 'the original signposts its live refund');
+      const refund = byCode('REF');
+      assert.equal(
+        refund?.badge,
+        `for purchase #${seeded.cornerShop} · 2026-09-21 · £12.00`,
+        'and the refund names the purchase it belongs to',
+      );
+      assert.deepEqual(refund?.secondaryLink, {
+        href: `/purchases?potId=${seeded.fx.pots.main.id}&from=2026-09-21&to=2026-09-21#purchase-${seeded.cornerShop}`,
+        label: `Original purchase #${seeded.cornerShop}`,
+      });
 
       // A split shows its first line and how many more are behind the link.
       const split = list.find((row) => row.key === `purchase-${seeded.splitPurchase}`);
