@@ -15,7 +15,7 @@ import {
   transferActivityRow,
   type ActivityRow,
 } from '@/lib/records/activity';
-import { ACTIVITY_ALL_FROM } from '@/lib/records/activity-range';
+import { DATE_RANGE_ALL_FROM } from '@/lib/records/date-range-presets';
 import {
   ACTIVITY_SEARCH_MAX_LENGTH,
   activityRowMatchesSearch,
@@ -274,7 +274,9 @@ export default async function TransactionsPage({
       <section aria-labelledby="activity-heading" className="mt-6">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
           <h2 id="activity-heading" className="text-xl font-semibold">
-            {dateFrom === ACTIVITY_ALL_FROM ? `All time to ${dateTo}` : `${dateFrom} to ${dateTo}`}
+            {dateFrom === DATE_RANGE_ALL_FROM
+              ? `All time to ${dateTo}`
+              : `${dateFrom} to ${dateTo}`}
           </h2>
           <span className="text-xs text-ink-muted">
             {activity.totals.rowCount} {activity.totals.rowCount === 1 ? 'movement' : 'movements'}

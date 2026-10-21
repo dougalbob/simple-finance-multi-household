@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition, type FormEvent } from 'react';
-import { activityRangePresets, matchedActivityRangePreset } from '@/lib/records/activity-range';
+import { dateRangePresets, matchedDateRangePreset } from '@/lib/records/date-range-presets';
 import { ACTIVITY_SEARCH_MAX_LENGTH } from '@/lib/records/activity-search';
 import { normalizeSearchText } from '@/lib/search';
 
@@ -69,7 +69,7 @@ export function ActivityFilters({
   query: initialQuery,
 }: ActivityFiltersProps) {
   const router = useRouter();
-  const presets = activityRangePresets(today);
+  const presets = dateRangePresets(today);
   const [potId, setPotId] = useState(initialPotId);
   const [dateFrom, setDateFrom] = useState(initialDateFrom);
   const [dateTo, setDateTo] = useState(initialDateTo);
@@ -169,7 +169,7 @@ export function ActivityFilters({
     navigate({ potId, from: dateFrom, to: dateTo, query }, 'push');
   };
 
-  const activePreset = matchedActivityRangePreset(today, dateFrom, dateTo);
+  const activePreset = matchedDateRangePreset(today, dateFrom, dateTo);
   const inputClass =
     'w-full min-w-0 rounded border border-border-strong bg-surface px-2.5 py-1.5 text-sm focus:border-border-emphasis focus:outline-none';
   const labelClass = 'text-xs font-medium text-ink-soft';

@@ -4278,3 +4278,58 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       word from each column, and by its note alone, and the no-match state clearing back. No schema,
       migration or backup-format change.
 
+255. **Purchases loses two filters, gains the Range drop-down and a three-column search (2026-10-21,
+    household follow-up to issue #98).** The household never used the **Pot** or **Paid by** drop-downs,
+    wanted the same date-range control All Transactions now has, and asked for one search that reads
+    supplier, category and notes together instead of two selects.
+    - **The Range drop-down is the transaction one, shared.** `src/lib/records/activity-range.ts` was
+      renamed `src/lib/records/date-range-presets.ts` (`dateRangePresets`, `matchedDateRangePreset`,
+      and `ACTIVITY_ALL_FROM` → `DATE_RANGE_ALL_FROM`) with no behaviour change, so both pages compute
+      **Last 30 days / This month / Last Month / This Year / All** from the household's local `today`
+      through one tested module; `src/components/activity-filters.tsx` was updated to the new names and
+      `tests/activity-range.test.ts` became `tests/date-range-presets.test.ts`. Purchases **keeps the
+      From/To inputs**, choosing a preset fills them and navigates at once, a hand-edited window shows
+      **Custom dates**, and this page's **All** is *no date filter at all* — its history starts where it
+      starts, so no sentinel start date is written (`?from`/`?to` absent). Its default is All.
+    - **Pot and Paid by are gone from the form, not just hidden.** `PurchaseFilterForm` no longer takes
+      `pots`, `suppliers` or `categories`. The page still reads `potId`, `categoryId`, `supplierId` and
+      `paidByPersonId` from the URL, so links that already carry them (a chart's category, Overview's
+      Groceries/vehicle links, All Transactions' pot, a refund's own record) keep filtering exactly as
+      before — `listPurchases` is unchanged for them.
+    - **A chip for every filter without a control.** Because the form cannot show a filter it no longer
+      owns, any such filter is printed above the results as **Also filtering** — `Pot: …`,
+      `Category: Parent / Child`, `Supplier: …`, `Paid by: …` — each a link to the current URL minus only
+      that parameter (`purchasesHrefWithout`), so a household that follows a link can see why the table
+      is short and undo that one thing without losing its dates or search.
+    - **One search over three columns, as you type.** `src/lib/records/purchase-search.ts` matches the
+      supplier's directory name **and** the optional bank payee printed beside it, the
+      `Parent / Child` label of **every** allocation line (so a split purchase is searched whole, retired
+      categories included), and the record's note. Rules are the picker's (`src/lib/search.ts`): case and
+      spacing folded, every whitespace-separated word required somewhere across those columns, in any
+      order; queries cap at `PURCHASE_SEARCH_MAX_LENGTH` (120). The box writes `?q=` through a 300 ms
+      debounce and a `router.replace({ scroll: false })` — one search is one history entry and the
+      focus/scroll stay put — with a Clear search button and a "Searching…" state.
+    - **The cap and the totals follow the matches.** `PurchaseFilters.search` makes `listPurchases` read
+      the filtered window uncapped (`.limit(-1)`), apply the search, and only then take the 500 newest,
+      so a matching purchase the ordinary read would have cut off is still found and the count, the net
+      total and the hidden-row note all describe the matches. The heading reads
+      `N entries matching “…”`, and the empty state offers **Clear the search** while keeping the other
+      parameters. The query is trimmed and length-capped in the page before the projection sees it.
+    - **Files.** `src/lib/records/purchase-search.ts` (new), `src/lib/records/purchases.ts`
+      (`search`, the uncapped read, `categoryLabelMap`), `src/components/purchase-filter-form.tsx`
+      (rewritten island), `src/app/purchases/page.tsx` (`q`, the chips, the heading, the empty state),
+      `src/lib/records/date-range-presets.ts` and its test (renamed), SPEC §15.2 and the new §15.3a,
+      `e2e/purchases-filters.spec.ts` (new project `purchases-filters`), and the Purchases journeys in
+      `e2e/desktop.spec.ts` and `e2e/home.spec.ts`.
+    - **Evidence.** `npm test` **1167/1167 across 273 suites** (+8: `tests/purchase-search.test.ts`'s
+      matcher rules — supplier, payee, parent name, child name, note, two words across two columns, the
+      retired category — and one projection case proving the search runs before the 500-row cap);
+      `typecheck`, `themes:check`, `format:check`, `next build` and `npm audit --omit=dev` green.
+      Browser: the new `purchases-filters` project **3/3** (the five Range labels with the removed
+      drop-downs absent from the filter form, preset ↔ dates ↔ URL including All and Custom dates;
+      searches by supplier, by one word from each of two columns, by a category word alone and by a note
+      alone, with an honest no-match and Clear the search keeping the window; an Overview Groceries link
+      rendering the category chip and the chip removing only `categoryId`), the full `desktop` and
+      `mobile` projects **47/47** together with it, and `charts` **15/15**. No schema, migration or
+      backup-format change.
+

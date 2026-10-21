@@ -21,6 +21,7 @@ import {
   type PurchaseRefundSummary,
 } from '@/lib/records/purchases';
 import { listSuppliersForEntry } from '@/lib/records/suppliers';
+import { PURCHASE_SEARCH_MAX_LENGTH } from '@/lib/records/purchase-search';
 import { supplierCardHref } from '@/lib/records/supplier-focus';
 import { targetLabel, targetNames } from '@/lib/records/targets';
 import { listStoredAttachments, type StoredAttachment } from '@/lib/records/attachments';
@@ -56,6 +57,8 @@ interface SearchParams {
   targetKind?: string;
   targetId?: string;
   paidByPersonId?: string;
+  /** The supplier / category / notes search (follow-up to issue #98), as typed. */
+  q?: string;
   scheduleOnly?: string;
   refundsOnly?: string;
   voidedOnly?: string;
@@ -132,6 +135,10 @@ export default async function PurchasesPage({
   const showRefunds = showValue(params.showRefunds, true);
   const showVoided = showValue(params.showVoided, hasLegacyOnly ? params.voidedOnly === '1' : true);
 
+  // The search matches the Supplier column, every line's category and Notes at
+  // once (the follow-up to GitHub issue #98). A blank box is not a filter.
+  const search = (params.q ?? '').trim().slice(0, PURCHASE_SEARCH_MAX_LENGTH);
+
   const filters: PurchaseFilters = {
     potId: toNumber(params.potId),
     supplierId: toNumber(params.supplierId),
@@ -147,6 +154,7 @@ export default async function PurchasesPage({
     paidByPersonId: toNumber(params.paidByPersonId),
     dateFrom: params.from || undefined,
     dateTo: params.to || undefined,
+    search: search === '' ? undefined : search,
     scheduleOnly: params.scheduleOnly === '1',
     refundsOnly: params.refundsOnly === '1',
     voidedOnly: params.voidedOnly === '1',
@@ -171,17 +179,56 @@ export default async function PurchasesPage({
       parent.children.map((child) => [child.id, `${parent.name} / ${child.name}`] as const),
     ),
   );
-  // The filter select offers every parent as "all children", so a link from a
-  // chart (which filters by parent) round-trips through the form unchanged.
-  const filterCategories = tree.flatMap((parent) => [
-    { id: parent.id, parentName: parent.name, childName: 'all children' },
-    ...parent.children
-      .filter((child) => child.retiredAt === null)
-      .map((child) => ({ id: child.id, parentName: parent.name, childName: child.name })),
-  ]);
+  // The Supplier and Category drop-downs are gone (the search replaces them),
+  // but links still carry those filters — a chart's category, All
+  // Transactions' pot, a refund's pot — so each one is shown as a chip above
+  // the results rather than being applied invisibly.
+  const categoryFilterLabels = new Map<number, string>();
+  for (const parent of tree) {
+    categoryFilterLabels.set(parent.id, `${parent.name} / all children`);
+    for (const child of parent.children) {
+      categoryFilterLabels.set(child.id, `${parent.name} / ${child.name}`);
+    }
+  }
   const potNames = new Map(pots.map((pot) => [pot.id, pot.label]));
   const supplierNames = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
   const personNames = new Map(people.map((person) => [person.id, person.label]));
+  const linkedFilters: LinkedFilter[] = [];
+  const linkedPotId = toNumber(params.potId);
+  if (linkedPotId !== undefined) {
+    linkedFilters.push({
+      key: `pot-${linkedPotId}`,
+      kind: 'Pot',
+      value: potNames.get(linkedPotId) ?? `#${linkedPotId}`,
+      href: purchasesHrefWithout(params, { key: 'potId' }),
+    });
+  }
+  for (const categoryId of requestedCategoryIds) {
+    linkedFilters.push({
+      key: `category-${categoryId}`,
+      kind: 'Category',
+      value: categoryFilterLabels.get(categoryId) ?? `#${categoryId}`,
+      href: purchasesHrefWithout(params, { key: 'categoryId', value: String(categoryId) }),
+    });
+  }
+  const linkedSupplierId = toNumber(params.supplierId);
+  if (linkedSupplierId !== undefined) {
+    linkedFilters.push({
+      key: `supplier-${linkedSupplierId}`,
+      kind: 'Supplier',
+      value: supplierNames.get(linkedSupplierId) ?? `#${linkedSupplierId}`,
+      href: purchasesHrefWithout(params, { key: 'supplierId' }),
+    });
+  }
+  const linkedPaidById = toNumber(params.paidByPersonId);
+  if (linkedPaidById !== undefined) {
+    linkedFilters.push({
+      key: `paid-by-${linkedPaidById}`,
+      kind: 'Paid by',
+      value: personNames.get(linkedPaidById) ?? `#${linkedPaidById}`,
+      href: purchasesHrefWithout(params, { key: 'paidByPersonId' }),
+    });
+  }
   const fuelContext = getFuelRowContext(db);
   // "Chase the refund" (decision 175): open tasks about each listed purchase.
   const tasksByPurchase = getTasksBySubject(db, 'purchase', now);
@@ -231,25 +278,44 @@ export default async function PurchasesPage({
       </header>
 
       <PurchaseFilterForm
-        pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
-        suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
         people={people.map((person) => ({ id: person.id, label: person.label }))}
         vehicles={vehicles.map((vehicle) => ({ id: vehicle.id, label: vehicle.label }))}
-        categories={filterCategories}
+        today={today}
         active={{
-          ...params,
+          from: params.from ?? '',
+          to: params.to ?? '',
+          q: search,
+          targetKind: params.targetKind,
+          targetId: params.targetId,
           showSchedule: showSchedule ? '1' : '0',
           showPurchases: showPurchases ? '1' : '0',
           showRefunds: showRefunds ? '1' : '0',
           showVoided: showVoided ? '1' : '0',
-          categoryId: requestedCategoryIds[0]?.toString(),
         }}
       />
+
+      {linkedFilters.length > 0 ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+          <span className="font-medium">Also filtering:</span>
+          {linkedFilters.map((filter) => (
+            <Link
+              key={filter.key}
+              href={filter.href}
+              aria-label={`Remove the ${filter.kind.toLowerCase()} filter: ${filter.value}`}
+              className="rounded-full border border-border-strong bg-surface px-2.5 py-1 text-ink-body hover:border-border-emphasis"
+            >
+              <span className="font-medium">{filter.kind}:</span> {filter.value}{' '}
+              <span aria-hidden="true">×</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       <section aria-labelledby="results-heading" className="mt-6">
         <div className="mb-1 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
           <h2 id="results-heading" className="text-xl font-semibold">
-            {purchases.length} {purchases.length === 1 ? 'entry' : 'entries'}: Total{' '}
+            {purchases.length} {purchases.length === 1 ? 'entry' : 'entries'}
+            {search !== '' ? ` matching “${search}”` : ''}: Total{' '}
             <span className="whitespace-nowrap tabular-nums">{formatPence(shownTotalPence)}</span>
           </h2>
           <span className="text-xs text-ink-muted">
@@ -258,12 +324,24 @@ export default async function PurchasesPage({
         </div>
         <p className="mb-3 text-xs text-ink-muted">
           Net of refunds; voided history adds nothing. Total covers the rows shown (up to 500 newest
-          matches).
+          matches). The search reads the supplier (with any bank payee), every category on the
+          record and the notes, before that cap is applied.
         </p>
         {purchases.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
-            Nothing matches these filters. Clear the filters to see the full history.
-          </p>
+          <div className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
+            {search === '' ? (
+              <p>Nothing matches these filters. Clear the filters to see the full history.</p>
+            ) : (
+              <p>
+                Nothing matches <span className="font-medium">“{search}”</span> in the supplier,
+                category or notes.{' '}
+                <Link href={purchasesHrefWithout(params, { key: 'q' })} className="sf-link">
+                  Clear the search
+                </Link>
+                .
+              </p>
+            )}
+          </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-sm">
             <table className="w-full min-w-[860px] text-sm">
@@ -593,4 +671,36 @@ function PurchaseRow(props: PurchaseRowProps) {
       </td>
     </tr>
   );
+}
+
+/** A filter a link brought in that the form no longer offers a control for. */
+interface LinkedFilter {
+  key: string;
+  kind: string;
+  value: string;
+  href: string;
+}
+
+/**
+ * The page's URL without one parameter (or one value of a repeatable one) —
+ * the chip's way to clear a filter the household did not set from this page.
+ * Every other parameter is preserved, so clearing a chart's category keeps
+ * the date window it arrived with.
+ */
+function purchasesHrefWithout(
+  params: SearchParams,
+  drop: { key: keyof SearchParams; value?: string },
+): string {
+  const query = new URLSearchParams();
+  for (const [key, raw] of Object.entries(params) as Array<
+    [string, string | string[] | undefined]
+  >) {
+    if (raw === undefined) continue;
+    for (const value of Array.isArray(raw) ? raw : [raw]) {
+      if (key === drop.key && (drop.value === undefined || drop.value === value)) continue;
+      query.append(key, value);
+    }
+  }
+  const search = query.toString();
+  return search === '' ? '/purchases' : `/purchases?${search}`;
 }

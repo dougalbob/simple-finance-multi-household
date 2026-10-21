@@ -1,27 +1,50 @@
-# Issue #98 — the All Transactions Range drop-down and supplier/notes search (2026-10-21) — unreleased, awaiting household review
+# Issue #98 and the Purchases follow-up — Range drop-downs and one search over several columns (2026-10-21) — unreleased, awaiting household review
 
-**Nothing is tagged, bumped or published.** This session implemented GitHub issue #98 on the session
-branch only; read decision 254 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC
-§15.3 first. The preview runs on the isolated fictional seed (`scripts/e2e-server.mts`, port 3100).
+**Nothing is tagged, bumped or published.** This session implemented GitHub issue #98 on All
+Transactions and, in the same session, the household's rework of the Purchases filter bar. Read
+decisions 254 and 255 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md), SPEC §15.3 and the
+new §15.3a first. The preview runs on the isolated fictional seed (`scripts/e2e-server.mts`, port
+3100).
 
-**What changed.** The three quick-pick links on All Transactions became one **Range** drop-down —
-**Last 30 days** (default), **This month**, **Last Month**, **This Year**, **All** — in the order the
-issue asked for. **Since last checkpoint** is gone, as requested (checkpoint dividers still show in
-every other window). A new **search** box matches the **Supplier / transfer / loan** column and
-**Notes** together as the household types: case- and spacing-insensitive, every word required across
-the two columns in any order, encoded in the URL as `q`, applied to the whole window before the 500-row
-cap, with totals and the hidden-row note describing the matches. Hand-edited dates put the select on a
+**All Transactions (issue #98).** The three quick-pick links became one **Range** drop-down — **Last
+30 days** (default), **This month**, **Last Month**, **This Year**, **All** — in the order the issue
+asked for. **Since last checkpoint** is gone, as requested (checkpoint dividers still show in every
+other window). A new **search** box matches the **Supplier / transfer / loan** column and **Notes**
+together as the household types: case- and spacing-insensitive, every word required across the two
+columns in any order, encoded in the URL as `q`, applied to the whole window before the 500-row cap,
+with totals and the hidden-row note describing the matches. Hand-edited dates put the select on a
 **Custom dates** entry; "All" is the real `from=1970-01-01` window and the heading reads "All time to
-today". Files: `src/lib/records/activity-range.ts` and `src/lib/records/activity-search.ts` (new),
+today". Files: `src/lib/records/date-range-presets.ts` (born as `activity-range.ts`, renamed when
+Purchases began sharing it) and `src/lib/records/activity-search.ts` (new),
 `src/components/activity-filters.tsx` (new), `src/lib/records/activity.ts`,
-`src/app/transactions/page.tsx`, `tests/activity-range.test.ts` and `tests/activity-search.test.ts`
-(new), `tests/activity.test.ts`, `e2e/transactions.spec.ts`, SPEC §15.3 and the §15 page table.
+`src/app/transactions/page.tsx`, `tests/date-range-presets.test.ts` and
+`tests/activity-search.test.ts` (new), `tests/activity.test.ts`, `e2e/transactions.spec.ts`, SPEC
+§15.3 and the §15 page table.
 
-**Validation:** `npm test` **1159/1159 across 271 suites**, `typecheck`, `themes:check`,
-`format:check`, `next build` and `npm audit --omit=dev` green. The local Playwright `transactions`
-project (SANDBOX entry 8) passed **14/14**, including the new issue #98 journey (the five range
-options, each range's `from`/`to`, the All-time heading, supplier / two-column / note-only searches,
-and the no-match state clearing).
+**Purchases (the follow-up).** **Pot** and **Paid by** are gone from the filter form because the
+household never used them, and **Supplier** and **Category** are replaced by one **Search supplier,
+category or notes** box: it reads the supplier's directory name and bank payee, every allocation
+line's `Parent / Child` category label (a split purchase is searched whole) and the record's note,
+applying as the household types (300 ms debounce, `?q=` through a `router.replace` so one search is
+one history entry, no scroll jump), and it filters the whole window **before** the 500-row cap so
+the count and net total describe the matches. Purchases now carries the same **Range** drop-down
+while keeping the editable **From/To** dates; choosing a preset fills and applies them, a
+hand-edited window shows **Custom dates**, and **All** — this page's default — means no date filter
+at all (no sentinel `from`). A link can still bring a category, pot, supplier or payer in the URL;
+each one the form no longer owns appears above the results as an **Also filtering** chip that clears
+only that filter, so an Overview Groceries link still filters, visibly, and can be undone in one
+click. Files: `src/lib/records/purchase-search.ts` (new), `src/lib/records/purchases.ts`,
+`src/components/purchase-filter-form.tsx`, `src/app/purchases/page.tsx`,
+`tests/purchase-search.test.ts` (new), `e2e/purchases-filters.spec.ts` (new project
+`purchases-filters`), the Purchases journeys in `e2e/desktop.spec.ts` and `e2e/home.spec.ts`, and
+SPEC §15.2 / §15.3a.
+
+**Validation:** `npm test` **1167/1167 across 273 suites**, `typecheck`, `themes:check`,
+`format:check`, `next build` and `npm audit --omit=dev` green. The local Playwright projects (SANDBOX
+entry 8) passed **47/47** for `desktop`, `mobile` and the new `purchases-filters`, plus `charts`
+**15/15**; the Purchases journeys cover the five Range options, preset ↔ dates ↔ URL, Custom dates,
+All clearing the dates, searches by supplier / two columns / a category word / a note alone, the
+no-match state keeping the window, and the category chip removing only `categoryId`.
 
 **Next:** the household reviews the preview and decides whether to accept it and request a stable
 release. If so, follow [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) as one gated PR (version files,

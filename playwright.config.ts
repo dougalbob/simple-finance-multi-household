@@ -111,6 +111,16 @@ export default defineConfig({
           use: { viewport: { width: 1400, height: 950 } },
         },
         {
+          // Own project (issue #98 follow-up): the Purchases filter bar — the
+          // range drop-down, the supplier/category/notes search and the chips
+          // a filtered link arrives with. It records nothing, but it reads the
+          // history every earlier spec has written (and the desktop spec edits
+          // a purchase note), so it runs after them.
+          name: 'purchases-filters',
+          testMatch: /purchases-filters\.spec\.ts/,
+          use: { viewport: { width: 1400, height: 950 } },
+        },
+        {
           // Own project for the same reason: it records and voids income after
           // the transaction list has been asserted.
           name: 'income',
