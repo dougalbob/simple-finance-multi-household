@@ -18,6 +18,7 @@ import {
   type StoredAttachment,
 } from './attachments';
 import { categoryTree } from './categories';
+import { activityRowMatchesSearch } from './activity-search';
 import { addDaysLocal } from './dates';
 import { expectedInflowOccurrences, expectedInflowPotId, listDebts } from './debts';
 import { SWAP_HISTORY_ANCHOR } from './external-history';
@@ -235,6 +236,13 @@ export interface ActivityFilters {
   dateFrom: string;
   dateTo: string;
   limit?: number;
+  /**
+   * Search the Supplier / transfer / loan column and Notes together (GitHub
+   * issue #98). Matching happens on the built rows, so every family is read
+   * through the same two columns the table shows. Omitted or blank keeps the
+   * ordinary capped projection.
+   */
+  search?: string;
 }
 
 interface PendingRow {
@@ -293,6 +301,13 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
     throw new InvalidActivityInputError(`The start date ${dateFrom} is after ${dateTo}.`);
   }
   const limit = Math.min(Math.max(filters.limit ?? ACTIVITY_ROW_LIMIT, 1), 1000);
+  // A search is a filter over the whole window, not over the newest pageful:
+  // a supplier whose last visit fell past the cap must still be found. The
+  // family reads therefore run uncapped (SQLite's LIMIT -1) while a search is
+  // active, and the cap is applied to the matches below. Without a search the
+  // four newest-first reads stop at the cap exactly as they always have.
+  const search = filters.search?.trim() ?? '';
+  const familyLimit = search === '' ? limit : -1;
 
   const potLabels = new Map(listPotsIncludingArchived(db).map((pot) => [pot.id, pot.label]));
   const supplierNames = new Map(listSuppliers(db).map((supplier) => [supplier.id, supplier.name]));
@@ -318,7 +333,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       ),
     )
     .orderBy(desc(purchases.occurredAt), desc(purchases.id))
-    .limit(limit)
+    .limit(familyLimit)
     .all();
 
   const linesByPurchase = new Map<number, Array<typeof allocations.$inferSelect>>();
@@ -423,7 +438,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       ),
     )
     .orderBy(desc(transfers.occurredAt), desc(transfers.id))
-    .limit(limit)
+    .limit(familyLimit)
     .all();
 
   for (const transfer of transferRows) {
@@ -461,7 +476,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       ),
     )
     .orderBy(desc(externalMovements.occurredAt), desc(externalMovements.id))
-    .limit(limit)
+    .limit(familyLimit)
     .all();
 
   const swapPartners = swapPartnerByExchangeKey(
@@ -549,7 +564,7 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
       ),
     )
     .orderBy(desc(receipts.occurredAt), desc(receipts.id))
-    .limit(limit)
+    .limit(familyLimit)
     .all();
 
   for (const { receipt, scheduleId, scheduleName } of receiptRows) {
@@ -638,15 +653,25 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
     }
   }
 
+  // The search reads the rows themselves (source + note), so it applies to
+  // purchases, transfers, boundary money, income and expectations alike, in
+  // the columns the household can see. An empty search keeps every row.
+  const matching =
+    search === '' ? pending : pending.filter((item) => activityRowMatchesSearch(item.row, search));
+
   // One deterministic order across families: newest first, then a stable
   // tie-break so a re-render cannot reshuffle rows sharing an instant.
-  pending.sort((a, b) => compareActivityOrder(pendingOrder(a), pendingOrder(b)));
-  const shown = pending.slice(0, limit);
+  matching.sort((a, b) => compareActivityOrder(pendingOrder(a), pendingOrder(b)));
+  const shown = matching.slice(0, limit);
   const windowRowCount =
-    countRows(db, purchases, potId, dateFrom, dateTo) +
-    countTransferRows(db, potId, dateFrom, dateTo) +
-    countRows(db, externalMovements, potId, dateFrom, dateTo) +
-    countRows(db, receipts, potId, dateFrom, dateTo);
+    search === ''
+      ? countRows(db, purchases, potId, dateFrom, dateTo) +
+        countTransferRows(db, potId, dateFrom, dateTo) +
+        countRows(db, externalMovements, potId, dateFrom, dateTo) +
+        countRows(db, receipts, potId, dateFrom, dateTo)
+      : // Every family was read uncapped, so the matches already are the
+        // window's answer; expectations are not movements and never counted.
+        matching.filter((item) => item.row.family !== 'expected').length;
 
   // ---- Running balance calculation --------------------------------------
   // Fetch all checkpoints for this pot, ascending.
@@ -895,6 +920,10 @@ export function listPotActivity(db: Db, filters: ActivityFilters): ActivityView 
   for (const checkpoint of checkpointRows) {
     const date = toLocalDateString(checkpoint.effectiveAt);
     if (date < dateFrom || date > dateTo) continue;
+    // A search is about the records that match it; a checkpoint divider has
+    // no supplier or notes of its own, so it is left out of a search view.
+    // It still anchors the running balances that are shown.
+    if (search !== '') continue;
     const insertAt = entries.findIndex((entry) => entry.kind === 'row' && entry.row.date < date);
     const divider: ActivityEntry = {
       kind: 'checkpoint',

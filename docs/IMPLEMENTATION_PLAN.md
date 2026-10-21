@@ -4221,3 +4221,60 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     The release PR must pass `gates`, `browser` and `docker` (including the container and
     applicable upgrade smoke) before merge; tag the exact `main` merge commit and publish only
     to `ghcr.io/dougalbob/simple-finance-multi-household`.
+
+254. **Issue #98 — All Transactions gets a Range drop-down and a supplier-and-notes search (2026-10-21,
+    awaiting household review).** The page's three quick-pick links were the only way to move the
+    window, and the household had never used "Since last checkpoint"; they asked for one drop-down and
+    for a search that reads the Supplier and Notes columns at once.
+    - **One Range select, five windows.** `src/lib/records/activity-range.ts` computes **Last 30 days**
+      (the default), **This month**, **Last Month** (calendar-exact: `addDaysLocal(monthStart, -1)`,
+      so a leap February ends on the 29th), **This Year** and **All** from the household's local
+      `today` — no browser clock, no timezone drift. "Since last checkpoint" is gone, with its
+      never-checkpointed fallback note and its `latestCheckpointPerPot` read; checkpoint dividers
+      still appear inside every other window. **All** is a real window the page already understands
+      (`from=1970-01-01`), so `from`/`to` remain the page's only date state and every existing
+      deep link, balance anchor and cap keeps working; the heading says "All time to today" rather
+      than printing the sentinel. The dates stay editable, and a hand-edited window puts the select
+      on a **Custom dates** entry instead of mislabelling it as a preset (`matchedActivityRangePreset`).
+    - **The filter bar is one island.** `src/components/activity-filters.tsx` replaces the server-side
+      `<form>`: Target, Range, Start date, End date, Show activity, and the search box. Choosing a
+      range navigates at once (as a quick pick did); Show activity submits the dates as before. The
+      form is `inert` until hydration and publishes `data-filters-ready` (decision 131), so nothing a
+      household types is swallowed, and with JavaScript off it is still an ordinary GET.
+    - **Search as you type, over two columns.** `q` is in the URL and the projection filters on it
+      (`activityRowMatchesSearch`, `src/lib/records/activity-search.ts`), reusing the picker search
+      rules (`src/lib/search.ts`): case and spacing folded, every whitespace-separated word required
+      across the row's `source` **and** `note`, in any order. Because `source` is the row's own
+      supplier / other pot / counterparty / income source, every family is searched in the column the
+      household is reading — purchases (supplier or schedule name), transfers (the other pot), loans
+      and swaps (the counterparty), income (the receipt's source), expectations — with no second
+      notion of "supplier" that could drift. Typing debounces 300 ms into a `router.replace`
+      (`scroll: false`) so one search costs one history entry, not one per word; focus and scroll
+      stay put, and a server round trip never rewrites words typed while it was in flight
+      (`lastRequestedQuery`).
+    - **The cap and the totals follow the matches.** A search reads every family uncapped
+      (`.limit(-1)`) and applies the 500-row cap to the matching rows, so a supplier whose last visit
+      fell past the cap is still found; "Movements shown", the net and the hidden-row note describe
+      the matches. A search view leaves checkpoint dividers out — they are context, not records with a
+      supplier or notes — while they still anchor the balances shown, and an empty result says
+      "Nothing in this window matches “…”" with a Clear the search link. An open in-place purchase or
+      transfer follows the same rule: matching, it stays open (so a void under an active search still
+      keeps its pinned panel); not matching, it is simply not listed, never pinned under a "past the
+      row limit" badge it did not earn.
+    - **Files.** `src/lib/records/activity-range.ts` and `src/lib/records/activity-search.ts` (new),
+      `src/components/activity-filters.tsx` (new), `src/lib/records/activity.ts` (`ActivityFilters.search`,
+      the uncapped reads, the match filter and the search-aware window count), `src/app/transactions/page.tsx`
+      (the island, the search state and copy, the All-time heading, the no-match empty state, the
+      open-record rule), SPEC §15.3 and the §15 page table.
+    - **Evidence.** `npm test` **1159/1159 across 271 suites** (+16: `tests/activity-range.test.ts`'s
+      calendar edges, `tests/activity-search.test.ts`'s two-column rules, and five projection cases in
+      `tests/activity.test.ts` — a supplier and a note match, two families found through different
+      columns, the cap applied to matches with the hidden remainder, a match the ordinary cap would
+      have hidden, and an honest empty result), `typecheck`, `themes:check`, `format:check`,
+      `next build` and `npm audit --omit=dev` green. Browser: the local Playwright `transactions`
+      project (SANDBOX entry 8) **14/14**, including a new issue #98 journey — the five option
+      labels in the household's order with no "Since last checkpoint", each range writing its own
+      `from`/`to` (including the All-time heading), the search finding a purchase by supplier, by a
+      word from each column, and by its note alone, and the no-match state clearing back. No schema,
+      migration or backup-format change.
+

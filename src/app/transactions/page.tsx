@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ACTIVITY_TABLE_ID, ActivityOpenRowProvider } from '@/components/activity-open-row';
+import { ActivityFilters } from '@/components/activity-filters';
 import { PurchaseActivityRow, type PinnedPurchaseView } from '@/components/purchase-activity-row';
 import { TransferActivityRow, type PinnedTransferView } from '@/components/transfer-activity-row';
 import { householdContextFromRequest } from '@/lib/auth/next';
@@ -14,10 +15,15 @@ import {
   transferActivityRow,
   type ActivityRow,
 } from '@/lib/records/activity';
+import { ACTIVITY_ALL_FROM } from '@/lib/records/activity-range';
+import {
+  ACTIVITY_SEARCH_MAX_LENGTH,
+  activityRowMatchesSearch,
+} from '@/lib/records/activity-search';
 import { leafCategoryOptions } from '@/lib/records/entry-view';
 import { ensureScheduleState } from '@/lib/records/money-view';
 import { listPeople } from '@/lib/records/people';
-import { latestCheckpointPerPot, listPots, listPotsIncludingArchived } from '@/lib/records/pots';
+import { listPots, listPotsIncludingArchived } from '@/lib/records/pots';
 import { findPurchaseWithLines } from '@/lib/records/purchases';
 import {
   parseOpenPurchaseId,
@@ -45,6 +51,8 @@ interface SearchParams {
   potId?: string;
   from?: string;
   to?: string;
+  /** The Supplier / Notes search (GitHub issue #98), as typed. */
+  q?: string;
   /** The transfer open in place beneath its row (decision 225). */
   transfer?: string | string[];
   /** The purchase open in place beneath its row (decision 226). */
@@ -107,8 +115,6 @@ export default async function TransactionsPage({
   }
 
   const defaultFrom = addDaysLocal(today, -29);
-  const latest = latestCheckpointPerPot(db).get(pot.id) ?? null;
-  const checkpointDate = latest === null ? null : toLocalDateString(latest.effectiveAt);
   const requestedFrom = params.from ?? '';
   const requestedTo = params.to ?? '';
   const rawTo = isValidLocalDate(requestedTo) && requestedTo <= today ? requestedTo : today;
@@ -116,8 +122,14 @@ export default async function TransactionsPage({
   const rangeIsBroken = rawFrom > rawTo;
   const dateFrom = rangeIsBroken ? defaultFrom : rawFrom;
   const dateTo = rangeIsBroken ? today : rawTo;
+  // The search matches the Supplier / transfer / loan column and Notes
+  // together (GitHub issue #98). A blank box is not a filter.
+  const search = (params.q ?? '').trim().slice(0, ACTIVITY_SEARCH_MAX_LENGTH);
 
-  const activity = listPotActivity(db, { potId: pot.id, dateFrom, dateTo });
+  const activity = listPotActivity(db, { potId: pot.id, dateFrom, dateTo, search });
+  /** The same two-column rule the projection applies, for a row built after it ran. */
+  const matchesSearch = (row: ActivityRow) =>
+    search === '' || activityRowMatchesSearch(row, search);
   const net = activity.totals.inPence - activity.totals.outPence;
   // Alternating rows (issue #23, the Purchases treatment of decision 205).
   // Only movements count towards the stripe: a checkpoint is already its own
@@ -151,20 +163,28 @@ export default async function TransactionsPage({
     const potLabels = new Map(
       listPotsIncludingArchived(db).map((candidate) => [candidate.id, candidate.label]),
     );
-    pinnedEntry = {
-      kind: 'pinned-transfer',
-      row: transferActivityRow(openTransfer, pot.id, potLabels, activityWindow),
-      order: transferActivityOrder(openTransfer),
-      reason: pinReason,
-    };
-    pinnedView = {
-      reason: pinReason,
-      links: pinnedTransferLinks(openTransfer, pinReason, {
-        potId: pot.id,
-        livePots: potOptions,
-        today,
-      }),
-    };
+    const pinnedRow = transferActivityRow(openTransfer, pot.id, potLabels, activityWindow);
+    // A search filters the open record like any other row (issue #98): if the
+    // household has typed something this record does not match, it is simply
+    // not on the list — no pin claiming it fell past a row cap it never
+    // reached. A record that does match still pins, so voiding it while a
+    // search is active keeps its panel in place.
+    if (matchesSearch(pinnedRow)) {
+      pinnedEntry = {
+        kind: 'pinned-transfer',
+        row: pinnedRow,
+        order: transferActivityOrder(openTransfer),
+        reason: pinReason,
+      };
+      pinnedView = {
+        reason: pinReason,
+        links: pinnedTransferLinks(openTransfer, pinReason, {
+          potId: pot.id,
+          livePots: potOptions,
+          today,
+        }),
+      };
+    }
   }
   // The purchase open in place (decision 226) works the same way: usually one
   // of the rows above, and after a void or a re-date outside the window it is
@@ -190,20 +210,23 @@ export default async function TransactionsPage({
   let pinnedPurchase: PinnedPurchaseEntry | null = null;
   let pinnedPurchaseView: PinnedPurchaseView | null = null;
   if (openPurchase !== null && purchasePinReason !== null) {
-    pinnedPurchase = {
-      kind: 'pinned-purchase',
-      row: purchaseActivityRow(db, openPurchase.purchase, pot.id, activityWindow),
-      order: purchaseActivityOrder(openPurchase.purchase),
-      reason: purchasePinReason,
-    };
-    pinnedPurchaseView = {
-      reason: purchasePinReason,
-      links: pinnedPurchaseLinks(openPurchase.purchase, purchasePinReason, {
-        potId: pot.id,
-        livePots: potOptions,
-        today,
-      }),
-    };
+    const pinnedRow = purchaseActivityRow(db, openPurchase.purchase, pot.id, activityWindow);
+    if (matchesSearch(pinnedRow)) {
+      pinnedPurchase = {
+        kind: 'pinned-purchase',
+        row: pinnedRow,
+        order: purchaseActivityOrder(openPurchase.purchase),
+        reason: purchasePinReason,
+      };
+      pinnedPurchaseView = {
+        reason: purchasePinReason,
+        links: pinnedPurchaseLinks(openPurchase.purchase, purchasePinReason, {
+          potId: pot.id,
+          livePots: potOptions,
+          today,
+        }),
+      };
+    }
   }
   // One record is open at a time, so one pin at most is ever placed.
   const displayEntries: Array<
@@ -212,17 +235,6 @@ export default async function TransactionsPage({
     pinnedEntry !== null
       ? withPinnedTransfer(activity.entries, pinnedEntry)
       : withPinnedPurchase(activity.entries, pinnedPurchase);
-
-  const monthStart = `${today.slice(0, 7)}-01`;
-  const quickPicks = [
-    { label: 'Last 30 days', from: defaultFrom, to: today },
-    {
-      label: 'Since last checkpoint',
-      from: checkpointDate ?? defaultFrom,
-      to: today,
-    },
-    { label: 'This month', from: monthStart > today ? today : monthStart, to: today },
-  ];
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
@@ -237,91 +249,21 @@ export default async function TransactionsPage({
           except a purchase and a transfer between your own pots, which open right here: select the
           supplier or the other pot&apos;s name to correct it or void it beneath its row, without
           leaving the list. A refund stays a link to Purchases, beside the record it was refunded
-          against. Green is money into this pot, red is money out. The far-right balance is the
-          running balance after each movement, anchored on checkpoints — green in credit, red
-          overdrawn.
+          against. The search box narrows the list to the supplier / transfer / loan column and
+          Notes together, as you type. Green is money into this pot, red is money out. The far-right
+          balance is the running balance after each movement, anchored on checkpoints — green in
+          credit, red overdrawn.
         </p>
       </header>
 
-      <form
-        method="GET"
-        aria-label="Activity filters"
-        className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-      >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end">
-          <div className="flex min-w-0 flex-col gap-1">
-            <label htmlFor="activity-pot" className="text-xs font-medium text-ink-soft">
-              Target
-            </label>
-            <select
-              id="activity-pot"
-              name="potId"
-              defaultValue={String(pot.id)}
-              className="w-full min-w-0 rounded border border-border-strong bg-surface px-2.5 py-1.5 text-sm focus:border-border-emphasis focus:outline-none"
-            >
-              {pots.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex min-w-0 flex-col gap-1">
-            <label htmlFor="activity-from" className="text-xs font-medium text-ink-soft">
-              Start date
-            </label>
-            <input
-              id="activity-from"
-              name="from"
-              type="date"
-              defaultValue={dateFrom}
-              max={today}
-              className="w-full min-w-0 rounded border border-border-strong bg-surface px-2.5 py-1.5 text-sm focus:border-border-emphasis focus:outline-none"
-            />
-          </div>
-          <div className="flex min-w-0 flex-col gap-1">
-            <label htmlFor="activity-to" className="text-xs font-medium text-ink-soft">
-              End date
-            </label>
-            <input
-              id="activity-to"
-              name="to"
-              type="date"
-              defaultValue={dateTo}
-              max={today}
-              className="w-full min-w-0 rounded border border-border-strong bg-surface px-2.5 py-1.5 text-sm focus:border-border-emphasis focus:outline-none"
-            />
-          </div>
-          <button
-            type="submit"
-            className="rounded-lg bg-till px-4 py-2 text-sm font-semibold text-till-ink hover:bg-till-hover"
-          >
-            Show activity
-          </button>
-        </div>
-        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
-          <span className="font-medium">Quick picks:</span>
-          {quickPicks.map((pick) => (
-            <Link
-              key={pick.label}
-              href={`/transactions?potId=${pot.id}&from=${pick.from}&to=${pick.to}`}
-              className={`rounded-full border px-2.5 py-1 ${
-                pick.from === dateFrom && pick.to === dateTo
-                  ? 'border-till bg-till text-till-ink'
-                  : 'border-border-strong bg-surface text-ink-body hover:border-border-emphasis'
-              }`}
-            >
-              {pick.label}
-            </Link>
-          ))}
-          {checkpointDate === null ? (
-            <span className="text-ink-muted">
-              (this pot has never been reported, so &ldquo;since last checkpoint&rdquo; falls back
-              to 30 days)
-            </span>
-          ) : null}
-        </p>
-      </form>
+      <ActivityFilters
+        pots={pots.map((candidate) => ({ id: candidate.id, label: candidate.label }))}
+        potId={pot.id}
+        today={today}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        query={search}
+      />
 
       {rangeIsBroken ? (
         <p className="mt-3 rounded-lg border border-warning-300 bg-warning-50 px-3 py-2 text-sm text-warning-900">
@@ -332,17 +274,18 @@ export default async function TransactionsPage({
       <section aria-labelledby="activity-heading" className="mt-6">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
           <h2 id="activity-heading" className="text-xl font-semibold">
-            {dateFrom} to {dateTo}
+            {dateFrom === ACTIVITY_ALL_FROM ? `All time to ${dateTo}` : `${dateFrom} to ${dateTo}`}
           </h2>
           <span className="text-xs text-ink-muted">
             {activity.totals.rowCount} {activity.totals.rowCount === 1 ? 'movement' : 'movements'}
+            {search !== '' ? ` matching “${search}”` : ''}
             {activity.totals.expectedRowCount > 0
               ? ` · ${activity.totals.expectedRowCount} expected support ${
                   activity.totals.expectedRowCount === 1 ? 'row' : 'rows'
                 }`
               : ''}
             {activity.totals.hiddenRowCount > 0
-              ? ` · showing the newest ${activity.totals.rowCount}, ${activity.totals.hiddenRowCount} older ones hidden — narrow the range`
+              ? ` · showing the newest ${activity.totals.rowCount}, ${activity.totals.hiddenRowCount} older ones hidden — narrow the range or the search`
               : ''}
           </span>
         </div>
@@ -353,9 +296,23 @@ export default async function TransactionsPage({
         // Voiding the window's only movement must not take its open panel away.
         pinnedEntry === null &&
         pinnedPurchase === null ? (
-          <p className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
-            Nothing touched {pot.label} in this window.
-          </p>
+          <div className="rounded-xl border border-dashed border-border-strong bg-surface p-6 text-sm text-ink-soft">
+            {search === '' ? (
+              <p>Nothing touched {pot.label} in this window.</p>
+            ) : (
+              <p>
+                Nothing in this window matches <span className="font-medium">“{search}”</span> in
+                the supplier / transfer / loan column or the notes.{' '}
+                <Link
+                  href={`/transactions?potId=${pot.id}&from=${dateFrom}&to=${dateTo}`}
+                  className="sf-link"
+                >
+                  Clear the search
+                </Link>
+                .
+              </p>
+            )}
+          </div>
         ) : (
           <ActivityOpenRowProvider>
             <div

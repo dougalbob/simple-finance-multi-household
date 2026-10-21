@@ -1,3 +1,35 @@
+# Issue #98 — the All Transactions Range drop-down and supplier/notes search (2026-10-21) — unreleased, awaiting household review
+
+**Nothing is tagged, bumped or published.** This session implemented GitHub issue #98 on the session
+branch only; read decision 254 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC
+§15.3 first. The preview runs on the isolated fictional seed (`scripts/e2e-server.mts`, port 3100).
+
+**What changed.** The three quick-pick links on All Transactions became one **Range** drop-down —
+**Last 30 days** (default), **This month**, **Last Month**, **This Year**, **All** — in the order the
+issue asked for. **Since last checkpoint** is gone, as requested (checkpoint dividers still show in
+every other window). A new **search** box matches the **Supplier / transfer / loan** column and
+**Notes** together as the household types: case- and spacing-insensitive, every word required across
+the two columns in any order, encoded in the URL as `q`, applied to the whole window before the 500-row
+cap, with totals and the hidden-row note describing the matches. Hand-edited dates put the select on a
+**Custom dates** entry; "All" is the real `from=1970-01-01` window and the heading reads "All time to
+today". Files: `src/lib/records/activity-range.ts` and `src/lib/records/activity-search.ts` (new),
+`src/components/activity-filters.tsx` (new), `src/lib/records/activity.ts`,
+`src/app/transactions/page.tsx`, `tests/activity-range.test.ts` and `tests/activity-search.test.ts`
+(new), `tests/activity.test.ts`, `e2e/transactions.spec.ts`, SPEC §15.3 and the §15 page table.
+
+**Validation:** `npm test` **1159/1159 across 271 suites**, `typecheck`, `themes:check`,
+`format:check`, `next build` and `npm audit --omit=dev` green. The local Playwright `transactions`
+project (SANDBOX entry 8) passed **14/14**, including the new issue #98 journey (the five range
+options, each range's `from`/`to`, the All-time heading, supplier / two-column / note-only searches,
+and the no-match state clearing).
+
+**Next:** the household reviews the preview and decides whether to accept it and request a stable
+release. If so, follow [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) as one gated PR (version files,
+release notes, this handoff), then tag the exact `main` merge commit and verify GHCR. No schema,
+migration or backup-format change.
+
+---
+
 # v1.35.0 — issue #96: explicit partial refunds, signposting and locked refund lines (2026-10-21)
 
 **Approved stable feature:** the household rejected a first pre-filled/remove-line preview,
