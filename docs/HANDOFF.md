@@ -23,7 +23,12 @@ Playwright `charts` project (SANDBOX entry 8) passed **15/15**, including the re
 journey and a new B/C/F in-place journey at 390px and 1400px (one document, no scroll jump,
 chip-closes-panel). Two pre-existing journeys (chips after reload, pace "Show the numbers") were
 hardened with this file's hydration-marker wait after the sandbox exposed the swallowed-click race
-decision 216 records; assertions unchanged. Required PR CI (`gates`, `browser`, `docker`) remains
+decision 216 records; assertions unchanged. The first PR #95 `browser` run then exposed a
+pre-existing calendar bug in the payday-summary fixture: its fixed 21st/26th window is incoherent
+on the 21st–25th (the direct debits fall after payday, so its expected low is unreachable) and one
+assertion pinned “26th Oct”. The fixture now picks payday and direct-debit days relative to today
+and the test derives its label from the fixture's payday — test-only, no product change. Required
+PR CI (`gates`, `browser`, `docker`) remains
 the gate at merge time; this entry is the pre-merge record.
 
 **To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified

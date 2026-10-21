@@ -4,7 +4,7 @@ import { getCurrentUser } from '../src/lib/auth/current-user';
 import { loadAppConfig } from '../src/lib/config';
 import { closeDbHandles, getHouseholdDbHandle, type Db } from '../src/lib/db/client';
 import { checkpoints } from '../src/lib/db/schema';
-import { addDaysLocal } from '../src/lib/records/dates';
+import { addDaysLocal, nextPaydayOccurrence } from '../src/lib/records/dates';
 import { getProjectionView } from '../src/lib/records/money-view';
 import { findChildCategory } from '../src/lib/records/categories';
 import { addCheckpoint, createPot, listPots } from '../src/lib/records/pots';
@@ -81,11 +81,21 @@ export async function seedPaydayScenario(): Promise<{
     const { db } = handle;
     const now = new Date();
     const today = toLocalDateString(now);
-    const nextMonthStart = firstOfNextMonth(today);
-    const currentDirectDebitDate = `${today.slice(0, 7)}-21`;
-    // Keep one upcoming set of DDs in the same window as the 26th's pay day.
-    // If the 21st has passed, both salary and DD fixtures start next month.
-    const windowStart = currentDirectDebitDate > today ? today : nextMonthStart;
+    // The fixture used to pin payday to the 26th and the direct debits to the
+    // 21st, which only coheres while the 21st is still ahead: on the 21st–25th
+    // the next 21st falls after payday, no bill lands in the projection window
+    // and the expected low is unreachable (CI, 2026-10-21). Choose the days
+    // relative to today instead — payday ten days out (the weekend shift can
+    // bring the actual payday at most two days closer), the direct debits five
+    // days before the actual payday, both starting today — so the scenario is
+    // the same on every calendar day.
+    const paydayDay = Number(addDaysLocal(today, 10).slice(8, 10));
+    const fixturePayday = nextPaydayOccurrence(paydayDay, today);
+    if (fixturePayday === null) {
+      throw new Error('Payday E2E fixture could not place its payday');
+    }
+    const directDebitDay = Number(addDaysLocal(fixturePayday, -5).slice(8, 10));
+    const windowStart = today;
 
     const pots = listPots(db);
     const main = required(
@@ -110,7 +120,7 @@ export async function seedPaydayScenario(): Promise<{
     // A preview may have changed the configured default pot manually; pin the
     // fixture to Main so the payday assertion starts from the known balance.
     setDefaultPurchasePotId(db, main.id, ACTOR, now);
-    setPaydayDayOfMonth(db, 26, ACTOR, now);
+    setPaydayDayOfMonth(db, paydayDay, ACTOR, now);
 
     const schedules = listSchedules(db, now);
     const salarySchedule = required(
@@ -144,7 +154,7 @@ export async function seedPaydayScenario(): Promise<{
       'Salary receipt schedule after reset',
     ).schedule;
     if (
-      currentSalary.dueDayOfMonth !== 26 ||
+      currentSalary.dueDayOfMonth !== paydayDay ||
       currentSalary.activeFrom !== windowStart ||
       currentSalary.activeUntil !== null
     ) {
@@ -153,7 +163,7 @@ export async function seedPaydayScenario(): Promise<{
         expectedVersion: currentSalary.version,
         actor: ACTOR,
         now,
-        patch: { dueDayOfMonth: 26, activeFrom: windowStart, activeUntil: null },
+        patch: { dueDayOfMonth: paydayDay, activeFrom: windowStart, activeUntil: null },
       });
     }
 
@@ -182,7 +192,7 @@ export async function seedPaydayScenario(): Promise<{
           name: bill.name,
           kind: 'dd',
           frequency: 'monthly',
-          dueDayOfMonth: 21,
+          dueDayOfMonth: directDebitDay,
           amountPence: bill.amountPence,
           potId: natwest.id,
           categoryId: category.id,
@@ -194,7 +204,7 @@ export async function seedPaydayScenario(): Promise<{
       } else {
         const { schedule } = existing;
         if (
-          schedule.dueDayOfMonth !== 21 ||
+          schedule.dueDayOfMonth !== directDebitDay ||
           schedule.amountPence !== bill.amountPence ||
           schedule.potId !== natwest.id ||
           schedule.categoryId !== category.id ||
@@ -208,7 +218,7 @@ export async function seedPaydayScenario(): Promise<{
             actor: ACTOR,
             now,
             patch: {
-              dueDayOfMonth: 21,
+              dueDayOfMonth: directDebitDay,
               amountPence: bill.amountPence,
               potId: natwest.id,
               categoryId: category.id,
@@ -346,14 +356,6 @@ function ensureCheckpoint(
     .get();
   if (existing !== undefined) return;
   addCheckpoint(db, { potId, amountPence, note, actor: ACTOR, now });
-}
-
-function firstOfNextMonth(today: string): string {
-  const year = Number(today.slice(0, 4));
-  const month = Number(today.slice(5, 7));
-  const nextYear = month === 12 ? year + 1 : year;
-  const nextMonth = month === 12 ? 1 : month + 1;
-  return `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 }
 
 function required<T>(value: T | null | undefined, label: string): T {
