@@ -1,3 +1,66 @@
+# v1.36.0 — issue #98 and the Purchases filter rework (2026-10-21)
+
+**Approved stable feature:** the household reviewed both pages in the Arena preview — the All
+Transactions Range drop-down and supplier/notes search of issue #98, then the Purchases filter
+rework it asked for in the same session — approved them and requested stable **v1.36.0** for full
+testing on the multi-household Unraid installation. Publication follows
+[`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md): one PR, required checks, merge to `main`, an
+annotated tag on that exact merge commit, and successful GHCR verification.
+
+**Read decisions 254 and 255 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md), plus
+SPEC §15.3 and the new §15.3a first.** The preview runs on the isolated fictional seed
+(`scripts/e2e-server.mts`, port 3100).
+
+**All Transactions (issue #98).** The three quick-pick links became one **Range** drop-down — **Last
+30 days** (default), **This month**, **Last Month**, **This Year**, **All** — in the order the issue
+asked for. **Since last checkpoint** is gone, as requested (checkpoint dividers still show in every
+other window). A new **search** box matches the **Supplier / transfer / loan** column and **Notes**
+together as the household types: case- and spacing-insensitive, every word required across the two
+columns in any order, encoded in the URL as `q`, applied to the whole window before the 500-row cap,
+with totals and the hidden-row note describing the matches. Hand-edited dates put the select on a
+**Custom dates** entry; "All" is the real `from=1970-01-01` window and the heading reads "All time to
+today". Files: `src/lib/records/date-range-presets.ts` (born as `activity-range.ts`, renamed when
+Purchases began sharing it) and `src/lib/records/activity-search.ts` (new),
+`src/components/activity-filters.tsx` (new), `src/lib/records/activity.ts`,
+`src/app/transactions/page.tsx`, `tests/date-range-presets.test.ts` and
+`tests/activity-search.test.ts` (new), `tests/activity.test.ts`, `e2e/transactions.spec.ts`, SPEC
+§15.3 and the §15 page table.
+
+**Purchases (the follow-up).** **Pot** and **Paid by** are gone from the filter form because the
+household never used them, and **Supplier** and **Category** are replaced by one **Search supplier,
+category or notes** box: it reads the supplier's directory name and bank payee, every allocation
+line's `Parent / Child` category label (a split purchase is searched whole) and the record's note,
+applying as the household types (300 ms debounce, `?q=` through a `router.replace` so one search is
+one history entry, no scroll jump), and it filters the whole window **before** the 500-row cap so
+the count and net total describe the matches. Purchases now carries the same **Range** drop-down
+while keeping the editable **From/To** dates; choosing a preset fills and applies them, a
+hand-edited window shows **Custom dates**, and **All** — this page's default — means no date filter
+at all (no sentinel `from`). A link can still bring a category, pot, supplier or payer in the URL;
+each one the form no longer owns appears above the results as an **Also filtering** chip that clears
+only that filter, so an Overview Groceries link still filters, visibly, and can be undone in one
+click. Files: `src/lib/records/purchase-search.ts` (new), `src/lib/records/purchases.ts`,
+`src/components/purchase-filter-form.tsx`, `src/app/purchases/page.tsx`,
+`tests/purchase-search.test.ts` (new), `e2e/purchases-filters.spec.ts` (new project
+`purchases-filters`), the Purchases journeys in `e2e/desktop.spec.ts` and `e2e/home.spec.ts`, and
+SPEC §15.2 / §15.3a.
+
+**Validation:** `npm test` **1167/1167 across 273 suites**, `typecheck`, `themes:check`,
+`format:check`, `next build` and `npm audit --omit=dev` green. The local Playwright projects (SANDBOX
+entry 8) passed **47/47** for `desktop`, `mobile` and the new `purchases-filters`, plus
+`transactions` **14/14** and `charts` **15/15**; the Purchases journeys cover the five Range
+options, preset ↔ dates ↔ URL, Custom dates, All clearing the dates, searches by supplier / two
+columns / a category word / a note alone, the no-match state keeping the window, and the category
+chip removing only `categoryId`.
+
+**Version files:** `1.36.0` in `package.json`, `package-lock.json` (root and `packages[""]`),
+`src/lib/version.ts` and the Unraid template, with `docs/RELEASE_NOTES_v1.36.0.md`. **No schema,
+migration or backup-format change.**
+
+**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
+GHCR digest for `v1.36.0` (the workflow prints them and creates the GitHub release).
+
+---
+
 # v1.35.0 — issue #96: explicit partial refunds, signposting and locked refund lines (2026-10-21)
 
 **Approved stable feature:** the household rejected a first pre-filled/remove-line preview,
@@ -35,8 +98,12 @@ gate at merge time; this entry is the pre-merge record.
 `sha256:9679e28473ad783484175c8f0af96daa9e7a82617a85401d8f9302b30c5e33da` for `v1.34.0`,
 `latest` and `sha-fe274ed`.
 
-**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
-GHCR digest for `v1.35.0` (the workflow prints them and creates the GitHub release).
+**Published:** `v1.35.0` was merged in PR #97 at
+`ad36f0c2c4af3f479ba6db97a3dea876e8936d6e`; the PR checks run `39604096898` passed `gates`,
+`browser` and `docker`, the `main` CI run `39605429986` succeeded, and Publish run `39607611128`
+verified GHCR tags `v1.35.0`, `latest` and `sha-ad36f0c` at digest
+`sha256:a7eef8262430e64cd4705b119a674797481a0149f317d4fa524632473ed55270`, creating the Latest
+release.
 
 ---
 

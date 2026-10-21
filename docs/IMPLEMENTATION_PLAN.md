@@ -4221,3 +4221,124 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     The release PR must pass `gates`, `browser` and `docker` (including the container and
     applicable upgrade smoke) before merge; tag the exact `main` merge commit and publish only
     to `ghcr.io/dougalbob/simple-finance-multi-household`.
+
+254. **Issue #98 — All Transactions gets a Range drop-down and a supplier-and-notes search (2026-10-21,
+    approved for stable v1.36.0).** The page's three quick-pick links were the only way to move the
+    window, and the household had never used "Since last checkpoint"; they asked for one drop-down and
+    for a search that reads the Supplier and Notes columns at once.
+    - **One Range select, five windows.** `src/lib/records/activity-range.ts` computes **Last 30 days**
+      (the default), **This month**, **Last Month** (calendar-exact: `addDaysLocal(monthStart, -1)`,
+      so a leap February ends on the 29th), **This Year** and **All** from the household's local
+      `today` — no browser clock, no timezone drift. "Since last checkpoint" is gone, with its
+      never-checkpointed fallback note and its `latestCheckpointPerPot` read; checkpoint dividers
+      still appear inside every other window. **All** is a real window the page already understands
+      (`from=1970-01-01`), so `from`/`to` remain the page's only date state and every existing
+      deep link, balance anchor and cap keeps working; the heading says "All time to today" rather
+      than printing the sentinel. The dates stay editable, and a hand-edited window puts the select
+      on a **Custom dates** entry instead of mislabelling it as a preset (`matchedActivityRangePreset`).
+    - **The filter bar is one island.** `src/components/activity-filters.tsx` replaces the server-side
+      `<form>`: Target, Range, Start date, End date, Show activity, and the search box. Choosing a
+      range navigates at once (as a quick pick did); Show activity submits the dates as before. The
+      form is `inert` until hydration and publishes `data-filters-ready` (decision 131), so nothing a
+      household types is swallowed, and with JavaScript off it is still an ordinary GET.
+    - **Search as you type, over two columns.** `q` is in the URL and the projection filters on it
+      (`activityRowMatchesSearch`, `src/lib/records/activity-search.ts`), reusing the picker search
+      rules (`src/lib/search.ts`): case and spacing folded, every whitespace-separated word required
+      across the row's `source` **and** `note`, in any order. Because `source` is the row's own
+      supplier / other pot / counterparty / income source, every family is searched in the column the
+      household is reading — purchases (supplier or schedule name), transfers (the other pot), loans
+      and swaps (the counterparty), income (the receipt's source), expectations — with no second
+      notion of "supplier" that could drift. Typing debounces 300 ms into a `router.replace`
+      (`scroll: false`) so one search costs one history entry, not one per word; focus and scroll
+      stay put, and a server round trip never rewrites words typed while it was in flight
+      (`lastRequestedQuery`).
+    - **The cap and the totals follow the matches.** A search reads every family uncapped
+      (`.limit(-1)`) and applies the 500-row cap to the matching rows, so a supplier whose last visit
+      fell past the cap is still found; "Movements shown", the net and the hidden-row note describe
+      the matches. A search view leaves checkpoint dividers out — they are context, not records with a
+      supplier or notes — while they still anchor the balances shown, and an empty result says
+      "Nothing in this window matches “…”" with a Clear the search link. An open in-place purchase or
+      transfer follows the same rule: matching, it stays open (so a void under an active search still
+      keeps its pinned panel); not matching, it is simply not listed, never pinned under a "past the
+      row limit" badge it did not earn.
+    - **Files.** `src/lib/records/activity-range.ts` and `src/lib/records/activity-search.ts` (new),
+      `src/components/activity-filters.tsx` (new), `src/lib/records/activity.ts` (`ActivityFilters.search`,
+      the uncapped reads, the match filter and the search-aware window count), `src/app/transactions/page.tsx`
+      (the island, the search state and copy, the All-time heading, the no-match empty state, the
+      open-record rule), SPEC §15.3 and the §15 page table.
+    - **Evidence.** `npm test` **1159/1159 across 271 suites** (+16: `tests/activity-range.test.ts`'s
+      calendar edges, `tests/activity-search.test.ts`'s two-column rules, and five projection cases in
+      `tests/activity.test.ts` — a supplier and a note match, two families found through different
+      columns, the cap applied to matches with the hidden remainder, a match the ordinary cap would
+      have hidden, and an honest empty result), `typecheck`, `themes:check`, `format:check`,
+      `next build` and `npm audit --omit=dev` green. Browser: the local Playwright `transactions`
+      project (SANDBOX entry 8) **14/14**, including a new issue #98 journey — the five option
+      labels in the household's order with no "Since last checkpoint", each range writing its own
+      `from`/`to` (including the All-time heading), the search finding a purchase by supplier, by a
+      word from each column, and by its note alone, and the no-match state clearing back. No schema,
+      migration or backup-format change.
+
+255. **Purchases loses two filters, gains the Range drop-down and a three-column search (2026-10-21,
+    household follow-up to issue #98, approved for stable v1.36.0).** The household never used the **Pot** or **Paid by** drop-downs,
+    wanted the same date-range control All Transactions now has, and asked for one search that reads
+    supplier, category and notes together instead of two selects.
+    - **The Range drop-down is the transaction one, shared.** `src/lib/records/activity-range.ts` was
+      renamed `src/lib/records/date-range-presets.ts` (`dateRangePresets`, `matchedDateRangePreset`,
+      and `ACTIVITY_ALL_FROM` → `DATE_RANGE_ALL_FROM`) with no behaviour change, so both pages compute
+      **Last 30 days / This month / Last Month / This Year / All** from the household's local `today`
+      through one tested module; `src/components/activity-filters.tsx` was updated to the new names and
+      `tests/activity-range.test.ts` became `tests/date-range-presets.test.ts`. Purchases **keeps the
+      From/To inputs**, choosing a preset fills them and navigates at once, a hand-edited window shows
+      **Custom dates**, and this page's **All** is *no date filter at all* — its history starts where it
+      starts, so no sentinel start date is written (`?from`/`?to` absent). Its default is All.
+    - **Pot and Paid by are gone from the form, not just hidden.** `PurchaseFilterForm` no longer takes
+      `pots`, `suppliers` or `categories`. The page still reads `potId`, `categoryId`, `supplierId` and
+      `paidByPersonId` from the URL, so links that already carry them (a chart's category, Overview's
+      Groceries/vehicle links, All Transactions' pot, a refund's own record) keep filtering exactly as
+      before — `listPurchases` is unchanged for them.
+    - **A chip for every filter without a control.** Because the form cannot show a filter it no longer
+      owns, any such filter is printed above the results as **Also filtering** — `Pot: …`,
+      `Category: Parent / Child`, `Supplier: …`, `Paid by: …` — each a link to the current URL minus only
+      that parameter (`purchasesHrefWithout`), so a household that follows a link can see why the table
+      is short and undo that one thing without losing its dates or search.
+    - **One search over three columns, as you type.** `src/lib/records/purchase-search.ts` matches the
+      supplier's directory name **and** the optional bank payee printed beside it, the
+      `Parent / Child` label of **every** allocation line (so a split purchase is searched whole, retired
+      categories included), and the record's note. Rules are the picker's (`src/lib/search.ts`): case and
+      spacing folded, every whitespace-separated word required somewhere across those columns, in any
+      order; queries cap at `PURCHASE_SEARCH_MAX_LENGTH` (120). The box writes `?q=` through a 300 ms
+      debounce and a `router.replace({ scroll: false })` — one search is one history entry and the
+      focus/scroll stay put — with a Clear search button and a "Searching…" state.
+    - **The cap and the totals follow the matches.** `PurchaseFilters.search` makes `listPurchases` read
+      the filtered window uncapped (`.limit(-1)`), apply the search, and only then take the 500 newest,
+      so a matching purchase the ordinary read would have cut off is still found and the count, the net
+      total and the hidden-row note all describe the matches. The heading reads
+      `N entries matching “…”`, and the empty state offers **Clear the search** while keeping the other
+      parameters. The query is trimmed and length-capped in the page before the projection sees it.
+    - **Files.** `src/lib/records/purchase-search.ts` (new), `src/lib/records/purchases.ts`
+      (`search`, the uncapped read, `categoryLabelMap`), `src/components/purchase-filter-form.tsx`
+      (rewritten island), `src/app/purchases/page.tsx` (`q`, the chips, the heading, the empty state),
+      `src/lib/records/date-range-presets.ts` and its test (renamed), SPEC §15.2 and the new §15.3a,
+      `e2e/purchases-filters.spec.ts` (new project `purchases-filters`), and the Purchases journeys in
+      `e2e/desktop.spec.ts` and `e2e/home.spec.ts`.
+    - **Evidence.** `npm test` **1167/1167 across 273 suites** (+8: `tests/purchase-search.test.ts`'s
+      matcher rules — supplier, payee, parent name, child name, note, two words across two columns, the
+      retired category — and one projection case proving the search runs before the 500-row cap);
+      `typecheck`, `themes:check`, `format:check`, `next build` and `npm audit --omit=dev` green.
+      Browser: the new `purchases-filters` project **3/3** (the five Range labels with the removed
+      drop-downs absent from the filter form, preset ↔ dates ↔ URL including All and Custom dates;
+      searches by supplier, by one word from each of two columns, by a category word alone and by a note
+      alone, with an honest no-match and Clear the search keeping the window; an Overview Groceries link
+      rendering the category chip and the chip removing only `categoryId`), the full `desktop` and
+      `mobile` projects **47/47** together with it, and `charts` **15/15**. No schema, migration or
+      backup-format change.
+
+256. **Stable release v1.36.0 — issue #98 and the Purchases filter rework (2026-10-21).** The household
+    reviewed the All Transactions Range drop-down and supplier/notes search in the Arena preview, asked
+    for the same treatment on Purchases, then reviewed that rework too and approved both, requesting
+    stable `v1.36.0` for full testing on the multi-household Unraid installation (decisions 254–255).
+    No schema, migration or backup-format change. The release PR must pass `gates`, `browser` and
+    `docker` (including the container and applicable upgrade smoke) before merge; tag the exact `main`
+    merge commit and publish only to `ghcr.io/dougalbob/simple-finance-multi-household`, moving
+    `latest` with it.
+

@@ -1042,8 +1042,8 @@ Menu pages:
 | Page | Contents |
 |---|---|
 | **Overview** | The one genuinely dense single screen: household available-now + per-pot mini-balances inline + "last checkpoint" times + the owed/owing figures beside the total; warning banner when a tier is active; payday projection panel retaining its date, tier, liquid funds, day-to-day total, commitments and receipts, plus the worst-pot bills-only transfer nudge (§7.5), but **no expandable forecast sections or day-by-day table** (v0.37.0 follow-up, decision 187). Horizon owns the dated shops/fills, expected-support list and day-by-day detail; the panel links there, opening on the day before configured payday. Quick Entry/Till stays visible beside the projection. Due-this-week commitments; **contracts & renewals inside their warning windows (§22.3)**; month-to-date by parent category with small bars, each parent name linking to Purchases filtered to that parent and this month's first day through today; vehicle rolling-12, each vehicle name linking to Purchases filtered to that vehicle and the rolling window through today (decision 179). Purchase review, transfer void, adding a pot and checkpoint history live on their own pages (decision 164) — not here. |
-| **Purchases** | Full history table; filters by date range, supplier, category, target, pot, person, tag (on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row); the four record-kind boxes — **Purchases** (anything not from a schedule), **From schedule**, **Refunds**, **Voided** — are show toggles, all on by default so the full history including voided records is shown, and unticking one hides that kind (a record with two tags is hidden if either is off; decision 205); the result heading shows the number of entries and their **net total** from the rows actually displayed (up to 500 newest matches): whole purchases count once even if a category filter matched one line, refunds subtract, and voided history adds nothing; rows alternate plain/tinted (`bg-canvas`) so neighbouring records are easy to tell apart; the supplier name links to that supplier's expanded card on Suppliers (decision 149's link); inline editing; the line editor puts **Spent for** and **Amount** on its first row and **Category** full-width on the second (plus **Which** when a person/vehicle is chosen), with slightly shorter controls; refund/void/correct with audit trail visible — a refund is its own negative record in the same category and target as the original, linked to it, with the original's pot, supplier and payer unless the form says otherwise; its lines total the refund exactly, so a partial refund is simply a smaller amount (§9.5); split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
-| **All Transactions** | Activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. Nothing is added here, and nothing is edited or voided here **except a purchase and an internal transfer**, which open in place — their correction and void forms in a panel directly beneath their row (decisions 225 and 226, GitHub issues #55 and #57; §15.3). A refund keeps its link to Purchases. |
+| **Purchases** | Full history table; a **Range** drop-down (Last 30 days, This month, Last Month, This Year, All — All is the default and clears the dates) with editable From/To dates and a **target** (type + which) filter; the **Pot** and **Paid by** drop-downs are gone and the **Supplier** and **Category** drop-downs are replaced by one **search** over the supplier column (with any bank payee printed beside it), every line's `Parent / Child` category and the notes, matching as the household types (`q` in the URL, before the 500-row cap); a filtered link (a chart's category, All Transactions' pot, a refund's pot) still applies, and is shown above the results as an **Also filtering** chip whose click clears just that filter (issue #98 follow-up, decision 255); on a phone the filter card collapses behind **Show filters**, starts open if any filter is already applied, and From/To date share a row; the four record-kind boxes — **Purchases** (anything not from a schedule), **From schedule**, **Refunds**, **Voided** — are show toggles, all on by default so the full history including voided records is shown, and unticking one hides that kind (a record with two tags is hidden if either is off; decision 205); the result heading shows the number of entries and their **net total** from the rows actually displayed (up to 500 newest matches): whole purchases count once even if a category filter matched one line, refunds subtract, and voided history adds nothing; rows alternate plain/tinted (`bg-canvas`) so neighbouring records are easy to tell apart; the supplier name links to that supplier's expanded card on Suppliers (decision 149's link); inline editing; the line editor puts **Spent for** and **Amount** on its first row and **Category** full-width on the second (plus **Which** when a person/vehicle is chosen), with slightly shorter controls; refund/void/correct with audit trail visible — a refund is its own negative record in the same category and target as the original, linked to it, with the original's pot, supplier and payer unless the form says otherwise; its lines total the refund exactly, so a partial refund is simply a smaller amount (§9.5); split editing with the same exact-total rule; **receipt/invoice attachments (§23)** viewed, added and removed from the purchase row, with the audit line (who, when) in that row's History. |
+| **All Transactions** | Activity for one selected pot over a date window: every movement that touched it (purchases, direct debits and standing orders, transfers, borrowing and repayments, swaps, other money, **income**), one signed amount column (green in / red out relative to that pot), the original record's note, checkpoint dividers, a debt's expected support as flagged `EXP<` rows outside the totals (v0.7.0), and a link from every row to that record's canonical form. With no pot in the URL, the household's saved default pot is used; an explicit pot in the URL wins. Nothing is added here, and nothing is edited or voided here **except a purchase and an internal transfer**, which open in place — their correction and void forms in a panel directly beneath their row (decisions 225 and 226, GitHub issues #55 and #57; §15.3). A refund keeps its link to Purchases. A **Range** drop-down (Last 30 days, This month, Last Month, This Year, All) and a **search box** over the supplier and notes columns filter the list (issue #98, decision 254). |
 | **Recurring Payments** | The DD/SO/income schedule list (amount, frequency, due day, category, target, pot, next instance and state); edit/cancel with effective dates; history of converted instances; **read-only month calendar view** of due instances. Provider agreements and their review dates live on Contracts & Renewals, with an optional link from a schedule. On a laptop the calendar sits left with compact projection figures under it; the schedules panel matches the calendar card's height and the list scrolls inside it, with Add a schedule pinned below and a link card to Contracts & Renewals beside projection. On a phone the four stack unclipped. Deep links `#schedule-{id}` still land on the row, below the sticky site header (every hash target in the app spends the measured `sf-anchor` offset, so a link works at any window width whatever the nav wraps to — decision 216, re-opened issue #34; and the scroll pass verifies each landing against the real header, correcting once a settled landing a browser left behind the bar — decision 222, issue #43). Cancelled schedules show by default; a Hide cancelled toggle (`?hideCancelled=1`, with a count of those hidden) removes them from the list while keeping the calendar and history (decision 212); the hide-cancelled preference is remembered across page navigations via a device cookie (decision 214). An in-place filter search box with Clear button filters schedules by name or supplier, revealing matching cancelled schedules even when cancelled schedules are hidden (decision 215). **When adding a new schedule (GitHub issue #78)** the supplier field is a searchable picker over the **whole directory in A–Z order** (not just the most recently used names), filtering on any part of a supplier name and keeping **Add a new supplier…** and a standing order's "no supplier / household transfer" choice as pinned rows; the Edit schedule form uses the same picker. The **Pot** field starts on the household's **new-schedule default** when one is ticked (§15.2 Settings, GitHub issue #79) and otherwise on the first pot. |
 | **Horizon** | "How far the money would go" (§7.6): pick a date up to 400 days ahead (opens on the day before configured payday, or today + 35 days when none is set; a date change applies itself), scope by pot (all selected by default) and toggle day-to-day; the free-to-spend headline, the always-shown lowest point with its date and tier, and detail blocks for the commitments, expected money in (debts' expected support flagged `expected`), the projected day-to-day events (dated shops/fills, v0.6.0) and the day-by-day table, whose heading counts its days and totals **out** (commitments plus projected day-to-day) and **in** (expected money in) from the rows beneath it — the same count-and-total reading as the other two cards (GitHub issue #77). Same engine as the payday projection; laptop-shaped by the household's choice. |
 | **Long-term forecast** (v1.26.0, decisions 233–235) | The multi-decade projection (§28, `LONGTERM_FORECASTING.md`): the household's own questions first — income in a chosen year and income at a chosen age, each carrying both an age and a year — with "does the money last?" beside them; the selected year line by line; the three-rate comparison (`?rate=cautious\|middle\|optimistic`); the same pension pot as drawdown vs annuity; every calendar year in future and today's money; and one assumptions editor in which every pot value, rate, amount and date is editable. The plan is one `longterm_plans` row per household (validated JSON behind a version counter, audited on create/save/reset), seeded from records as a draft. A £0 "everything else" line and other missing figures are flagged before the figures; a temporary gap is named separately from a run-out; every screen says the figures are arithmetic on the household's assumptions, never a bank forecast or financial advice. |
@@ -1065,6 +1065,38 @@ in the visible filter. **No drag-and-drop**, and the UI states plainly that chan
 only the app's expectation, never a bank instruction.
 
 **Version display:** the app version is visible unobtrusively on desktop and mobile (blueprint §1).
+
+### 15.3a Purchases — the review table's filters (issue #98 follow-up, decision 255)
+
+The history table's own filter bar, reshaped at the household's request after the All Transactions
+work of issue #98:
+
+- **Range** — the same five presets All Transactions offers (Last 30 days, This month, Last Month,
+  This Year, All), computed from the household's local `today` (`src/lib/records/date-range-presets.ts`).
+  Choosing one applies it at once and fills the From/To boxes, which stay editable; a hand-edited
+  window puts the select on **Custom dates**. This page's default is **All**, which means *no* date
+  filter at all — its history starts where it starts, so unlike All Transactions it carries no
+  sentinel start date.
+- **No Pot, no Paid by.** Both drop-downs are gone because the household never used them. Records are
+  still filtered by pot or payer from links, and the page keeps accepting `potId` and
+  `paidByPersonId` in its URL so those links, bookmarks and the refund/All Transactions round trips
+  keep meaning what they meant.
+- **One search for three columns.** The **Supplier** and **Category** drop-downs are replaced by
+  **Search supplier, category or notes**, which matches the supplier's directory name and the optional
+  bank payee, the `Parent / Child` label of every allocation line on the record (a split is searched
+  whole), and the record's own note. Case and spacing are folded and every typed word must appear
+  somewhere across those columns, in any order — the in-page search rules of `src/lib/search.ts`.
+  It applies as the household types (300 ms debounce, a router `replace` so one search is one history
+  entry, no scroll jump; `q` in the URL), and the projection applies it to the whole filtered window
+  *before* the 500-row cap, so the count, the net total and "up to 500 newest matches" all describe
+  the matches. The heading says `N entries matching “…”`.
+- **Chips for filters with no control.** A link can still arrive with a category (a chart bar, the
+  Overview page), a pot (All Transactions, a refund's own link) or a supplier/payer. Rather than
+  applying a filter the form cannot show, the page lists each as an **Also filtering** chip above the
+  results; clicking one removes only that filter and keeps everything else in the URL. Clearing the
+  search (the box's own Clear search, or the empty state's link) likewise keeps the rest.
+- **No match** says "Nothing matches “…” in the supplier, category or notes" and offers
+  **Clear the search**, instead of the generic empty-filter sentence.
 
 ### 15.3 All Transactions — activity for one pot (v0.3.0 line; household sketch 2026-09-23)
 
@@ -1130,14 +1162,41 @@ beside the code.
   hold its date, otherwise about a month around it. It is not statement import and not bank reconciliation, both of which remain
 non-goals (§2): the rows are the household's own records, not a bank's lines.
 
-**Filters.** A target selector (the household's live pots; if the URL does not name a valid pot, use
-the household's saved default from Settings, then the pot labelled `Main account`, else the first
-pot; issue #44) and a start/end date pair compared against each record's local `occurred_date` — never
-against an instant. A valid `potId` in the URL always wins, including links and submitted filters.
-Quick picks: **last 30 days** (the default), **since last checkpoint** (that pot's most recent
-checkpoint's effective date; a never-checkpointed pot falls back to 30 days and says so) and **this
-month**. The end date cannot be in the future, because no record can be (§9.1). The list caps at the
-newest 500 rows and says so, rather than truncating silently.
+**Filters (issue #98).** A target selector (the household's live pots; if the URL does not name a valid
+pot, use the household's saved default from Settings, then the pot labelled `Main account`, else the
+first pot; issue #44) and a start/end date pair compared against each record's local `occurred_date` —
+never against an instant. A valid `potId` in the URL always wins, including links and submitted
+filters. The three quick-pick links are one **Range** drop-down, in the order the household asked for:
+
+- **Last 30 days** (the default; today and the 29 dates before it),
+- **This month** (the 1st to today),
+- **Last Month** (the whole previous calendar month, calendar-exact — the 29th after a leap February),
+- **This Year** (1 January to today),
+- **All** (the household's whole history to today; the URL carries `from=1970-01-01`, a real window
+  the page already understands, and the heading reads "All time to today" rather than printing it).
+
+Choosing a range applies it at once, as a quick pick did. Hand-editing either date keeps the dates as
+the page's real state and puts the select on a **Custom dates** entry, so a hand-picked window is
+never mislabelled as a preset. **Since last checkpoint** was removed — the household never used it;
+checkpoint dividers still show inside every other window. The end date cannot be in the future,
+because no record can be (§9.1). The list caps at the newest 500 rows and says so, rather than
+truncating silently.
+
+**Search (issue #98).** One box searches the **Supplier / transfer / loan** column and **Notes**
+together, as the household types (300 ms after the last keystroke, a soft navigation that replaces the
+URL rather than stacking a history entry per word; before React is listening the box is inside the
+inert filter form, and Show activity submits it). The URL carries it as `q`. It matches the two
+columns exactly as the table shows them — a purchase's supplier or schedule name, the other pot's
+label on a transfer, a counterparty on a loan or swap, an income receipt's source, and the record's
+own note — case- and spacing-insensitively, with every whitespace-separated word required somewhere
+across the two, in any order (`corner weekly` finds Corner Foods' weekly shop). The search is applied
+by the projection to the whole window *before* the 500-row cap, so a supplier whose last visit fell
+past the cap is still found; the cap then applies to the matches, and "Movements shown", the net and
+the hidden-row note all describe the matching rows only. A search view leaves checkpoint dividers out
+(the divider is context, not a record with a supplier or notes) while they still anchor the balances
+shown, and it says "Nothing in this window matches “…”" with a way to clear it. An open in-place
+record follows the same rule: if it matches the search it stays open, and if it does not it is simply
+not on the list — never pinned with a badge claiming it fell past a row cap it never reached.
 
 Archived pots are not offered, and that strands no history: a pot can only be archived when it has
 no records at all — no checkpoints, purchases, transfers, receipts, external movements or schedules

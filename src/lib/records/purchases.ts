@@ -16,6 +16,7 @@ import { CategoryLevelError, CategoryNotFoundError, CategoryRetiredError } from 
 import { AlreadyVoidError, RecordVoidedError, VersionConflictError } from './errors';
 import { checkFuelDetails, type FuelDetails } from './fuel-economy';
 import { resolveOccurred } from './occurred';
+import { purchaseMatchesSearch } from './purchase-search';
 import { PersonNotFoundError } from './people';
 import { PotNotFoundError } from './pots';
 import { assertSplitBalanced } from './splits';
@@ -614,6 +615,14 @@ export interface PurchaseFilters {
   excludeScheduled?: boolean;
   excludePurchases?: boolean;
   excludeRefunds?: boolean;
+  /**
+   * Free-text search across the Supplier column (the directory name and the
+   * bank payee), every line's `Parent / Child` category label and the Notes
+   * column — the follow-up to GitHub issue #98. Matching happens in memory on
+   * the whole filtered window, before the row cap, so a match the newest
+   * pageful would have missed is still found.
+   */
+  search?: string;
   /** Default 200, capped at 1000 — household scale, no keyset games. */
   limit?: number;
 }
@@ -718,12 +727,17 @@ export function listPurchases(db: Db | DbTx, filters: PurchaseFilters = {}): Pur
     conditions.push(isNull(purchases.voidedAt));
   }
   const limit = Math.min(Math.max(filters.limit ?? 200, 1), 1000);
+  const search = filters.search?.trim() ?? '';
 
   const base = db
     .select()
     .from(purchases)
     .orderBy(desc(purchases.occurredAt), desc(purchases.id))
-    .limit(limit);
+    // A search is a filter over the whole window, not over the newest
+    // pageful: the families are read uncapped (SQLite's LIMIT -1) while a
+    // search is active, and the cap is applied to the matches below. Without
+    // a search the read stops at the cap exactly as it always has.
+    .limit(search === '' ? limit : -1);
   const rows = (conditions.length === 0 ? base : base.where(and(...conditions))).all();
   if (rows.length === 0) return [];
   const lines = db
@@ -743,10 +757,64 @@ export function listPurchases(db: Db | DbTx, filters: PurchaseFilters = {}): Pur
     list.push(line);
     byPurchase.set(line.purchaseId, list);
   }
-  return rows.map((purchase) => ({
-    purchase,
-    allocations: byPurchase.get(purchase.id) ?? [],
-  }));
+  if (search === '') {
+    return rows.map((purchase) => ({
+      purchase,
+      allocations: byPurchase.get(purchase.id) ?? [],
+    }));
+  }
+  // The search reads the three columns the review table shows. Both lookups
+  // are loaded once per query, and only when there is something to match.
+  const supplierNames = new Map(
+    db
+      .select({ id: suppliers.id, name: suppliers.name })
+      .from(suppliers)
+      .all()
+      .map((row) => [row.id, row.name] as const),
+  );
+  const categoryLabels = categoryLabelMap(db);
+  return rows
+    .filter((purchase) =>
+      purchaseMatchesSearch(
+        {
+          supplierName:
+            purchase.supplierId === null ? '' : (supplierNames.get(purchase.supplierId) ?? ''),
+          paidVia: purchase.paidVia,
+          categoryLabels: (byPurchase.get(purchase.id) ?? []).map(
+            (line) => categoryLabels.get(line.categoryId) ?? '',
+          ),
+          note: purchase.note ?? '',
+        },
+        search,
+      ),
+    )
+    .slice(0, limit)
+    .map((purchase) => ({
+      purchase,
+      allocations: byPurchase.get(purchase.id) ?? [],
+    }));
+}
+
+/**
+ * `Parent / Child` for every category id, retired ones included — a record
+ * made before a category was retired still searches by the name the household
+ * knows it by. A parent category is its own name.
+ */
+function categoryLabelMap(db: Db | DbTx): Map<number, string> {
+  const rows = db
+    .select({ id: categories.id, parentId: categories.parentId, name: categories.name })
+    .from(categories)
+    .all();
+  const names = new Map(rows.map((row) => [row.id, row.name] as const));
+  return new Map(
+    rows.map(
+      (row) =>
+        [
+          row.id,
+          row.parentId === null ? row.name : `${names.get(row.parentId) ?? ''} / ${row.name}`,
+        ] as const,
+    ),
+  );
 }
 
 export interface LinkedRefundSummaryEntry {

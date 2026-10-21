@@ -1152,3 +1152,119 @@ describe('All Transactions: running balance (v0.33.0)', () => {
     );
   });
 });
+
+describe('All Transactions: supplier and notes search (issue #98)', () => {
+  it('keeps only the rows whose source or note matches, and totals only those', async () => {
+    const { fx } = await seedActivity();
+    try {
+      const view = listPotActivity(fx.db, {
+        potId: fx.pots.main.id,
+        ...WINDOW,
+        search: '  TESCO ',
+      });
+      const list = rows(view);
+      assert.deepEqual(
+        list.map((row) => row.code),
+        ['PUR'],
+      );
+      assert.equal(list[0]?.source, 'Tesco');
+      assert.equal(view.totals.rowCount, 1);
+      assert.equal(view.totals.outPence, 6347);
+      assert.equal(view.totals.inPence, 0);
+      // Checkpoints are context for the window, not records that match a
+      // supplier or a note, so a search view leaves the divider out.
+      assert.equal(
+        view.entries.every((entry) => entry.kind === 'row'),
+        true,
+      );
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('reads the source column and the notes column together across families', async () => {
+    const { fx } = await seedActivity();
+    try {
+      // "son" is the transfer's note ("Son wages") and the swap's source
+      // ("Son") — two different columns, one search.
+      const view = listPotActivity(fx.db, {
+        potId: fx.pots.main.id,
+        ...WINDOW,
+        search: 'son',
+      });
+      const list = rows(view);
+      assert.deepEqual(list.map((row) => row.code).sort(), ['SW>', 'TX>']);
+      assert.deepEqual(list.map((row) => row.source).sort(), ["Alex's cash", 'Son']);
+      assert.equal(view.totals.rowCount, 2);
+
+      // Every typed word must appear somewhere across the two columns, in
+      // any order — the supplier's name and a word from its note.
+      const both = listPotActivity(fx.db, {
+        potId: fx.pots.main.id,
+        ...WINDOW,
+        search: 'weekly corner',
+      });
+      assert.deepEqual(
+        rows(both).map((row) => row.source),
+        ['Corner Shop'],
+      );
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('applies the row cap to the matches themselves and reports the hidden remainder', async () => {
+    const { fx } = await seedActivity();
+    try {
+      const view = listPotActivity(fx.db, {
+        potId: fx.pots.main.id,
+        ...WINDOW,
+        search: 'son',
+        limit: 1,
+      });
+      assert.equal(rows(view).length, 1);
+      assert.equal(view.totals.rowCount, 1);
+      assert.equal(view.totals.hiddenRowCount, 1);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('finds a row that the ordinary cap would have hidden', async () => {
+    const { fx } = await seedActivity();
+    try {
+      // The oldest row is far outside the newest one-row page; the search
+      // reads the whole window before the cap is applied, so its note finds
+      // the original purchase, not the later refund of part of it.
+      const view = listPotActivity(fx.db, {
+        potId: fx.pots.main.id,
+        ...WINDOW,
+        search: 'weekly shop',
+        limit: 1,
+      });
+      assert.deepEqual(
+        rows(view).map((row) => [row.code, row.source]),
+        [['PUR', 'Corner Shop']],
+      );
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('says nothing matched when neither column holds the words', async () => {
+    const { fx } = await seedActivity();
+    try {
+      const view = listPotActivity(fx.db, {
+        potId: fx.pots.main.id,
+        ...WINDOW,
+        search: 'nothing like this exists',
+      });
+      assert.deepEqual(view.entries, []);
+      assert.equal(view.totals.rowCount, 0);
+      assert.equal(view.totals.expectedRowCount, 0);
+      assert.equal(view.totals.hiddenRowCount, 0);
+    } finally {
+      fx.close();
+    }
+  });
+});

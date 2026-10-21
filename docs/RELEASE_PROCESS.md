@@ -4,6 +4,17 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.36.0 stable release — issue #98 and the Purchases filter rework (2026-10-21)
+
+The household reviewed the All Transactions Range drop-down and supplier/notes search of issue #98
+in the Arena preview, then asked for the same treatment on Purchases; it reviewed that rework too,
+approved both and requested stable **v1.36.0** for full testing on its multi-household Unraid
+installation. This release contains the shared date presets, both search boxes, the removed
+Purchases drop-downs and the linked-filter chips (decisions 254–255), with no schema, migration or
+backup-format change. Keep the implementation, tests, version files, release notes and handoff in
+one PR; require `gates`, `browser` and `docker` before merge, then tag the exact `main` merge
+commit, publish and verify the GHCR tags/digest as below.
+
 ## v1.35.0 stable release — issue #96 (2026-10-21)
 
 The household rejected a first pre-filled/remove-line refund preview, directed the explicit-entry

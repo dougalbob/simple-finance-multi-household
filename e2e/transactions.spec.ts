@@ -1,6 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
+  addDaysIso,
+  londonToday,
   pickEntryCategory,
+  waitForFilters,
   waitForPurchaseToggle,
   waitForTill,
   waitForTransferToggle,
@@ -876,6 +879,83 @@ test.describe('all transactions', () => {
     ).toBeVisible();
   });
 
+  test('the range drop-down and the supplier-and-notes search filter the list (issue #98)', async ({
+    page,
+  }) => {
+    const today = londonToday();
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const lastMonthEnd = addDaysIso(monthStart, -1);
+    const lastMonthStart = `${lastMonthEnd.slice(0, 7)}-01`;
+    const supplier = `Search Probe ${Date.now()}`;
+    const note = 'Distinct note wording';
+    await recordPurchase(page, { supplier, amount: '3.21', note });
+
+    await page.goto('/transactions');
+    await waitForFilters(page);
+    const filters = page.getByRole('form', { name: 'Activity filters' });
+    const range = filters.getByLabel('Range');
+    // The household's five ranges, in the order the issue asked for. There
+    // is no "Since last checkpoint" — it was never used.
+    await expect(range.locator('option')).toHaveText([
+      'Last 30 days',
+      'This month',
+      'Last Month',
+      'This Year',
+      'All',
+    ]);
+    await expect(range).toHaveValue('last-30-days');
+
+    // Choosing a range applies it at once, exactly as a quick pick did; the
+    // two date fields follow the choice.
+    await range.selectOption({ label: 'This month' });
+    await expect.poll(() => new URL(page.url()).searchParams.get('from')).toBe(monthStart);
+    await expect(filters.getByLabel('Start date')).toHaveValue(monthStart);
+    await expect(filters.getByLabel('End date')).toHaveValue(today);
+
+    await range.selectOption({ label: 'Last Month' });
+    await expect.poll(() => new URL(page.url()).searchParams.get('from')).toBe(lastMonthStart);
+    await expect(filters.getByLabel('Start date')).toHaveValue(lastMonthStart);
+    await expect(filters.getByLabel('End date')).toHaveValue(lastMonthEnd);
+
+    // All is the whole history, and the heading says so rather than printing
+    // the sentinel start date.
+    await range.selectOption({ label: 'All' });
+    await expect.poll(() => new URL(page.url()).searchParams.get('from')).toBe('1970-01-01');
+    await expect(page.getByRole('heading', { name: `All time to ${today}` })).toBeVisible();
+
+    // The search reads the Supplier / transfer / loan column and Notes
+    // together, as the household types — no Enter, no Show activity.
+    await page.goto('/transactions');
+    await waitForFilters(page);
+    const search = page.getByLabel('Search supplier or notes');
+    await search.fill(supplier);
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe(supplier);
+    await expect(purchaseRows(page)).toHaveCount(1);
+    await expect(purchaseRows(page)).toContainText(supplier);
+    await expect(purchaseRows(page)).not.toContainText('Corner Foods');
+
+    // One word from the supplier and one from the note still find the row:
+    // the two columns are searched together.
+    await search.fill('probe distinct');
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('probe distinct');
+    await expect(purchaseRows(page)).toHaveCount(1);
+    await expect(purchaseRows(page)).toContainText(supplier);
+    await expect(purchaseRows(page)).toContainText(note);
+
+    // A note with no supplier word finds it too.
+    await search.fill(note);
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe(note);
+    await expect(purchaseRows(page)).toHaveCount(1);
+
+    // Nothing matching says so, and offers the way back.
+    await search.fill('no such supplier anywhere');
+    await expect(page.getByText(/Nothing in this window matches/)).toBeVisible();
+    await page.getByRole('button', { name: 'Clear search' }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.has('q')).toBe(false);
+    await expect(search).toHaveValue('');
+    await expect(purchaseRows(page).filter({ hasText: supplier })).toHaveCount(1);
+  });
+
   test('shows running balance at far right, green in credit red in debit, anchored on checkpoints', async ({
     page,
   }) => {
@@ -938,7 +1018,7 @@ function purchaseRows(page: Page): Locator {
 /** Record a purchase through the till, as the household does (SPEC §15.1). */
 async function recordPurchase(
   page: Page,
-  { supplier, amount }: { supplier: string; amount: string },
+  { supplier, amount, note }: { supplier: string; amount: string; note?: string },
 ): Promise<void> {
   await page.goto('/');
   await waitForTill(page);
@@ -950,6 +1030,10 @@ async function recordPurchase(
   // till refuses to save without one (SPEC §15.1). These rows are looked up on
   // Main account's activity, so the pot here is not negotiable either.
   await entry.getByLabel('Pot').selectOption({ label: 'Main account' });
+  if (note !== undefined) {
+    await entry.getByRole('button', { name: '+ Note' }).click();
+    await entry.getByLabel('Note (optional)').fill(note);
+  }
   await entry.getByRole('button', { name: 'Next: category →' }).click();
   await pickEntryCategory(entry, 'Groceries / Weekly Shop');
   await entry.getByRole('button', { name: 'Save purchase' }).click();

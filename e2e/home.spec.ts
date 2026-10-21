@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { addDaysIso, pickEntryCategory, waitForTill } from './support';
+import { addDaysIso, pickEntryCategory, waitForFilters, waitForTill } from './support';
 import { formatPence } from '../src/lib/money';
 import { formatOrdinalDayMonthShortLocalDate, toLocalDateString } from '../src/lib/time';
 import { APP_RELEASE_STAGE, APP_VERSION } from '../src/lib/version';
@@ -1054,6 +1054,7 @@ test.describe('mobile quick entry', () => {
 
   test('purchase filters start collapsed and stay inside the card', async ({ page }) => {
     await page.goto('/purchases');
+    await waitForFilters(page);
     const filters = page.getByRole('form', { name: 'Purchase filters' });
     const show = filters.getByRole('button', { name: 'Show filters' });
     await expect(show).toBeVisible();
@@ -1064,33 +1065,39 @@ test.describe('mobile quick entry', () => {
 
     const from = filters.getByLabel('From date');
     const to = filters.getByLabel('To date');
-    const pot = filters.getByLabel('Pot');
+    // The Pot and Paid by drop-downs were removed (issue #98 follow-up); the
+    // Range drop-down and the search box are what the panel carries now.
+    const range = filters.getByLabel('Range');
     await expect(from).toBeVisible();
     await expect(to).toBeVisible();
-    await expect(pot).toBeVisible();
+    await expect(range).toBeVisible();
+    await expect(filters.getByLabel('Pot', { exact: true })).toHaveCount(0);
+    await expect(filters.getByLabel('Paid by', { exact: true })).toHaveCount(0);
 
     const cardBox = await filters.boundingBox();
     const fromBox = await from.boundingBox();
     const toBox = await to.boundingBox();
-    const potBox = await pot.boundingBox();
+    const rangeBox = await range.boundingBox();
     expect(cardBox).toBeTruthy();
     expect(fromBox).toBeTruthy();
     expect(toBox).toBeTruthy();
-    expect(potBox).toBeTruthy();
-    if (cardBox === null || fromBox === null || toBox === null || potBox === null) return;
+    expect(rangeBox).toBeTruthy();
+    if (cardBox === null || fromBox === null || toBox === null || rangeBox === null) return;
 
-    // From/To sit on one row; the dropdowns stay inside the rounded card.
+    // From/To sit on one row, with Range above them; everything stays inside
+    // the rounded card.
     expect(Math.abs(fromBox.y - toBox.y)).toBeLessThan(8);
     expect(toBox.x).toBeGreaterThan(fromBox.x);
-    for (const box of [fromBox, toBox, potBox]) {
+    expect(rangeBox.y).toBeLessThan(fromBox.y);
+    for (const box of [fromBox, toBox, rangeBox]) {
       expect(box.x).toBeGreaterThanOrEqual(cardBox.x - 1);
       expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
     }
 
-    await filters.getByLabel('Supplier').selectOption({ label: 'Corner Foods' });
-    await filters.getByRole('button', { name: 'Apply filters' }).click();
+    await filters.getByLabel('Search supplier, category or notes').fill('Corner Foods');
+    await expect(page).toHaveURL(/[?&]q=Corner\+Foods/);
     await expect(filters.getByRole('button', { name: 'Hide filters' })).toBeVisible();
-    await expect(filters.getByLabel('Supplier')).toBeVisible();
+    await expect(filters.getByLabel('Search supplier, category or notes')).toBeVisible();
   });
 
   test('the Move tab records a transfer; a transfer after the checkpoint is household-net-zero', async ({

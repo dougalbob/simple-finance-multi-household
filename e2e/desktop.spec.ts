@@ -118,9 +118,12 @@ test.describe('desktop review', () => {
 
     await groceries.click();
     await expect(page.getByRole('heading', { name: 'Every recorded purchase' })).toBeVisible();
-    await expect(page.getByLabel('Category')).toHaveValue(
-      groceriesUrl.searchParams.get('categoryId') ?? '',
-    );
+    // The Category drop-down is gone (the search replaces it, issue #98
+    // follow-up), so the link's category is stated as a chip above the
+    // results instead of appearing as a control the page no longer has.
+    await expect(
+      page.getByLabel('Remove the category filter: Groceries / all children'),
+    ).toBeVisible();
     await expect(page.getByLabel('From date')).toHaveValue(monthFrom);
     await expect(page.getByLabel('To date')).toHaveValue(today);
   });
@@ -152,6 +155,7 @@ test.describe('desktop review', () => {
 
   test('purchases can be filtered and edited inline', async ({ page }) => {
     await page.goto('/purchases');
+    await waitForFilters(page);
     await expect(
       page.getByRole('heading', { name: 'Every recorded purchase', level: 1 }),
     ).toBeVisible();
@@ -174,11 +178,22 @@ test.describe('desktop review', () => {
 
     // Desktop keeps the filter form open; the phone-only toggle stays hidden.
     await expect(page.getByRole('button', { name: 'Show filters' })).toBeHidden();
-    await expect(page.getByLabel('Supplier')).toBeVisible();
+    // The Supplier and Category drop-downs are gone; one search box reads the
+    // supplier column, every category and the notes (issue #98 follow-up).
+    // Scoped to the filter form: each row's editor keeps its own Category
+    // select, and that is not a filter.
+    const filterForm = page.getByRole('form', { name: 'Purchase filters' });
+    await expect(filterForm.getByLabel('Supplier', { exact: true })).toHaveCount(0);
+    await expect(filterForm.getByLabel('Category', { exact: true })).toHaveCount(0);
+    await expect(filterForm.getByLabel('Pot', { exact: true })).toHaveCount(0);
+    await expect(filterForm.getByLabel('Paid by', { exact: true })).toHaveCount(0);
+    await expect(filterForm.getByLabel('Search supplier, category or notes')).toBeVisible();
 
-    // Filter down to one supplier and confirm the table follows.
-    await page.getByLabel('Supplier').selectOption({ label: 'Corner Foods' });
-    await page.getByRole('button', { name: 'Apply filters' }).click();
+    // Search by supplier and confirm the table follows — as you type, with no
+    // Apply press (a keystroke debounces into a soft navigation).
+    await page.getByLabel('Search supplier, category or notes').fill('Corner Foods');
+    await expect(page).toHaveURL(/[?&]q=Corner\+Foods/);
+    await expect(results.getByRole('heading')).toContainText('matching “Corner Foods”');
     await expect(results.getByText('Corner Foods').first()).toBeVisible();
     await expect(results.getByText('The Corner Cafe')).toHaveCount(0);
 
@@ -200,7 +215,7 @@ test.describe('desktop review', () => {
     await waitForFilters(page);
     const results = page.locator('section[aria-labelledby="results-heading"]');
 
-    const checkHeadingAgainstRows = async () => {
+    const checkHeadingAgainstRows = async (matching = '') => {
       const rows = await results.locator('tbody tr').evaluateAll((elements) =>
         elements.map((row) => ({
           amount: row.querySelector('td:nth-child(6)')?.textContent?.trim() ?? '',
@@ -219,16 +234,17 @@ test.describe('desktop review', () => {
       }, 0);
       const count = rows.length;
       await expect(results.getByRole('heading', { level: 2 })).toHaveText(
-        `${count} ${count === 1 ? 'entry' : 'entries'}: Total ${formatPence(netPence)}`,
+        `${count} ${count === 1 ? 'entry' : 'entries'}${matching}: Total ${formatPence(netPence)}`,
       );
     };
 
     await checkHeadingAgainstRows();
-    await page.getByLabel('Supplier').selectOption({ label: 'Corner Foods' });
-    await page.getByRole('button', { name: 'Apply filters' }).click();
-    await expect(page).toHaveURL(/supplierId=/);
+    // The search names itself in the heading, and the total follows the rows
+    // it leaves (issue #98 follow-up to the same honest-total rule).
+    await page.getByLabel('Search supplier, category or notes').fill('Corner Foods');
+    await expect(page).toHaveURL(/[?&]q=Corner\+Foods/);
     await expect(results.getByText('Corner Foods').first()).toBeVisible();
-    await checkHeadingAgainstRows();
+    await checkHeadingAgainstRows(' matching “Corner Foods”');
 
     await page.goto('/purchases?from=1900-01-01&to=1900-01-02');
     await expect(results.getByRole('heading', { level: 2 })).toHaveText('0 entries: Total £0.00');
