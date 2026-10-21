@@ -4162,5 +4162,14 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       chip-closes-panel, Exclude Housing redraws without a load). Two pre-existing journeys were
       hardened with this file's own hydration-marker wait (the chips test after its reload; the pace
       table's summary centred before its click) — the swallowed-click race decision 216 records,
-      exposed by sandbox slowness; their assertions are unchanged. Prepared for the household's
-      review on the Arena preview; no version change has been requested yet.
+      exposed by sandbox slowness; their assertions are unchanged. The household reviewed the Arena
+      preview, approved it and requested stable **v1.34.0** for full testing on Unraid; decision 251
+      records that release.
+
+251. **Stable release v1.34.0 — issue #94 (2026-10-21).** The household reviewed the Arena preview
+    of Charts B, C and F opening their line items in line, approved it and requested a stable
+    `v1.34.0` so it can test fully on the multi-household Unraid installation. This supersedes
+    decision 250's awaiting-acceptance note as first written. No schema, migration or backup-format
+    change. The release PR must pass `gates`, `browser` and `docker` (including the container and
+    applicable upgrade smoke) before merge; tag the exact `main` merge commit and publish only to
+    `ghcr.io/dougalbob/simple-finance-multi-household`.

@@ -1,8 +1,12 @@
-# Issue #94 — Charts B, C and F open their line items in line (2026-10-21)
+# v1.34.0 — issue #94: Charts B, C and F open their line items in line (2026-10-21)
 
-**Prepared on the assigned branch, awaiting household acceptance on the Arena preview.** No version
-bump, tag or release has been requested yet. **Read decision 250 in
-[`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC §16.7 B, C, F first.**
+**Approved stable feature:** the household reviewed the Arena preview, approved it and requested
+stable **v1.34.0** for full testing on the multi-household Unraid installation. Publication follows
+[`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md): one PR, required checks, merge to `main`, an
+annotated tag on that exact merge commit, and successful GHCR verification.
+
+**Read decisions 250–251 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC
+§16.7 B, C, F first.**
 
 **What changed:** tapping a grocery week (B), a personal-spending segment (C) or a three-months bar
 (F) now opens that figure's allocation lines in a panel beneath its own chart — Chart E's behaviour,
@@ -22,9 +26,8 @@ hardened with this file's hydration-marker wait after the sandbox exposed the sw
 decision 216 records; assertions unchanged. Required PR CI (`gates`, `browser`, `docker`) remains
 the gate at merge time; this entry is the pre-merge record.
 
-**Next step:** the household reviews the Arena preview (Charts → tap a bar on B, C or F). On
-approval, release follows [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) — and only to
-`ghcr.io/dougalbob/simple-finance-multi-household`.
+**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
+GHCR digest for `v1.34.0` (the workflow prints them and creates the GitHub release).
 
 ---
 
