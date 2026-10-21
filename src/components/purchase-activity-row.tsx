@@ -166,6 +166,9 @@ export function PurchaseActivityRow({
               {BADGE[pinned.reason]}
             </span>
           ) : null}
+          {row.badge !== null ? (
+            <span className="mt-1 block text-xs font-medium text-ink-soft">{row.badge}</span>
+          ) : null}
         </td>
         <td className="px-3 py-2.5">
           <button
@@ -249,6 +252,19 @@ export function PurchaseActivityRow({
             date={row.date}
             voidReason={facts.voidReason}
           />
+          {row.badge !== null ? (
+            <p
+              role="status"
+              className="mt-3 rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-sm text-ink-body"
+            >
+              <strong>{row.badge}.</strong> The refund records and the amount still refundable are
+              shown with this purchase on{' '}
+              <Link href={row.link.href} className="sf-link">
+                Purchases
+              </Link>
+              .
+            </p>
+          ) : null}
           {voided ? null : (
             <div className="mt-4 grid gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
               <div className="min-w-0">

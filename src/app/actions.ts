@@ -1942,6 +1942,13 @@ export async function addRefundAction(
   } catch {
     return { status: 'error', message: 'The refund lines were not readable. Please try again.' };
   }
+  if (Array.isArray(lines) && lines.length === 0) {
+    return {
+      status: 'error',
+      message:
+        'Enter the amount to be refunded on at least one line. Leave lines with no refund blank.',
+    };
+  }
   const amount = parsePence(
     typeof formData.get('amount') === 'string' ? String(formData.get('amount')) : '',
   );

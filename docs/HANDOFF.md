@@ -1,3 +1,45 @@
+# v1.35.0 — issue #96: explicit partial refunds, signposting and locked refund lines (2026-10-21)
+
+**Approved stable feature:** the household rejected a first pre-filled/remove-line preview,
+directed explicit refund entry, then tested the revised refund form, linked signposting and the
+fresh-origin refund-correction preview. It approved the entire change and requested stable
+**v1.35.0** for full testing on the multi-household Unraid installation. Publication follows
+[`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md): one PR, required checks, merge to `main`, an
+annotated tag on that exact merge commit, and successful GHCR verification.
+
+**Read decision 252 (the refund model) and decision 253 (this release) in
+[`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md), plus SPEC §9.5 and §15.3 first.**
+
+**What changed:** refund amount boxes start blank with **Originally £X** placeholders; the household
+explicitly enters each **refunded** amount under **Enter the amount _to be refunded_**, and a blank
+line is omitted. An all-blank form records nothing. Refund creation and correction show each
+parent/child category and spent-for target only as a read-only heading, with no Spent for,
+Category or Which selects and no add/remove-line controls. A refund correction edits a positive
+**Amount refunded** and submits the negative record; `editPurchase`'s
+`assertRefundLineIdentitiesUnchanged` preserves its line count, order, categories and targets.
+Purchases and All Transactions now signpost live refund state in both directions: originals show
+the amount refunded/still refundable and linked refund records, while refunds name and link their
+original purchase. Ordinary purchase edits retain the new split-line removal control. No schema,
+migration or backup-format change.
+
+**Validation:** `npm test` **1143/1143 across 268 suites**, `typecheck`, `themes:check`,
+`format:check`, `next build` and `npm audit --omit=dev` green. The local Playwright
+`transactions` refund journeys (SANDBOX entry 8) passed **2/2**, including the explicit partial
+refund, already-refunded warnings, both signposting surfaces and a £10.00 → £12.00 refund
+correction through the locked editor. Required PR CI (`gates`, `browser`, `docker`) remains the
+gate at merge time; this entry is the pre-merge record.
+
+**Previous release publication record:** `v1.34.0` was merged in PR #95 at
+`fe274edad03c3fc5aea74a8df9e3b27fcbf1713d`; successful PR CI run `39563700500`, main CI run
+`39564993184`, Publish run `39566470448`, verified GHCR digest
+`sha256:9679e28473ad783484175c8f0af96daa9e7a82617a85401d8f9302b30c5e33da` for `v1.34.0`,
+`latest` and `sha-fe274ed`.
+
+**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
+GHCR digest for `v1.35.0` (the workflow prints them and creates the GitHub release).
+
+---
+
 # v1.34.0 — issue #94: Charts B, C and F open their line items in line (2026-10-21)
 
 **Approved stable feature:** the household reviewed the Arena preview, approved it and requested
@@ -31,8 +73,9 @@ and the test derives its label from the fixture's payday — test-only, no produ
 PR CI (`gates`, `browser`, `docker`) remains
 the gate at merge time; this entry is the pre-merge record.
 
-**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
-GHCR digest for `v1.34.0` (the workflow prints them and creates the GitHub release).
+**Publication record:** PR #95 merged at `fe274edad03c3fc5aea74a8df9e3b27fcbf1713d`; successful
+PR CI run `39563700500`, main CI run `39564993184`, Publish run `39566470448`, verified GHCR
+digest `sha256:9679e28473ad783484175c8f0af96daa9e7a82617a85401d8f9302b30c5e33da`.
 
 ---
 

@@ -380,9 +380,18 @@ export function editPurchase(db: Db, input: EditPurchaseInput): PurchaseWithLine
       effectiveLines.map((line) => line.amountPence),
     );
     if (patch.lines !== undefined) {
-      // Unchanged lines are not re-validated against the category tree: a
-      // category retired after the purchase must not block fixing a typo.
-      assertLinesReferenceLiveLeaves(tx, effectiveLines);
+      if (isRefund) {
+        // A refund correction may change amounts (and the record's
+        // date/note around them), never re-file its lines: category and
+        // spent-for belong to the original purchase (issue #96). The UI
+        // hides those controls; this is the same rule at the domain's
+        // door, so add/remove/re-target cannot arrive by another path.
+        assertRefundLineIdentitiesUnchanged(currentLines, effectiveLines);
+      } else {
+        // Unchanged lines are not re-validated against the category tree: a
+        // category retired after the purchase must not block fixing a typo.
+        assertLinesReferenceLiveLeaves(tx, effectiveLines);
+      }
     }
 
     const effectivePotId = patch.potId ?? current.potId;
@@ -740,6 +749,72 @@ export function listPurchases(db: Db | DbTx, filters: PurchaseFilters = {}): Pur
   }));
 }
 
+export interface LinkedRefundSummaryEntry {
+  id: number;
+  /** Positive pence: the money that came back on this refund record. */
+  amountPence: number;
+  potId: number;
+  occurredAt: Date;
+  occurredDate: string;
+  enteredBy: string;
+}
+
+export interface PurchaseRefundSummary {
+  /** Positive pence already returned by live (non-voided) refund records. */
+  refundedPence: number;
+  refunds: LinkedRefundSummaryEntry[];
+}
+
+/**
+ * Live refund signposting for a set of original purchases (issue #96):
+ * how much has already come back against each one, and the refund records
+ * that make up that amount. Voided refunds are history, not money back, so
+ * they never contribute. Purchases with no live refunds are absent.
+ */
+export function refundSummariesForPurchases(
+  db: Db | DbTx,
+  purchaseIds: readonly number[],
+): Map<number, PurchaseRefundSummary> {
+  const ids = [...new Set(purchaseIds)];
+  const summaries = new Map<number, PurchaseRefundSummary>();
+  if (ids.length === 0) return summaries;
+  const refunds = db
+    .select()
+    .from(purchases)
+    .where(and(inArray(purchases.refundOfPurchaseId, ids), isNull(purchases.voidedAt)))
+    .orderBy(asc(purchases.occurredAt), asc(purchases.id))
+    .all();
+  for (const refund of refunds) {
+    if (refund.refundOfPurchaseId === null) continue;
+    const summary = summaries.get(refund.refundOfPurchaseId) ?? {
+      refundedPence: 0,
+      refunds: [],
+    };
+    summary.refundedPence += Math.abs(refund.totalPence);
+    summary.refunds.push({
+      id: refund.id,
+      amountPence: Math.abs(refund.totalPence),
+      potId: refund.potId,
+      occurredAt: refund.occurredAt,
+      occurredDate: refund.occurredDate,
+      enteredBy: refund.enteredBy,
+    });
+    summaries.set(refund.refundOfPurchaseId, summary);
+  }
+  return summaries;
+}
+
+/** Original purchase records for a set of refund links, keyed by purchase id. */
+export function refundOriginalsById(
+  db: Db | DbTx,
+  purchaseIds: readonly number[],
+): Map<number, Purchase> {
+  const ids = [...new Set(purchaseIds)];
+  if (ids.length === 0) return new Map();
+  const rows = db.select().from(purchases).where(inArray(purchases.id, ids)).all();
+  return new Map(rows.map((purchase) => [purchase.id, purchase] as const));
+}
+
 export interface DuplicateSearchInput {
   potId: number;
   supplierId: number | null;
@@ -877,6 +952,35 @@ function assertLinesReferenceLiveLeaves(db: Db | DbTx, lines: AllocationLineInpu
       }
     }
   });
+}
+
+/**
+ * An existing refund keeps the allocation lines it was recorded with: the
+ * same count, in the same order, with the same category and spent-for
+ * target on each line. Only line amounts may be corrected. A refund filed
+ * against the wrong original line is voided and recorded again, rather
+ * than quietly reallocated by an edit (issue #96).
+ */
+function assertRefundLineIdentitiesUnchanged(
+  currentLines: Allocation[],
+  effectiveLines: AllocationLineInput[],
+): void {
+  const identitiesMatch =
+    currentLines.length === effectiveLines.length &&
+    currentLines.every((current, index) => {
+      const next = effectiveLines[index];
+      return (
+        next !== undefined &&
+        current.categoryId === next.categoryId &&
+        current.targetKind === next.targetKind &&
+        current.targetId === (next.targetId ?? null)
+      );
+    });
+  if (!identitiesMatch) {
+    throw new RefundLinkError(
+      "A refund's category and spent-for target are fixed by the purchase it refunds — void this refund and record a new one if a line was filed against the wrong part of that purchase.",
+    );
+  }
 }
 
 interface RefundLinkCheck {

@@ -4,6 +4,17 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.35.0 stable release — issue #96 (2026-10-21)
+
+The household rejected a first pre-filled/remove-line refund preview, directed the explicit-entry
+model, then tested refund creation, refund signposting and refund correction in the Arena preview.
+It approved the entire change and asked for stable **v1.35.0** so it can test fully on its
+multi-household Unraid installation. This release contains explicit partial refunds, bidirectional
+linked-refund signposting and locked refund line identities only (decisions 252–253), with no
+schema, migration or backup-format change. Keep the implementation, tests, version files, release
+notes and handoff in one PR; require `gates`, `browser` and `docker` before merge, then tag the
+exact `main` merge commit, publish and verify the GHCR tags/digest as below.
+
 ## v1.34.0 stable release — issue #94 (2026-10-21)
 
 The household reviewed the Arena preview of Charts B, C and F opening their line items in line,

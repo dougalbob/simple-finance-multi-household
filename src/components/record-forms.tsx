@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useState } from 'react';
+import { useActionState, useState, type ReactNode } from 'react';
 import {
   addRefundAction,
   addTransferAction,
@@ -13,13 +13,29 @@ import {
   voidTransferAction,
 } from '@/app/actions';
 import { initialActionState } from '@/lib/action-state';
-import { penceInput } from '@/lib/money';
+import { formatPence, penceInput } from '@/lib/money';
 
 export interface EntryLineState {
   amount: string;
   categoryId: number;
   targetKind: 'household' | 'person' | 'vehicle';
   targetId: number | null;
+  /**
+   * Refund lines only (issue #96): what this line cost on the original
+   * purchase. It is shown only as the amount box's placeholder
+   * ("Originally £X"); the box itself starts blank, so any figure the
+   * household submits is one they explicitly typed as money refunded.
+   * Never submitted — `RefundForm` maps entered lines to the action's shape.
+   */
+  originalPence?: number;
+  /**
+   * Read-only line identity for refund editors, where category and target
+   * are fixed by the original purchase and their select controls are not
+   * rendered at all (issue #96). Labels rather than ids because the
+   * editor's live category options may no longer include a retired leaf.
+   */
+  categoryLabel?: string;
+  spentForLabel?: string;
 }
 
 interface TargetOption {
@@ -94,16 +110,56 @@ interface LineEditorProps {
   people: TargetOption[];
   vehicles: TargetOption[];
   allowEmptyCategory?: boolean;
+  /** "Amount" on a purchase edit; the household's explicit refund wording on a refund. */
+  amountLabel?: ReactNode;
+  /** "Spent for" on a purchase edit; "Originally spent for" on a refund. */
+  targetLabel?: string;
+  /** Remove-button wording for editors where a line may leave. */
+  removeLineLabel?: string;
+  /** A purchase edit may add/remove split lines; a refund only enters amounts on the original lines. */
+  allowAddLine?: boolean;
+  allowRemoveLines?: boolean;
+  /** Blank is meaningful on a refund: no money came back for that line. */
+  amountRequired?: boolean;
+  /**
+   * Refund creation/edit only: category and target are inherited from the
+   * original purchase, so render them as a read-only line heading and
+   * offer no Spent for / Category / Which controls to change them.
+   */
+  lockLineIdentity?: boolean;
 }
 
 /**
  * Shared line editor for purchase edits/refunds (blueprint: same line rules
  * everywhere — total must equal the sum of the lines, enforced server-side;
- * this UI only keeps the input tidy).
+ * this UI only keeps the input tidy). Purchase-edit lines can be removed
+ * as well as added (issue #96): until now a split line could never leave a
+ * purchase edit even though a £0 line is rejected everywhere ("remove it
+ * or give it an amount", splits.ts). A refund deliberately offers neither
+ * add nor remove and locks each line's identity: its lines are the
+ * original purchase's lines, shown by category and target as read-only
+ * headings, with only the refunded amount editable.
  */
-function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }: LineEditorProps) {
+function LineEditor({
+  idPrefix,
+  lines,
+  setLines,
+  categories,
+  people,
+  vehicles,
+  amountLabel = 'Amount',
+  targetLabel = 'Spent for',
+  removeLineLabel = 'Remove line',
+  allowAddLine = true,
+  allowRemoveLines = true,
+  amountRequired = true,
+  lockLineIdentity = false,
+}: LineEditorProps) {
   const updateLine = (index: number, patch: Partial<EntryLineState>) => {
     setLines(lines.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  };
+  const removeLine = (index: number) => {
+    setLines(lines.filter((_, i) => i !== index));
   };
 
   return (
@@ -111,62 +167,93 @@ function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }:
       {lines.map((line, index) => {
         const personMatches = line.targetKind === 'person';
         const vehicleMatches = line.targetKind === 'vehicle';
+        const categoryOption = categories.find((category) => category.id === line.categoryId);
+        const lineCategoryLabel =
+          line.categoryLabel ??
+          (categoryOption !== undefined
+            ? `${categoryOption.parentName} / ${categoryOption.childName}`
+            : 'Category');
+        const lineSpentForLabel =
+          line.spentForLabel ??
+          (line.targetKind === 'household'
+            ? 'household'
+            : line.targetKind === 'person'
+              ? (people.find((person) => person.id === line.targetId)?.label ?? 'person')
+              : (vehicles.find((vehicle) => vehicle.id === line.targetId)?.label ?? 'vehicle'));
         return (
           <div key={index} className="grid grid-cols-2 items-end gap-2 rounded-lg bg-canvas p-2">
-            <div className="flex min-w-0 flex-col gap-1">
-              <label htmlFor={`${idPrefix}-target-${index}`} className={labelClass}>
-                Spent for
-              </label>
-              <select
-                id={`${idPrefix}-target-${index}`}
-                value={line.targetKind}
-                onChange={(event) => {
-                  const targetKind = event.target.value as EntryLineState['targetKind'];
-                  updateLine(index, { targetKind, targetId: null });
-                }}
-                className={lineInputClass}
-              >
-                <option value="household">Household (shared)</option>
-                <option value="person">Person</option>
-                <option value="vehicle">Vehicle</option>
-              </select>
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
+            {lockLineIdentity ? (
+              <div className="col-span-2 min-w-0">
+                <p className="text-sm font-medium text-ink-body">
+                  {lineCategoryLabel}{' '}
+                  <span className="font-normal text-ink-faint">({lineSpentForLabel})</span>
+                </p>
+              </div>
+            ) : (
+              <div className="flex min-w-0 flex-col gap-1">
+                <label htmlFor={`${idPrefix}-target-${index}`} className={labelClass}>
+                  {targetLabel}
+                </label>
+                <select
+                  id={`${idPrefix}-target-${index}`}
+                  value={line.targetKind}
+                  onChange={(event) => {
+                    const targetKind = event.target.value as EntryLineState['targetKind'];
+                    updateLine(index, { targetKind, targetId: null });
+                  }}
+                  className={lineInputClass}
+                >
+                  <option value="household">Household (shared)</option>
+                  <option value="person">Person</option>
+                  <option value="vehicle">Vehicle</option>
+                </select>
+              </div>
+            )}
+            <div className={`${lockLineIdentity ? 'col-span-2 ' : ''}flex min-w-0 flex-col gap-1`}>
               <label htmlFor={`${idPrefix}-amount-${index}`} className={labelClass}>
-                Amount
+                {amountLabel}
               </label>
               <input
                 id={`${idPrefix}-amount-${index}`}
                 type="text"
                 inputMode="decimal"
-                required
+                required={amountRequired}
+                placeholder={
+                  line.originalPence !== undefined
+                    ? `Originally ${formatPence(Math.abs(line.originalPence))}`
+                    : undefined
+                }
                 value={line.amount}
                 onChange={(event) => updateLine(index, { amount: event.target.value })}
                 className={lineInputClass}
               />
             </div>
-            <div className="col-span-2 flex min-w-0 flex-col gap-1">
-              <label htmlFor={`${idPrefix}-category-${index}`} className={labelClass}>
-                Category
-              </label>
-              <select
-                id={`${idPrefix}-category-${index}`}
-                required
-                value={String(line.categoryId)}
-                onChange={(event) => updateLine(index, { categoryId: Number(event.target.value) })}
-                className={lineInputClass}
-              >
-                <option value="" disabled>
-                  Choose…
-                </option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.parentName} / {category.childName}
+            {!lockLineIdentity ? (
+              <div className="col-span-2 flex min-w-0 flex-col gap-1">
+                <label htmlFor={`${idPrefix}-category-${index}`} className={labelClass}>
+                  Category
+                </label>
+                <select
+                  id={`${idPrefix}-category-${index}`}
+                  required
+                  value={String(line.categoryId)}
+                  onChange={(event) =>
+                    updateLine(index, { categoryId: Number(event.target.value) })
+                  }
+                  className={lineInputClass}
+                >
+                  <option value="" disabled>
+                    Choose…
                   </option>
-                ))}
-              </select>
-            </div>
-            {personMatches || vehicleMatches ? (
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.parentName} / {category.childName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            {!lockLineIdentity && (personMatches || vehicleMatches) ? (
               <div className="col-span-2 flex min-w-0 flex-col gap-1">
                 <label htmlFor={`${idPrefix}-targetid-${index}`} className={labelClass}>
                   Which
@@ -193,28 +280,41 @@ function LineEditor({ idPrefix, lines, setLines, categories, people, vehicles }:
                 </select>
               </div>
             ) : null}
+            {!lockLineIdentity && allowRemoveLines && lines.length > 1 ? (
+              <div className="col-span-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => removeLine(index)}
+                  className="text-xs font-semibold text-danger underline underline-offset-2"
+                >
+                  {removeLineLabel}
+                </button>
+              </div>
+            ) : null}
           </div>
         );
       })}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() =>
-            setLines([
-              ...lines,
-              {
-                amount: '',
-                categoryId: categories[0]?.id ?? 0,
-                targetKind: 'household',
-                targetId: null,
-              },
-            ])
-          }
-          className="text-xs font-medium text-ink-soft underline underline-offset-2 hover:text-ink"
-        >
-          Add a line
-        </button>
-      </div>
+      {!lockLineIdentity && allowAddLine ? (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setLines([
+                ...lines,
+                {
+                  amount: '',
+                  categoryId: categories[0]?.id ?? 0,
+                  targetKind: 'household',
+                  targetId: null,
+                },
+              ])
+            }
+            className="text-xs font-medium text-ink-soft underline underline-offset-2 hover:text-ink"
+          >
+            Add a line
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -229,13 +329,28 @@ export interface PurchaseEditFormProps {
   categories: CategoryOption[];
   people: TargetOption[];
   vehicles: TargetOption[];
+  /**
+   * Editing a refund record (issue #96): amounts stay positive magnitudes
+   * in this form and are sent negative; category/target are inherited from
+   * the original purchase and are not controls here.
+   */
+  isRefund?: boolean;
+  refundOfPurchaseId?: number | null;
 }
 
-/** Full-replacement edit of an ACTIVE purchase (blueprint: void + re-add is
- *  the other path; editing a converted instance is never offered). */
+/**
+ * Full-replacement edit of an ACTIVE purchase (blueprint: void + re-add is
+ * the other path; editing a converted instance is never offered). The
+ * same editor corrects a refund record, but with refund semantics: the
+ * boxes hold positive amounts already refunded, submission converts them
+ * back to the negative record, and each line's category/target is a fixed
+ * heading inherited from the original purchase — there are no controls
+ * with which to re-file a refund under another line.
+ */
 export function PurchaseEditForm(props: PurchaseEditFormProps) {
   const [lines, setLines] = useState<EntryLineState[]>(props.lines);
   const [state, formAction, pending] = useActionState(editPurchaseAction, initialActionState);
+  const isRefund = props.isRefund === true;
   return (
     <form
       action={(formData: FormData) => {
@@ -246,14 +361,38 @@ export function PurchaseEditForm(props: PurchaseEditFormProps) {
             break;
           }
         }
-        formData.set('linesJson', JSON.stringify(lines));
+        const submittedLines = isRefund
+          ? lines.map((line) => {
+              const { pence } = poundsToPence(line.amount);
+              return {
+                ...line,
+                amount: pence === null ? line.amount : penceInput(-Math.abs(pence)),
+              };
+            })
+          : lines;
+        formData.set('linesJson', JSON.stringify(submittedLines));
         formAction(formData);
       }}
       className="flex flex-col gap-3"
     >
+      {isRefund ? (
+        <p className="text-sm text-ink-soft">
+          Correct the amount <strong>refunded</strong>
+          {props.refundOfPurchaseId ? (
+            <>
+              {' '}
+              for purchase <strong>#{props.refundOfPurchaseId}</strong>
+            </>
+          ) : null}
+          . Each line&apos;s category and who it was originally spent for are fixed by that purchase
+          and are shown only to identify the line.
+        </p>
+      ) : null}
       <div className="flex flex-col gap-1">
         <label htmlFor={`edit-purchase-${props.purchaseId}-date`} className={labelClass}>
-          When it happened (blank keeps the current date)
+          {isRefund
+            ? 'When the refund landed (blank keeps the current date)'
+            : 'When it happened (blank keeps the current date)'}
         </label>
         <input
           id={`edit-purchase-${props.purchaseId}-date`}
@@ -270,6 +409,16 @@ export function PurchaseEditForm(props: PurchaseEditFormProps) {
         categories={props.categories}
         people={props.people}
         vehicles={props.vehicles}
+        amountLabel={
+          isRefund ? (
+            <>
+              Amount <strong>refunded</strong>
+            </>
+          ) : undefined
+        }
+        lockLineIdentity={isRefund}
+        allowAddLine={!isRefund}
+        allowRemoveLines={!isRefund}
       />
       <div className="flex flex-col gap-1">
         <label htmlFor={`edit-purchase-${props.purchaseId}-note`} className={labelClass}>
@@ -301,11 +450,18 @@ export function PurchaseEditForm(props: PurchaseEditFormProps) {
       <input type="hidden" name="purchaseId" value={props.purchaseId} />
       <input type="hidden" name="expectedVersion" value={props.expectedVersion} />
       <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
-        {pending ? 'Saving…' : 'Save purchase'}
+        {pending ? 'Saving…' : isRefund ? 'Save refund' : 'Save purchase'}
       </button>
       <FormMessage status={state.status} message={state.message} />
     </form>
   );
+}
+
+export interface ExistingRefundView {
+  id: number;
+  /** Positive pence already returned by this live refund record. */
+  amountPence: number;
+  occurredDate: string;
 }
 
 export interface RefundFormProps {
@@ -320,12 +476,48 @@ export interface RefundFormProps {
   people: TargetOption[];
   vehicles: TargetOption[];
   today: string;
+  /** Live refunds already recorded against this purchase (issue #96). */
+  existingRefunds?: ExistingRefundView[];
+}
+
+const REFUND_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/** `2026-10-21` as `21 Oct 2026`, without asking a timezone to reinterpret it. */
+function formatRefundDate(value: string): string {
+  const [year, month, day] = value.split('-').map(Number);
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    month < 1 ||
+    month > REFUND_MONTHS.length
+  ) {
+    return value;
+  }
+  return `${day} ${REFUND_MONTHS[month - 1]} ${year}`;
 }
 
 /**
  * Refund form (negative purchase that links to its original, decision 37).
- * The lines are prefilled from the original purchase as POSITIVE magnitudes;
- * the action flips the signs before calling createRefund.
+ * The original lines supply only their category/target and an "Originally
+ * £X" placeholder; every amount box starts blank (issue #96, decision 252
+ * as revised after the household rejected a pre-filled preview). A line
+ * left blank has had no refund and is not submitted. Entered amounts are
+ * positive refund magnitudes; the action flips their signs before calling
+ * createRefund.
  *
  * The field names are the contract with `addRefundAction` (the same rule
  * `VoidForm` follows): the original is `refundOfPurchaseId` — *not*
@@ -333,16 +525,45 @@ export interface RefundFormProps {
  * travels with the form, the total is an `amount` the household can read, and
  * the lines are whole pence (`amountPence`), because the action's schema reads
  * the till's own line shape, not the editor's typed text. Nothing here is
- * typed twice: the total is the sum of the lines, as SPEC §9.5 requires.
+ * typed twice: the total is the sum of the entered lines, as SPEC §9.5
+ * requires. Live refunds already against the purchase are named before the
+ * boxes, so a second person can see what has already been processed and
+ * how much of the original remains refundable.
  */
 export function RefundForm(props: RefundFormProps) {
-  const [lines, setLines] = useState<EntryLineState[]>(props.lines);
+  const [lines, setLines] = useState<EntryLineState[]>(() =>
+    props.lines.map((line) => ({ ...line, amount: '' })),
+  );
   const [state, formAction, pending] = useActionState(addRefundAction, initialActionState);
+  const originalTotalPence = props.lines.reduce(
+    (sum, line) => sum + Math.abs(line.originalPence ?? poundsToPence(line.amount).pence ?? 0),
+    0,
+  );
+  const existingRefunds = props.existingRefunds ?? [];
+  const alreadyRefundedPence = existingRefunds.reduce(
+    (sum, refund) => sum + Math.abs(refund.amountPence),
+    0,
+  );
+  const remainingRefundablePence = Math.max(originalTotalPence - alreadyRefundedPence, 0);
+  let refundTotalPence: number | null = 0;
+  for (const line of lines) {
+    if (line.amount.trim() === '') continue;
+    const { pence } = poundsToPence(line.amount);
+    if (pence === null) {
+      refundTotalPence = null;
+      break;
+    }
+    refundTotalPence += Math.abs(pence);
+  }
+  const blankLineCount = lines.filter((line) => line.amount.trim() === '').length;
   return (
     <form
       action={(formData: FormData) => {
-        const pence = lines.map((line) => Math.abs(poundsToPence(line.amount).pence ?? 0));
-        for (const [index, line] of lines.entries()) {
+        const entered = lines
+          .map((line, index) => ({ line, index }))
+          .filter(({ line }) => line.amount.trim() !== '');
+        const pence = entered.map(({ line }) => Math.abs(poundsToPence(line.amount).pence ?? 0));
+        for (const { line, index } of entered) {
           const { error } = poundsToPence(line.amount);
           if (error !== null) {
             formData.set('clientError', `Line ${index + 1}: ${error}`);
@@ -352,7 +573,7 @@ export function RefundForm(props: RefundFormProps) {
         formData.set(
           'linesJson',
           JSON.stringify(
-            lines.map((line, index) => ({
+            entered.map(({ line }, index) => ({
               amountPence: pence[index] ?? 0,
               categoryId: line.categoryId,
               targetKind: line.targetKind,
@@ -365,6 +586,32 @@ export function RefundForm(props: RefundFormProps) {
       }}
       className="flex flex-col gap-3"
     >
+      {alreadyRefundedPence > 0 ? (
+        <div
+          role="status"
+          className="rounded-lg border border-warning-300 bg-warning-50 px-3 py-2 text-sm text-warning-900"
+        >
+          <p>
+            <strong>Refund already recorded for this purchase.</strong>{' '}
+            {formatPence(alreadyRefundedPence)} has already been refunded, leaving{' '}
+            {formatPence(remainingRefundablePence)} of the {formatPence(originalTotalPence)}{' '}
+            purchase still refundable. Only enter additional money that has been refunded below.
+          </p>
+          <ul className="mt-1 list-inside list-disc text-xs">
+            {existingRefunds.map((refund) => (
+              <li key={refund.id}>
+                Refund #{refund.id}: {formatPence(Math.abs(refund.amountPence))} on{' '}
+                {formatRefundDate(refund.occurredDate)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <p className="text-sm text-ink-soft">
+        For any line item where there has been a refund, enter the <strong>refunded</strong> amount
+        (not the amount that remains after the refund is applied). Leave any line with no refund
+        blank.
+      </p>
       <div className="flex flex-col gap-1">
         <label htmlFor={`refund-${props.purchaseId}-date`} className={labelClass}>
           When the refund landed
@@ -385,7 +632,54 @@ export function RefundForm(props: RefundFormProps) {
         categories={props.categories}
         people={props.people}
         vehicles={props.vehicles}
+        amountLabel={
+          <>
+            Enter the amount <strong>to be refunded</strong>
+          </>
+        }
+        lockLineIdentity
+        allowAddLine={false}
+        allowRemoveLines={false}
+        amountRequired={false}
       />
+      {refundTotalPence !== null ? (
+        <p aria-live="polite" className="text-sm font-medium text-ink-body">
+          Refund total {formatPence(refundTotalPence)}
+          {refundTotalPence > 0 && originalTotalPence > 0 ? (
+            <span className="font-normal text-ink-soft">
+              {' '}
+              of the {formatPence(originalTotalPence)} paid
+              {refundTotalPence === remainingRefundablePence
+                ? alreadyRefundedPence > 0
+                  ? ' — the rest of this purchase'
+                  : ' — the whole purchase'
+                : refundTotalPence < remainingRefundablePence
+                  ? ' — a partial refund'
+                  : ''}
+            </span>
+          ) : (
+            <span className="font-normal text-ink-soft"> — no refund amounts entered yet</span>
+          )}
+        </p>
+      ) : null}
+      {refundTotalPence !== null &&
+      remainingRefundablePence >= 0 &&
+      refundTotalPence > remainingRefundablePence ? (
+        <p className="text-sm text-danger">
+          That is more than the {formatPence(remainingRefundablePence)} still refundable on this{' '}
+          {formatPence(originalTotalPence)} purchase
+          {alreadyRefundedPence > 0
+            ? ` after the ${formatPence(alreadyRefundedPence)} already refunded`
+            : ''}
+          .
+        </p>
+      ) : null}
+      {refundTotalPence !== null && refundTotalPence > 0 && blankLineCount > 0 ? (
+        <p className="text-xs text-ink-muted">
+          {blankLineCount === 1 ? 'The blank line' : `${blankLineCount} blank lines`} will not be
+          included in this refund.
+        </p>
+      ) : null}
       <div className="flex flex-col gap-1">
         <label htmlFor={`refund-${props.purchaseId}-note`} className={labelClass}>
           Note (optional)
@@ -402,8 +696,12 @@ export function RefundForm(props: RefundFormProps) {
       <input type="hidden" name="refundOfPurchaseId" value={props.purchaseId} />
       <input type="hidden" name="potId" value={props.potId} />
       <input type="hidden" name="expectedVersion" value={props.expectedVersion} />
-      <button type="submit" disabled={pending} className={`${submitClass} self-start`}>
-        {pending ? 'Saving…' : 'Record refund'}
+      <button
+        type="submit"
+        disabled={pending || remainingRefundablePence === 0}
+        className={`${submitClass} self-start`}
+      >
+        {pending ? 'Saving…' : remainingRefundablePence === 0 ? 'Fully refunded' : 'Record refund'}
       </button>
       <FormMessage status={state.status} message={state.message} />
     </form>
@@ -467,6 +765,8 @@ export interface EntryLineAmounts {
   categoryId: number;
   targetKind: 'household' | 'person' | 'vehicle';
   targetId: number | null;
+  categoryLabel?: string;
+  spentForLabel?: string;
 }
 
 export interface RecentEntryActionsProps {
@@ -483,6 +783,12 @@ export interface RecentEntryActionsProps {
   vehicles: TargetOption[];
   today: string;
   summary: string;
+  /** True when this row is itself a refund — a refund of a refund is not offered. */
+  isRefund?: boolean;
+  /** For a refund row: the original purchase its line identities are fixed by. */
+  refundOfPurchaseId?: number | null;
+  /** Live refunds already recorded against this purchase, for signposting. */
+  existingRefunds?: ExistingRefundView[];
 }
 
 const penceToAmountText = (pence: number): string => {
@@ -492,8 +798,11 @@ const penceToAmountText = (pence: number): string => {
 
 /**
  * Inline actions for a recent purchase row (overview + purchases pages):
- * full edit (line replacement), refund (prefilled lines, positive
- * magnitudes — the action flips the signs), or void (reason required).
+ * full edit (line replacement), refund (blank amount boxes on the original
+ * lines — only explicitly entered refund magnitudes are submitted), or
+ * void (reason required). A refund record itself offers no Refund action,
+ * and a purchase whose live refunds already cover it shows **Fully
+ * refunded** instead of inviting the same money back a second time.
  */
 export function RecentEntryActions(props: RecentEntryActionsProps) {
   const [mode, setMode] = useState<'none' | 'edit' | 'refund' | 'void'>('none');
@@ -502,13 +811,25 @@ export function RecentEntryActions(props: RecentEntryActionsProps) {
     categoryId: line.categoryId,
     targetKind: line.targetKind,
     targetId: line.targetId,
+    categoryLabel: line.categoryLabel,
+    spentForLabel: line.spentForLabel,
   }));
   const refundLines: EntryLineState[] = props.lines.map((line) => ({
-    amount: penceToAmountText(line.amountPence),
+    amount: '',
     categoryId: line.categoryId,
     targetKind: line.targetKind,
     targetId: line.targetId,
+    originalPence: line.amountPence,
+    categoryLabel: line.categoryLabel,
+    spentForLabel: line.spentForLabel,
   }));
+  const purchaseTotalPence = props.lines.reduce((sum, line) => sum + Math.abs(line.amountPence), 0);
+  const alreadyRefundedPence = (props.existingRefunds ?? []).reduce(
+    (sum, refund) => sum + Math.abs(refund.amountPence),
+    0,
+  );
+  const fullyRefunded =
+    props.isRefund !== true && purchaseTotalPence > 0 && alreadyRefundedPence >= purchaseTotalPence;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
@@ -519,13 +840,23 @@ export function RecentEntryActions(props: RecentEntryActionsProps) {
         >
           Edit
         </button>
-        <button
-          type="button"
-          onClick={() => setMode(mode === 'refund' ? 'none' : 'refund')}
-          className="rounded border border-border-strong bg-surface px-2.5 py-1 text-xs font-medium text-ink-body hover:bg-canvas"
-        >
-          Refund
-        </button>
+        {props.isRefund === true ? null : fullyRefunded ? (
+          <button
+            type="button"
+            disabled
+            className="rounded border border-border-strong bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-muted disabled:cursor-not-allowed"
+          >
+            Fully refunded
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setMode(mode === 'refund' ? 'none' : 'refund')}
+            className="rounded border border-border-strong bg-surface px-2.5 py-1 text-xs font-medium text-ink-body hover:bg-canvas"
+          >
+            Refund
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setMode(mode === 'void' ? 'none' : 'void')}
@@ -545,6 +876,8 @@ export function RecentEntryActions(props: RecentEntryActionsProps) {
           categories={props.categories}
           people={props.people}
           vehicles={props.vehicles}
+          isRefund={props.isRefund}
+          refundOfPurchaseId={props.refundOfPurchaseId}
         />
       ) : null}
       {mode === 'refund' ? (
@@ -559,6 +892,7 @@ export function RecentEntryActions(props: RecentEntryActionsProps) {
           people={props.people}
           vehicles={props.vehicles}
           today={props.today}
+          existingRefunds={props.existingRefunds}
         />
       ) : null}
       {mode === 'void' ? (

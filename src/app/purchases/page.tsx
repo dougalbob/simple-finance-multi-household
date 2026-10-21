@@ -14,8 +14,11 @@ import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
 import {
   listPurchases,
+  refundOriginalsById,
+  refundSummariesForPurchases,
   sumListedPurchasesPence,
   type PurchaseFilters,
+  type PurchaseRefundSummary,
 } from '@/lib/records/purchases';
 import { listSuppliersForEntry } from '@/lib/records/suppliers';
 import { supplierCardHref } from '@/lib/records/supplier-focus';
@@ -182,6 +185,38 @@ export default async function PurchasesPage({
   const fuelContext = getFuelRowContext(db);
   // "Chase the refund" (decision 175): open tasks about each listed purchase.
   const tasksByPurchase = getTasksBySubject(db, 'purchase', now);
+  // Refund signposting (issue #96): an original says how much has already
+  // come back against it, and a refund names the purchase it belongs to —
+  // so a second household member does not process the same refund again
+  // simply because neither row mentioned the other.
+  const refundSummaries = refundSummariesForPurchases(
+    db,
+    purchases
+      .filter(({ purchase }) => purchase.refundOfPurchaseId === null)
+      .map(({ purchase }) => purchase.id),
+  );
+  const refundOriginalRecords = refundOriginalsById(
+    db,
+    purchases.flatMap(({ purchase }) =>
+      purchase.refundOfPurchaseId === null ? [] : [purchase.refundOfPurchaseId],
+    ),
+  );
+  const refundOriginals = new Map(
+    [...refundOriginalRecords].map(([id, original]) => [
+      id,
+      {
+        id: original.id,
+        totalPence: original.totalPence,
+        occurredAt: original.occurredAt,
+        occurredDate: original.occurredDate,
+        potId: original.potId,
+        supplierLabel:
+          original.supplierId !== null
+            ? (supplierNames.get(original.supplierId) ?? 'Unknown supplier')
+            : 'Unknown supplier',
+      },
+    ]),
+  );
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
@@ -281,6 +316,12 @@ export default async function PurchasesPage({
                     openTasks={tasksByPurchase.get(purchase.id)?.open ?? []}
                     fromSchedule={purchase.scheduleInstanceId !== null}
                     isRefund={purchase.refundOfPurchaseId !== null}
+                    refundSummary={refundSummaries.get(purchase.id) ?? null}
+                    refundOriginal={
+                      purchase.refundOfPurchaseId === null
+                        ? null
+                        : (refundOriginals.get(purchase.refundOfPurchaseId) ?? null)
+                    }
                     voidedAt={purchase.voidedAt}
                     voidReason={purchase.voidReason}
                     note={purchase.note ?? ''}
@@ -321,6 +362,17 @@ interface PurchaseRowProps {
   }>;
   fromSchedule: boolean;
   isRefund: boolean;
+  /** Live refunds against this original; null when none (and on refund rows). */
+  refundSummary: PurchaseRefundSummary | null;
+  /** For a refund row: the purchase this money came back against. */
+  refundOriginal: {
+    id: number;
+    totalPence: number;
+    occurredAt: Date;
+    occurredDate: string;
+    potId: number;
+    supplierLabel: string;
+  } | null;
   voidedAt: Date | null;
   voidReason: string | null;
   note: string;
@@ -345,8 +397,18 @@ function PurchaseRow(props: PurchaseRowProps) {
       : props.fromSchedule
         ? 'From schedule'
         : props.isRefund
-          ? 'Refund'
+          ? props.refundOriginal !== null
+            ? `Refund · for #${props.refundOriginal.id}`
+            : 'Refund'
           : 'Active';
+  const refundedPence = props.refundSummary?.refundedPence ?? 0;
+  const remainingRefundablePence = Math.max(Math.abs(props.totalPence) - refundedPence, 0);
+  const refundState =
+    !props.isRefund && refundedPence > 0
+      ? remainingRefundablePence === 0
+        ? 'Fully refunded'
+        : `${formatPence(refundedPence)} refunded`
+      : null;
   const statusClass =
     props.voidedAt !== null
       ? 'bg-surface-muted text-ink-muted'
@@ -380,6 +442,44 @@ function PurchaseRow(props: PurchaseRowProps) {
           <span className="ml-1.5 text-xs text-ink-soft">· via {props.paidVia}</span>
         ) : null}
         {props.note !== '' ? <p className="mt-0.5 text-xs text-ink-muted">{props.note}</p> : null}
+        {props.isRefund && props.refundOriginal !== null ? (
+          <p className="mt-1 text-xs text-ink-soft">
+            <strong className="font-medium text-ink-body">Refund for</strong>{' '}
+            <Link
+              href={`/purchases?potId=${props.refundOriginal.potId}&from=${props.refundOriginal.occurredDate}&to=${props.refundOriginal.occurredDate}#purchase-${props.refundOriginal.id}`}
+              className="sf-link"
+            >
+              purchase #{props.refundOriginal.id} · {props.refundOriginal.supplierLabel}
+            </Link>{' '}
+            · {formatInstantLocal(props.refundOriginal.occurredAt)} ·{' '}
+            {formatPence(props.refundOriginal.totalPence)}
+          </p>
+        ) : null}
+        {!props.isRefund && props.refundSummary !== null && refundedPence > 0 ? (
+          <div className="mt-1.5 text-xs text-ink-soft">
+            <p>
+              <strong className="font-medium text-ink-body">Refund recorded:</strong>{' '}
+              {formatPence(refundedPence)} back
+              {remainingRefundablePence > 0
+                ? ` · ${formatPence(remainingRefundablePence)} still refundable`
+                : ' · fully refunded'}
+              .
+            </p>
+            <ul className="mt-0.5 space-y-0.5">
+              {props.refundSummary.refunds.map((refund) => (
+                <li key={refund.id}>
+                  <Link
+                    href={`/purchases?potId=${refund.potId}&from=${refund.occurredDate}&to=${refund.occurredDate}#purchase-${refund.id}`}
+                    className="sf-link"
+                  >
+                    Refund #{refund.id}
+                  </Link>{' '}
+                  · {formatPence(refund.amountPence)} · {formatInstantLocal(refund.occurredAt)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {props.fuel !== null ? <FuelDetailsForm {...props.fuel} /> : null}
         <AttachmentForm purchaseId={props.purchaseId} attachments={props.attachments} />
         {props.openTasks.length > 0 ? (
@@ -439,9 +539,16 @@ function PurchaseRow(props: PurchaseRowProps) {
         {formatPence(props.totalPence)}
       </td>
       <td className="whitespace-nowrap px-3 py-2.5">
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusClass}`}>
-          {status}
-        </span>
+        <div className="flex flex-col items-start gap-1">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusClass}`}>
+            {status}
+          </span>
+          {refundState !== null ? (
+            <span className="rounded-full bg-accent-50 px-2 py-0.5 text-xs font-semibold text-accent">
+              {refundState}
+            </span>
+          ) : null}
+        </div>
       </td>
       <td className="px-3 py-2.5">
         {props.voidedAt === null ? (
@@ -462,12 +569,21 @@ function PurchaseRow(props: PurchaseRowProps) {
                   categoryId: line.categoryId,
                   targetKind: line.targetKind,
                   targetId: line.targetId,
+                  categoryLabel: line.label,
+                  spentForLabel: line.targetLabel,
                 }))}
                 people={props.people}
                 vehicles={props.vehicles}
                 categories={props.categories}
                 today={props.today}
                 summary={`${props.supplierLabel}, ${formatPence(props.totalPence)}`}
+                isRefund={props.isRefund}
+                refundOfPurchaseId={props.refundOriginal?.id ?? null}
+                existingRefunds={(props.refundSummary?.refunds ?? []).map((refund) => ({
+                  id: refund.id,
+                  amountPence: refund.amountPence,
+                  occurredDate: refund.occurredDate,
+                }))}
               />
             </div>
           </details>
