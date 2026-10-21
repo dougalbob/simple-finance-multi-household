@@ -198,9 +198,11 @@ export function PurchaseFilterForm({
   const labelClass = 'text-xs font-medium text-ink-soft';
   const fieldClass = 'flex min-w-0 flex-col gap-1';
   const fullRowClass = `${fieldClass} col-span-2 sm:col-span-1`;
-  // The range takes a whole phone row so the two dates keep sharing theirs
-  // (the layout the phone spec has guarded since decision 92).
-  const rangeFieldClass = `${fieldClass} col-span-2 lg:col-span-1`;
+  // The range takes two columns everywhere: a whole phone row, so the two dates
+  // keep sharing theirs (the layout the phone spec has guarded since decision
+  // 92), and beside them on a laptop the From/To pair, so the target pair
+  // sits together on the second row instead of Target type trailing the row.
+  const rangeFieldClass = `${fieldClass} col-span-2`;
 
   const cancelSearch = () => {
     if (searchTimer.current !== null) {
@@ -368,7 +370,7 @@ export function PurchaseFilterForm({
               className={inputClass}
             />
           </div>
-          <div className={fieldClass}>
+          <div className={fullRowClass}>
             <label htmlFor="f-target-kind" className={labelClass}>
               Target type
             </label>
