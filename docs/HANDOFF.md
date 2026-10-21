@@ -56,8 +56,12 @@ chip removing only `categoryId`.
 `src/lib/version.ts` and the Unraid template, with `docs/RELEASE_NOTES_v1.36.0.md`. **No schema,
 migration or backup-format change.**
 
-**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
-GHCR digest for `v1.36.0` (the workflow prints them and creates the GitHub release).
+**Published:** `v1.36.0` was merged in PR #99 at
+`94ca0b40f521d4d556d007f6ac1a2fd349198d0e`; the PR checks run `39652310731` passed `gates`,
+`browser` and `docker`, the `main` CI run `39653934230` succeeded, and Publish run `39653951397`
+verified GHCR tags `v1.36.0`, `latest` and `sha-94ca0b4` at digest
+`sha256:4373ddfc4dd4f8688d706ef2a3ec5cf3aa7390a5d2079e199ca7c98af8d57fde`, creating the Latest
+release titled "v1.36.0 — Date Range drop-downs and one search over supplier, category and notes".
 
 ---
 
