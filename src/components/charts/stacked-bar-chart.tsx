@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { bandWidth, bandX, yFor, type ChartDomain, type Plot } from './scale';
 import { BandLabels, CHART_COLOURS, Gridlines, SubZeroBand } from './chart-primitives';
 
@@ -21,6 +22,14 @@ export interface StackedSegment {
   key: string;
   valuePence: number;
   href?: string;
+  /**
+   * A same-page link (Chart C's in-line line items, issue #94): the segment
+   * rides the client router with `scroll={false}`, so the chart redraws the
+   * panel beneath it without the document reloading or the reader's place
+   * moving. The anchor underneath is unchanged, so it still works with
+   * JavaScript off.
+   */
+  soft?: boolean;
   hint?: string;
 }
 
@@ -100,12 +109,30 @@ export function StackedBarChart({
                 />
               );
               const title = segment.hint === undefined ? null : <title>{segment.hint}</title>;
-              return segment.href === undefined ? (
-                <g key={segment.key}>
-                  {title}
-                  {rect}
-                </g>
-              ) : (
+              if (segment.href === undefined) {
+                return (
+                  <g key={segment.key}>
+                    {title}
+                    {rect}
+                  </g>
+                );
+              }
+              if (segment.soft === true) {
+                return (
+                  <Link
+                    key={segment.key}
+                    href={segment.href}
+                    scroll={false}
+                    prefetch={false}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  >
+                    {title}
+                    {rect}
+                  </Link>
+                );
+              }
+              return (
                 <a key={segment.key} href={segment.href} tabIndex={-1} aria-hidden="true">
                   {title}
                   {rect}

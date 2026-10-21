@@ -1392,7 +1392,7 @@ would flatter the average. The week being lived is drawn hatched and never count
 which is the honesty loop's rule (§16.4) and its exact figure. **Weeks before the household started recording
 are not counted either**: recording starts at the first recorded purchase (the earliest non-voided,
 hand-entered one), and a week counts only if it is complete and begins on or after that date. Those weeks
-are labelled "not counted" rather than read as shopping-free (decision 183).
+are labelled "not counted" rather than read as shopping-free (decision 183). Tapping a week's bar (or its date in the table twin) opens that week's grocery line items beneath the chart (issue #94, decision 250) — the same allocation lines the bar summed, so the panel's total is the bar's figure to the penny — with **Open these purchases** carrying on to the filtered purchases list and **Close line items** putting the chart back as it was.
 
 **C. Hers, his, household.** Stacked monthly bars — 6 months on a phone, 12 on a laptop — split into one
 series per person plus a Household series. Attribution is **"For: person"**, the allocation's target, never
@@ -1404,8 +1404,11 @@ between people; only the Household series keeps the discretionary scope — the 
 *Entertainment & Eating Out*, resolved from the live category tree rather than a fixed list of children, so
 a child added under Personal is in scope the day it is created. Chips filter the chart by person; the choice
 lives in the URL, and a filter click keeps the reader's scroll position. The `#personal` link also lands on
-the card on a direct/no-JavaScript visit, below the sticky header. A person's bar drills down with no
-category filter; the household bar keeps the discretionary-parent filter.
+the card on a direct/no-JavaScript visit, below the sticky header. Tapping a segment (or its figure in the table twin) opens that person-or-Household month's line
+items beneath the chart (issue #94, decision 250): a person's panel carries no category filter, because
+their bar counts every line marked for them; the Household panel keeps the discretionary-parent filter.
+Switching a series off with its chip closes its panel with it — a panel never outlives the bar it
+belongs to.
 
 **D. Spending trends (issue #40, decision 223).** Monthly bars of **recorded net spending** in a
 household's chosen category preset — never projected groceries, fuel or future commitments.
@@ -1529,8 +1532,12 @@ come from the same read as the Insights table, so the two views cannot drift.
   the spending stops flattening the rest. It is a real link (`?noHousing=1#months`), like every other
   control here, and the verdict says "Housing is excluded." while it is on. The category excluded is never
   deleted: the toggle puts it back with one press.
-- **Each bar is a drill-down link** to its own month and category in the purchases list, repeated per cell
-  in the table twin (a row per category, a column per month, a totals row), which is the keyboard path.
+- **Each bar opens its line items beneath the chart** (issue #94, decision 250): that month and category's
+  allocation lines, summing exactly to the bar, with **Open these purchases** carrying on to the same
+  month and category in the purchases list. The same link is repeated per cell in the table twin (a row
+  per category, a column per month, a totals row), which is the keyboard path. The Exclude Housing
+  toggle is a soft navigation too, so changing what is drawn never reloads the page, and a panel stays
+  open for a category the redrawn chart still shows.
 - **Categories the household never recorded are left out**, but a category with a zero month still gets an
   honest zero bar; rows are ordered by the three-month total, biggest first.
 - **The axis carries abbreviated names** (decision 201) — "Grocer'", "Person'", "Vehicle'" — each with its
@@ -1615,11 +1622,15 @@ shelved by the household in design discussion; nothing here draws a historic bal
   paint server ever fails again. A browser spec reads the drawing's own pixels back (an in-progress
   bar has to have paint in it) and checks that no id inside one figure is shared with, or resolves
   into, another.
-- **Drill-down is a real link.** A bar wraps an `<a>` at `/purchases?from=…&to=…&categoryId=…` (the same
-  link is repeated in the table twin, which is the keyboard path), so it can be opened in a new tab or sent
-  to the other person. Those filters match the **purchase**, and a matched purchase comes back with all of
-  its lines, receipt-style — so a split shop appears whole, not as the single line that matched. The page
-  says so.
+- **Drill-down is a real link.** On the reported charts B, C, E and F a bar, segment or slice wraps an
+  `<a>` that opens its line items beneath its own chart (`?show=…` on B, C and F since issue #94;
+  `?slice=…` on E), repeated in the table twin, which is the keyboard path. The panel is URL state, so
+  it works without JavaScript and can be sent to the other person, and re-tapping the same figure closes
+  it. Each panel lists the allocation lines its figure summed — its total is the figure tapped,
+  exactly — and its **Open these purchases** link carries on to `/purchases?from=…&to=…&categoryId=…`.
+  Charts D (unsynced) and G link straight to that purchases URL. Those filters match the **purchase**,
+  and a matched purchase comes back with all of its lines, receipt-style — so a split shop appears
+  whole, not as the single line that matched. The page says so.
 - **Responsive by `viewBox` and two variants**: a 320px-wide drawing for a phone, a 720px one for a laptop,
   chosen by CSS. Neither pans the page sideways at 320px, or at 360px with 130% text.
 

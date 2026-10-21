@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { bandWidth, bandX, yFor, type ChartDomain, type Plot } from './scale';
 import { BandLabels, CHART_COLOURS, Gridlines, SubZeroBand } from './chart-primitives';
 
@@ -27,8 +28,14 @@ export interface GroupedSeries {
 export interface GroupedBar {
   key: string;
   valuePence: number;
-  /** `/purchases?...` — the purchases behind this bar. */
   href?: string;
+  /**
+   * A same-page link (Chart F's in-line line items, issue #94): the bar rides
+   * the client router with `scroll={false}`, so the panel opens beneath the
+   * chart without a document reload. The anchor underneath is unchanged, so
+   * it still works with JavaScript off.
+   */
+  soft?: boolean;
   /** Native tooltip text. */
   hint?: string;
 }
@@ -172,12 +179,30 @@ export function GroupedBarChart({
                 />
               );
               const title = bar.hint === undefined ? null : <title>{bar.hint}</title>;
-              return bar.href === undefined ? (
-                <g key={bar.key}>
-                  {title}
-                  {rect}
-                </g>
-              ) : (
+              if (bar.href === undefined) {
+                return (
+                  <g key={bar.key}>
+                    {title}
+                    {rect}
+                  </g>
+                );
+              }
+              if (bar.soft === true) {
+                return (
+                  <Link
+                    key={bar.key}
+                    href={bar.href}
+                    scroll={false}
+                    prefetch={false}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  >
+                    {title}
+                    {rect}
+                  </Link>
+                );
+              }
+              return (
                 <a key={bar.key} href={bar.href} tabIndex={-1} aria-hidden="true">
                   {title}
                   {rect}

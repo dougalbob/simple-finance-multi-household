@@ -14,6 +14,7 @@ import {
   groceriesSeries,
   monthKey,
   parseMonthKey,
+  purchasesHref,
   personalSpendSeries,
   qualifyingMonths,
   type ChartSpendingLine,
@@ -38,6 +39,8 @@ import { ensureScheduleState, getHorizonProjectionView, recentPaydayDates } from
 import { getMonthComparisonView } from './insights-view';
 import { spendingMix, type MixLine, type SpendingMix } from './spending-mix';
 import { listVehicles } from './vehicles';
+import { chartDrillKey, type ChartDrillSelection } from '../charts-drill';
+import { formatShortLocalDate } from '../time';
 import { firstRecordedPurchaseDate, firstSpendingEntryDate } from './recording';
 import { listPeople } from './people';
 import { getCommitmentCategoryIds, getWeeklyGroceriesPence } from './settings';
@@ -917,6 +920,192 @@ export function getCategoryMonthsView(
     totalPence: categories.reduce((sum, category) => sum + category.totalPence, 0),
     heavyParentId: heavyParent === null ? null : heavyParent.id,
     excludeHeavy,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* B, C and F — the in-line line items behind a tapped bar             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The views the drill-down is checked against: a week, a month and a series
+ * are only worth opening a panel for when the chart really drew them.
+ */
+export interface ChartDrillContext {
+  groceries: GroceriesChartView;
+  /** The personal chart **as drawn** (the chips included), so a hidden series has no panel. */
+  personal: PersonalChartView;
+  months: CategoryMonthsView;
+}
+
+/** One purchase line behind a bar, ready for the panel's table. */
+export interface ChartDrillRow {
+  /** Stable React key: a purchase can contribute several lines. */
+  key: string;
+  purchaseId: number;
+  occurredDate: string;
+  supplierName: string | null;
+  note: string | null;
+  /** “Weekly Shop”, or “Personal · Clothing & Shoes” when parents differ. */
+  category: string;
+  /** “Household”, a person's name, or a vehicle's label. */
+  forLabel: string;
+  amountPence: number;
+}
+
+export interface ChartDrillView {
+  kind: ChartDrillSelection['kind'];
+  /** The `show=` value this panel belongs to (the toggle reads it). */
+  key: string;
+  heading: string;
+  from: string;
+  to: string;
+  /** Newest first, exactly the lines that add up to `totalPence`. */
+  rows: ChartDrillRow[];
+  totalPence: number;
+  /** The filtered purchases list behind the same bars (issue #94). */
+  openHref: string;
+  emptyText: string;
+}
+
+/**
+ * The line items behind Chart B, C or F's tapped bar (issue #94, decision
+ * 250): the same allocation lines the bar was summed from, with the purchase
+ * they came from, so the panel reconciles with the drawing exactly. The
+ * window stops at today for a week or month still being lived — the panel
+ * counts recorded money, never the rest of a calendar period.
+ *
+ * `null` means "not drawn": a week, month, series or category this page is
+ * not drawing right now opens no panel. That is what makes a stale or
+ * hand-edited `show=` honest instead of showing a list that disagrees with
+ * the chart above it.
+ */
+export function getChartDrillView(
+  db: Db,
+  selection: ChartDrillSelection,
+  context: ChartDrillContext,
+): ChartDrillView | null {
+  const targetLabels = new Map<string, string>([['household', 'Household']]);
+  for (const person of context.personal.people) {
+    targetLabels.set(`person:${person.id}`, person.label);
+  }
+  for (const vehicle of listVehicles(db)) {
+    targetLabels.set(`vehicle:${vehicle.id}`, vehicle.label);
+  }
+
+  let from: string;
+  let to: string;
+  let heading: string;
+  let emptyText: string;
+  let openHref: string;
+  let match: (line: MixLine) => boolean;
+  let categoryOf: (line: MixLine) => string;
+
+  switch (selection.kind) {
+    case 'groceries': {
+      const week = context.groceries.laptop.weeks.find(
+        (entry) => entry.weekStart === selection.weekStart,
+      );
+      if (week === undefined) return null;
+      from = week.weekStart;
+      to = week.weekEnd > context.groceries.today ? context.groceries.today : week.weekEnd;
+      heading = `Line items: week of ${formatShortLocalDate(week.weekStart)}`;
+      emptyText = 'Nothing was recorded in this week.';
+      match = (line) => line.parentName === context.groceries.parentName;
+      categoryOf = (line) => line.childName;
+      openHref = purchasesHref({
+        from,
+        to,
+        ...(context.groceries.parentCategoryId === null
+          ? {}
+          : { categoryIds: [context.groceries.parentCategoryId] }),
+      });
+      break;
+    }
+    case 'personal': {
+      const month = context.personal.laptop.months.find(
+        (entry) => entry.from.slice(0, 7) === selection.month,
+      );
+      const ref = context.personal.laptop.series.find((entry) => entry.key === selection.series);
+      if (month === undefined || ref === undefined) return null;
+      from = month.from;
+      // The month being lived stops at today, as every other reported chart does.
+      to = month.to > context.personal.today ? context.personal.today : month.to;
+      heading = `Line items: ${ref.label} — ${month.label}${month.complete ? '' : ' (so far)'}`;
+      emptyText = 'Nothing was recorded for this series in this month.';
+      // A person's bar counts every line marked for them, whatever its
+      // category (issue #25); the household bar keeps the discretionary scope.
+      categoryOf = (line) => `${line.parentName} · ${line.childName}`;
+      if (ref.kind === 'person' && ref.personId !== null) {
+        const personId = ref.personId;
+        match = (line) => line.targetKind === 'person' && line.targetId === personId;
+        openHref = purchasesHref({ from, to, targetKind: 'person', targetId: personId });
+      } else {
+        const parents = new Set(context.personal.parentNames);
+        match = (line) => line.targetKind === 'household' && parents.has(line.parentName);
+        openHref = purchasesHref({
+          from,
+          to,
+          targetKind: 'household',
+          categoryIds: context.personal.parentCategoryIds,
+        });
+      }
+      break;
+    }
+    case 'months': {
+      const month = context.months.months.find(
+        (entry) => entry.from.slice(0, 7) === selection.month,
+      );
+      const category = context.months.categories.find(
+        (entry) => entry.parentId === selection.parentId,
+      );
+      if (month === undefined || category === undefined) return null;
+      from = month.from;
+      to = month.to;
+      heading = `Line items: ${category.name} — ${month.label}`;
+      emptyText = 'Nothing was recorded here in this month.';
+      const parentId = category.parentId;
+      match = (line) => line.parentId === parentId;
+      categoryOf = (line) => line.childName;
+      openHref = purchasesHref({ from, to, categoryIds: [parentId] });
+      break;
+    }
+    default:
+      return null;
+  }
+
+  const rows: ChartDrillRow[] = spendingMixLines(db, from, to)
+    .filter(match)
+    .sort(
+      (a, b) =>
+        b.occurredDate.localeCompare(a.occurredDate) ||
+        (a.supplierName ?? '').localeCompare(b.supplierName ?? '') ||
+        b.purchaseId - a.purchaseId,
+    )
+    .map((line) => ({
+      key: `${line.purchaseId}-${line.categoryId}-${line.targetKind}-${line.targetId ?? 'x'}-${line.amountPence}`,
+      purchaseId: line.purchaseId,
+      occurredDate: line.occurredDate,
+      supplierName: line.supplierName,
+      note: line.note,
+      category: categoryOf(line),
+      forLabel:
+        line.targetKind === 'household'
+          ? 'Household'
+          : (targetLabels.get(`${line.targetKind}:${line.targetId}`) ?? 'Unknown'),
+      amountPence: line.amountPence,
+    }));
+
+  return {
+    kind: selection.kind,
+    key: chartDrillKey(selection),
+    heading,
+    from,
+    to,
+    rows,
+    totalPence: rows.reduce((sum, row) => sum + row.amountPence, 0),
+    openHref,
+    emptyText,
   };
 }
 

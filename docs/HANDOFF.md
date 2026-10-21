@@ -1,3 +1,33 @@
+# Issue #94 — Charts B, C and F open their line items in line (2026-10-21)
+
+**Prepared on the assigned branch, awaiting household acceptance on the Arena preview.** No version
+bump, tag or release has been requested yet. **Read decision 250 in
+[`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC §16.7 B, C, F first.**
+
+**What changed:** tapping a grocery week (B), a personal-spending segment (C) or a three-months bar
+(F) now opens that figure's allocation lines in a panel beneath its own chart — Chart E's behaviour,
+through one shared `LineItemsPanel` — instead of leaving for `/purchases`. One `?show=` key
+(`b:`/`c:`/`f:`) carries the open panel as URL state (no-JavaScript and shareable, re-tap closes);
+each panel sums **exactly** to the bar tapped, and **Open these purchases** keeps the old filtered
+list one press further on. Opening, closing, Chart C's chips and Chart F's Exclude Housing are all
+soft, scroll-preserving navigations, and a panel never outlives a series or category the redrawn
+chart no longer shows. No schema, migration or backup-format change.
+
+**Validation:** `npm test` **1141/1141 across 268 suites** (+12 for the drill keys and the resolver
+reconciliations), `typecheck`, `themes:check`, `format:check` and `next build` green. The local
+Playwright `charts` project (SANDBOX entry 8) passed **15/15**, including the reworked grocery
+journey and a new B/C/F in-place journey at 390px and 1400px (one document, no scroll jump,
+chip-closes-panel). Two pre-existing journeys (chips after reload, pace "Show the numbers") were
+hardened with this file's hydration-marker wait after the sandbox exposed the swallowed-click race
+decision 216 records; assertions unchanged. Required PR CI (`gates`, `browser`, `docker`) remains
+the gate at merge time; this entry is the pre-merge record.
+
+**Next step:** the household reviews the Arena preview (Charts → tap a bar on B, C or F). On
+approval, release follows [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) — and only to
+`ghcr.io/dougalbob/simple-finance-multi-household`.
+
+---
+
 # v1.33.0 — issue #91: server settings, the Admin menu and the Cloudflare shortcut (2026-10-20)
 
 **Approved stable feature:** the household agreed the issue #91 design (strict

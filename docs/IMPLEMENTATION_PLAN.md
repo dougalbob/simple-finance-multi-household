@@ -4119,3 +4119,48 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     `gates`, `browser` and `docker` (including the container and applicable upgrade smoke) before
     merge; tag the exact `main` merge commit and publish only to
     `ghcr.io/dougalbob/simple-finance-multi-household`.
+
+250. **Issue #94 — Charts B, C and F open their line items in line (2026-10-21).** Tapping a grocery
+    week (B), a personal-spending segment (C) or a three-months bar (F) used to leave Charts for a
+    filtered `/purchases` list, while Chart E had shown its purchases beneath the pie all along. The
+    household asked for one behaviour everywhere: stay on the chart, see the purchases behind the
+    figure, then choose whether to open the full list.
+    - **One `show` parameter, three keys.** `?show=b:<weekStart>`, `?show=c:<YYYY-MM>:<household|person:N>`
+      and `?show=f:<YYYY-MM>:<parentId>` (`src/lib/charts-drill.ts`: build, strict parse — real calendar
+      dates only, known series only — and same-selection comparison for the re-tap toggle). The key is
+      resolved against what the page actually Drew (`getChartDrillView` in
+      `src/lib/records/charts-view.ts`): anything unparseable, outside the drawn window, or filtered
+      away resolves to no panel rather than a wrong one, and a part-lived week or month ends at today.
+    - **The panel is the bar, itemised.** All three panels render through one shared
+      `LineItemsPanel` (`src/components/line-items.tsx`, Chart E's block, now common): the same
+      `spendingMixLines` allocation lines the chart summed, newest first, so the heading total is the
+      figure tapped to the penny — never the purchase-whole approximation the old filtered list had to
+      explain. **Open these purchases** keeps the previous `/purchases` href byte-for-byte; **Close
+      line items** returns to the chart. A person's panel keeps issue #25's no-category-filter rule;
+      the Household panel keeps the discretionary-parent scope.
+    - **Soft, scroll-preserving, still a real link.** Bars, segments and their table-twin figures are
+      same-page soft links (decision 248's `soft` pattern extended from `BarChart` to the stacked and
+      grouped charts), so opening or closing a panel never reloads the document or moves the
+      viewport; with JavaScript off every link is an ordinary anchor and the panel is plain URL state.
+      Re-tapping the open figure closes it, as Chart E already taught. Changing the drawn series
+      cannot strand a panel (the issue's redraw watch, the issue #87 class): switching a person off
+      with Chart C's chips closes their panel, and Exclude Housing — now `scroll: false` like the
+      chips — drops `show` only when the open panel belongs to the category being excluded.
+    - **Files.** `src/lib/charts-drill.ts` (new), `src/components/line-items.tsx` (new),
+      `src/lib/records/charts-view.ts` (the resolver), `src/app/charts/page.tsx` (the three sections,
+      `drillHref`/`closeDrillHref`, chip and toggle hrefs), `src/components/charts/stacked-bar-chart.tsx`
+      and `grouped-bar-chart.tsx` (`soft` segments/bars), SPEC §16.7 B, C, F and the shared drill-down
+      rule. No schema, migration or backup-format change.
+    - **Evidence.** `npm test` **1141/1141 across 268 suites** (+12: `tests/charts-drill.test.ts` key
+      round-trips and rejections, and the resolver reconciliations in `tests/charts-view.test.ts` —
+      a £93.50 grocery week, a refund-netted part week, Sam, the Household scope, a £179.00 category
+      month — each asserting the panel's rows sum to the bar), `typecheck`, `themes:check`,
+      `format:check` and `next build` green. Browser: the local Playwright `charts` project (SANDBOX
+      entry 8) **15/15**, including the reworked grocery journey (the panel's lines sum **exactly**
+      to the tapped week, then Open these purchases reaches the old filtered list) and a new B/C/F
+      journey at 390px and 1400px in the issue #87 mould (one document throughout, |ΔscrollY| < 8,
+      chip-closes-panel, Exclude Housing redraws without a load). Two pre-existing journeys were
+      hardened with this file's own hydration-marker wait (the chips test after its reload; the pace
+      table's summary centred before its click) — the swallowed-click race decision 216 records,
+      exposed by sandbox slowness; their assertions are unchanged. Prepared for the household's
+      review on the Arena preview; no version change has been requested yet.
