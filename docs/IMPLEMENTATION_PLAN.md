@@ -4223,7 +4223,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     to `ghcr.io/dougalbob/simple-finance-multi-household`.
 
 254. **Issue #98 — All Transactions gets a Range drop-down and a supplier-and-notes search (2026-10-21,
-    awaiting household review).** The page's three quick-pick links were the only way to move the
+    approved for stable v1.36.0).** The page's three quick-pick links were the only way to move the
     window, and the household had never used "Since last checkpoint"; they asked for one drop-down and
     for a search that reads the Supplier and Notes columns at once.
     - **One Range select, five windows.** `src/lib/records/activity-range.ts` computes **Last 30 days**
@@ -4279,7 +4279,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       migration or backup-format change.
 
 255. **Purchases loses two filters, gains the Range drop-down and a three-column search (2026-10-21,
-    household follow-up to issue #98).** The household never used the **Pot** or **Paid by** drop-downs,
+    household follow-up to issue #98, approved for stable v1.36.0).** The household never used the **Pot** or **Paid by** drop-downs,
     wanted the same date-range control All Transactions now has, and asked for one search that reads
     supplier, category and notes together instead of two selects.
     - **The Range drop-down is the transaction one, shared.** `src/lib/records/activity-range.ts` was
@@ -4332,4 +4332,13 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
       rendering the category chip and the chip removing only `categoryId`), the full `desktop` and
       `mobile` projects **47/47** together with it, and `charts` **15/15**. No schema, migration or
       backup-format change.
+
+256. **Stable release v1.36.0 — issue #98 and the Purchases filter rework (2026-10-21).** The household
+    reviewed the All Transactions Range drop-down and supplier/notes search in the Arena preview, asked
+    for the same treatment on Purchases, then reviewed that rework too and approved both, requesting
+    stable `v1.36.0` for full testing on the multi-household Unraid installation (decisions 254–255).
+    No schema, migration or backup-format change. The release PR must pass `gates`, `browser` and
+    `docker` (including the container and applicable upgrade smoke) before merge; tag the exact `main`
+    merge commit and publish only to `ghcr.io/dougalbob/simple-finance-multi-household`, moving
+    `latest` with it.
 

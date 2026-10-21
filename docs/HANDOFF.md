@@ -1,10 +1,15 @@
-# Issue #98 and the Purchases follow-up — Range drop-downs and one search over several columns (2026-10-21) — unreleased, awaiting household review
+# v1.36.0 — issue #98 and the Purchases filter rework (2026-10-21)
 
-**Nothing is tagged, bumped or published.** This session implemented GitHub issue #98 on All
-Transactions and, in the same session, the household's rework of the Purchases filter bar. Read
-decisions 254 and 255 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md), SPEC §15.3 and the
-new §15.3a first. The preview runs on the isolated fictional seed (`scripts/e2e-server.mts`, port
-3100).
+**Approved stable feature:** the household reviewed both pages in the Arena preview — the All
+Transactions Range drop-down and supplier/notes search of issue #98, then the Purchases filter
+rework it asked for in the same session — approved them and requested stable **v1.36.0** for full
+testing on the multi-household Unraid installation. Publication follows
+[`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md): one PR, required checks, merge to `main`, an
+annotated tag on that exact merge commit, and successful GHCR verification.
+
+**Read decisions 254 and 255 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md), plus
+SPEC §15.3 and the new §15.3a first.** The preview runs on the isolated fictional seed
+(`scripts/e2e-server.mts`, port 3100).
 
 **All Transactions (issue #98).** The three quick-pick links became one **Range** drop-down — **Last
 30 days** (default), **This month**, **Last Month**, **This Year**, **All** — in the order the issue
@@ -41,15 +46,18 @@ SPEC §15.2 / §15.3a.
 
 **Validation:** `npm test` **1167/1167 across 273 suites**, `typecheck`, `themes:check`,
 `format:check`, `next build` and `npm audit --omit=dev` green. The local Playwright projects (SANDBOX
-entry 8) passed **47/47** for `desktop`, `mobile` and the new `purchases-filters`, plus `charts`
-**15/15**; the Purchases journeys cover the five Range options, preset ↔ dates ↔ URL, Custom dates,
-All clearing the dates, searches by supplier / two columns / a category word / a note alone, the
-no-match state keeping the window, and the category chip removing only `categoryId`.
+entry 8) passed **47/47** for `desktop`, `mobile` and the new `purchases-filters`, plus
+`transactions` **14/14** and `charts` **15/15**; the Purchases journeys cover the five Range
+options, preset ↔ dates ↔ URL, Custom dates, All clearing the dates, searches by supplier / two
+columns / a category word / a note alone, the no-match state keeping the window, and the category
+chip removing only `categoryId`.
 
-**Next:** the household reviews the preview and decides whether to accept it and request a stable
-release. If so, follow [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) as one gated PR (version files,
-release notes, this handoff), then tag the exact `main` merge commit and verify GHCR. No schema,
-migration or backup-format change.
+**Version files:** `1.36.0` in `package.json`, `package-lock.json` (root and `packages[""]`),
+`src/lib/version.ts` and the Unraid template, with `docs/RELEASE_NOTES_v1.36.0.md`. **No schema,
+migration or backup-format change.**
+
+**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
+GHCR digest for `v1.36.0` (the workflow prints them and creates the GitHub release).
 
 ---
 
@@ -90,8 +98,12 @@ gate at merge time; this entry is the pre-merge record.
 `sha256:9679e28473ad783484175c8f0af96daa9e7a82617a85401d8f9302b30c5e33da` for `v1.34.0`,
 `latest` and `sha-fe274ed`.
 
-**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
-GHCR digest for `v1.35.0` (the workflow prints them and creates the GitHub release).
+**Published:** `v1.35.0` was merged in PR #97 at
+`ad36f0c2c4af3f479ba6db97a3dea876e8936d6e`; the PR checks run `39604096898` passed `gates`,
+`browser` and `docker`, the `main` CI run `39605429986` succeeded, and Publish run `39607611128`
+verified GHCR tags `v1.35.0`, `latest` and `sha-ad36f0c` at digest
+`sha256:a7eef8262430e64cd4705b119a674797481a0149f317d4fa524632473ed55270`, creating the Latest
+release.
 
 ---
 
