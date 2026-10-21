@@ -306,9 +306,12 @@ test.describe('charts', () => {
     expect(unpainted, 'in-progress bars with no pixels').toEqual([]);
   });
 
-  test('a grocery week opens the purchases it was made of', async ({ page }) => {
+  test('a grocery week opens its line items in place, then the purchases list (issue #94)', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1400, height: 950 });
     await page.goto('/charts');
+    const card = page.locator('#groceries');
     const groceries = figure(page, 'groceries', 'laptop');
     await groceries.getByText(/^Show the numbers/).click();
 
@@ -320,6 +323,24 @@ test.describe('charts', () => {
     const spent = poundsIn(await row.innerText()).pop() ?? 0;
     await row.getByRole('link').click();
 
+    // In line: still /charts, a panel under the chart, no purchases page yet.
+    await expect(page).toHaveURL(new RegExp(`show=b%3A${weekStart}`));
+    const panel = card.locator('#groceries-lines');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('heading')).toHaveText(/^Line items: week of /);
+    await expect(page.getByRole('heading', { name: 'Every recorded purchase' })).toHaveCount(0);
+
+    // The panel's own lines add up to the bar that was tapped — exactly, not
+    // approximately: the chart and the panel read the same allocation lines.
+    const lineTotals = await panel.locator('tbody tr td:nth-child(5)').allInnerTexts();
+    const panelTotal = lineTotals.reduce((sum, cell) => sum + (poundsIn(cell)[0] ?? 0), 0);
+    expect(
+      Math.round(panelTotal * 100),
+      `week of ${weekStart}: the chart says £${spent}, its line items add to £${panelTotal}`,
+    ).toBe(Math.round(spent * 100));
+
+    // "Open these purchases" is the document link to the filtered list.
+    await panel.getByRole('link', { name: /Open these purchases/ }).click();
     await expect(page).toHaveURL(new RegExp(`from=${weekStart}`));
     await expect(page.getByRole('heading', { name: 'Every recorded purchase' })).toBeVisible();
     const results = page.locator('section[aria-labelledby="results-heading"]');
@@ -337,9 +358,141 @@ test.describe('charts', () => {
     await expect(page.getByText(/receipt-style/).first()).toBeVisible();
   });
 
+  test('Charts B, C and F open their line items in place, without a reload or a scroll jump (issue #94)', async ({
+    page,
+  }) => {
+    test.slow();
+    // A soft navigation keeps `window`; a full document load runs this again.
+    await page.addInitScript(() => {
+      const key = 'sf-e2e-document-loads';
+      sessionStorage.setItem(key, String(Number(sessionStorage.getItem(key) ?? '0') + 1));
+    });
+
+    /** Click the first drawn bar of a chart and demand a panel in place. */
+    const tapDrawnBar = async (
+      chart: string,
+      width: number,
+      hrefPart: string,
+    ): Promise<{ loads: string | null; scroll: number }> => {
+      const drawing = figure(page, chart, width < 1024 ? 'phone' : 'laptop');
+      const rects = drawing.locator(`svg a[href*="${hrefPart}"] rect`);
+      await expect(rects.first()).toBeAttached();
+      const drawn = await rects.evaluateAll((nodes) =>
+        nodes.findIndex((node) => node.getBoundingClientRect().height > 4),
+      );
+      expect(drawn, `${chart}: a drawn bar`).toBeGreaterThanOrEqual(0);
+      const bar = rects.nth(drawn);
+      await bar.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(120);
+      const before = await page.evaluate(() => window.scrollY);
+      const loads = await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads'));
+      await bar.click();
+      await page.waitForTimeout(450);
+      return { loads, scroll: before };
+    };
+
+    for (const width of [390, 1400]) {
+      await page.setViewportSize({ width, height: 950 });
+      await page.goto('/charts');
+      // Inert anchors until the router has hydrated; a click before then is a
+      // full document load, which is exactly what this test rules out.
+      await page.waitForFunction(() =>
+        Boolean(document.documentElement.style.getPropertyValue('--sf-anchor-offset')),
+      );
+
+      // B — groceries.
+      const groceries = await tapDrawnBar('groceries', width, 'show=b%3A');
+      let panel = page.locator('#groceries-lines');
+      await expect(panel).toBeVisible();
+      expect(page.url()).toContain('show=b%3A');
+      expect(
+        await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads')),
+        'Chart B: a full document load',
+      ).toBe(groceries.loads);
+      expect(Math.abs((await page.evaluate(() => window.scrollY)) - groceries.scroll)).toBeLessThan(
+        8,
+      );
+      await panel.getByRole('link', { name: 'Close line items' }).click();
+      await expect(page.locator('#groceries-lines')).toHaveCount(0);
+      await expect(page).not.toHaveURL(/show=/);
+
+      // C — personal spending. A segment opens its month's line items, and the
+      // person chips (the chart's own series filter) keep them open.
+      const personal = await tapDrawnBar('personal', width, 'show=c%3A');
+      panel = page.locator('#personal-lines');
+      await expect(panel).toBeVisible();
+      await expect(panel.getByRole('heading')).toHaveText(/^Line items: /);
+      expect(page.url()).toContain('show=c%3A');
+      expect(
+        await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads')),
+        'Chart C: a full document load',
+      ).toBe(personal.loads);
+      expect(Math.abs((await page.evaluate(() => window.scrollY)) - personal.scroll)).toBeLessThan(
+        8,
+      );
+      const panelHeading = (await panel.getByRole('heading').innerText()).trim();
+      // Switching that series off closes its panel with it.
+      const who = panelHeading.replace(/^Line items: /, '').split(' — ')[0] ?? '';
+      const chips = page
+        .locator('#personal')
+        .getByRole('group', { name: 'Whose spending to show' });
+      // No `exact`: a switched-on chip reads "✓ Alex", as the older chips
+      // spec already relies on.
+      await chips.getByRole('link', { name: who }).click();
+      await expect(page.locator('#personal-lines')).toHaveCount(0);
+      await expect(page).not.toHaveURL(/show=/);
+      await chips.getByRole('link', { name: who }).click();
+      await expect(chips.getByRole('link', { name: who })).toHaveAttribute('aria-current', 'true');
+
+      // F — three months by category.
+      const months = await tapDrawnBar('months', width, 'show=f%3A');
+      panel = page.locator('#months-lines');
+      await expect(panel).toBeVisible();
+      await expect(panel.getByRole('heading')).toHaveText(/^Line items: .+ — /);
+      expect(page.url()).toContain('show=f%3A');
+      expect(
+        await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads')),
+        'Chart F: a full document load',
+      ).toBe(months.loads);
+      expect(Math.abs((await page.evaluate(() => window.scrollY)) - months.scroll)).toBeLessThan(8);
+
+      // The Exclude Housing toggle is a soft navigation too: it redraws the
+      // chart (the issue's "changing the data series") without a page load,
+      // and leaves the open panel for a category it still draws.
+      const loadsBeforeToggle = await page.evaluate(() =>
+        sessionStorage.getItem('sf-e2e-document-loads'),
+      );
+      await page
+        .locator('#months')
+        .getByRole('link', { name: /Exclude Housing/ })
+        .click();
+      await page.waitForTimeout(450);
+      expect(
+        await page.evaluate(() => sessionStorage.getItem('sf-e2e-document-loads')),
+        'the Exclude Housing toggle: a full document load',
+      ).toBe(loadsBeforeToggle);
+      await expect(page).toHaveURL(/noHousing=1/);
+      await page
+        .locator('#months')
+        .getByRole('link', { name: /Close line items/ })
+        .click();
+      await expect(page.locator('#months-lines')).toHaveCount(0);
+
+      await noOverflow(page, `${width}px: an open line-items panel`);
+    }
+  });
+
   test('the chips narrow the personal chart, and the URL carries the choice', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 950 });
     await page.goto('/charts');
+    // The nav publishes this once hydrated; a chip click that lands before
+    // then can be swallowed between the press and its navigation, as the
+    // issue #39 spec below already guards against.
+    const hydrated = () =>
+      page.waitForFunction(() =>
+        Boolean(document.documentElement.style.getPropertyValue('--sf-anchor-offset')),
+      );
+    await hydrated();
     const chips = page.getByRole('group', { name: 'Whose spending to show' });
     const headline = figure(page, 'personal', 'laptop').locator('[data-chart-headline]');
     await expect(headline).toContainText('Alex');
@@ -353,6 +506,7 @@ test.describe('charts', () => {
 
     // A reload keeps it: the choice lives in the URL, not in a component.
     await page.reload();
+    await hydrated();
     await expect(headline).not.toContainText('Alex');
 
     // Turning Alex back on restores everybody.
@@ -835,8 +989,16 @@ test.describe('charts', () => {
     );
 
     // The table twin carries every drawn day; a day's spend opens that
-    // day's purchases.
-    await laptop.getByText(/^Show the numbers/).click();
+    // day's purchases. The #pace landing leaves this summary at the very
+    // bottom edge of the viewport, where a click can be lost between the
+    // press and the release while the hash-scroll helper settles — so wait
+    // for hydration and centre it first, as the chip specs above do.
+    await page.waitForFunction(() =>
+      Boolean(document.documentElement.style.getPropertyValue('--sf-anchor-offset')),
+    );
+    const numbers = laptop.getByText(/^Show the numbers/);
+    await numbers.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+    await numbers.click();
     const table = laptop.locator('table[data-chart-table="pace"]');
     await expect(table).toBeVisible();
     await expect(table.locator('tbody tr').first().locator('td').first()).toHaveText('1');

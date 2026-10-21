@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { addDaysIso, pickEntryCategory, waitForTill } from './support';
 import { formatPence } from '../src/lib/money';
+import { formatOrdinalDayMonthShortLocalDate, toLocalDateString } from '../src/lib/time';
 import { APP_RELEASE_STAGE, APP_VERSION } from '../src/lib/version';
 import { seedPaydayScenario } from './payday-scenario';
 
@@ -966,9 +967,12 @@ test.describe('mobile quick entry', () => {
   test('the payday card states the facts and opens Horizon the day before payday', async ({
     page,
   }) => {
-    // Isolated fictional household: Main £242.22, payday configured for the
-    // 26th, Salary due on the same day, Natwest direct debits on the 21st, and
-    // a projected £90 fuel item on payday to prove the shared filter applies.
+    // Isolated fictional household: Main £242.22, payday configured a few
+    // days out, Salary due on the same day, Natwest direct debits five days
+    // before it, and a projected £90 fuel item on payday to prove the shared
+    // filter applies. The fixture picks those days relative to today, so the
+    // expected payday label is derived from its payday date, never pinned to
+    // a calendar month.
     const { paydayDate, natwestBillsOnlyShortfallPence } = await seedPaydayScenario();
     const dayBefore = addDaysIso(paydayDate, -1);
 
@@ -981,7 +985,11 @@ test.describe('mobile quick entry', () => {
       'title',
       /^\d{1,2} [A-Za-z]{3} \d{4}, \d{1,2}:\d{2}$/,
     );
-    await expect(till.getByText('Lowest before 26th Oct pay day')).toBeVisible();
+    const paydayLabel = formatOrdinalDayMonthShortLocalDate(
+      paydayDate,
+      toLocalDateString(new Date()),
+    );
+    await expect(till.getByText(`Lowest before ${paydayLabel} pay day`)).toBeVisible();
     await expect(till).toContainText(
       'Projected shortfall: -£96.35 before payday. No discretionary spending is available at this time.',
     );

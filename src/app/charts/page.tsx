@@ -1,3 +1,4 @@
+import { LineItemsPanel } from '@/components/line-items';
 import { SpendingPresetSelect } from '@/components/spending-presets';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -26,6 +27,12 @@ import {
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import {
+  chartDrillKey,
+  isSameChartDrill,
+  parseChartDrillKey,
+  type ChartDrillSelection,
+} from '@/lib/charts-drill';
+import {
   MIX_RESET_KEYS,
   chartsHref,
   mixShowReconfirms,
@@ -37,12 +44,14 @@ import {
   PIE_SPLIT_PARENTS,
   getSpendingTrendsView,
   getCategoryMonthsView,
+  getChartDrillView,
   getCumulativeComparisonView,
   getForecastChartView,
   getGroceriesChartView,
   getPersonalChartView,
   getSpendingMixView,
   type CategoryMonthsView,
+  type ChartDrillView,
   type CumulativeComparisonView,
   type SpendingTrendsView,
   type ForecastChartView,
@@ -58,12 +67,7 @@ import {
   type PersonalSeries,
   type WeekBucket,
 } from '@/lib/records/chart-series';
-import {
-  householdSliceKey,
-  mixSliceKey,
-  type MixLine,
-  type MixSlice,
-} from '@/lib/records/spending-mix';
+import { householdSliceKey, mixSliceKey, type MixSlice } from '@/lib/records/spending-mix';
 import { formatShortLocalDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -108,6 +112,23 @@ interface SearchParams {
   cmpA?: string;
   cmpB?: string;
   cmpPreset?: string;
+  /**
+   * The in-line line items behind one tapped bar on Chart B, C or F (issue
+   * #94, decision 250): the same `show` name Insights uses for its own
+   * drill-down, carrying a chart-prefixed key — see `lib/charts-drill`.
+   */
+  show?: string;
+}
+
+/**
+ * The line-items panel that is open, and the selection that opened it. Only
+ * one can be open at a time: `show` is one parameter, so opening another
+ * chart's panel replaces this one, and tapping the open bar closes it.
+ */
+interface OpenDrill {
+  selection: ChartDrillSelection;
+  /** The resolved panel; it is only here when the selection is really drawn. */
+  view: ChartDrillView;
 }
 
 const PHONE_WIDTH = 320;
@@ -162,6 +183,23 @@ export default async function ChartsPage({
   );
   // The D → E sync's signpost (decision 241), computed where both views exist.
   const syncNotice = mixSyncNotice(params, commitments, mixView);
+  // The in-line line items behind a tapped bar (issue #94, decision 250).
+  // The panel is resolved against the views this page is drawing, so a stale
+  // or hand-edited `show=` opens nothing rather than a list that disagrees
+  // with the chart above it.
+  const drillSelection = parseChartDrillKey(params.show);
+  const drillView =
+    drillSelection === null
+      ? null
+      : getChartDrillView(db, drillSelection, {
+          groceries,
+          personal,
+          months: monthsView,
+        });
+  const openDrill: OpenDrill | null =
+    drillSelection !== null && drillView !== null
+      ? { selection: drillSelection, view: drillView }
+      : null;
 
   return (
     <main className="mx-auto max-w-7xl overflow-x-clip px-4 py-6 sm:py-8">
@@ -184,12 +222,13 @@ export default async function ChartsPage({
         <ForecastSection view={forecast} needs={forecastNeeds} />
         {reportedDrawn ? (
           <>
-            <GroceriesSection view={groceries} />
+            <GroceriesSection view={groceries} params={params} drill={openDrill} />
             <PersonalSection
               view={personal}
               everyone={everyone}
               selected={include}
               params={params}
+              drill={openDrill}
             />
             <CommitmentsSection view={commitments} params={params} />
             <MixSection
@@ -198,7 +237,7 @@ export default async function ChartsPage({
               params={params}
               syncNotice={syncNotice}
             />
-            <MonthsSection view={monthsView} params={params} />
+            <MonthsSection view={monthsView} params={params} drill={openDrill} />
             <PaceSection view={paceView} params={params} />
           </>
         ) : (
@@ -212,9 +251,10 @@ export default async function ChartsPage({
 
       {reportedDrawn ? (
         <p className="mt-6 text-xs text-ink-muted">
-          Clicking a bar opens the purchases behind it. Those filters match the <em>purchase</em>,
-          and a matched purchase comes back with all of its lines, receipt-style — so a split shop
-          appears whole, not as the single line that matched.
+          Tapping a bar opens the purchases behind it in place, beneath its chart, beside{' '}
+          <em>Open these purchases</em> and <em>Close line items</em>. Those filters match the{' '}
+          <em>purchase</em>, and a matched purchase comes back with all of its lines, receipt-style
+          — so a split shop appears whole, not as the single line that matched.
         </p>
       ) : null}
     </main>
@@ -448,7 +488,15 @@ function DayDetails({ view }: { view: ForecastChartView }) {
 /* B. Groceries                                                        */
 /* ------------------------------------------------------------------ */
 
-function GroceriesSection({ view }: { view: GroceriesChartView }) {
+function GroceriesSection({
+  view,
+  params,
+  drill,
+}: {
+  view: GroceriesChartView;
+  params: SearchParams;
+  drill: OpenDrill | null;
+}) {
   // Weeks before the first recorded purchase were never recorded at all, so
   // they are not zero weeks and do not count (decision 183).
   const since =
@@ -458,14 +506,32 @@ function GroceriesSection({ view }: { view: GroceriesChartView }) {
   const caption =
     'Recorded grocery lines only, bucketed Monday to Sunday. A week with no shop is a zero week, not a missing one — the average would flatter you otherwise. The current week is still being lived and never counts towards the average.' +
     since;
+  const open: OpenDrill | null = drill?.selection.kind === 'groceries' ? drill : null;
+  const weekHref = (week: WeekBucket): string =>
+    drillHref(params, drill, { kind: 'groceries', weekStart: week.weekStart }, '#groceries');
   return (
     <ChartCard id="groceries" eyebrow="B · Groceries" title="Is the weekly shop creeping up?">
       <div className="lg:hidden">
-        {renderGroceries(view, view.phone, 'phone', PHONE_WIDTH, 200, caption, 3)}
+        {renderGroceries(view, view.phone, 'phone', PHONE_WIDTH, 200, caption, 3, weekHref)}
       </div>
       <div className="hidden lg:block">
-        {renderGroceries(view, view.laptop, 'laptop', LAPTOP_WIDTH, 260, caption, 4)}
+        {renderGroceries(view, view.laptop, 'laptop', LAPTOP_WIDTH, 260, caption, 4, weekHref)}
       </div>
+      {open === null ? (
+        <p className="mt-4 text-xs text-ink-muted">
+          Tap a week’s bar, or its date below, to see the purchases behind it.
+        </p>
+      ) : (
+        <LineItemsPanel
+          id="groceries-lines"
+          heading={open.view.heading}
+          rows={open.view.rows}
+          totalPence={open.view.totalPence}
+          emptyText={open.view.emptyText}
+          openHref={open.view.openHref}
+          closeHref={closeDrillHref(params, '#groceries')}
+        />
+      )}
     </ChartCard>
   );
 }
@@ -478,21 +544,19 @@ function renderGroceries(
   height: number,
   caption: string,
   labelEvery: number,
+  weekHref: (week: WeekBucket) => string,
 ) {
-  const href = (week: WeekBucket): string =>
-    purchasesHref({
-      from: week.weekStart,
-      to: week.weekEnd,
-      categoryIds: view.parentCategoryId === null ? undefined : [view.parentCategoryId],
-    });
   const bars: BarDatum[] = series.weeks.map((week) => ({
     key: week.weekStart,
     label: shortDayMonth(week.weekStart),
     valuePence: week.amountPence,
-    href: href(week),
+    href: weekHref(week),
+    // A same-page link: the line items open beneath the drawing through the
+    // client router, without a document reload (issue #94, decision 250).
+    soft: true,
     hint: `Week of ${formatShortLocalDate(week.weekStart)}: ${formatPence(week.amountPence)}${
       week.complete ? '' : ' so far'
-    }${week.recorded ? '' : ' — not counted, recording had not begun'} — open these purchases`,
+    }${week.recorded ? '' : ' — not counted, recording had not begun'} — show these purchases in line`,
     muted: !week.complete,
   }));
   const domain = chartDomain(
@@ -534,11 +598,19 @@ function renderGroceries(
         key: week.weekStart,
         muted: !week.complete || !week.recorded,
         cells: [
-          <a key="link" href={href(week)} className="sf-link">
+          // The table twin is the keyboard path, so it opens the same panel
+          // as the bar — in place, with no scroll jump (issue #94).
+          <Link
+            key="link"
+            href={weekHref(week)}
+            scroll={false}
+            prefetch={false}
+            className="sf-link"
+          >
             {week.weekStart}
             {week.complete ? '' : ' (so far)'}
             {week.recorded ? '' : ' (not counted)'}
-          </a>,
+          </Link>,
           formatPence(week.amountPence),
         ],
       }))}
@@ -597,11 +669,13 @@ function PersonalSection({
   everyone,
   selected,
   params,
+  drill,
 }: {
   view: PersonalChartView;
   everyone: PersonalChartView;
   selected: string[] | null;
   params: SearchParams;
+  drill: OpenDrill | null;
 }) {
   const caption = `Attributed by “For: …”, the way Insights already does it — not by whose card was used. A person's bar counts every line marked for them, whatever its category. Household-marked spending (a joint takeaway, a shared subscription) is its own bar and is never split between people; its scope is ${view.parentNames.join(' and ')}.`;
   const chips = everyone.laptop.series.map((ref) => ({
@@ -616,6 +690,17 @@ function PersonalSection({
       CHART_COLOURS.series[index % CHART_COLOURS.series.length] as string,
     ]),
   );
+  const open: OpenDrill | null = drill?.selection.kind === 'personal' ? drill : null;
+  // A bar or a segment opens its own line items beneath the card (issue #94);
+  // the table twin's figures take the same link, so the keyboard path matches
+  // the drawing.
+  const segmentHref = (month: { from: string }, key: string): string =>
+    drillHref(
+      params,
+      drill,
+      { kind: 'personal', month: month.from.slice(0, 7), series: key },
+      '#personal',
+    );
 
   return (
     <ChartCard
@@ -652,19 +737,42 @@ function PersonalSection({
       ) : (
         <>
           <div className="lg:hidden">
-            {renderPersonal(view, view.phone, 'phone', PHONE_WIDTH, 210, caption, fills, 1)}
+            {renderPersonal(view.phone, 'phone', PHONE_WIDTH, 210, caption, fills, 1, segmentHref)}
           </div>
           <div className="hidden lg:block">
-            {renderPersonal(view, view.laptop, 'laptop', LAPTOP_WIDTH, 280, caption, fills, 1)}
+            {renderPersonal(
+              view.laptop,
+              'laptop',
+              LAPTOP_WIDTH,
+              280,
+              caption,
+              fills,
+              1,
+              segmentHref,
+            )}
           </div>
         </>
+      )}
+      {open === null ? (
+        <p className="mt-4 text-xs text-ink-muted">
+          Tap a person’s segment, or its figure below, to see the purchases behind it.
+        </p>
+      ) : (
+        <LineItemsPanel
+          id="personal-lines"
+          heading={open.view.heading}
+          rows={open.view.rows}
+          totalPence={open.view.totalPence}
+          emptyText={open.view.emptyText}
+          openHref={open.view.openHref}
+          closeHref={closeDrillHref(params, '#personal')}
+        />
       )}
     </ChartCard>
   );
 }
 
 function renderPersonal(
-  view: PersonalChartView,
   series: PersonalSeries,
   variant: 'phone' | 'laptop',
   width: number,
@@ -672,19 +780,11 @@ function renderPersonal(
   caption: string,
   fills: Map<string, string>,
   labelEvery: number,
+  segmentHref: (month: { from: string }, key: string) => string,
 ) {
-  // A person's drill-down carries no category filter: their bar counts every
-  // line marked for them, so the review page must show every line (issue
-  // #25). The household bar keeps the discretionary-parent filter.
-  const hrefFor = (from: string, to: string, key: string): string =>
-    purchasesHref({
-      from,
-      to,
-      ...(key === 'household'
-        ? { targetKind: 'household' as const, categoryIds: view.parentCategoryIds }
-        : { targetKind: 'person' as const, targetId: Number(key.split(':')[1]) }),
-    });
-
+  // A person's panel carries no category filter: their bar counts every line
+  // marked for them, so the panel shows every line (issue #25). The
+  // household bar keeps the discretionary-parent filter.
   const groups: StackedGroup[] = series.months.map((month) => ({
     key: month.from,
     label: monthTick(month.label),
@@ -692,8 +792,10 @@ function renderPersonal(
     segments: month.cells.map((cell) => ({
       key: cell.key,
       valuePence: cell.amountPence,
-      href: hrefFor(month.from, month.to, cell.key),
-      hint: `${labelOf(series, cell.key)} · ${month.label}: ${formatPence(cell.amountPence)} — open these purchases`,
+      href: segmentHref(month, cell.key),
+      // A same-page link: the panel opens in place (issue #94).
+      soft: true,
+      hint: `${labelOf(series, cell.key)} · ${month.label}: ${formatPence(cell.amountPence)} — show these purchases in line`,
     })),
   }));
   const domain = chartDomain(
@@ -735,9 +837,15 @@ function renderPersonal(
             cell.amountPence === 0 ? (
               <span key={cell.key}>{formatPence(cell.amountPence)}</span>
             ) : (
-              <a key={cell.key} href={hrefFor(month.from, month.to, cell.key)} className="sf-link">
+              <Link
+                key={cell.key}
+                href={segmentHref(month, cell.key)}
+                scroll={false}
+                prefetch={false}
+                className="sf-link"
+              >
                 {formatPence(cell.amountPence)}
-              </a>
+              </Link>
             ),
           ),
           formatPence(month.totalPence),
@@ -1340,84 +1448,26 @@ function MixLineItems({
     ...target,
   });
   return (
-    <section
+    <LineItemsPanel
       id="mix-lines"
-      aria-labelledby="mix-lines-heading"
-      className="mt-4 rounded-xl border border-border bg-canvas p-4"
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 id="mix-lines-heading" className="text-sm font-semibold">
-          Line items: {slice.label}
-        </h3>
-        <p className="text-sm tabular-nums text-ink-soft">
-          {formatPence(slice.amountPence)} · {slice.lines.length}{' '}
-          {slice.lines.length === 1 ? 'line' : 'lines'}
-        </p>
-      </div>
-      {slice.lines.length === 0 ? (
-        <p className="mt-2 text-sm text-ink-muted">Nothing was spent here in this window.</p>
-      ) : (
-        <div className="mt-2 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="text-left text-[11px] uppercase tracking-wide text-ink-muted">
-              <tr>
-                <th scope="col" className="py-1 pr-3 font-medium">
-                  Date
-                </th>
-                <th scope="col" className="py-1 pr-3 font-medium">
-                  Where
-                </th>
-                <th scope="col" className="py-1 pr-3 font-medium">
-                  Category
-                </th>
-                <th scope="col" className="py-1 pr-3 font-medium">
-                  For
-                </th>
-                <th scope="col" className="py-1 pr-0 text-right font-medium">
-                  Amount
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {slice.lines.map((line) => (
-                <MixLineRow
-                  key={`${line.purchaseId}-${line.categoryId}-${line.targetKind}-${line.targetId ?? 'x'}-${line.amountPence}`}
-                  line={line}
-                  labels={view.targetLabels}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <Link href={openHref} className="sf-link-arrow">
-          Open these purchases →
-        </Link>
-        <Link href={closeHref} className="sf-link">
-          Close line items
-        </Link>
-        <span className="text-ink-muted">
-          A matching purchase comes back whole, with all of its lines.
-        </span>
-      </div>
-    </section>
-  );
-}
-
-function MixLineRow({ line, labels }: { line: MixLine; labels: Map<string, string> }) {
-  const forText =
-    line.targetKind === 'household'
-      ? 'Household'
-      : (labels.get(`${line.targetKind}:${line.targetId}`) ?? 'Unknown');
-  return (
-    <tr className="border-t border-border-hairline align-top">
-      <td className="whitespace-nowrap py-1 pr-3">{formatShortLocalDate(line.occurredDate)}</td>
-      <td className="py-1 pr-3">{line.supplierName ?? line.note ?? '—'}</td>
-      <td className="py-1 pr-3 text-ink-soft">{line.childName}</td>
-      <td className="py-1 pr-3 text-ink-soft">{forText}</td>
-      <td className="py-1 pr-0 text-right tabular-nums">{formatPence(line.amountPence)}</td>
-    </tr>
+      heading={`Line items: ${slice.label}`}
+      rows={slice.lines.map((line) => ({
+        key: `${line.purchaseId}-${line.categoryId}-${line.targetKind}-${line.targetId ?? 'x'}-${line.amountPence}`,
+        occurredDate: line.occurredDate,
+        supplierName: line.supplierName,
+        note: line.note,
+        category: line.childName,
+        forLabel:
+          line.targetKind === 'household'
+            ? 'Household'
+            : (view.targetLabels.get(`${line.targetKind}:${line.targetId}`) ?? 'Unknown'),
+        amountPence: line.amountPence,
+      }))}
+      totalPence={slice.amountPence}
+      emptyText="Nothing was spent here in this window."
+      openHref={openHref}
+      closeHref={closeHref}
+    />
   );
 }
 
@@ -1425,10 +1475,28 @@ function MixLineRow({ line, labels }: { line: MixLine; labels: Map<string, strin
 /* F. Three months by category                                         */
 /* ------------------------------------------------------------------ */
 
-function MonthsSection({ view, params }: { view: CategoryMonthsView; params: SearchParams }) {
+function MonthsSection({
+  view,
+  params,
+  drill,
+}: {
+  view: CategoryMonthsView;
+  params: SearchParams;
+  drill: OpenDrill | null;
+}) {
   const { months, categories, heavyParentId, excludeHeavy } = view;
   const canExclude = heavyParentId !== null;
-  const toggleHref = `${hrefWith(params, { noHousing: excludeHeavy ? undefined : '1' })}#months`;
+  const open: OpenDrill | null = drill?.selection.kind === 'months' ? drill : null;
+  // Excluding Housing removes the category from the drawing, so an open panel
+  // for Housing cannot outlive it: the toggle drops `show=` in that one case.
+  const drilledIsHeavy =
+    open !== null && heavyParentId !== null && open.selection.kind === 'months'
+      ? open.selection.parentId === heavyParentId
+      : false;
+  const toggleHref = `${hrefWith(params, {
+    noHousing: excludeHeavy ? undefined : '1',
+    ...(!excludeHeavy && drilledIsHeavy ? { show: undefined } : {}),
+  })}#months`;
   const newest = months[months.length - 1];
   const largest = categories[0];
   const headline =
@@ -1454,8 +1522,13 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
 
   const hrefOf = (parentId: number, monthIndex: number): string => {
     const month = months[monthIndex];
-    if (month === undefined) return '/purchases';
-    return purchasesHref({ from: month.from, to: month.to, categoryIds: [parentId] });
+    if (month === undefined) return '/charts#months';
+    return drillHref(
+      params,
+      drill,
+      { kind: 'months', month: month.from.slice(0, 7), parentId },
+      '#months',
+    );
   };
 
   const bands: GroupedBand[] = categories.map((category) => ({
@@ -1466,9 +1539,11 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
       key: `${category.parentId}-${month.from}`,
       valuePence: category.amountsPence[index] ?? 0,
       href: hrefOf(category.parentId, index),
+      // A same-page link: the line items open beneath the chart (issue #94).
+      soft: true,
       hint: `${category.name}, ${month.label}: ${formatPence(
         category.amountsPence[index] ?? 0,
-      )} — open these purchases`,
+      )} — show these purchases in line`,
     })),
   }));
 
@@ -1486,11 +1561,26 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
     muted: category.totalPence <= 0,
     cells: [
       category.name,
-      ...months.map((month, index) => (
-        <a key={month.from} href={hrefOf(category.parentId, index)} className="sf-link">
-          {formatPence(category.amountsPence[index] ?? 0)}
-        </a>
-      )),
+      // The table twin is the keyboard path; a £0.00 figure opens nothing,
+      // as on Insights (decision 232), because there is nothing behind it.
+      ...months.map((month, index) => {
+        const amountPence = category.amountsPence[index] ?? 0;
+        return amountPence === 0 ? (
+          <span key={month.from} className="text-ink-muted">
+            {formatPence(amountPence)}
+          </span>
+        ) : (
+          <Link
+            key={month.from}
+            href={hrefOf(category.parentId, index)}
+            scroll={false}
+            prefetch={false}
+            className="sf-link"
+          >
+            {formatPence(amountPence)}
+          </Link>
+        );
+      }),
     ],
   }));
   const totals = [
@@ -1505,6 +1595,8 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
   const action = canExclude ? (
     <Link
       href={toggleHref}
+      scroll={false}
+      prefetch={false}
       aria-current={excludeHeavy ? 'true' : undefined}
       className={`rounded-full border px-3 py-1 text-xs font-medium ${
         excludeHeavy
@@ -1561,6 +1653,21 @@ function MonthsSection({ view, params }: { view: CategoryMonthsView; params: Sea
     >
       <div className="lg:hidden">{drawing('phone', PHONE_WIDTH, 240)}</div>
       <div className="hidden lg:block">{drawing('laptop', LAPTOP_WIDTH, 300)}</div>
+      {open === null ? (
+        <p className="mt-4 text-xs text-ink-muted">
+          Tap a bar, or a figure below, to see the purchases behind it.
+        </p>
+      ) : (
+        <LineItemsPanel
+          id="months-lines"
+          heading={open.view.heading}
+          rows={open.view.rows}
+          totalPence={open.view.totalPence}
+          emptyText={open.view.emptyText}
+          openHref={open.view.openHref}
+          closeHref={closeDrillHref(params, '#months')}
+        />
+      )}
     </ChartCard>
   );
 }
@@ -1922,7 +2029,36 @@ function chipHref(params: SearchParams, key: string, everyone: PersonalChartView
     ? current.filter((entry) => entry !== key)
     : all.filter((entry) => current.includes(entry) || entry === key);
   const who = next.length === all.length ? undefined : next.join(',');
-  return `${hrefWith(params, { who })}#personal`;
+  // Switching a series off also closes its line items: a panel cannot
+  // outlive the bar it belongs to (issue #94).
+  const drill = parseChartDrillKey(params.show);
+  const hidesDrilled = drill?.kind === 'personal' && drill.series === key && current.includes(key);
+  return `${hrefWith(params, { who, ...(hidesDrilled ? { show: undefined } : {}) })}#personal`;
+}
+
+/**
+ * The `/charts` href that opens a chart's in-line line items — or closes the
+ * open panel when the same bar is tapped again, the toggle Chart E already
+ * teaches (issue #94, decision 250). The anchor is the chart's own card, so a
+ * no-JavaScript load lands on the drawing rather than the top of the page.
+ */
+function drillHref(
+  params: SearchParams,
+  open: OpenDrill | null,
+  selection: ChartDrillSelection,
+  anchor: string,
+): string {
+  const same = isSameChartDrill(open?.selection ?? null, selection);
+  return chartsHref(
+    paramEntries(params),
+    { set: { show: same ? undefined : chartDrillKey(selection) } },
+    anchor,
+  );
+}
+
+/** “Close line items”: the page without a drill-down, back at its chart. */
+function closeDrillHref(params: SearchParams, anchor: string): string {
+  return chartsHref(paramEntries(params), { set: { show: undefined } }, anchor);
 }
 
 function hrefWith(params: SearchParams, changes: Partial<SearchParams>): string {

@@ -1,3 +1,41 @@
+# v1.34.0 — issue #94: Charts B, C and F open their line items in line (2026-10-21)
+
+**Approved stable feature:** the household reviewed the Arena preview, approved it and requested
+stable **v1.34.0** for full testing on the multi-household Unraid installation. Publication follows
+[`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md): one PR, required checks, merge to `main`, an
+annotated tag on that exact merge commit, and successful GHCR verification.
+
+**Read decisions 250–251 in [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and SPEC
+§16.7 B, C, F first.**
+
+**What changed:** tapping a grocery week (B), a personal-spending segment (C) or a three-months bar
+(F) now opens that figure's allocation lines in a panel beneath its own chart — Chart E's behaviour,
+through one shared `LineItemsPanel` — instead of leaving for `/purchases`. One `?show=` key
+(`b:`/`c:`/`f:`) carries the open panel as URL state (no-JavaScript and shareable, re-tap closes);
+each panel sums **exactly** to the bar tapped, and **Open these purchases** keeps the old filtered
+list one press further on. Opening, closing, Chart C's chips and Chart F's Exclude Housing are all
+soft, scroll-preserving navigations, and a panel never outlives a series or category the redrawn
+chart no longer shows. No schema, migration or backup-format change.
+
+**Validation:** `npm test` **1141/1141 across 268 suites** (+12 for the drill keys and the resolver
+reconciliations), `typecheck`, `themes:check`, `format:check` and `next build` green. The local
+Playwright `charts` project (SANDBOX entry 8) passed **15/15**, including the reworked grocery
+journey and a new B/C/F in-place journey at 390px and 1400px (one document, no scroll jump,
+chip-closes-panel). Two pre-existing journeys (chips after reload, pace "Show the numbers") were
+hardened with this file's hydration-marker wait after the sandbox exposed the swallowed-click race
+decision 216 records; assertions unchanged. The first PR #95 `browser` run then exposed a
+pre-existing calendar bug in the payday-summary fixture: its fixed 21st/26th window is incoherent
+on the 21st–25th (the direct debits fall after payday, so its expected low is unreachable) and one
+assertion pinned “26th Oct”. The fixture now picks payday and direct-debit days relative to today
+and the test derives its label from the fixture's payday — test-only, no product change. Required
+PR CI (`gates`, `browser`, `docker`) remains
+the gate at merge time; this entry is the pre-merge record.
+
+**To record next session:** the merge commit SHA, PR/check run IDs, Publish run ID and the verified
+GHCR digest for `v1.34.0` (the workflow prints them and creates the GitHub release).
+
+---
+
 # v1.33.0 — issue #91: server settings, the Admin menu and the Cloudflare shortcut (2026-10-20)
 
 **Approved stable feature:** the household agreed the issue #91 design (strict

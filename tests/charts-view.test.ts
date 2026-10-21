@@ -19,6 +19,7 @@ import {
   getCommitmentChartView,
   getSpendingTrendsView,
   getCategoryMonthsView,
+  getChartDrillView,
   getForecastChartView,
   getGroceriesChartView,
   getPersonalChartView,
@@ -599,6 +600,148 @@ describe('charts-view: reconciliation with the purchase history', () => {
     assert.equal(personal.laptop.months.at(-1)?.label, 'September 2026');
     const commitments = getCommitmentChartView(db(), {}, NOW);
     assert.equal(commitments.series.months.at(-1)?.label, 'September 2026');
+  });
+  /* ---------------- B, C and F: in-line line items (issue #94) ---------------- */
+
+  const drillContext = () => ({
+    groceries: getGroceriesChartView(db(), {}, NOW),
+    personal: getPersonalChartView(db(), {}, NOW),
+    months: getCategoryMonthsView(db(), {}, NOW),
+  });
+
+  it('a grocery week’s line items add up to its bar, and open the same list', () => {
+    const context = drillContext();
+    const view = getChartDrillView(db(), { kind: 'groceries', weekStart: '2026-08-24' }, context);
+    assert.ok(view !== null);
+    assert.equal(view.key, 'b:2026-08-24');
+    const week = context.groceries.laptop.weeks.find((entry) => entry.weekStart === '2026-08-24');
+    assert.equal(view.totalPence, week?.amountPence);
+    assert.equal(view.totalPence, 8200 + 1150);
+    // Newest first, and grocery lines only — not the other purchases in the week.
+    assert.deepEqual(
+      view.rows.map((row) => row.occurredDate),
+      ['2026-08-27', '2026-08-25'],
+    );
+    assert.ok(
+      view.rows.every((row) => row.category === 'Weekly Shop' || row.category === 'Top-up Shops'),
+    );
+    assert.match(view.openHref, /^\/purchases\?from=2026-08-24&to=2026-08-30/);
+    assert.ok(
+      view.openHref.includes(`categoryId=${context.groceries.parentCategoryId}`),
+      'the purchases list carries the same category filter',
+    );
+  });
+
+  it('the week being lived stops its line items at today', () => {
+    const view = getChartDrillView(
+      db(),
+      { kind: 'groceries', weekStart: '2026-09-14' },
+      drillContext(),
+    );
+    assert.ok(view !== null);
+    assert.equal(view.from, '2026-09-14');
+    assert.equal(view.to, TODAY);
+    // 8,800 recorded and 1,200 returned in the same week.
+    assert.equal(view.totalPence, 8800 + 1200 - 1200);
+  });
+
+  it('a person’s month adds up to their bar — every category, and nothing else', () => {
+    const context = drillContext();
+    const series = `person:${fixture.people.sam.id}`;
+    const view = getChartDrillView(db(), { kind: 'personal', month: '2026-08', series }, context);
+    assert.ok(view !== null);
+    const month = context.personal.laptop.months.find(
+      (entry) => entry.from.slice(0, 7) === '2026-08',
+    );
+    const cell = month?.cells.find((entry) => entry.key === series);
+    assert.equal(view.totalPence, cell?.amountPence);
+    // Sam's clothing and the top-up marked for them inside Groceries (issue #25).
+    assert.equal(view.totalPence, 3150 + 1240);
+    assert.deepEqual(
+      view.rows.map((row) => row.category),
+      ['Personal · Clothing & Shoes', 'Groceries · Top-up Shops'],
+    );
+    assert.match(view.openHref, /targetKind=person/);
+    assert.ok(view.openHref.includes(`targetId=${fixture.people.sam.id}`));
+  });
+
+  it('the household series keeps the discretionary scope, and stops at today', () => {
+    const context = drillContext();
+    const view = getChartDrillView(
+      db(),
+      { kind: 'personal', month: '2026-09', series: 'household' },
+      context,
+    );
+    assert.ok(view !== null);
+    assert.equal(view.from, '2026-09-01');
+    assert.equal(view.to, TODAY);
+    // The takeaway and the streaming subscription — not the Utilities bill,
+    // and not the vehicle's fuel, both of which are out of this scope.
+    assert.equal(view.totalPence, 4200 + 1499);
+    assert.ok(view.rows.every((row) => row.forLabel === 'Household'));
+    assert.match(view.openHref, /targetKind=household/);
+    assert.ok(view.openHref.includes('categoryId='));
+  });
+
+  it('a category month adds up to its bar', () => {
+    const context = drillContext();
+    const groceries = context.months.categories.find((entry) => entry.name === 'Groceries');
+    assert.ok(groceries !== undefined);
+    const view = getChartDrillView(
+      db(),
+      { kind: 'months', month: '2026-09', parentId: groceries.parentId },
+      context,
+    );
+    assert.ok(view !== null);
+    const monthIndex = context.months.months.findIndex(
+      (entry) => entry.from.slice(0, 7) === '2026-09',
+    );
+    assert.equal(view.totalPence, groceries.amountsPence[monthIndex]);
+    assert.equal(view.totalPence, 9100 + 8800 + 1200 - 1200);
+    assert.equal(view.to, TODAY);
+    assert.match(view.openHref, new RegExp(`categoryId=${groceries.parentId}`));
+  });
+
+  it('opens nothing for something the chart is not drawing', () => {
+    const context = drillContext();
+    assert.equal(
+      getChartDrillView(db(), { kind: 'groceries', weekStart: '2020-01-06' }, context),
+      null,
+      'a week outside the drawn window',
+    );
+    assert.equal(
+      getChartDrillView(db(), { kind: 'personal', month: '2020-01', series: 'household' }, context),
+      null,
+      'a month outside the drawn window',
+    );
+    assert.equal(
+      getChartDrillView(
+        db(),
+        { kind: 'personal', month: '2026-09', series: 'person:999' },
+        context,
+      ),
+      null,
+      'a person who is not in the drawn chart',
+    );
+    assert.equal(
+      getChartDrillView(db(), { kind: 'months', month: '2026-09', parentId: 999999 }, context),
+      null,
+      'a category the chart does not draw',
+    );
+    // A series the chips have switched off has no bar, so no panel either.
+    const onlyAlex = getPersonalChartView(
+      db(),
+      { include: [`person:${fixture.people.alex.id}`] },
+      NOW,
+    );
+    assert.equal(
+      getChartDrillView(
+        db(),
+        { kind: 'personal', month: '2026-09', series: 'household' },
+        { ...context, personal: onlyAlex },
+      ),
+      null,
+    );
   });
 });
 
