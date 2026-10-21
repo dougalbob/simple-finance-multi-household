@@ -421,7 +421,8 @@ export function PurchaseFilterForm({
             <input
               id="f-search"
               name="q"
-              type="search"
+              type="text"
+              enterKeyHint="search"
               value={state.q}
               maxLength={PURCHASE_SEARCH_MAX_LENGTH}
               autoComplete="off"
