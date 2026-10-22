@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { londonToday } from './support';
+import { londonToday, waitForFilters } from './support';
 
 /**
  * Income (SPEC §6, §11.3 — plan decisions 109–113): one-off money recorded
@@ -42,8 +42,17 @@ test.describe('income', () => {
   test('an income record can be corrected and voided, keeping the history', async ({ page }) => {
     test.slow();
     await page.goto('/income');
+    // Own this test's record: a retry must not depend on the preceding test,
+    // or try to edit a record the first attempt already voided.
+    const source = `Correction probe ${Date.now()}`;
+    const form = page.locator('section[aria-labelledby="one-off-income-heading"]');
+    await form.getByLabel('Amount received').fill('32.50');
+    await form.getByLabel('Into which pot?').selectOption({ label: "Alex's cash" });
+    await form.getByLabel('What was it / who from? (optional)').fill(source);
+    await form.getByRole('button', { name: 'Record income' }).click();
+    await expect(form.getByRole('status')).toContainText(source);
     const list = page.locator('section[aria-labelledby="income-history-heading"]');
-    const row = list.locator('li', { hasText: 'Sale of old bike' }).first();
+    const row = list.locator('li', { hasText: source }).first();
 
     // Correct the amount: the money that actually arrived was 30.00.
     await row.locator('summary', { hasText: 'Correct or void' }).click();
@@ -55,7 +64,7 @@ test.describe('income', () => {
     // the save above re-rendered the list, and a <details> that is still open
     // would only be closed by another click.
     await page.reload();
-    const saved = list.locator('li', { hasText: 'Sale of old bike' }).first();
+    const saved = list.locator('li', { hasText: source }).first();
     await expect(saved).toContainText('+£30.00');
     await saved.locator('summary', { hasText: 'Correct or void' }).click();
     await expect(saved.getByLabel(/Why are you voiding this/)).toBeVisible();
@@ -67,15 +76,17 @@ test.describe('income', () => {
     await page.goto('/transactions');
     const table = page.locator('section[aria-labelledby="activity-heading"] table');
     await expect(table).toBeVisible();
+    await waitForFilters(page);
     const filters = page.getByRole('form', { name: 'Activity filters' });
-    await filters.getByLabel('Target').selectOption({ label: "Alex's cash" });
+    const [potId] = await filters.getByLabel('Target').selectOption({ label: "Alex's cash" });
     await filters.getByRole('button', { name: 'Show activity' }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('potId')).toBe(potId);
     // The pot still has its seeded income; the voided one is gone. Matched on
     // the corrected amount, so a row left behind by an earlier failed attempt
     // cannot make this fail — and the seeded row proves the filter applied.
     await expect(table.getByText('Sale of bicycle')).toHaveCount(1);
     await expect(
-      table.locator('tr').filter({ hasText: 'Sale of old bike' }).filter({ hasText: '+£30.00' }),
+      table.locator('tr').filter({ hasText: source }).filter({ hasText: '+£30.00' }),
     ).toHaveCount(0);
   });
 

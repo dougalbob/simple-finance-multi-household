@@ -1,5 +1,8 @@
 <!-- BEGIN:nextjs-agent-rules -->
 
+**v1.37.0 — Cloudflare inspection (issue #101, stage one):** Admin now compares registry emails with the dedicated Cloudflare Allow policy using a server-side, read-only API token. Only `REGISTRY_ADMIN_EMAIL` can inspect it. Application audience and policy association are verified; errors mean unknown, and complex conditions are explicitly flagged. No Cloudflare writes, schema, migration or backup-format changes. Configure the four connection variables and restart; see [setup](docs/CLOUDFLARE_INSPECTION.md). Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.37.0` (stable also moves `latest`).
+
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.

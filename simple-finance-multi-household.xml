@@ -9,9 +9,8 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.36.0 is the stable production release and moves :latest (issue #98 and
-  the Purchases follow-up: one date Range drop-down on All Transactions and
-  Purchases, and one search over supplier, category and notes).
+  v1.37.0 is the stable production release and moves :latest (issue #101,
+  stage one: bootstrap-admin-only read-only Cloudflare policy inspection).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -48,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.36.0 is the stable production release and moves :latest. All Transactions and Purchases now share one Range drop-down (Last 30 days, This month, Last Month, This Year, All) with the dates kept editable, plus one search box: on Purchases it reads supplier, category and notes together, and the Pot, Paid by, Supplier and Category drop-downs are gone. All Transactions searches its supplier and notes columns as you type.
+    v1.37.0 is the stable production release and moves :latest. Admin gains read-only Cloudflare policy inspection for the bootstrap administrator, comparing registry emails with direct policy entries. Configure the four CLOUDFLARE_* connection variables with an account-scoped Read token and restart. No Cloudflare writes or storage changes.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.
