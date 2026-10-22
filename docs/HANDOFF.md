@@ -1,3 +1,79 @@
+# v1.38.0 — Cloudflare Admin stages 2 and 3 (2026-10-22)
+
+## Owner approval and delivery
+
+PR **#103**: https://github.com/dougalbob/simple-finance-multi-household/pull/103.
+Branch `arena/f98dfce2-simple-finance-multi-household`, based on `ef36287` (v1.37.0).
+The owner requested stable publication after the browser failure was investigated. It is **not
+flaky**: configuring the fictional Alex as REGISTRY_ADMIN_EMAIL makes the existing Admin link visible,
+so the old non-admin drawer assertion expected 18 destinations while the correct result is 19.
+`e2e/bell.spec.ts` now checks all 19 exact destinations including `/admin`. No application navigation
+or authorisation behaviour was relaxed. No skipped checks or forced merge are authorised.
+
+All implementation, tests, release preparation and docs remain in PR #103. Version is **1.38.0**
+(stable); require corrected PR `gates`, `browser`, `docker`, then main CI, then Publish/digest
+verification. Follow `RELEASE_PROCESS.md`. Publication does not deploy or make real Cloudflare writes.
+Final merge/check/Publish/digest provenance should be recorded in the next working session after
+verification, not through a separate post-merge documentation PR.
+
+## Design and safety
+
+Read decision **257** and [`CLOUDFLARE_INSPECTION.md`](CLOUDFLARE_INSPECTION.md). The owner approved
+single-application reusable Allow policy support, strict writable schemas, full PUT preservation,
+local filesystem exclusion, prewrite reread, post-write verification, and external exclusive-edit
+acknowledgement. There is **no documented provider CAS**; external concurrent edits remain unsafe.
+Legacy/shared/unknown policies are refused rather than converted or overwritten. Write token:
+account-scoped **Access: Apps and Policies / Edit** (API: Write), configured only in trusted server
+environment. Never request credentials in chat. The live policy's eligibility has not been checked
+with credentials here; check it safely in the live environment after installing the release.
+
+- Server: `src/lib/cloudflare/{mutate,policy}.ts`, `src/app/admin/cloudflare-actions.ts`.
+  Every call resolves actual session identity and enforces the bootstrap email gate. Grant rechecks
+  assignment; removal confirms, protects admin and supports policy-only cleanup.
+- UI: `cloudflare-controls.tsx`, inspection and audit outcomes. Feedback survives refreshed inspection
+  and policy-only row removal. React form reset is prevented so the selected target remains accurate;
+  changing target clears removal confirmation.
+- Audit: pending intent + sanitised outcome with attempt ID; no credentials/raw provider responses.
+  Crash-orphan locks are never auto-stolen; recovery instructions are in the Cloudflare guide.
+- No auto-sync, auth/JWT/allowlist/active-household changes, schema/migration/storage/backup-format
+  changes. Registry unassignment/deactivation stay independent. Existing sessions are not revoked.
+- Preserve the retry-independent income correction test from v1.37.0 (unchanged).
+
+## Validation and infrastructure
+
+- Local unit suite: **1194/1194** across 273 suites; format, types, theme check and production audit
+  (zero vulnerabilities) passed on the release head.
+- Targeted local browser run: **11/11** (Bell including the corrected phone drawer, existing Admin,
+  Cloudflare mutation workflow). Local production build passed; corrected full remote CI must still pass.
+- Original PR CI **39747614102** on `1587b2857a4551fb3e70ca6faa752b2edd90205c`:
+  `gates` and `docker` passed; `browser` failed only on the stale bell drawer count (182 passed).
+  This failure is fixed, not dismissed as flaky. Corrected-head CI must pass before merge.
+- Earlier local full browser run stopped after 144 passes when sandbox shell/process handshakes
+  stopped responding (SANDBOX entry 26). Shell access recovered in the owner's follow-up; process
+  inspection confirmed the old browser/server were no longer running. Do not treat that interrupted
+  run as a completed pass. Use targeted local bell/Admin tests and the full remote seeded/fresh gates.
+- Browser runner preloads `scripts/e2e-cloudflare.cjs` only in the fictional test harness; every
+  Cloudflare URL is intercepted and unexpected paths are refused. No production mock endpoint,
+  real provider call or credential UI was added. Local Chromium comes from npm (SANDBOX entry 8).
+
+Only production target: `ghcr.io/dougalbob/simple-finance-multi-household`,
+`/mnt/user/appdata/simple-finance-multi-household`, host **3009**. Original image/appdata and host
+**3007** are out of scope and must not be modified.
+
+## Released baseline provenance supplied by owner
+
+v1.37.0 / PR #102 / merge `ef36287f9eb3ad44628f5eecaa84f8dd5e73a6e7`.
+PR CI `39740370420`, main CI `39741757181`, Publish `39743256753`.
+Published image digest `sha256:2e92d5a6f02c9d2ed36dec6b256ee95307c5520377edffbdfba7a66ce845c075`
+for `v1.37.0`, `latest`, `sha-ef36287`. Stage one was live-tested by the owner.
+Issue #101 has no release handoff comment; the owner supplied this provenance directly.
+
+Only production target: `ghcr.io/dougalbob/simple-finance-multi-household`,
+`/mnt/user/appdata/simple-finance-multi-household`, host **3009**. Original app/image/appdata and
+host **3007** are out of scope and must not be modified.
+
+---
+
 # v1.36.0 — issue #98 and the Purchases filter rework (2026-10-21)
 
 **v1.37.0 — Cloudflare inspection (issue #101, stage one):** Admin now compares registry emails with the dedicated Cloudflare Allow policy using a server-side, read-only API token. Only `REGISTRY_ADMIN_EMAIL` can inspect it. Application audience and policy association are verified; errors mean unknown, and complex conditions are explicitly flagged. No Cloudflare writes, schema, migration or backup-format changes. Configure the four connection variables and restart; see [setup](docs/CLOUDFLARE_INSPECTION.md). Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.37.0` (stable also moves `latest`).

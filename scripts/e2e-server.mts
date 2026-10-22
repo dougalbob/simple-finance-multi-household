@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { openDatabase } from '../src/lib/db/client';
 import { applyMigrations } from '../src/lib/db/migrate';
@@ -591,6 +591,33 @@ if (process.env.E2E_SEED_ONLY === '1') {
   process.exit(0);
 }
 
+// Mock the external API at the server fetch boundary, never via production
+// endpoints or browser credentials. No real Cloudflare request can escape.
+const cloudflareFile = path.join(DATA_DIR, 'cloudflare-fixture.json');
+writeFileSync(
+  cloudflareFile,
+  JSON.stringify({
+    application: {
+      id: 'e2e-app',
+      name: 'Fictional finance',
+      aud: 'e2e-aud',
+      policies: [{ id: 'e2e-policy' }],
+    },
+    policy: {
+      id: 'e2e-policy',
+      account_id: 'e2e-account',
+      reusable: true,
+      app_count: 1,
+      name: 'Fictional finance emails',
+      decision: 'allow',
+      include: [{ email: { email: ACTOR } }, { email: { email: 'cleanup@example.com' } }],
+      require: [],
+      exclude: [],
+      session_duration: '12h',
+    },
+  }),
+);
+
 const child = spawn('node_modules/.bin/next', ['dev', '-H', '0.0.0.0', '-p', String(PORT)], {
   stdio: 'inherit',
   env: {
@@ -601,6 +628,14 @@ const child = spawn('node_modules/.bin/next', ['dev', '-H', '0.0.0.0', '-p', Str
     PORT: String(PORT),
     AUTH_DEV_BYPASS: 'true',
     AUTH_DEV_IDENTITY_EMAIL: ACTOR,
+    REGISTRY_ADMIN_EMAIL: FRESH ? '' : ACTOR,
+    AUTH_AUDIENCE: 'e2e-aud',
+    CLOUDFLARE_ACCOUNT_ID: 'e2e-account',
+    CLOUDFLARE_APPLICATION_ID: 'e2e-app',
+    CLOUDFLARE_POLICY_ID: 'e2e-policy',
+    CLOUDFLARE_API_TOKEN: 'fictional-e2e-token',
+    E2E_CLOUDFLARE_FILE: cloudflareFile,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${path.resolve('scripts/e2e-cloudflare.cjs')}`,
   },
 });
 

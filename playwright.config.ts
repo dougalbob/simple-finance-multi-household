@@ -206,7 +206,7 @@ export default defineConfig({
           // Own project (multi-household registry): platform administration —
           // households and sign-in pre-assignment. Writes registry rows only.
           name: 'admin',
-          testMatch: /admin\.spec\.ts/,
+          testMatch: /(?:admin|cloudflare)\.spec\.ts/,
           use: { viewport: { width: 1400, height: 950 } },
         },
         {

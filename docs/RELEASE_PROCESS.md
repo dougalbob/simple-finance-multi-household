@@ -4,6 +4,20 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.38.0 — issue #101 stages two and three (2026-10-22)
+
+After reviewing the failed browser check, the owner requested publication if the cause was understood.
+The failure is deterministic and test-only: the fictional browser seed now sets REGISTRY_ADMIN_EMAIL,
+so the existing Admin link adds a nineteenth destination to the phone drawer. Correct the stale
+18-link assertion to verify the complete 19-destination list, not by weakening or skipping the check.
+The owner’s message authorises stable **v1.38.0** after this correction and all required release gates.
+Keep implementation, test correction, version files, release notes and handoff in PR #103. Require
+`gates`, `browser` and `docker`, merge once with a merge commit, require main CI, then annotate/tag the
+exact merge SHA and verify Publish and stable image digests. No live Cloudflare writes or deployment
+are part of publication. Only target `ghcr.io/dougalbob/simple-finance-multi-household`, appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never touch the original
+single-household installation or port 3007.
+
 ## v1.37.0 — issue #101, stage one (2026-10-22)
 
 The owner requested publication for live-environment testing. Release only the
