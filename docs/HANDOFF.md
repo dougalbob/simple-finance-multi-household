@@ -1,5 +1,8 @@
 # v1.36.0 — issue #98 and the Purchases filter rework (2026-10-21)
 
+**v1.37.0 — Cloudflare inspection (issue #101, stage one):** Admin now compares registry emails with the dedicated Cloudflare Allow policy using a server-side, read-only API token. Only `REGISTRY_ADMIN_EMAIL` can inspect it. Application audience and policy association are verified; errors mean unknown, and complex conditions are explicitly flagged. No Cloudflare writes, schema, migration or backup-format changes. Configure the four connection variables and restart; see [setup](docs/CLOUDFLARE_INSPECTION.md). Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.37.0` (stable also moves `latest`).
+
+
 **Approved stable feature:** the household reviewed both pages in the Arena preview — the All
 Transactions Range drop-down and supplier/notes search of issue #98, then the Purchases filter
 rework it asked for in the same session — approved them and requested stable **v1.36.0** for full

@@ -4,6 +4,14 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.37.0 — issue #101, stage one (2026-10-22)
+
+The owner requested publication for live-environment testing. Release only the
+read-only Cloudflare inspection panel, configuration guidance and tests. No
+Cloudflare writes or storage changes. Require all three PR gates and main CI,
+then tag the exact merge commit and verify Publish and all stable image digests.
+Issue #101 remains open for live feedback and later grant/revoke stages.
+
 ## v1.36.0 stable release — issue #98 and the Purchases filter rework (2026-10-21)
 
 The household reviewed the All Transactions Range drop-down and supplier/notes search of issue #98

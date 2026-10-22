@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { CloudflareInspection } from '@/components/cloudflare-inspection';
 import { redirect } from 'next/navigation';
 import {
   AssignIdentityForm,
@@ -122,6 +123,9 @@ export default async function AdminPage() {
       </header>
 
       <div className="space-y-6">
+        {showEnvEditor ? (
+          <CloudflareInspection emails={identities.map((identity) => identity.email)} />
+        ) : null}
         <section
           aria-labelledby="admin-households-heading"
           className="rounded-xl border border-border bg-surface p-4 shadow-sm"
