@@ -1,3 +1,57 @@
+# Unreleased — Cloudflare Admin stages 2 and 3 (2026-10-22)
+
+**Delivery hold:** implementation authorised, production release not authorised. The current fixed
+Arena branch is `arena/f98dfce2-simple-finance-multi-household`, starting clean at latest `main`
+`ef36287f9eb3ad44628f5eecaa84f8dd5e73a6e7`. Keep all substantive changes and any later approved release
+preparation in one PR. Do not merge early; confirm readiness/publication with the owner before release.
+Package/version remains **1.37.0**; no tag, image publication, deployment or real Cloudflare write.
+
+Read decision **257** and [`CLOUDFLARE_INSPECTION.md`](CLOUDFLARE_INSPECTION.md). The owner explicitly
+approved conservative support after API research: single-application reusable Allow policy, strict
+supported schema, full PUT projection preserving settings, local filesystem lock, prewrite reread,
+post-write verification, and exclusive-edit acknowledgement. There is **no documented provider CAS**;
+external concurrent edits remain unsafe and are prohibited operationally. Legacy/shared/unknown
+policies are refused rather than converted or overwritten. The required write token is account-scoped
+**Access: Apps and Policies / Edit** (API: Write), configured only through trusted server environment.
+Never request credentials in chat. The live policy's reusable/usage metadata has not been inspected
+with credentials here; its eligibility must be checked safely in the live server environment later.
+
+- Server boundary: `src/lib/cloudflare/{mutate,policy}.ts`, dedicated server action
+  `src/app/admin/cloudflare-actions.ts`; every call resolves the actual session and enforces the same
+  bootstrap identity gate as Server settings. Grant validates/rechecks assignment; removal confirms,
+  protects admin and supports policy-only cleanup. No automatic roster/deactivation side effects.
+- UI: `cloudflare-controls.tsx`, the existing inspection panel and Admin audit outcomes. Success,
+  refusal and unknown results persist while inspection refreshes. The form prevents React's automatic
+  DOM reset (which otherwise cleared the selected target without updating controlled state), keeps
+  feedback outside list rows and clears removal confirmation when changing target.
+- Audit: pending intent + sanitised final outcome with attempt ID; never credentials/raw provider data.
+  Crash-orphan locks are never auto-stolen: see operator recovery in the Cloudflare guide.
+- Tests: direct unauthorised server-action calls, service security/preservation/no-op/error/concurrency/
+  audit cases; browser success, rejection/pending, deliberate retry, self-protection and policy-only
+  cleanup. `scripts/e2e-cloudflare.cjs` is loaded only by the fictional browser runner, intercepts all
+  Cloudflare URLs and never imports into the production application. No real provider requests in tests.
+- No auth, schema, migration, household storage or backup-format change. Preserve
+  `e2e/income.spec.ts`'s retry-independent correction fixture from v1.37.0.
+- Local validation: `npm test` **1194/1194** across 273 suites; `format:check`, `typecheck`,
+  `themes:check`, `npm audit --omit=dev` (zero vulnerabilities) passed. Targeted Admin/browser
+  scenarios passed (existing Admin 4/4 and new Cloudflare 1/1); full seeded/fresh browser and
+  build/CI evidence are pending. Native module rebuilt with local headers per SANDBOX entry 21;
+  local Chromium from npm per entry 8. PR/check identifiers will be recorded before merge.
+
+## Released baseline provenance supplied by owner
+
+v1.37.0 / PR #102 / merge `ef36287f9eb3ad44628f5eecaa84f8dd5e73a6e7`.
+PR CI `39740370420`, main CI `39741757181`, Publish `39743256753`.
+Published image digest `sha256:2e92d5a6f02c9d2ed36dec6b256ee95307c5520377edffbdfba7a66ce845c075`
+for `v1.37.0`, `latest`, `sha-ef36287`. Stage one was live-tested by the owner.
+Issue #101 has no release handoff comment; the owner supplied this provenance directly.
+
+Only production target: `ghcr.io/dougalbob/simple-finance-multi-household`,
+`/mnt/user/appdata/simple-finance-multi-household`, host **3009**. Original app/image/appdata and
+host **3007** are out of scope and must not be modified.
+
+---
+
 # v1.36.0 — issue #98 and the Purchases filter rework (2026-10-21)
 
 **v1.37.0 — Cloudflare inspection (issue #101, stage one):** Admin now compares registry emails with the dedicated Cloudflare Allow policy using a server-side, read-only API token. Only `REGISTRY_ADMIN_EMAIL` can inspect it. Application audience and policy association are verified; errors mean unknown, and complex conditions are explicitly flagged. No Cloudflare writes, schema, migration or backup-format changes. Configure the four connection variables and restart; see [setup](docs/CLOUDFLARE_INSPECTION.md). Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.37.0` (stable also moves `latest`).

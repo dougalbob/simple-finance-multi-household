@@ -43,10 +43,29 @@ const AUDIT_WORDS: Record<string, string> = {
   'identity.unassign': 'Identity unassigned',
   'identity.role': 'Role changed',
   'config.update': 'Server settings changed',
+  'cloudflare.grant': 'Cloudflare grant',
+  'cloudflare.remove': 'Cloudflare removal',
 };
 
 function auditWords(action: string): string {
   return AUDIT_WORDS[action] ?? action;
+}
+
+function cloudflareAuditOutcome(action: string, detail: string | null): string | null {
+  if (!['cloudflare.grant', 'cloudflare.remove'].includes(action) || detail === null) return null;
+  try {
+    const outcome: unknown = JSON.parse(detail).outcome;
+    const labels: Record<string, string> = {
+      pending: 'Attempt started',
+      changed: 'Change verified',
+      noop: 'No change needed',
+      refused: 'Refused before write',
+      unknown: 'Outcome unknown — review required',
+    };
+    return typeof outcome === 'string' ? (labels[outcome] ?? null) : null;
+  } catch {
+    return null;
+  }
 }
 
 export default async function AdminPage() {
@@ -124,7 +143,10 @@ export default async function AdminPage() {
 
       <div className="space-y-6">
         {showEnvEditor ? (
-          <CloudflareInspection emails={identities.map((identity) => identity.email)} />
+          <CloudflareInspection
+            emails={identities.map((identity) => identity.email)}
+            administrator={config.registryBootstrap.adminEmail!}
+          />
         ) : null}
         <section
           aria-labelledby="admin-households-heading"
@@ -250,6 +272,9 @@ export default async function AdminPage() {
                 <span>{auditWords(entry.action)}</span>
                 {entry.email !== null ? <span> · {entry.email}</span> : null}
                 <span> · by {entry.actor}</span>
+                {cloudflareAuditOutcome(entry.action, entry.detail) ? (
+                  <span> · {cloudflareAuditOutcome(entry.action, entry.detail)}</span>
+                ) : null}
               </li>
             ))}
             {audit.length === 0 ? <li className="text-sm text-ink-muted">Nothing yet.</li> : null}

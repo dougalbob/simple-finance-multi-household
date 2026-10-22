@@ -1,3 +1,10 @@
+**Unreleased — issue #101 stages 2/3 (2026-10-22):** Explicit Cloudflare grant/removal,
+strict bootstrap-admin gate, single-application reusable Allow policy only, schema-preserving PUTs,
+local exclusion and external exclusive-edit acknowledgement. Cloudflare has no documented atomic
+conditional update; see `docs/CLOUDFLARE_INSPECTION.md` and decision 257. Owner approved these limits,
+not publication. Keep the complete change in one PR; no merge/version bump/tag/publish until readiness
+and publication are confirmed. Authentication, registry assignments and household status are unchanged.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 **v1.37.0 — Cloudflare inspection (issue #101, stage one):** Admin now compares registry emails with the dedicated Cloudflare Allow policy using a server-side, read-only API token. Only `REGISTRY_ADMIN_EMAIL` can inspect it. Application audience and policy association are verified; errors mean unknown, and complex conditions are explicitly flagged. No Cloudflare writes, schema, migration or backup-format changes. Configure the four connection variables and restart; see [setup](docs/CLOUDFLARE_INSPECTION.md). Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.37.0` (stable also moves `latest`).

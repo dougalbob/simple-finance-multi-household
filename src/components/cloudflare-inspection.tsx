@@ -1,7 +1,14 @@
 import { inspectCloudflare } from '@/lib/cloudflare/inspect';
+import { CloudflareControls } from './cloudflare-controls';
 
 /** Server component: API credentials never enter client props or HTML. */
-export async function CloudflareInspection({ emails }: { emails: string[] }) {
+export async function CloudflareInspection({
+  emails,
+  administrator,
+}: {
+  emails: string[];
+  administrator: string;
+}) {
   const result = await inspectCloudflare();
   return (
     <section
@@ -9,10 +16,11 @@ export async function CloudflareInspection({ emails }: { emails: string[] }) {
       aria-labelledby="cloudflare-heading"
     >
       <h2 id="cloudflare-heading" className="text-lg font-semibold">
-        Cloudflare access — read-only
+        Cloudflare access
       </h2>
       <p className="my-2 text-sm text-ink-soft">
-        Inspection only. No emails or policy settings are changed. Reload this page to check again.
+        Compare direct policy emails with registry assignments. Changes require an explicit
+        administrator action below. Reload this page to check again.
       </p>
       {result.status !== 'ok' ? (
         <p role="status" className="text-sm">
@@ -40,6 +48,11 @@ export async function CloudflareInspection({ emails }: { emails: string[] }) {
           </ul>
         </>
       )}
+      <CloudflareControls
+        emails={[...new Set([...emails, ...(result.status === 'ok' ? result.emails : [])])].sort()}
+        assigned={emails}
+        administrator={administrator}
+      />
     </section>
   );
 }

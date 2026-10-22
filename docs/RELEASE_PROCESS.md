@@ -4,6 +4,17 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## Issue #101 stages two and three — implementation only (2026-10-22)
+
+The owner authorised grant/removal implementation and approved the conservative mutation limits
+in decision 257. This does **not** authorise a production release. Keep implementation, tests,
+docs and any subsequently approved release preparation in the same reviewable PR. Require `gates`,
+`browser` and `docker`; confirm readiness and publication with the owner before merging/tagging/
+publishing. No version bump or release tag is prepared yet; v1.37.0 remains the published baseline.
+Only target `ghcr.io/dougalbob/simple-finance-multi-household`, appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never touch the original
+single-household installation or port 3007.
+
 ## v1.37.0 — issue #101, stage one (2026-10-22)
 
 The owner requested publication for live-environment testing. Release only the

@@ -4342,3 +4342,22 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     merge commit and publish only to `ghcr.io/dougalbob/simple-finance-multi-household`, moving
     `latest` with it.
 
+
+257. **Issue #101, stages two and three — explicit Cloudflare grant/removal (2026-10-22, unreleased).**
+    Stage one was released as v1.37.0 and owner-tested in the live multi-household environment.
+    The owner authorised both mutation stages together, not a production release, and explicitly
+    approved the conservative safety limits after API research: only reusable Allow policies with
+    `app_count === 1`, strict supported schemas, no automatic sync, exclusive external-edit window,
+    installation-level locking, prewrite reread/drift refusal and post-write verification. Cloudflare
+    documents a full PUT with no atomic conditional-update facility; a remaining external-edit race
+    is an acknowledged limitation, not a solved concurrency guarantee. Legacy/shared/unknown policy
+    structures fail closed. Grant rechecks registry assignment; removal separately confirms and
+    protects the bootstrap admin, including policy-only cleanup. Auth/JWT/allowlist/active-household
+    semantics, assignments, household status, migrations and backup formats are unchanged.
+    Durable audit records actor, operation, target and attempt/outcome without provider bodies or
+    credentials. API write failure leaves the registry intact and onboarding pending/unknown.
+    Session revocation is not part of removal. See `docs/CLOUDFLARE_INSPECTION.md` for the pinned
+    official sources, permission change (account-scoped Access: Apps and Policies Edit/Write), exact
+    supported writable schema, stale-lock recovery and concurrency limitations. Implementation,
+    tests and docs belong in one reviewable PR; do not merge/bump/tag/publish before owner readiness
+    and publication confirmation. Preserve the v1.37.0 income-test retry fix.
