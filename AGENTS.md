@@ -1,9 +1,11 @@
-**Unreleased — issue #101 stages 2/3 (2026-10-22):** Explicit Cloudflare grant/removal,
+**v1.38.0 — issue #101 stages 2/3 (2026-10-22):** Explicit Cloudflare grant/removal,
 strict bootstrap-admin gate, single-application reusable Allow policy only, schema-preserving PUTs,
 local exclusion and external exclusive-edit acknowledgement. Cloudflare has no documented atomic
-conditional update; see `docs/CLOUDFLARE_INSPECTION.md` and decision 257. Owner approved these limits,
-not publication. Keep the complete change in one PR; no merge/version bump/tag/publish until readiness
-and publication are confirmed. Authentication, registry assignments and household status are unchanged.
+conditional update; see `docs/CLOUDFLARE_INSPECTION.md` and decision 257. Owner approved stable
+publication after the stale admin-navigation test is corrected and all release gates pass.
+Authentication, registry assignments and household status are unchanged. Image target remains
+`ghcr.io/dougalbob/simple-finance-multi-household`, appdata `/mnt/user/appdata/simple-finance-multi-household`,
+host port **3009**. Never modify the original installation or port 3007.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

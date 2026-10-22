@@ -740,3 +740,25 @@ Two smaller lessons from the same slice:
 - **Not run this session:** the Playwright suite. The household asked that the browser CI check be left for the next
   session; entry 8 still describes how to run it locally.
 
+## 26. Shell/process handshakes stopped responding during a full browser run (2026-10-22)
+
+After the targeted Admin/Cloudflare browser checks passed, a full 183-case seeded run progressed to
+144 passing cases with no recorded failures. Shell calls (including simple process/log inspection)
+then timed out without output; process wait/stop tools reported `Request handshake timed out after
+60000ms`. File read/edit tools still worked. This is an infrastructure interruption, not evidence
+that the tests passed or failed. The cause is unverified; do not label it OOM without evidence.
+
+No recovery was verified in that session. Do not launch duplicate full runs or assume the old
+runner/server stopped after a timed-out stop request. Once shell access returns, inspect and stop
+any surviving test/server processes before reseeding or building. Recheck PR #103 CI run
+39747614102 and run any remaining checks. The local log was `/home/user/browser-checks.log`;
+process IDs were `browser-acceptance-checks-df002ce8` (runner) and
+`finance-test-preview-548bb612` (seeded dev server). Keep final handoff/validation notes in the
+same PR before merge.
+
+**Recovery observed in the owner’s follow-up (2026-10-22):** shell access returned and process
+inspection showed no surviving browser/server processes. PR CI revealed one deterministic stale
+phone-drawer count assertion (the bootstrap-admin seed adds the Admin link), not a provider/mutation
+failure. Correct that test and rerun required gates; the owner then authorised publication conditional
+on successful checks. The exact cause of the earlier infrastructure interruption remains unknown.
+

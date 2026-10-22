@@ -1,7 +1,7 @@
 # Cloudflare Admin integration — issue #101
 
 Stage one shipped in **v1.37.0** and was live-tested by the owner. Stages two
-and three add **explicit** grant/removal operations; they are not yet released.
+and three add **explicit** grant/removal operations in **v1.38.0**.
 There is no automatic or background synchronisation.
 
 Only the verified `REGISTRY_ADMIN_EMAIL` identity can inspect or mutate

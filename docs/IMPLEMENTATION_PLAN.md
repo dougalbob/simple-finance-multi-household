@@ -4361,3 +4361,12 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     supported writable schema, stale-lock recovery and concurrency limitations. Implementation,
     tests and docs belong in one reviewable PR; do not merge/bump/tag/publish before owner readiness
     and publication confirmation. Preserve the v1.37.0 income-test retry fix.
+
+258. **Stable v1.38.0 approval and deterministic navigation-test correction (2026-10-22).** The owner
+    reviewed PR #103's remote browser failure and requested publication if the cause was understood.
+    The new fictional bootstrap-admin configuration exposes the existing Admin menu link, so the
+    phone-drawer test deterministically sees 19 links instead of the old non-admin expectation of 18.
+    It now checks the complete ordered destination list including `/admin`; no application behaviour
+    is changed or check skipped. Prepare v1.38.0 and release notes in the same PR as decision 257,
+    require all PR gates and main CI, then publish the exact annotated merge-commit tag only to the
+    multi-household image. No real Cloudflare writes or live deployment are authorised by publication.

@@ -225,13 +225,39 @@ test.describe('bell — phone layout', () => {
     const drawerNav = page.locator('nav[aria-label="Pages"]');
     await expect(drawerNav.getByRole('button', { name: /Needs attention|Nothing/ })).toHaveCount(0);
 
-    // Open drawer and check the link list (12 links in More + 6 in Daily = 18)
+    // Open the drawer and check every destination for the bootstrap-admin seed.
     await page.getByRole('button', { name: 'Open navigation menu' }).click();
     await expect(drawerNav).toBeVisible();
     const links = drawerNav.getByRole('link');
-    // There should be 18 links (6 Daily + 12 More) — 17 until the long-term
-    // forecast arrived (v1.26.0). A new menu entry must keep these in step.
-    await expect(links).toHaveCount(18);
+    // The Cloudflare test harness now configures Alex as REGISTRY_ADMIN_EMAIL,
+    // so the existing admin-only link adds one to the 18 ordinary destinations.
+    // Check actual destinations rather than accepting an arbitrary extra link.
+    const destinations = [
+      '/#quick-entry',
+      '/purchases',
+      '/horizon',
+      '/charts',
+      '/overview',
+      '/recurring',
+      '/transactions',
+      '/longterm',
+      '/income',
+      '/pots',
+      '/borrowing',
+      '/insights',
+      '/settings',
+      '/suppliers',
+      '/contracts',
+      '/tasks',
+      '/projects',
+      '/start',
+      '/admin',
+    ];
+    await expect(links).toHaveCount(destinations.length);
+    await expect
+      .poll(() => links.evaluateAll((items) => items.map((item) => item.getAttribute('href'))))
+      .toEqual(destinations);
+    await expect(drawerNav.getByRole('link', { name: 'Admin', exact: true })).toBeVisible();
     // Bell should still be visible in top bar even when drawer open
     await expect(button).toBeVisible();
   });

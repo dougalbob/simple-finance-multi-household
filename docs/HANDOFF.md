@@ -1,42 +1,64 @@
-# Unreleased — Cloudflare Admin stages 2 and 3 (2026-10-22)
+# v1.38.0 — Cloudflare Admin stages 2 and 3 (2026-10-22)
 
-**Delivery hold:** implementation authorised, production release not authorised. The current fixed
-Arena branch is `arena/f98dfce2-simple-finance-multi-household`, starting clean at latest `main`
-`ef36287f9eb3ad44628f5eecaa84f8dd5e73a6e7`. Keep all substantive changes and any later approved release
-preparation in one PR. Do not merge early; confirm readiness/publication with the owner before release.
-Package/version remains **1.37.0**; no tag, image publication, deployment or real Cloudflare write.
+## Owner approval and delivery
 
-Read decision **257** and [`CLOUDFLARE_INSPECTION.md`](CLOUDFLARE_INSPECTION.md). The owner explicitly
-approved conservative support after API research: single-application reusable Allow policy, strict
-supported schema, full PUT projection preserving settings, local filesystem lock, prewrite reread,
-post-write verification, and exclusive-edit acknowledgement. There is **no documented provider CAS**;
-external concurrent edits remain unsafe and are prohibited operationally. Legacy/shared/unknown
-policies are refused rather than converted or overwritten. The required write token is account-scoped
-**Access: Apps and Policies / Edit** (API: Write), configured only through trusted server environment.
-Never request credentials in chat. The live policy's reusable/usage metadata has not been inspected
-with credentials here; its eligibility must be checked safely in the live server environment later.
+PR **#103**: https://github.com/dougalbob/simple-finance-multi-household/pull/103.
+Branch `arena/f98dfce2-simple-finance-multi-household`, based on `ef36287` (v1.37.0).
+The owner requested stable publication after the browser failure was investigated. It is **not
+flaky**: configuring the fictional Alex as REGISTRY_ADMIN_EMAIL makes the existing Admin link visible,
+so the old non-admin drawer assertion expected 18 destinations while the correct result is 19.
+`e2e/bell.spec.ts` now checks all 19 exact destinations including `/admin`. No application navigation
+or authorisation behaviour was relaxed. No skipped checks or forced merge are authorised.
 
-- Server boundary: `src/lib/cloudflare/{mutate,policy}.ts`, dedicated server action
-  `src/app/admin/cloudflare-actions.ts`; every call resolves the actual session and enforces the same
-  bootstrap identity gate as Server settings. Grant validates/rechecks assignment; removal confirms,
-  protects admin and supports policy-only cleanup. No automatic roster/deactivation side effects.
-- UI: `cloudflare-controls.tsx`, the existing inspection panel and Admin audit outcomes. Success,
-  refusal and unknown results persist while inspection refreshes. The form prevents React's automatic
-  DOM reset (which otherwise cleared the selected target without updating controlled state), keeps
-  feedback outside list rows and clears removal confirmation when changing target.
-- Audit: pending intent + sanitised final outcome with attempt ID; never credentials/raw provider data.
-  Crash-orphan locks are never auto-stolen: see operator recovery in the Cloudflare guide.
-- Tests: direct unauthorised server-action calls, service security/preservation/no-op/error/concurrency/
-  audit cases; browser success, rejection/pending, deliberate retry, self-protection and policy-only
-  cleanup. `scripts/e2e-cloudflare.cjs` is loaded only by the fictional browser runner, intercepts all
-  Cloudflare URLs and never imports into the production application. No real provider requests in tests.
-- No auth, schema, migration, household storage or backup-format change. Preserve
-  `e2e/income.spec.ts`'s retry-independent correction fixture from v1.37.0.
-- Local validation: `npm test` **1194/1194** across 273 suites; `format:check`, `typecheck`,
-  `themes:check`, `npm audit --omit=dev` (zero vulnerabilities) passed. Targeted Admin/browser
-  scenarios passed (existing Admin 4/4 and new Cloudflare 1/1); full seeded/fresh browser and
-  build/CI evidence are pending. Native module rebuilt with local headers per SANDBOX entry 21;
-  local Chromium from npm per entry 8. PR/check identifiers will be recorded before merge.
+All implementation, tests, release preparation and docs remain in PR #103. Version is **1.38.0**
+(stable); require corrected PR `gates`, `browser`, `docker`, then main CI, then Publish/digest
+verification. Follow `RELEASE_PROCESS.md`. Publication does not deploy or make real Cloudflare writes.
+Final merge/check/Publish/digest provenance should be recorded in the next working session after
+verification, not through a separate post-merge documentation PR.
+
+## Design and safety
+
+Read decision **257** and [`CLOUDFLARE_INSPECTION.md`](CLOUDFLARE_INSPECTION.md). The owner approved
+single-application reusable Allow policy support, strict writable schemas, full PUT preservation,
+local filesystem exclusion, prewrite reread, post-write verification, and external exclusive-edit
+acknowledgement. There is **no documented provider CAS**; external concurrent edits remain unsafe.
+Legacy/shared/unknown policies are refused rather than converted or overwritten. Write token:
+account-scoped **Access: Apps and Policies / Edit** (API: Write), configured only in trusted server
+environment. Never request credentials in chat. The live policy's eligibility has not been checked
+with credentials here; check it safely in the live environment after installing the release.
+
+- Server: `src/lib/cloudflare/{mutate,policy}.ts`, `src/app/admin/cloudflare-actions.ts`.
+  Every call resolves actual session identity and enforces the bootstrap email gate. Grant rechecks
+  assignment; removal confirms, protects admin and supports policy-only cleanup.
+- UI: `cloudflare-controls.tsx`, inspection and audit outcomes. Feedback survives refreshed inspection
+  and policy-only row removal. React form reset is prevented so the selected target remains accurate;
+  changing target clears removal confirmation.
+- Audit: pending intent + sanitised outcome with attempt ID; no credentials/raw provider responses.
+  Crash-orphan locks are never auto-stolen; recovery instructions are in the Cloudflare guide.
+- No auto-sync, auth/JWT/allowlist/active-household changes, schema/migration/storage/backup-format
+  changes. Registry unassignment/deactivation stay independent. Existing sessions are not revoked.
+- Preserve the retry-independent income correction test from v1.37.0 (unchanged).
+
+## Validation and infrastructure
+
+- Local unit suite: **1194/1194** across 273 suites; format, types, theme check and production audit
+  (zero vulnerabilities) passed on the release head.
+- Targeted local browser run: **11/11** (Bell including the corrected phone drawer, existing Admin,
+  Cloudflare mutation workflow). Local production build passed; corrected full remote CI must still pass.
+- Original PR CI **39747614102** on `1587b2857a4551fb3e70ca6faa752b2edd90205c`:
+  `gates` and `docker` passed; `browser` failed only on the stale bell drawer count (182 passed).
+  This failure is fixed, not dismissed as flaky. Corrected-head CI must pass before merge.
+- Earlier local full browser run stopped after 144 passes when sandbox shell/process handshakes
+  stopped responding (SANDBOX entry 26). Shell access recovered in the owner's follow-up; process
+  inspection confirmed the old browser/server were no longer running. Do not treat that interrupted
+  run as a completed pass. Use targeted local bell/Admin tests and the full remote seeded/fresh gates.
+- Browser runner preloads `scripts/e2e-cloudflare.cjs` only in the fictional test harness; every
+  Cloudflare URL is intercepted and unexpected paths are refused. No production mock endpoint,
+  real provider call or credential UI was added. Local Chromium comes from npm (SANDBOX entry 8).
+
+Only production target: `ghcr.io/dougalbob/simple-finance-multi-household`,
+`/mnt/user/appdata/simple-finance-multi-household`, host **3009**. Original image/appdata and host
+**3007** are out of scope and must not be modified.
 
 ## Released baseline provenance supplied by owner
 
