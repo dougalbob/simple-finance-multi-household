@@ -3745,3 +3745,5 @@ git-excluded): **70 tests green** across every project, including the new `chart
 - Overview hydration warning (`<p>` wrapping `<details>`/`<form>` at `overview/page.tsx:305`) — still out of
   scope.
 - UK gallons; supplier-level documents (OQ10); home-page mobile layout beyond the till.
+
+Release v1.37.0 CI note: initial run 39738142161 passed gates and Docker but failed one income browser assertion (181 passed). The retry reused an already-voided record. Income correction coverage now creates its own unique record and waits for filter hydration and the selected-pot URL before asserting. All gates must pass on the updated PR before merge.
