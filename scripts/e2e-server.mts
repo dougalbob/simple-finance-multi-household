@@ -603,8 +603,12 @@ writeFileSync(
       aud: 'e2e-aud',
       policies: [{ id: 'e2e-policy' }],
     },
+    // Mirrors the live provider shape that v1.38.0 rejected: a legacy read-only
+    // `uid` beside `id`, absent `precedence`, empty Require/Exclude arrays and
+    // an empty RDP connection-rules object.
     policy: {
       id: 'e2e-policy',
+      uid: 'fictional-legacy-uid',
       account_id: 'e2e-account',
       reusable: true,
       app_count: 1,
@@ -613,6 +617,7 @@ writeFileSync(
       include: [{ email: { email: ACTOR } }, { email: { email: 'cleanup@example.com' } }],
       require: [],
       exclude: [],
+      connection_rules: { rdp: {} },
       session_duration: '12h',
     },
   }),

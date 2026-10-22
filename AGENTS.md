@@ -1,3 +1,14 @@
+**v1.38.1 — Cloudflare read-only policy metadata fix (2026-10-22):** Patch that unblocks the live
+grant. The account-level reusable-policy GET returns a legacy read-only **`uid`** beside `id`; the
+strict reusable-policy schema now accepts `uid` (and an optional `precedence`) as validated metadata
+that is stripped from the writable projection, so the PUT body, full preservation, prewrite reread,
+post-write verification and fail-closed refusal of genuinely unknown fields are all unchanged. No
+authentication, registry, household-status, schema, migration or backup-format change. See decision
+259 and [release notes](docs/RELEASE_NOTES_v1.38.1.md); image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.38.1`, appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original
+installation or port 3007.
+
 **v1.38.0 — issue #101 stages 2/3 (2026-10-22):** Explicit Cloudflare grant/removal,
 strict bootstrap-admin gate, single-application reusable Allow policy only, schema-preserving PUTs,
 local exclusion and external exclusive-edit acknowledgement. Cloudflare has no documented atomic

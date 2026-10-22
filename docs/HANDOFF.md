@@ -1,3 +1,85 @@
+# v1.38.1 — Cloudflare read-only policy metadata fix (2026-10-22)
+
+## The live defect
+
+v1.38.0 shipped the explicit Cloudflare grant/removal operations, but in the owner's live
+environment **every** operation was refused before any write with:
+
+> Policy is not a supported single-application reusable Allow policy. Shared, legacy, unknown
+> fields/rules or malformed settings require dashboard review.
+
+Root cause: the account-level reusable-policy `GET` returns a legacy, read-only top-level `uid`
+beside `id`. `reusablePolicySchema` in `src/lib/cloudflare/policy.ts` is `.strict()`, so the
+unrecognised key failed parsing, and `snapshot()` in `src/lib/cloudflare/mutate.ts` converted that
+failure into the refusal above. Fail-closed behaved as designed — no provider write, no registry
+assignment change — but the feature was unusable. The owner's household `test` still has an assigned
+email awaiting its grant; it may have been added manually in the Cloudflare dashboard as an interim
+workaround.
+
+## Evidence (owner-supplied, redacted — no credentials or policy contents recorded)
+
+Account-level reusable-policy response keys: `app_count`, `connection_rules`, `created_at`,
+`decision`, `exclude`, `id`, `include`, `name`, `require`, `reusable`, **`uid`**, `updated_at`;
+`reusable: true`; `app_count: 1`; `decision: "allow"`; seven Include rules whose only selector is
+`email`; `require: []`; `exclude: []`; `connection_rules: { "rdp": {} }`; `precedence` absent;
+`uid` a non-empty string. Ruled out with the owner: shared policy (`app_count` is 1; the original
+single-household application was deleted), the decision, unsupported selectors, and precedence.
+
+## The fix
+
+- `reusablePolicySchema` accepts `uid: string.min(1).optional()` as read-only metadata, and
+  `precedence` as an optional nullable integer (documented on policy responses, absent here;
+  accepting it now avoids a second patch cycle elsewhere).
+- `writablePolicy()` destructures and `void`s both, so the `PUT` body is exactly what v1.38.0 would
+  have sent. The pinned SDK's `PolicyUpdateParams` does not include `uid`, so writing it would be
+  wrong regardless.
+- The `PUT` response and post-write readback are still parsed with `reusablePolicySchema` (metadata
+  accepted there too), and verification still compares `fingerprint(writablePolicy(...))`, so a
+  metadata-only difference is not drift while a real Include change still is.
+- Fail-closed behaviour is unchanged: genuinely unknown top-level fields, unknown selectors and
+  malformed metadata still refuse; the pre-write reread still treats any response change (timestamps
+  included) as drift; no retry, rollback or automatic synchronisation was added. The
+  bootstrap-admin gate, single-application reusable Allow restriction, full-preserving `PUT`,
+  exclusive-edit acknowledgement and audited outcomes are untouched.
+- `scripts/e2e-server.mts`'s fictional provider fixture now mirrors the live shape (`uid`, empty
+  Require/Exclude, `connection_rules: { "rdp": {} }`), so the browser gate exercises it.
+- Tests added to `tests/cloudflare-mutate.test.ts`: grant against a `uid` policy with no `uid` in the
+  `PUT` body (and an exact writable-key set); a `PUT` response still carrying `uid`/`precedence`
+  verifying; unknown top-level fields still refusing with the existing message; metadata-only
+  readback differences not drift versus a real Include change being unknown; `connection_rules`
+  `{ "rdp": {} }` round-tripping unchanged.
+
+## Validation
+
+- Local unit suite, `npm run format:check`, `npm run typecheck`, `npm run themes:check`,
+  `npm audit --omit=dev`, `npm run build` and the targeted local browser run (`e2e/bell.spec.ts`,
+  `e2e/admin*.spec.ts`, `e2e/cloudflare.spec.ts`) are recorded in the release report for this
+  session.
+- Required PR checks `gates`, `browser`, `docker` must pass on the PR head, then main CI, then Publish.
+  No check is skipped, and no failure is dismissed as flaky without proving the cause.
+
+## Release provenance
+
+- Single release PR: **#104** (this session's branch, `arena/9d4c534f-simple-finance-multi-household`).
+- PR/main CI run IDs, the merge commit, the annotated `v1.38.1` tag and the verified GHCR digest are
+  recorded in this session's release report and carried into the next release handoff; do not open a
+  separate post-merge documentation PR for them.
+- Released baseline (owner-supplied): v1.38.0 / PR #103 / merge
+  `eb48ba64d59e702a4902c670175cd5e9955078f4`; tags `v1.38.0` and `latest` plus `sha-eb48ba6` all at
+  digest `sha256:ad175c940ec6c8e4bc601c82548ee869437323b8ae68f4f63676f69a2c701b0d`.
+- Only production target: `ghcr.io/dougalbob/simple-finance-multi-household`,
+  `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never the original
+  single-household image, appdata or port 3007.
+
+## After install
+
+Retry the grant for the pending email on household `test` and confirm the refreshed inspection shows
+the verified direct entry. If that email was added manually in the dashboard as a workaround, the
+first app-driven grant reports it as already present (safe no-op) and a subsequent removal works end
+to end.
+
+---
+
 # v1.38.0 — Cloudflare Admin stages 2 and 3 (2026-10-22)
 
 ## Owner approval and delivery

@@ -28,6 +28,9 @@ const env = {
 const app = { id: 'app', name: 'Finance', aud: 'aud', policies: [{ id: 'policy', precedence: 1 }] };
 const policy = {
   id: 'policy',
+  // Live provider metadata: the account-level reusable GET returns a legacy
+  // `uid` beside `id`. It is read-only and must never appear in a PUT body.
+  uid: 'legacy-uid-fictional',
   account_id: 'account',
   reusable: true as const,
   app_count: 1 as const,
@@ -161,8 +164,17 @@ test('grant preserves all unrelated rules/settings and audits actor, intent and 
     fingerprint(body),
     fingerprint({ ...writablePolicy(policy), include: [...policy.include, { email: { email } }] }),
   );
-  for (const key of ['id', 'account_id', 'reusable', 'app_count', 'created_at', 'updated_at'])
-    assert.ok(!(key in body));
+  for (const key of [
+    'id',
+    'uid',
+    'account_id',
+    'reusable',
+    'app_count',
+    'precedence',
+    'created_at',
+    'updated_at',
+  ])
+    assert.ok(!(key in body), `${key} must never be written`);
   const audit = listRegistryAudit(f.registry).filter((a) => a.action === 'cloudflare.grant');
   assert.equal(audit.length, 2);
   assert.ok(audit.every((a) => a.actor === admin && a.email === email));
@@ -434,6 +446,130 @@ test('a successful envelope with an unverified write body never reports success'
   assert.equal(result.status, 'error');
   assert.match(result.message!, /write outcome is unknown/);
   assert.equal(f.calls.filter((c) => c.method === 'PUT').length, 1);
+});
+
+// The owner-supplied live shape: `uid` is returned beside `id`, `precedence` is
+// absent, Require/Exclude are empty arrays and connection rules carry an empty
+// RDP object. v1.38.0 refused every grant against it because of `uid`.
+const livePolicy = {
+  id: 'policy',
+  uid: 'legacy-uid-fictional',
+  account_id: 'account',
+  reusable: true as const,
+  app_count: 1 as const,
+  name: 'Finance',
+  decision: 'allow' as const,
+  created_at: '2026-10-22',
+  updated_at: '2026-10-22',
+  include: [{ email: { email: admin } }, { email: { email: 'other@example.com' } }],
+  require: [],
+  exclude: [],
+  connection_rules: { rdp: {} },
+};
+
+test('grant succeeds against a policy returning read-only uid and never writes it', async (t) => {
+  const f = fixture(t);
+  f.policy(livePolicy);
+  const result = await mutateCloudflare(f.input, f.trusted);
+  assert.equal(result.status, 'ok');
+  assert.match(result.message!, /added and verified/);
+  const puts = f.calls.filter((c) => c.method === 'PUT');
+  assert.equal(puts.length, 1);
+  const body = puts[0]!.body;
+  assert.ok(!('uid' in body));
+  assert.ok(!('id' in body) && !('account_id' in body) && !('reusable' in body));
+  assert.deepEqual(body.connection_rules, { rdp: {} });
+  assert.deepEqual(body.require, []);
+  assert.deepEqual(body.exclude, []);
+  assert.deepEqual(body.include, [...livePolicy.include, { email: { email } }]);
+  assert.deepEqual(
+    Object.keys(body).sort(),
+    ['connection_rules', 'decision', 'exclude', 'include', 'name', 'require'].sort(),
+  );
+});
+
+test('the PUT response still carrying uid (and precedence) verifies successfully', async (t) => {
+  const f = fixture(t);
+  f.policy({ ...livePolicy, uid: 'legacy-uid-before', precedence: 4 });
+  const result = await mutateCloudflare(f.input, {
+    ...f.trusted,
+    request: (async (url, options) => {
+      const response = await f.trusted.request(url, options);
+      if (options?.method !== 'PUT') return response;
+      const written = await response.clone().json();
+      // Post-write parse must accept provider metadata that our body omitted.
+      return Response.json({
+        success: true,
+        result: {
+          ...written.result,
+          uid: 'legacy-uid-rotated-by-provider',
+          precedence: 7,
+        },
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(result.status, 'ok');
+  assert.match(result.message!, /added and verified/);
+  const body = f.calls.find((c) => c.method === 'PUT')!.body;
+  assert.ok(!('uid' in body) && !('precedence' in body));
+});
+
+test('a genuinely unknown top-level field still fails closed with the refusal message', async (t) => {
+  const f = fixture(t);
+  for (const unknown of [{ totally_new_field: true }, { uid: '' }, { precedence: 'high' }]) {
+    f.policy({ ...livePolicy, ...unknown });
+    const result = await mutateCloudflare(f.input, f.trusted);
+    assert.equal(result.status, 'error');
+    assert.match(
+      result.message!,
+      /Policy is not a supported single-application reusable Allow policy/,
+    );
+  }
+  assert.ok(f.calls.every((c) => c.method === 'GET'));
+});
+
+test('metadata-only readback differences are not drift, a real Include change still is', async (t) => {
+  const f = fixture(t);
+  // Readback after our write: uid/precedence/timestamps are excluded from the
+  // verified projection, so a metadata-only difference stays successful.
+  f.hook((_, count) => {
+    if (count === 6)
+      // Keeps the entry our own write added; only metadata differs.
+      f.policy({
+        ...policy,
+        include: [...policy.include, { email: { email } }],
+        uid: 'legacy-uid-rotated',
+        precedence: 9,
+        created_at: '2026-10-23',
+        updated_at: '2026-10-23',
+      });
+  });
+  const ok = await mutateCloudflare(f.input, f.trusted);
+  assert.equal(ok.status, 'ok', ok.message ?? undefined);
+  assert.match(ok.message!, /added and verified/);
+  assert.equal(f.calls.filter((c) => c.method === 'PUT').length, 1);
+
+  // A real Include difference after the write is still unknown, never retried.
+  for (const include of [
+    [...policy.include, { email: { email: 'concurrent@example.com' } }],
+    [{ email: { email: admin } }],
+  ]) {
+    const g = fixture(t);
+    g.hook((_, count) => {
+      if (count === 6) g.policy({ ...policy, include });
+    });
+    const result = await mutateCloudflare(g.input, g.trusted);
+    assert.equal(result.status, 'error');
+    assert.match(result.message!, /write outcome is unknown/);
+    assert.equal(g.calls.filter((c) => c.method === 'PUT').length, 1);
+  }
+});
+
+test('a connection_rules rdp object round-trips unchanged through a grant', async (t) => {
+  const f = fixture(t);
+  f.policy({ ...policy, connection_rules: { rdp: {} }, uid: 'legacy-uid-fictional' });
+  assert.equal((await mutateCloudflare(f.input, f.trusted)).status, 'ok');
+  assert.deepEqual(f.calls.find((c) => c.method === 'PUT')!.body.connection_rules, { rdp: {} });
 });
 
 test('application embedded policy bodies are not mistaken for association edits after our own write', async (t) => {

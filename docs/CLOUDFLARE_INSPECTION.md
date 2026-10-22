@@ -1,8 +1,10 @@
 # Cloudflare Admin integration — issue #101
 
 Stage one shipped in **v1.37.0** and was live-tested by the owner. Stages two
-and three add **explicit** grant/removal operations in **v1.38.0**.
-There is no automatic or background synchronisation.
+and three add **explicit** grant/removal operations in **v1.38.0**; the
+**v1.38.1** patch makes those writes work against the live policy response, which
+returns a legacy read-only `uid` field. There is no automatic or background
+synchronisation.
 
 Only the verified `REGISTRY_ADMIN_EMAIL` identity can inspect or mutate
 Cloudflare, including recovery while their household is deactivated. A promoted
@@ -118,9 +120,19 @@ approval groups/flags, isolation flag, purpose-justification prompt/flag, sessio
 duration (including null), RDP connection rules and MFA settings. Objects are
 strict at every level. Supported MFA authenticators are `totp`, `biometrics`,
 `security_key`; unknown authenticators/settings require review. Read-only
-`id`, `account_id`, `reusable`, `app_count`, `created_at`, `updated_at` metadata
-is validated but **not** sent back in the PUT; Cloudflare controls timestamps.
-Application settings and policy precedence/associations are never written.
+`id`, `uid`, `account_id`, `reusable`, `app_count`, `precedence`, `created_at`,
+`updated_at` metadata is validated but **not** sent back in the PUT; Cloudflare
+controls identifiers, order and timestamps. `uid` is a legacy identifier that
+the account-level reusable-policy GET still returns beside `id` (discovered
+live in v1.38.0, fixed in v1.38.1); `precedence` is optional, may be absent or
+null, and belongs to the application's policy ordering, not this policy's
+writable body. Accepting them on read is not a writable extension: they are
+excluded from the write projection, so the PUT body, the post-write verified
+comparison and the full-preservation checks are unchanged. (The pre-write
+reread still refuses on any change in the provider response, timestamps
+included, exactly as documented below.) Any genuinely unknown top-level field
+still fails closed. Application settings and application-level policy
+associations are never written.
 
 ## Concurrency — important limitation approved for this implementation
 
@@ -177,6 +189,18 @@ Cloudflare documentation host):
   for token lifecycle, renewal policy checks and separate revocation operations;
   [policy evaluation](https://github.com/cloudflare/cloudflare-docs/blob/ea89e14e0b75bab7f0dfca82ae14f35ba3550cdf/src/content/docs/cloudflare-one/access-controls/policies/index.mdx)
   for Include/Require/Exclude and multiple-policy caveats.
+
+**Live response shape observed after v1.38.0 (owner-supplied, redacted).** The
+account-level reusable-policy GET returns `app_count`, `connection_rules`,
+`created_at`, `decision`, `exclude`, `id`, `include`, `name`, `require`,
+`reusable`, **`uid`** and `updated_at` (with `reusable: true`, `app_count: 1`,
+`decision: allow`, all seven Include selectors plain `email`, empty
+`require`/`exclude` and `connection_rules: { "rdp": {} }`). `uid` is absent from
+the pinned `PolicyGetResponse`/`PolicyUpdateParams` typings: it is legacy,
+read-only provider metadata that is returned but not accepted back on write.
+`precedence`, which the application-scoped policy type documents, is absent in
+this account. v1.38.1 therefore validates `uid`/`precedence` as read-only
+metadata and strips them from the PUT body instead of refusing the policy.
 
 Tests use fictional values only. The browser runner preloads
 `scripts/e2e-cloudflare.cjs` at the server-fetch boundary and intercepts **all**
