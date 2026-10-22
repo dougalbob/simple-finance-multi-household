@@ -51,10 +51,13 @@ single-household application was deleted), the decision, unsupported selectors, 
 
 ## Validation
 
-- Local unit suite, `npm run format:check`, `npm run typecheck`, `npm run themes:check`,
-  `npm audit --omit=dev`, `npm run build` and the targeted local browser run (`e2e/bell.spec.ts`,
-  `e2e/admin*.spec.ts`, `e2e/cloudflare.spec.ts`) are recorded in the release report for this
-  session.
+- `npm test` **1199/1199 across 273 suites** (up from 1194; the five new mutation tests are the only
+  additions), `npm run format:check`, `npm run typecheck`, `npm run themes:check`,
+  `npm audit --omit=dev` (zero production vulnerabilities) and `npm run build` all green locally.
+- Targeted local browser run with the live-shape fictional provider fixture: `e2e/bell.spec.ts`,
+  `e2e/admin.spec.ts` and `e2e/cloudflare.spec.ts` **11/11**. Local Chromium came from
+  `@sparticuz/chromium` (SANDBOX entry 8) through the uncommitted `playwright.local.config.ts`
+  overlay.
 - Required PR checks `gates`, `browser`, `docker` must pass on the PR head, then main CI, then Publish.
   No check is skipped, and no failure is dismissed as flaky without proving the cause.
 
