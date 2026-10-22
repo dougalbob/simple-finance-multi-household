@@ -63,12 +63,21 @@ export const writablePolicySchema = z
       .optional(),
   })
   .strict();
+// Read-only response metadata. Cloudflare returns these on the account-level
+// reusable-policy GET even though they are not writable parameters: `uid` is a
+// legacy identifier still emitted alongside `id`, and `precedence` is
+// documented on the policy response but absent in some accounts (where it can
+// also be null). Accepting a bounded, reviewed shape keeps the read strict
+// without turning known provider metadata into a refusal. Both are stripped
+// from the PUT body by `writablePolicy()`.
 export const reusablePolicySchema = writablePolicySchema
   .extend({
     id: stringValue,
+    uid: stringValue.optional(),
     account_id: stringValue.optional(),
     reusable: z.literal(true),
     app_count: z.literal(1),
+    precedence: z.number().int().nullable().optional(),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),
   })
@@ -78,8 +87,12 @@ export type WritablePolicy = z.infer<typeof writablePolicySchema>;
 
 /** Explicit projection, NOT the read-only inspection's lossy email summary. */
 export function writablePolicy(policy: ReusablePolicy): WritablePolicy {
-  const { id, account_id, reusable, app_count, created_at, updated_at, ...body } = policy;
-  void [id, account_id, reusable, app_count, created_at, updated_at];
+  // `uid`/`precedence` are read-only provider metadata: they are validated on
+  // read but never written, and excluding them keeps drift comparisons free of
+  // metadata-only churn.
+  const { id, uid, account_id, reusable, app_count, precedence, created_at, updated_at, ...body } =
+    policy;
+  void [id, uid, account_id, reusable, app_count, precedence, created_at, updated_at];
   return writablePolicySchema.parse(body);
 }
 

@@ -4370,3 +4370,31 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     is changed or check skipped. Prepare v1.38.0 and release notes in the same PR as decision 257,
     require all PR gates and main CI, then publish the exact annotated merge-commit tag only to the
     multi-household image. No real Cloudflare writes or live deployment are authorised by publication.
+
+259. **Live `uid` rejection fixed; read-only policy metadata accepted (v1.38.1, 2026-10-22).** The
+    owner's live installation refused **every** grant in v1.38.0 with "Policy is not a supported
+    single-application reusable Allow policy", before any write, so no provider change and no
+    registry assignment was touched. The owner supplied a redacted diagnostic of the account-level
+    reusable-policy GET: top-level keys `app_count`, `connection_rules`, `created_at`, `decision`,
+    `exclude`, `id`, `include`, `name`, `require`, `reusable`, **`uid`**, `updated_at`, with
+    `reusable: true`, `app_count: 1`, `decision: allow`, seven Include rules whose only selector is
+    `email`, `require: []`, `exclude: []`, `connection_rules: { "rdp": {} }`, no `precedence`, and
+    `uid` a string. `reusablePolicySchema` is `.strict()`, so the legacy `uid` (a read-only
+    identifier Cloudflare still returns beside `id`) failed parsing and `snapshot()` converted that
+    into the refusal. Ruled out with the owner: a shared policy (`app_count` is 1 and the original
+    application was deleted), the decision, unsupported selectors, and account-level precedence.
+    Fix: `uid` is validated as optional read-only metadata in `reusablePolicySchema`, and
+    `writablePolicy()` destructures and `void`s it, so the PUT body is byte-for-byte what v1.38.0
+    would have sent; `precedence` is accepted the same way as an optional nullable integer because
+    the SDK documents it on policy responses and accepting it now avoids a second patch cycle for
+    another account (a null value would otherwise still refuse). The PUT response and the post-write
+    readback are parsed with the same schema, and the verified comparison still uses
+    `writablePolicy(...)`, so metadata-only differences are not drift. Fail-closed behaviour is
+    unchanged: unknown top-level fields, unknown selectors and malformed metadata still refuse, the
+    pre-write reread still treats any response change (timestamps included) as drift, and no
+    automatically retried or rolled-back write was added. Tests cover the live shape, absence of
+    `uid`/`precedence` in the PUT body, a PUT response still carrying them, unknown fields, and
+    metadata-only readback differences versus a real Include change; the browser fixture now mirrors
+    the live shape. Ship as stable **v1.38.1** through the normal one-PR gates; version files, release
+    notes, handoff and inspection/docs updated in the same PR. No schema, migration, authentication,
+    registry, household-status or backup-format change.

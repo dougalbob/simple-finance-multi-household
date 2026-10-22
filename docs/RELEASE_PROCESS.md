@@ -4,6 +4,23 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.38.1 — issue #101 patch: read-only Cloudflare policy metadata (2026-10-22)
+
+v1.38.0 was published but every live grant failed before any write: the account-level
+reusable-policy `GET` returns a legacy read-only `uid` beside `id`, and the strict schema refused the
+policy. The owner supplied a redacted diagnostic proving the shape (`reusable: true`, `app_count: 1`,
+`decision: allow`, email-only Include rules, empty Require/Exclude, `connection_rules: {"rdp": {}}`,
+no `precedence`) and asked for a stable patch. The fix accepts `uid` (and optional `precedence`) as
+validated read-only metadata and strips both from the `PUT` body; unknown fields, drift refusal,
+post-write verification and the mutation safety model are unchanged (decision 259). Keep code, tests,
+version files, release notes and documentation in one PR; require `gates`, `browser` and `docker`,
+merge once with a merge commit, require main CI, then create the annotated `v1.38.1` tag on that exact
+merge commit and verify Publish pushed only to
+`ghcr.io/dougalbob/simple-finance-multi-household` with `v1.38.1`, `latest` and `sha-<short>` on one
+digest. No deployment or live Cloudflare write is part of publication. Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or 3007.
+
 ## v1.38.0 — issue #101 stages two and three (2026-10-22)
 
 After reviewing the failed browser check, the owner requested publication if the cause was understood.
