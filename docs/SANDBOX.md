@@ -762,3 +762,25 @@ phone-drawer count assertion (the bootstrap-admin seed adds the Admin link), not
 failure. Correct that test and rerun required gates; the owner then authorised publication conditional
 on successful checks. The exact cause of the earlier infrastructure interruption remains unknown.
 
+
+## 27. Wiki screenshot pipeline — Playwright against the seeded dev server (2026-10-23)
+
+The GitHub wiki (`…wiki.git`, branch `master`) is a normal cloneable repo; its `images/` folder
+holds screenshots embedded with standard Markdown. The repo is **public**, so only the fictional
+e2e household may ever appear. Proven recipe for capturing pages:
+
+- Install and browser exactly as entries 1/8/18: `npm_config_nodedir=/usr/local npm ci` (the
+  prebuilt `better-sqlite3` loads fine), and the sideloaded `@sparticuz/chromium` at `/tmp/chromium`
+  with `LD_LIBRARY_PATH=/tmp/al2023/lib`.
+- Start the fictional seed server (re-seeds `.e2e-data` on every start, dev identity bypass,
+  port 3100): `node --import tsx scripts/e2e-server.mts`, wait on `GET /api/health`.
+- **`waitUntil: 'networkidle'` never settles** — the presence heartbeat (`POST /api/presence`) and
+  bell polling (`GET /api/attention`) run forever. Use `waitUntil: 'load'` plus
+  `page.waitForSelector('main')` and a short settle delay.
+- Remove the Next.js dev-tools button before shooting:
+  `page.evaluate(() => document.querySelectorAll('nextjs-portal').forEach((el) => el.remove()))`.
+- Full-page screenshots are impractically tall (the Guide is ~3,200 px at 1,400 px wide); prefer
+  fixed-viewport (1400×950) shots of the section a wiki page actually discusses.
+- The throwaway capture script and PNG staging live outside the repo in
+  `/home/user/wiki-screenshots/`; the wiki itself is cloned as a sibling at
+  `/home/user/simple-finance-wiki/` (never nested inside the main repo).
