@@ -4399,7 +4399,7 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     notes, handoff and inspection/docs updated in the same PR. No schema, migration, authentication,
     registry, household-status or backup-format change.
 
-260. **Issue 105 — who is connected, and a connection log (2026-10-23, unreleased).** The owner asked for a
+260. **Issue 105 — who is connected, and a connection log (v1.39.0, 2026-10-23).** The owner asked for a
     live view of who is using the app and a log of connections/disconnections, so that updates and restarts
     are not performed under someone's feet. Agreed with the owner before any code: **active for two minutes,
     idle to fifteen, ended after fifteen minutes of silence**; presence stored in the **system registry**
@@ -4427,5 +4427,9 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     cap, tab-key validation, cross-identity isolation, FK refusal, fail-open-on-failure) and a browser
     assertion on the admin card. No authentication, allowlist, assignment, household-status or
     backup-format change; the registry backup now carries presence metadata, which is why retention is
-    bounded and the columns are audited by test. Unreleased under the issue 73 override: no version bump,
-    tag, image or release note.
+    bounded and the columns are audited by test. The household reviewed the Arena preview and asked for
+    stable publication so it can test fully on Unraid: ship as **v1.39.0** through the normal one-PR gates,
+    with `next` moved to ^16.4.2 in the same PR because the critical advisories against
+    16.0.0–16.4.0 fail the `gates` audit step. The interim issue #73 release hold is recorded as finished
+    (that issue closed when v1.27.0 shipped and the stale override sentence in `AGENTS.md` is corrected
+    here).

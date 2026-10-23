@@ -4,6 +4,26 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.39.0 — issue #105: who is connected, and a connection log (2026-10-23)
+
+The household reviewed the Arena preview of the presence card and asked for publication so it can test
+fully on its multi-household Unraid installation. Agreed with the owner before any code: thresholds
+**active 2 minutes / idle to 15 / ended after 15 minutes of silence**; presence stored in the **system
+registry**; **full detail for the platform administrator across every household**; **30-day retention**.
+This release contains the presence card, the connection log, registry migration `0003_presence.sql` and
+the `next` 16.4.2 dependency patch that clears the critical advisories failing the `gates` audit step.
+No change to authentication, the allowlist, assignments, household status, finance data locations or the
+household backup format; the **registry** backup now carries presence metadata, which is why retention is
+bounded. Keep implementation, tests, version files, release notes and handoff in one PR; require `gates`,
+`browser` and `docker`, merge once with a merge commit, require main CI, then create the annotated
+`v1.39.0` tag on that exact merge commit and verify Publish pushed only to
+`ghcr.io/dougalbob/simple-finance-multi-household` with `v1.39.0`, `latest` and `sha-<short>` on one
+digest. The interim issue #73 hold is finished — #73 closed when v1.27.0 shipped, and every release since
+has followed the standing process below; the stale override sentence in `AGENTS.md` is corrected in this
+PR. No deployment is part of publication. Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or 3007.
+
 ## v1.38.1 — issue #101 patch: read-only Cloudflare policy metadata (2026-10-22)
 
 v1.38.0 was published but every live grant failed before any write: the account-level

@@ -9,8 +9,8 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.37.0 is the stable production release and moves :latest (issue #101,
-  stage one: bootstrap-admin-only read-only Cloudflare policy inspection).
+  v1.39.0 is the stable production release and moves :latest (issue #105:
+  who is connected, and a connection log, on the Admin page).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>

@@ -1,4 +1,4 @@
-# Unreleased — who is connected, and a connection log (issue 105, 2026-10-23)
+# v1.39.0 — who is connected, and a connection log (issue 105, 2026-10-23)
 
 ## What this session built
 
@@ -36,10 +36,35 @@ sign-out event to record, and the card does not pretend otherwise. Presence rows
 
 - `npm test` **1218/1218 across 274 suites** (1199 before; 19 new in `tests/registry-presence.test.ts`),
   `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` green locally.
-- `e2e/admin.spec.ts` gained a presence assertion. The browser suite must pass in CI (`browser` job); it was
-  not run here if the sandbox could not fetch Chromium.
-- **Unreleased** under the issue 73 override: no version bump, tag, image or release note. Registry data paths,
-  authentication, assignments, household status and the household backup format are unchanged.
+- `e2e/admin.spec.ts` gained a presence assertion. The full browser suite ran locally through the SANDBOX
+  entry 8 overlay (`@sparticuz/chromium`): **184/184** acceptance and **3/3** first-run, and the console shows
+  real `POST /api/presence` beats. CI still has the final word on the `browser` job.
+- **Dependency patch in the same PR:** `next` ^16.3.5 → **^16.4.2** (installed 16.4.2), because
+  `npm audit --omit=dev` failed on critical advisories against 16.0.0–16.4.0 and that step gates the PR.
+  After the bump audit reports **0 vulnerabilities**; every gate above and the whole browser suite were
+  re-run against it.
+- **Version 1.39.0** in the five places (`package.json`, `package-lock.json` root and `packages[""]`,
+  `src/lib/version.ts`, the Unraid template comment). Release notes are
+  `docs/RELEASE_NOTES_v1.39.0.md` and their first line is the exact title the publish workflow checks.
+- Registry data paths, authentication, assignments, household status and the household backup format are
+  unchanged; the registry backup now carries presence metadata.
+
+## Release provenance (fill in at publication)
+
+- Single release PR: this session's branch, `arena/204cb86e-simple-finance-multi-household` → `main`.
+- Required PR checks `gates`, `browser`, `docker` on the PR head, then main CI, then Publish.
+- Record the PR number, main CI run ID, merge commit, annotated `v1.39.0` tag and the verified GHCR digest
+  here or in the release report carried into the next handoff. Do not open a separate post-merge docs PR.
+- Released baseline: v1.38.1 / tag `v1.38.1`; the v1.38.1 provenance lines in the older section below
+  belong to that release, not this one.
+
+## After install
+
+Back up (each household download plus the Admin registry backup), then Force Update on host port **3009**,
+appdata `/mnt/user/appdata/simple-finance-multi-household`. The container applies registry migration `0003`
+at startup. Sign in on a phone as the second identity and watch the Admin card move from *active now* to
+*idle* to a logged visit — expect about a minute of lag on the way down, which is the honest cost of having
+no server session. Check the log after the restart that installed it: every visit should end at once.
 
 # v1.38.1 — Cloudflare read-only policy metadata fix (2026-10-22)
 
