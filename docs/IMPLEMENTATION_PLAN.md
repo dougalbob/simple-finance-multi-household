@@ -4398,3 +4398,38 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     the live shape. Ship as stable **v1.38.1** through the normal one-PR gates; version files, release
     notes, handoff and inspection/docs updated in the same PR. No schema, migration, authentication,
     registry, household-status or backup-format change.
+
+260. **Issue 105 — who is connected, and a connection log (v1.39.0, 2026-10-23).** The owner asked for a
+    live view of who is using the app and a log of connections/disconnections, so that updates and restarts
+    are not performed under someone's feet. Agreed with the owner before any code: **active for two minutes,
+    idle to fifteen, ended after fifteen minutes of silence**; presence stored in the **system registry**
+    rather than a second database; **full detail for the platform administrator across every household**
+    (counts only would defeat the purpose of deciding whether it is safe to restart); **30-day retention**.
+    The app has no server-side session — every request re-verifies the Cloudflare assertion and Cloudflare
+    owns sign-out — so "connected" is explicitly an inference from activity and the UI says *active now*,
+    *idle* and *last seen*, never *online*. Registry migration `0003_presence.sql` adds `presence_sessions`
+    (email, the identity's own household, an opaque per-tab key, first/last seen, ended at/reason) with a
+    partial unique index that keeps one open visit per tab; deliberately no paths, finance data, IP addresses
+    or user agents. Two write paths, both throttled to one write a minute per visit: authenticated page
+    renders (`src/lib/auth/next.ts`) and route handlers (`householdContextFromHeaders`) count as activity, and
+    a browser heartbeat (`POST /api/presence`) beats while the tab is visible **and the reader has actually
+    touched the page**, which is what distinguishes an open tab from a closed one without a background timer.
+    Visits end **lazily** — on the next touch from that tab or the next read of the card — at last activity
+    plus the idle timeout, so the log cannot claim an hour of use for a five-minute visit. `/admin` gains
+    "Who is connected" (open visits by household, state, since/last seen, tab count, a plain
+    hold-off-restarting line) and "Connection history" (ended visits, durations, idle-timeout reason), both
+    polling every 30 seconds and readable without JavaScript; `GET /api/presence` is platform-administrator
+    only. Closed visits are pruned after 30 days with a 2,000-row ceiling; open visits are never pruned.
+    Presence can never decide access: `safeRecordPresence` swallows a read-only, locked or half-migrated
+    registry, and the session gate never reads presence. Support views record the administrator's **own**
+    household, never the household being viewed. Tests: 19 new domain tests (thresholds, throttle, per-tab
+    visits, no-tab extension, honest end times, lazy expiry, grouping, unassignment, retention and the row
+    cap, tab-key validation, cross-identity isolation, FK refusal, fail-open-on-failure) and a browser
+    assertion on the admin card. No authentication, allowlist, assignment, household-status or
+    backup-format change; the registry backup now carries presence metadata, which is why retention is
+    bounded and the columns are audited by test. The household reviewed the Arena preview and asked for
+    stable publication so it can test fully on Unraid: ship as **v1.39.0** through the normal one-PR gates,
+    with `next` moved to ^16.4.2 in the same PR because the critical advisories against
+    16.0.0–16.4.0 fail the `gates` audit step. The interim issue #73 release hold is recorded as finished
+    (that issue closed when v1.27.0 shipped and the stale override sentence in `AGENTS.md` is corrected
+    here).

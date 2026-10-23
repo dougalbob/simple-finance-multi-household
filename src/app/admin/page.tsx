@@ -8,6 +8,7 @@ import {
   SetHouseholdStatusForm,
   UnassignIdentityForm,
 } from '@/components/admin-forms';
+import { AdminPresence } from '@/components/admin-presence';
 import { AdminSettings } from '@/components/admin-settings';
 import { RegistryBackup } from '@/components/registry-backup';
 import { appSessionFromRequest } from '@/lib/auth/next';
@@ -15,6 +16,7 @@ import { isRegistryAdminSession } from '@/lib/auth/current-user';
 import { loadAppConfig } from '@/lib/config';
 import { envDrift, readEnvFile } from '@/lib/env-file';
 import { getRegistry } from '@/lib/registry/db';
+import { buildPresenceView } from '@/lib/registry/presence';
 import {
   listHouseholds,
   listIdentities,
@@ -104,6 +106,9 @@ export default async function AdminPage() {
   const households = listHouseholds(registry);
   const identities = listIdentities(registry);
   const audit = listRegistryAudit(registry, 25);
+  // Presence (issue 105): open visits and the closed-visit log. Reading it is
+  // also what closes visits that have gone quiet — there is no background job.
+  const presence = buildPresenceView(registry);
 
   // Server settings (issue #91): the env-file editor is strictly the
   // REGISTRY_ADMIN_EMAIL identity — a promoted platform_admin does not see it.
@@ -142,6 +147,7 @@ export default async function AdminPage() {
       </header>
 
       <div className="space-y-6">
+        <AdminPresence initial={presence} me={user.email} />
         {showEnvEditor ? (
           <CloudflareInspection
             emails={identities.map((identity) => identity.email)}

@@ -9,6 +9,7 @@
 # --- Node / Next.js build artefacts ---
 node_modules/
 .next/
+.next-fresh/
 out/
 build/
 dist/

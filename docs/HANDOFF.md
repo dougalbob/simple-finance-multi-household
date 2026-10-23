@@ -1,3 +1,90 @@
+# v1.39.0 — who is connected, and a connection log (issue 105, 2026-10-23)
+
+## What this session built
+
+`/admin` gains **Who is connected** and **Connection history** (SPEC §18.6, decision 260). The app has no
+server-side session — Cloudflare verifies every request and owns signing out — so presence is an inference
+from activity and the card says *active now* / *idle* / *last seen*, never *online*.
+
+- **Storage.** Registry migration `drizzle/registry/0003_presence.sql` adds `presence_sessions`
+  (email, the identity's own household, an opaque per-tab key, first/last seen, ended at/reason). No page
+  paths, finance data, IP addresses or user agents. A partial unique index keeps one open visit per tab, and a
+  returning tab opens a new visit instead of reviving an ended one, so the log keeps both.
+- **Writes.** Authenticated page renders (`src/lib/auth/next.ts`) and route handlers
+  (`householdContextFromHeaders`) count as activity; a browser heartbeat
+  (`src/components/presence-heartbeat.tsx` → `POST /api/presence`) beats while the tab is visible and the
+  reader has touched the page since the last beat. All throttled to one write a minute per visit. A request
+  with no tab key extends that identity's most recent open visit, so one browser is never two "connections".
+- **Thresholds (owner-agreed).** Active ≤2 min, idle ≤15 min, ended after 15 min of silence. Ending is lazy —
+  next touch or next read — and the recorded end is last activity + 15 min, so a five-minute visit never reads
+  as an hour.
+- **Reads.** `buildPresenceView` renders the first paint server-side (works without JavaScript); the card then
+  polls `/api/presence` every 30 seconds while visible. That route is platform-administrator only (a
+  deactivated household's administrator keeps access, matching `/admin`). Closed visits are pruned after 30
+  days, capped at 2,000 rows; open visits are never pruned.
+- **Fail-open by design.** `safeRecordPresence` swallows a read-only, locked or half-migrated registry, and the
+  session gate never reads presence: this can never deny access.
+
+## Deliberate limits to repeat if asked
+
+A locked phone or a suspended background tab stops beating and reads as idle/last-seen; an expired Cloudflare
+assertion looks the same as someone walking away; a container restart ends every visit at once. There is no
+sign-out event to record, and the card does not pretend otherwise. Presence rows travel in the registry backup
+— which is why retention is bounded and the columns are pinned by a test.
+
+## Validation
+
+- `npm test` **1218/1218 across 274 suites** (1199 before; 19 new in `tests/registry-presence.test.ts`),
+  `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` green locally.
+- `e2e/admin.spec.ts` gained a presence assertion. The full browser suite ran locally through the SANDBOX
+  entry 8 overlay (`@sparticuz/chromium`): **184/184** acceptance and **3/3** first-run, and the console shows
+  real `POST /api/presence` beats.
+
+## The CI failure this release had to fix (evidence, so it is not guessed at again)
+
+The first `browser` run of this PR failed only the **first-run** project: three tests timed out waiting for
+`[data-till-ready]`, with `ERR_ABORTED` on later `goto`s and 31 repeated "waiting for `/` navigation to
+finish" polls. That is a **page that keeps reloading**, so the till never hydrates — not a till defect.
+
+Cause, proved rather than assumed: reproduced locally with `CI=true` and a clean `.next` by running the
+acceptance suite and then the first-run suite in one workspace (the order CI uses). The second phase showed
+**108 "Compiled" lines and 134 `GET /` requests** — a rebuild per request. The two dev servers (3100 seeded,
+3200 first-run, separate data roots by design) were sharing **one Turbopack build cache**, so the second
+server invalidated it continuously and pushed HMR full reloads to the browser. Control checks: presence
+writes alone cause no recompiles (9 rows written, zero "Compiled"); a second server on a shared cache with
+plain `curl` does not loop either — the loop needs the browser's HMR client.
+
+Fix: `next.config.ts` reads `NEXT_DIST_DIR` (default `.next`, so production, `next build` and the Docker
+image are untouched); `scripts/e2e-server.mts` gives the first-run installation `.next-fresh` and removes it
+at seed time, exactly like its data root; `.gitignore` and `tsconfig` follow. After the fix the same sequence
+is **184/184 then 3/3 with zero recompile churn**.
+- **Dependency patch in the same PR:** `next` ^16.3.5 → **^16.4.2** (installed 16.4.2), because
+  `npm audit --omit=dev` failed on critical advisories against 16.0.0–16.4.0 and that step gates the PR.
+  After the bump audit reports **0 vulnerabilities**; every gate above and the whole browser suite were
+  re-run against it.
+- **Version 1.39.0** in the five places (`package.json`, `package-lock.json` root and `packages[""]`,
+  `src/lib/version.ts`, the Unraid template comment). Release notes are
+  `docs/RELEASE_NOTES_v1.39.0.md` and their first line is the exact title the publish workflow checks.
+- Registry data paths, authentication, assignments, household status and the household backup format are
+  unchanged; the registry backup now carries presence metadata.
+
+## Release provenance (fill in at publication)
+
+- Single release PR: this session's branch, `arena/204cb86e-simple-finance-multi-household` → `main`.
+- Required PR checks `gates`, `browser`, `docker` on the PR head, then main CI, then Publish.
+- Record the PR number, main CI run ID, merge commit, annotated `v1.39.0` tag and the verified GHCR digest
+  here or in the release report carried into the next handoff. Do not open a separate post-merge docs PR.
+- Released baseline: v1.38.1 / tag `v1.38.1`; the v1.38.1 provenance lines in the older section below
+  belong to that release, not this one.
+
+## After install
+
+Back up (each household download plus the Admin registry backup), then Force Update on host port **3009**,
+appdata `/mnt/user/appdata/simple-finance-multi-household`. The container applies registry migration `0003`
+at startup. Sign in on a phone as the second identity and watch the Admin card move from *active now* to
+*idle* to a logged visit — expect about a minute of lag on the way down, which is the honest cost of having
+no server session. Check the log after the restart that installed it: every visit should end at once.
+
 # v1.38.1 — Cloudflare read-only policy metadata fix (2026-10-22)
 
 ## The live defect

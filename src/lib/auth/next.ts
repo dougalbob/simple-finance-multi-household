@@ -1,7 +1,35 @@
 import { headers } from 'next/headers';
 import { loadAppConfig } from '../config';
+import { getRegistry } from '../registry/db';
+import { PRESENCE_KEY_HEADER, safeRecordPresence } from '../registry/presence';
 import { householdContextFromHeaders, type HouseholdContext } from './household-context';
-import { describeSession, getCurrentUser, type SessionState, type User } from './current-user';
+import { describeSession, type SessionState, type User } from './current-user';
+
+/**
+ * Every authenticated server render passes through here, so a page view is
+ * itself evidence of presence (issue 105). The write is throttled per tab and
+ * can never fail a request: a registry that is read-only, locked or missing
+ * the presence table loses the record and nothing else.
+ */
+async function sessionWithPresence(): Promise<SessionState> {
+  const config = loadAppConfig();
+  const headerSource = await headers();
+  const session = await describeSession(headerSource, config);
+  if (session.status === 'ok') {
+    try {
+      safeRecordPresence(getRegistry(config), {
+        email: session.user.email,
+        // The identity's own assignment — never a support grant's household.
+        householdId: session.user.householdId,
+        sessionKey: headerSource.get(PRESENCE_KEY_HEADER),
+      });
+    } catch {
+      // `getRegistry` itself can fail (unmounted data directory, mid-restore
+      // swap). Presence must never turn a readable page into an error.
+    }
+  }
+  return session;
+}
 
 /**
  * Next.js adapter: resolve the signed-in user inside server components and
@@ -11,7 +39,8 @@ import { describeSession, getCurrentUser, type SessionState, type User } from '.
  * fail-closed session gate.
  */
 export async function currentUserFromRequest(): Promise<User | null> {
-  return getCurrentUser(await headers(), loadAppConfig());
+  const session = await sessionWithPresence();
+  return session.status === 'ok' ? session.user : null;
 }
 
 /**
@@ -32,5 +61,5 @@ export async function householdContextFromRequest(): Promise<HouseholdContext | 
  * not need a finance-database context.
  */
 export async function appSessionFromRequest(): Promise<SessionState> {
-  return describeSession(await headers(), loadAppConfig());
+  return sessionWithPresence();
 }

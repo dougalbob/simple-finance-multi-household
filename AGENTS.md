@@ -1,3 +1,20 @@
+**v1.39.0 — who is connected, and a connection log (issue 105, 2026-10-23):** `/admin` gains
+**Who is connected** and **Connection history** (SPEC §18.6, decision 260). The app has no
+server-side session, so presence is inferred from activity: active for 2 minutes, idle to 15,
+ended after 15 minutes of silence, written lazily with no background timer. Registry migration
+`0003_presence.sql` adds `presence_sessions` (email, the identity's own household, an opaque
+per-tab key, timestamps) — control-plane metadata only, never finance data, page paths, IP
+addresses or user agents, and never the household a support view was looking at. Closed visits are
+pruned after 30 days with a 2,000-row ceiling. Writes can never deny access (`safeRecordPresence`)
+and the session gate never reads presence. `next` moves to ^16.4.2, clearing the critical
+advisories that failed the `gates` audit step (`npm audit --omit=dev` now reports none). No
+authentication, assignment, household-status, finance-path or household-backup-format change; the
+registry backup now carries presence metadata. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.39.0` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original
+installation or 3007. Back up before updating; the container applies registry migration 0003 at
+startup. See [release notes](docs/RELEASE_NOTES_v1.39.0.md) and decision 260.
+
 **v1.38.1 — Cloudflare read-only policy metadata fix (2026-10-22):** Patch that unblocks the live
 grant. The account-level reusable-policy GET returns a legacy read-only **`uid`** beside `id`; the
 strict reusable-policy schema now accepts `uid` (and an optional `precedence`) as validated metadata
@@ -68,7 +85,7 @@ Each household may have up to two assigned sign-in identities; its `people` attr
 
 **Still deferred:** import of the owner's existing single-household data (a fictional rehearsal passes via `npm run rehearse:import`; real data needs its own approval), and a browser test for the support-grant flow. The registry and `.env` are still not in a household backup: since `v1.0.1` the registry has its own admin-panel download/restore, while `.env` still needs the host's own backup routine. Do not point this app at the original appdata. See [`docs/MULTI_HOUSEHOLD_PLAN.md`](docs/MULTI_HOUSEHOLD_PLAN.md) and the current [`docs/HANDOFF.md`](docs/HANDOFF.md) before changing storage, auth, backup, restore, deployment or release code.
 
-Releases follow [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — **except the interim override there (issue #73, 2026-10-17): no release, version bump or tag until every #73 slice is complete; PRs stay unreleased and the Playwright CI check is left for the next session.** The standing default for every GitHub release: the agent owns version bumps, the merge-commit pull request, the lower-case annotated tag, registry verification, release notes and the GitHub release. Do not ask the household to merge, tag or publish anything by hand.
+Releases follow [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — the interim issue #73 override is **finished**: #73 closed when v1.27.0 shipped and every release since has followed the standing process, so no unreleased-PR hold applies. The standing default for every GitHub release: the agent owns version bumps, the merge-commit pull request, the lower-case annotated tag, registry verification, release notes and the GitHub release. Do not ask the household to merge, tag or publish anything by hand.
 
 ## Working ethos — how to use the docs
 

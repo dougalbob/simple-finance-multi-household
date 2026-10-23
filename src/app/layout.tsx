@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { PresenceHeartbeat } from '@/components/presence-heartbeat';
 import { SiteNav } from '@/components/site-nav';
 import { ScrollHashIntoView } from '@/components/scroll-hash';
 import { SupportBanner } from '@/components/support-banner';
@@ -45,18 +46,24 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // identity. Computed here in the server layout; SiteNav stays a client
   // component and just receives the boolean.
   let showAdmin = false;
+  let signedIn = false;
   try {
     const config = loadAppConfig();
     const session = await appSessionFromRequest();
     showAdmin = isRegistryAdminSession(session, config);
+    // The heartbeat (issue 105) only runs for a household that is genuinely
+    // in the app; a denied identity must never appear as "connected".
+    signedIn = session.status === 'ok';
   } catch {
     // Any session/config failure hides the admin entry (fail closed).
     showAdmin = false;
+    signedIn = false;
   }
   return (
     <html lang="en-GB" data-theme={theme.id}>
       <body className="sf-app-canvas min-h-screen bg-canvas text-ink antialiased">
         <SiteNav showAdmin={showAdmin} />
+        {signedIn ? <PresenceHeartbeat /> : null}
         <SupportBanner />
         {/* Every page's `#hash` targets land below the measured header. */}
         <ScrollHashIntoView />

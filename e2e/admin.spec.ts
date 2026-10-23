@@ -153,4 +153,21 @@ test.describe('platform administration', () => {
     await card.getByRole('button', { name: /Reactivate/ }).click();
     await expect(card.getByText('Active', { exact: true })).toBeVisible();
   });
+
+  test('shows who is connected and keeps a connection log', async ({ page }) => {
+    await page.goto('/admin');
+
+    const presence = page.getByRole('region', { name: 'Who is connected' });
+    await expect(presence).toBeVisible();
+
+    // Rendering this very page is activity, so the signed-in administrator is
+    // present the moment the card is drawn — no waiting for a heartbeat.
+    await expect(presence.getByText('alex@example.com', { exact: true })).toBeVisible();
+    await expect(presence.getByText('(you)')).toBeVisible();
+    await expect(presence.getByTestId('presence-summary')).toContainText('active now');
+
+    // The previous page view was filed under the identity's own household, and
+    // the card never claims to know what anyone was doing.
+    await expect(page.getByRole('region', { name: 'Connection history' })).toBeVisible();
+  });
 });
