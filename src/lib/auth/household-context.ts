@@ -3,6 +3,7 @@ import type { Db, DbHandle } from '../db/client';
 import { getHouseholdDbHandle, getHouseholdReadOnlyDbHandle } from '../db/client';
 import { getRegistry, type RegistryDb } from '../registry/db';
 import { assertSafeHouseholdId } from '../registry/ids';
+import { PRESENCE_KEY_HEADER, safeRecordPresence } from '../registry/presence';
 import { householdDocumentsDir } from '../registry/paths';
 import { describeSession, type HeaderSource, type User } from './current-user';
 import { resolveSupportSelection, supportGrantIdFromHeaders } from './support';
@@ -51,6 +52,21 @@ export async function householdContextFromHeaders(
   now: Date = new Date(),
 ): Promise<HouseholdContext | null> {
   const session = await describeSession(headerSource, config, registry);
+
+  // Presence (issue 105): an authenticated route-handler call counts as
+  // activity too, so an open tab that is polling the app stays "active".
+  // Recorded against the identity's own assignment — a support view never
+  // makes the visiting administrator look like a member of the household.
+  if (session.status === 'ok') {
+    const presenceRegistry = registry ?? safeRegistry(config);
+    if (presenceRegistry !== null) {
+      safeRecordPresence(presenceRegistry, {
+        email: session.user.email,
+        householdId: session.user.householdId,
+        sessionKey: headerSource.get(PRESENCE_KEY_HEADER),
+      });
+    }
+  }
 
   const grantId = supportGrantIdFromHeaders(headerSource);
   if (grantId !== null) {

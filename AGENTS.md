@@ -1,3 +1,15 @@
+**Unreleased — who is connected and a connection log (issue 105, 2026-10-23):** `/admin` gains
+**Who is connected** and **Connection history** (SPEC §18.6, decision 260). The app has no
+server-side session, so presence is inferred from activity: active for 2 minutes, idle to 15,
+ended after 15 minutes of silence, written lazily with no background timer. Registry migration
+`0003_presence.sql` adds `presence_sessions` (email, the identity's own household, an opaque
+per-tab key, timestamps) — control-plane metadata only, never finance data, page paths, IP
+addresses or user agents, and never the household a support view was looking at. Closed visits are
+pruned after 30 days with a 2,000-row ceiling. Writes can never deny access (`safeRecordPresence`)
+and the session gate never reads presence. No authentication, assignment, household-status or
+household-backup-format change; the registry backup now carries presence metadata. **Unreleased**
+under the issue 73 override: no version bump, tag, image or release note.
+
 **v1.38.1 — Cloudflare read-only policy metadata fix (2026-10-22):** Patch that unblocks the live
 grant. The account-level reusable-policy GET returns a legacy read-only **`uid`** beside `id`; the
 strict reusable-policy schema now accepts `uid` (and an optional `precedence`) as validated metadata

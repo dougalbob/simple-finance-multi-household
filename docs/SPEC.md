@@ -1917,7 +1917,7 @@ Host path on Unraid: **`/mnt/user/appdata/simple-finance-multi-household`**, map
 ```text
 /mnt/user/appdata/simple-finance-multi-household/  →  /data/
   .env                                           Cloudflare/bootstrap secrets (root-owned, 0600)
-  system/registry.sqlite                        household roster, assignments, roles and support grants only
+  system/registry.sqlite                        household roster, assignments, roles, support grants and presence metadata only
   households/<opaque-household-id>/
     simple-finance.sqlite (+ -wal / -shm)         this household's SQLite data, WAL mode
     documents/                                    this household's receipt/invoice attachments (§23)
@@ -2005,6 +2005,47 @@ failure leaves the live data as it was.
 Before real household data is entrusted to an installation, a backup must be restored into a **clean isolated
 installation** and verified — records *and* attachments (blueprint §12). Rehearsals never run against the
 live household installation.
+
+### 18.6 Presence and the connection log (issue 105)
+
+The application has **no server-side session**: every request re-verifies the Cloudflare Access assertion and
+resolves the registry assignment, and Cloudflare owns signing out — there is no sign-out route to hook. "Who is
+connected" is therefore an **inference from recent activity**, and the interface says so. It never claims a
+live socket: the words are *active now*, *idle* and *last seen*, never *online* or *disconnected at*.
+
+- **Where.** `presence_sessions` in `system/registry.sqlite` (registry migration `0003`), beside the roster it
+  is always read with. It is control-plane metadata under the same rule as everything else there: no finance
+  rows, no documents, no receipt content.
+- **What a row holds.** The normalised sign-in email, that identity's **own** household id (never a support
+  grant's target household), an opaque per-tab key generated in `sessionStorage`, and `first_seen_at`,
+  `last_seen_at`, `ended_at`, `ended_reason`. Deliberately absent: page paths, query strings, finance data, IP
+  addresses and user-agent strings. A row says that someone was using the app, never what they were doing.
+- **How it is written.** Two paths, both throttled to one write a minute per visit: every authenticated page
+  render (`src/lib/auth/next.ts`) and every authenticated route-handler call
+  (`householdContextFromHeaders`) counts as activity; and a browser heartbeat
+  (`src/components/presence-heartbeat.tsx` → `POST /api/presence`) beats while the tab is visible **and the
+  reader has actually touched the page** since the previous beat. The heartbeat is what distinguishes an open
+  tab from a closed one; the touch requirement is what stops a tab left open overnight being reported as
+  someone working.
+- **When a visit ends.** Two thresholds, agreed with the product owner: **active** for two minutes after the
+  last activity, **idle** from two to fifteen minutes, and **ended** after fifteen minutes of silence. The end
+  is written **lazily** — by the next touch from that tab, or by the next read of the card — so there is no
+  background timer, no cron and nothing to restart. The recorded end is the last activity plus the idle
+  timeout, not the moment someone looked again, so the log never claims an hour of use for a five-minute visit.
+- **The card.** `/admin` shows open visits grouped by household with each person's state, since/last-seen time
+  and tab count, plus the closed-visit log newest first; both refresh every 30 seconds while visible and are
+  readable with JavaScript off. It is platform-administrator only (`GET /api/presence` returns 401/403
+  otherwise) and shows the same detail for every household, since the point is knowing whether it is safe to
+  restart the container.
+- **Retention.** Closed visits are pruned after **30 days**, with a hard ceiling of 2,000 stored closed visits;
+  open visits are never pruned. Presence rows travel in the registry backup like the rest of the control plane,
+  which is why the retention window is bounded and why no finance data can be in them.
+- **Failure.** Presence can never decide access. Writes go through `safeRecordPresence`, which swallows a
+  read-only, locked or half-migrated registry; the session gate does not consult presence at all.
+
+**Known limitations, stated in the card.** A locked phone or a suspended background tab stops beating and reads
+as idle/last-seen; a Cloudflare assertion that expires looks the same as someone walking away; a container
+restart ends every visit at once. There is no "sign out" event to record and no attempt is made to invent one.
 
 ## 19. Security and repository privacy (binding rules)
 

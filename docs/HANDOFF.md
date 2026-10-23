@@ -1,3 +1,46 @@
+# Unreleased — who is connected, and a connection log (issue 105, 2026-10-23)
+
+## What this session built
+
+`/admin` gains **Who is connected** and **Connection history** (SPEC §18.6, decision 260). The app has no
+server-side session — Cloudflare verifies every request and owns signing out — so presence is an inference
+from activity and the card says *active now* / *idle* / *last seen*, never *online*.
+
+- **Storage.** Registry migration `drizzle/registry/0003_presence.sql` adds `presence_sessions`
+  (email, the identity's own household, an opaque per-tab key, first/last seen, ended at/reason). No page
+  paths, finance data, IP addresses or user agents. A partial unique index keeps one open visit per tab, and a
+  returning tab opens a new visit instead of reviving an ended one, so the log keeps both.
+- **Writes.** Authenticated page renders (`src/lib/auth/next.ts`) and route handlers
+  (`householdContextFromHeaders`) count as activity; a browser heartbeat
+  (`src/components/presence-heartbeat.tsx` → `POST /api/presence`) beats while the tab is visible and the
+  reader has touched the page since the last beat. All throttled to one write a minute per visit. A request
+  with no tab key extends that identity's most recent open visit, so one browser is never two "connections".
+- **Thresholds (owner-agreed).** Active ≤2 min, idle ≤15 min, ended after 15 min of silence. Ending is lazy —
+  next touch or next read — and the recorded end is last activity + 15 min, so a five-minute visit never reads
+  as an hour.
+- **Reads.** `buildPresenceView` renders the first paint server-side (works without JavaScript); the card then
+  polls `/api/presence` every 30 seconds while visible. That route is platform-administrator only (a
+  deactivated household's administrator keeps access, matching `/admin`). Closed visits are pruned after 30
+  days, capped at 2,000 rows; open visits are never pruned.
+- **Fail-open by design.** `safeRecordPresence` swallows a read-only, locked or half-migrated registry, and the
+  session gate never reads presence: this can never deny access.
+
+## Deliberate limits to repeat if asked
+
+A locked phone or a suspended background tab stops beating and reads as idle/last-seen; an expired Cloudflare
+assertion looks the same as someone walking away; a container restart ends every visit at once. There is no
+sign-out event to record, and the card does not pretend otherwise. Presence rows travel in the registry backup
+— which is why retention is bounded and the columns are pinned by a test.
+
+## Validation
+
+- `npm test` **1218/1218 across 274 suites** (1199 before; 19 new in `tests/registry-presence.test.ts`),
+  `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` green locally.
+- `e2e/admin.spec.ts` gained a presence assertion. The browser suite must pass in CI (`browser` job); it was
+  not run here if the sandbox could not fetch Chromium.
+- **Unreleased** under the issue 73 override: no version bump, tag, image or release note. Registry data paths,
+  authentication, assignments, household status and the household backup format are unchanged.
+
 # v1.38.1 — Cloudflare read-only policy metadata fix (2026-10-22)
 
 ## The live defect

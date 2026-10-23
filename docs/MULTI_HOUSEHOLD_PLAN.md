@@ -67,7 +67,7 @@ Target host/container layout:
 ```text
 /mnt/user/appdata/simple-finance-multi-household/  ->  /data/
   .env                                           Cloudflare/bootstrap secrets; root-owned, not backed up
-  system/registry.sqlite                        household roster, assignments, roles and support grants only
+  system/registry.sqlite                        household roster, assignments, roles, support grants and presence metadata only
   households/<opaque-household-id>/
     simple-finance.sqlite (+ WAL/SHM)             that household's finance records only
     documents/                                    that household's attachments only
