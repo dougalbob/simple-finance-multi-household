@@ -784,3 +784,16 @@ e2e household may ever appear. Proven recipe for capturing pages:
 - The throwaway capture script and PNG staging live outside the repo in
   `/home/user/wiki-screenshots/`; the wiki itself is cloned as a sibling at
   `/home/user/simple-finance-wiki/` (never nested inside the main repo).
+
+## 28. Capturing seeded-data screenshots that the seed does not contain (2026-10-23)
+
+The e2e seed has no measured mpg stretch, so the wiki Fuel page needed one. A
+throwaway capture script (`/home/user/wiki-screenshots/capture-fuel.mts`, never
+committed) drives the seeded server through the real UI: add a vehicle via the
+Settings "Add vehicle" form, then three Fuel-tab saves — full tank with
+odometer, part fill (tick off), closing full tank with the higher odometer —
+which reproduces the e2e worked example (40.9 mpg, 15.6p/mile). The
+`@playwright/test` library Locator has no `toHaveValue` outside the test runner:
+poll `inputValue()` until the save-cleared form empties instead. The e2e server
+reseeds `.e2e-data` on every start (entry 24), so restart it before re-running a
+script that writes, and use `hideNav` (entry 27) for tall Insights sections.
