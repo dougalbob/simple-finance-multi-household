@@ -797,3 +797,20 @@ which reproduces the e2e worked example (40.9 mpg, 15.6p/mile). The
 poll `inputValue()` until the save-cleared form empties instead. The e2e server
 reseeds `.e2e-data` on every start (entry 24), so restart it before re-running a
 script that writes, and use `hideNav` (entry 27) for tall Insights sections.
+
+## 29. After a snapshot restore: node_modules, /tmp tooling and sibling clones all vanish (2026-10-23)
+
+A mid-session restore removed `node_modules`, the sideloaded `/tmp/chromium` +
+`/tmp/al2023` (entry 8), AND every sibling directory under `/home/user`
+including a cloned GitHub wiki and scratch backlogs. Recovery that worked, in
+order: `npm_config_nodedir=/usr/local npm ci` (entry 18), rebuild the browser
+exactly as entry 8, re-clone the wiki (anything pushed was safe; local-only
+files were not), then restart `scripts/e2e-server.mts` which reseeds
+`.e2e-data`. Lesson: push wiki work at the end of every turn and keep durable
+notes inside the repo, not only in scratch folders. One more Playwright quirk
+from the same session: on the first compile of a server-action form, a
+`fill()` into a React controlled input can be lost to a hydration race —
+assert `inputValue()` before clicking Save, re-filling if it did not stick.
+Also, Gollum wiki page URLs come from the filename: keep commas out of
+filenames (a `%2C` wikilink 302-redirects to the wiki root) and use a piped
+link `[[Display title, with comma|Exact-File-Name]]` when the title needs one.
