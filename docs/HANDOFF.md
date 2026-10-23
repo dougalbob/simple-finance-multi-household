@@ -1,3 +1,68 @@
+# v1.40.0 — compact Admin workspace (issue 107, 2026-10-23)
+
+## What this session built
+
+`/admin` now has a compact summary and a two-column laptop/large-tablet workspace (decision 261).
+The main column keeps **Households & sign-in** and **Recent registry activity** together; the task
+rail holds creation, support access, presence/history, advanced Cloudflare/server tools and
+registry backup/restore. It returns to one column on smaller screens.
+
+- **Owner-refined household disclosure.** Every household starts closed with only its name and an
+  expand arrow. The first expansion reveals status, metadata, assigned emails and unassign
+  controls. A separate nested **Manage household** disclosure contains assignment, rename and
+  activate/deactivate controls. The two disclosures are independent native `details` elements.
+- **Bounded, still-reachable lists.** The roster and activity cards have their own vertical scroll
+  areas. Activity asks the registry for up to **25** entries, newest first, and its copy explains
+  that scrolling reaches earlier entries in that set. The list is keyboard-focusable. This does not
+  change or truncate the stored audit history.
+- **Progressive disclosure elsewhere.** Cloudflare access and Server settings use the shared
+  `AdminDisclosure`; connection history keeps its detailed disclosure; registry backup/restore uses
+  a vertical compact-rail layout. Existing server gates, confirmations, warnings and recovery text
+  remain in place.
+- **Presentation only.** No schema, migration, authentication, assignment, household-status,
+  storage-path or backup-format change. No live Unraid deployment is part of publication.
+
+## Preview and feedback actually resolved
+
+The first preview exposed all household management forms at once. After the owner asked for rows
+to start with just the household name and expand arrow, the roster was changed to the two-level
+pattern above and the activity copy was clarified to say **up to 25** with scrolling instructions.
+The owner then approved the refined preview and authorised stable publication. No unrelated Admin
+redesign was added after that approval.
+
+## Validation
+
+- `npm test`: **1,218/1,218 across 274 suites**; typecheck, Prettier, themes, diff and production
+  build checks pass locally.
+- Focused real-browser run: **7/7 Admin and Cloudflare tests** passed. Helpers now open the outer
+  household disclosure before finding assigned-email controls and the nested management disclosure
+  before using editing forms. Tests also assert initial hiding and the activity list's overflow
+  contract.
+- A separate Chromium probe seeded five households and 25 activity entries: all five households
+  started collapsed; activity had `clientHeight=320`, `scrollHeight=1674` and reached its exact
+  maximum `scrollTop=1354`. There was no horizontal page overflow at 1,024 px or 390 px; the
+  1,440 px and 1,024 px layouts were also visually reviewed.
+- Required remote evidence is still PR `gates`, `browser` and `docker`, then main CI and Publish.
+  Do not treat a local preview or a merge alone as publication.
+
+## Release provenance (complete in the release report / next handoff)
+
+- Single release PR: `arena/63278f7c-simple-finance-multi-household` → `main`, closing issue #107.
+- Required PR checks `gates`, `browser`, `docker` on the PR head; one merge commit; green main CI;
+  annotated `v1.40.0` on that exact main commit; green Publish.
+- Verify the stable GitHub release and one GHCR digest behind `v1.40.0`, `latest` and `sha-<short>`.
+  Record PR/run IDs, merge commit, tag and digest in the release report or next handoff; do not open
+  a separate post-merge documentation PR. Released baseline: v1.39.0 / tag `v1.39.0`.
+
+## After install
+
+Back up each household and the Admin registry first. Update only
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.40.0` (or `:latest` after publication), keeping
+`/mnt/user/appdata/simple-finance-multi-household` at `/data` and host port **3009** → container
+**3000**. Confirm the badge reads **`v1.40.0 · stable`**, then open Admin: check collapsed household
+rows, expansion, nested management controls, advanced disclosures and activity scrolling. Never
+switch to the original single-household image/appdata or port **3007**.
+
 # v1.39.0 — who is connected, and a connection log (issue 105, 2026-10-23)
 
 ## What this session built

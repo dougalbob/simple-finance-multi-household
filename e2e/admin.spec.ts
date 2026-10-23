@@ -28,11 +28,25 @@ const householdCard = (page: Page, name: string): Locator =>
     has: page.getByRole('heading', { name, level: 3 }),
   });
 
-/** The rename/status disclosure — open before touching anything inside it. */
-async function openStatusDisclosure(card: Locator): Promise<void> {
-  const details = card.locator('details');
+const householdDisclosure = (card: Locator): Locator =>
+  card.locator('details[data-household-details]');
+const managementDisclosure = (card: Locator): Locator =>
+  card.locator('details[data-household-management]');
+
+async function openDisclosure(details: Locator): Promise<void> {
   const isOpen = await details.evaluate((node) => (node as HTMLDetailsElement).open);
-  if (!isOpen) await details.locator('summary').click();
+  if (!isOpen) await details.locator(':scope > summary').click();
+}
+
+/** Expand a household row so its assigned identities and controls are visible. */
+async function openHousehold(card: Locator): Promise<void> {
+  await openDisclosure(householdDisclosure(card));
+}
+
+/** The rename/status disclosure — open the household and then its controls. */
+async function openStatusDisclosure(card: Locator): Promise<void> {
+  await openHousehold(card);
+  await openDisclosure(managementDisclosure(card));
 }
 
 test.describe('platform administration', () => {
@@ -94,6 +108,7 @@ test.describe('platform administration', () => {
     // The seeded household is full: two sign-in identities, no assign form, and
     // the identity limit explained instead.
     const seeded = householdCard(page, 'Alex & Sam');
+    await openHousehold(seeded);
     await expect(seeded.getByText('alex@example.com', { exact: true })).toBeVisible();
     await expect(seeded.getByText('sam@example.com', { exact: true })).toBeVisible();
     await expect(seeded.getByText('2 of 2 sign-in identities assigned')).toBeVisible();
@@ -118,10 +133,12 @@ test.describe('platform administration', () => {
     await expect(householdCard(page, HOUSEHOLD)).toBeVisible();
 
     const card = householdCard(page, HOUSEHOLD);
+    await openStatusDisclosure(card);
     await expect(card.getByText('0 of 2 sign-in identities assigned')).toBeVisible();
     await card.getByLabel(/Sign-in email to assign/).fill(ASSIGNEE);
     await card.getByRole('button', { name: 'Assign to this household' }).click();
 
+    await openHousehold(card);
     await expect(card.getByText(ASSIGNEE, { exact: true })).toBeVisible();
     await expect(card.getByText('1 of 2 sign-in identities assigned')).toBeVisible();
 
@@ -131,6 +148,7 @@ test.describe('platform administration', () => {
     await expect(audit.getByText('alex@example.com').first()).toBeVisible();
 
     await card.getByRole('button', { name: `Unassign ${ASSIGNEE}` }).click();
+    await openHousehold(card);
     await expect(card.getByText(ASSIGNEE, { exact: true })).toHaveCount(0);
     await expect(card.getByText('0 of 2 sign-in identities assigned')).toBeVisible();
   });
@@ -143,14 +161,16 @@ test.describe('platform administration', () => {
     await create.getByLabel('Household name').fill(name);
     await create.getByRole('button', { name: 'Create household' }).click();
     const card = householdCard(page, name);
+    await openStatusDisclosure(card);
     await expect(card.getByText('Active', { exact: true })).toBeVisible();
 
-    await openStatusDisclosure(card);
     await card.getByRole('button', { name: /Deactivate/ }).click();
+    await openHousehold(card);
     await expect(card.getByText('Deactivated', { exact: true })).toBeVisible();
 
     await openStatusDisclosure(card);
     await card.getByRole('button', { name: /Reactivate/ }).click();
+    await openHousehold(card);
     await expect(card.getByText('Active', { exact: true })).toBeVisible();
   });
 
@@ -169,5 +189,53 @@ test.describe('platform administration', () => {
     // The previous page view was filed under the identity's own household, and
     // the card never claims to know what anyone was doing.
     await expect(page.getByRole('region', { name: 'Connection history' })).toBeVisible();
+  });
+
+  test('reveals household management and advanced tools only on demand', async ({ page }) => {
+    await page.goto('/admin');
+
+    const seeded = householdCard(page, 'Alex & Sam');
+    const household = householdDisclosure(seeded);
+    const management = managementDisclosure(seeded);
+    await expect(household).toHaveJSProperty('open', false);
+    await expect(seeded.getByText('alex@example.com', { exact: true })).toBeHidden();
+    await expect(management).toHaveJSProperty('open', false);
+
+    await openHousehold(seeded);
+    await expect(household).toHaveJSProperty('open', true);
+    await expect(seeded.getByText('alex@example.com', { exact: true })).toBeVisible();
+    await expect(seeded.getByText('2 of 2 sign-in identities assigned')).toBeVisible();
+    await expect(seeded.getByLabel('Name', { exact: true })).toBeHidden();
+
+    await openDisclosure(management);
+    await expect(management).toHaveJSProperty('open', true);
+    await expect(seeded.getByLabel('Name', { exact: true })).toBeVisible();
+    await management.locator(':scope > summary').click();
+    await expect(seeded.getByLabel('Name', { exact: true })).toBeHidden();
+    await household.locator(':scope > summary').click();
+    await expect(seeded.getByText('alex@example.com', { exact: true })).toBeHidden();
+
+    const activity = page.locator('ol[aria-label="Registry activity, newest first"]');
+    await expect(activity).toHaveCSS('overflow-y', 'auto');
+    await expect(activity).toHaveCSS('max-height', '320px');
+
+    const history = page.getByRole('region', { name: 'Connection history' });
+    const historyDisclosure = history.locator('details');
+    await expect(history).toBeVisible();
+    await expect(historyDisclosure).toHaveJSProperty('open', false);
+    await historyDisclosure.locator('summary').click();
+    await expect(historyDisclosure).toHaveJSProperty('open', true);
+
+    const cloudflareSection = page.locator('section[aria-labelledby="cloudflare-heading"]');
+    await expect(cloudflareSection).toBeHidden();
+    await page.locator('details').filter({ has: cloudflareSection }).locator('summary').click();
+    await expect(
+      page.getByRole('region', { name: 'Cloudflare access', exact: true }),
+    ).toBeVisible();
+
+    const settingsSection = page.locator('section[aria-labelledby="admin-settings-heading"]');
+    await expect(settingsSection).toBeHidden();
+    await page.locator('details').filter({ has: settingsSection }).locator('summary').click();
+    await expect(page.getByRole('region', { name: 'Server settings', exact: true })).toBeVisible();
   });
 });

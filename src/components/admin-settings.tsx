@@ -69,11 +69,8 @@ export function AdminSettings({
   const showRestartBanner = state.restartRequired || drift;
 
   return (
-    <section
-      aria-labelledby="admin-settings-heading"
-      className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-    >
-      <h2 id="admin-settings-heading" className="mb-1 text-lg font-semibold">
+    <section aria-labelledby="admin-settings-heading">
+      <h2 id="admin-settings-heading" className="sr-only">
         Server settings
       </h2>
       <p className="mb-3 text-xs text-ink-muted">

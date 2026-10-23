@@ -1,3 +1,16 @@
+**v1.40.0 — compact Admin workspace (issue 107, 2026-10-23):** `/admin` is reorganised into a
+shorter two-column laptop/large-tablet layout with compact summary metrics and a task rail.
+Household rows start collapsed to **name and expand arrow only**; expansion reveals status,
+metadata, assigned emails and unassign controls, while a separate nested **Manage household**
+disclosure holds assignment, rename and status editing. Roster and recent-activity lists are
+bounded and internally scrollable; activity retrieves up to 25 entries and says to scroll for the
+earlier entries in that set. Cloudflare access and Server settings use native advanced disclosures,
+and registry backup/restore stays in the compact rail. This is presentation only: no schema,
+migration, authentication, assignment, household-status, storage-path or backup-format change.
+Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.40.0` (stable also moves `latest`),
+appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original
+installation or 3007. See [release notes](docs/RELEASE_NOTES_v1.40.0.md) and decision 261.
+
 **v1.39.0 — who is connected, and a connection log (issue 105, 2026-10-23):** `/admin` gains
 **Who is connected** and **Connection history** (SPEC §18.6, decision 260). The app has no
 server-side session, so presence is inferred from activity: active for 2 minutes, idle to 15,
