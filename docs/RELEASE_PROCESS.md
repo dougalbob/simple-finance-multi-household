@@ -4,6 +4,18 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.40.0 — issue #107: compact Admin workspace (2026-10-23)
+
+The owner reviewed the Admin redesign in the live Arena preview, asked for households to start as
+name-only collapsed rows with assigned emails inside the expansion, and approved the refined
+version for stable publication and full Unraid testing. Keep the implementation, browser tests,
+version metadata, release notes, handoff and current-release documentation in **one PR**. Require
+PR `gates`, `browser` and `docker`, merge once, require main CI, then place annotated `v1.40.0` on
+the exact main merge commit and verify Publish. This is a UI-only release: no schema, migration,
+authentication, assignment, household-status, storage-path or backup-format change. Publish only
+`ghcr.io/dougalbob/simple-finance-multi-household` with matching-digest `v1.40.0`, `latest` and
+`sha-<short>` tags plus a stable GitHub Latest release; publication does not deploy to Unraid.
+
 ## v1.39.0 — issue #105: who is connected, and a connection log (2026-10-23)
 
 The household reviewed the Arena preview of the presence card and asked for publication so it can test

@@ -133,8 +133,13 @@ export function UnassignIdentityForm({ email }: UnassignIdentityFormProps) {
   return (
     <form action={formAction} className="flex flex-col gap-1">
       <input type="hidden" name="email" value={email} />
-      <button type="submit" disabled={pending} className={`${quietSubmitClass} self-start`}>
-        {pending ? 'Removing…' : `Unassign ${email}`}
+      <button
+        type="submit"
+        disabled={pending}
+        aria-label={`Unassign ${email}`}
+        className={`${quietSubmitClass} shrink-0 self-start whitespace-nowrap`}
+      >
+        {pending ? 'Removing…' : 'Unassign'}
       </button>
       <FormMessage status={state.status} message={state.message} />
     </form>

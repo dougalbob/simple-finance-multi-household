@@ -1,5 +1,18 @@
 # Multi-household edition — active product and safety contract
 
+**v1.40.0 — A compact, task-oriented Admin workspace (issue #107):** `/admin` now uses compact
+summary metrics and a two-column laptop/large-tablet workspace, returning to one column on smaller
+screens. Household rows start collapsed to name and expand arrow only; expansion reveals status,
+metadata and assigned emails, with a separate **Manage household** disclosure for assignment,
+rename and status controls. Roster and recent-activity lists scroll inside their cards; activity
+retrieves up to 25 entries and explains how to reach earlier entries in that set. Cloudflare/Server
+settings become advanced disclosures, while create-household, support, presence and registry
+backup/restore tasks use the compact rail. No schema, migration, authentication, assignment,
+household-status, storage-path or backup-format change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.40.0` (stable also moves `latest`), Unraid host
+port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`, never the original
+installation or 3007. See `docs/RELEASE_NOTES_v1.40.0.md` and decision 261.
+
 **v1.39.0 — Who is connected, and a connection log (issue #105):** The **Admin** page gains a live **Who is connected** card and a **Connection history** log, so an update or restart is never done while somebody is using the app. There is no server-side session (Cloudflare re-verifies every request and owns signing out), so presence is an inference from activity and reads **active now** / **idle** / **last seen**: active for 2 minutes, idle to 15, ended after 15 minutes of silence, closed lazily with no background job. Registry migration `0003` adds `presence_sessions` — identity, that identity's own household, an opaque per-tab key and timestamps only; no page paths, finance data, IP addresses or user agents, and a support view records the visitor's own household. Closed visits are pruned after 30 days with a 2,000-row ceiling. Presence can never deny access. `next` moves to ^16.4.2, clearing the advisories that failed the CI audit step. No authentication, assignment, household-status, finance-path or household-backup-format change; the registry backup now carries presence metadata. Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.39.0` (stable also moves `latest`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.39.0.md` and SPEC §18.6.
 
 **v1.38.1 — Cloudflare grant/removal accepts read-only policy metadata (issue #101 patch):** Fixes the live-blocking refusal that made every grant fail in v1.38.0. Cloudflare's account-level reusable-policy response includes a legacy read-only `uid` beside `id`, which the strict schema rejected. `uid` (and an optional `precedence`) is now accepted, validated and stripped from the PUT body: the written payload, full preservation, prewrite reread, post-write verification, exclusive-edit acknowledgement and fail-closed refusal of genuinely unknown fields are unchanged. No authentication, registry, household-status, schema, migration or backup-format change. See [release notes](docs/RELEASE_NOTES_v1.38.1.md) and [setup and limitations](docs/CLOUDFLARE_INSPECTION.md). Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.38.1` (stable also moves `latest`); appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original installation or 3007.

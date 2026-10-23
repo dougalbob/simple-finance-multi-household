@@ -4433,3 +4433,26 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     16.0.0–16.4.0 fail the `gates` audit step. The interim issue #73 release hold is recorded as finished
     (that issue closed when v1.27.0 shipped and the stale override sentence in `AGENTS.md` is corrected
     here).
+
+261. **Issue 107 — compact, task-oriented Admin workspace (v1.40.0, 2026-10-23).** The owner asked
+    for a less disjointed Admin page that does not require excessive scrolling on a laptop or large
+    tablet, with progressive disclosure and bounded logs. The implementation uses compact summary
+    metrics and a two-column wide workspace: household roster and recent registry activity in the
+    main column, with create-household, support, presence, advanced Cloudflare/server tools and
+    registry backup/restore in the task rail; small screens remain one column. The owner reviewed
+    the first preview and explicitly refined the roster requirement: households must start closed
+    with only their name and expand arrow, and assigned emails belong inside the expansion. The
+    final interaction therefore has an outer native household disclosure for status, metadata,
+    assigned emails and unassign controls, plus an independent nested **Manage household**
+    disclosure for assignment, rename and status editing. Roster and activity lists scroll inside
+    their cards; activity retrieves up to 25 entries, newest first, and says to scroll for earlier
+    entries in that set rather than implying that audit history was deleted. Cloudflare access and
+    Server settings use a shared native advanced disclosure, and backup/restore fits the compact
+    rail. Browser helpers and assertions cover both disclosure levels, the Cloudflare region and
+    the activity overflow contract. A real Chromium probe also verified five initially collapsed
+    households, scrolling through 25 activity entries, and no horizontal overflow at laptop or
+    phone widths. The owner approved the refined preview and authorised stable publication for
+    full Unraid testing. Ship as **v1.40.0** through one PR with tests, version metadata, release
+    notes, handoff and current-release docs; require PR gates, main CI and the tagged Publish run.
+    No schema, migration, authentication, assignment, household-status, storage-path or
+    backup-format change, and no live deployment is authorised by publication.

@@ -11,11 +11,8 @@ export async function CloudflareInspection({
 }) {
   const result = await inspectCloudflare();
   return (
-    <section
-      className="rounded-xl border border-border bg-surface p-4 shadow-sm"
-      aria-labelledby="cloudflare-heading"
-    >
-      <h2 id="cloudflare-heading" className="text-lg font-semibold">
+    <section aria-labelledby="cloudflare-heading">
+      <h2 id="cloudflare-heading" className="sr-only">
         Cloudflare access
       </h2>
       <p className="my-2 text-sm text-ink-soft">

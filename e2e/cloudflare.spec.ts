@@ -16,6 +16,8 @@ test('explicit grant/remove refresh inspection, keep feedback and permit deliber
   ];
   fs.writeFileSync(file, JSON.stringify(original));
   await page.goto('/admin');
+  const section = page.locator('section[aria-labelledby="cloudflare-heading"]');
+  await page.locator('details').filter({ has: section }).locator('summary').click();
   const panel = page.getByRole('region', { name: 'Cloudflare access', exact: true });
   const target = panel.getByLabel('Email to manage');
   await target.selectOption('sam@example.com');
