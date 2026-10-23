@@ -38,7 +38,26 @@ sign-out event to record, and the card does not pretend otherwise. Presence rows
   `npm run typecheck`, `npm run format:check`, `npm run themes:check` and `npm run build` green locally.
 - `e2e/admin.spec.ts` gained a presence assertion. The full browser suite ran locally through the SANDBOX
   entry 8 overlay (`@sparticuz/chromium`): **184/184** acceptance and **3/3** first-run, and the console shows
-  real `POST /api/presence` beats. CI still has the final word on the `browser` job.
+  real `POST /api/presence` beats.
+
+## The CI failure this release had to fix (evidence, so it is not guessed at again)
+
+The first `browser` run of this PR failed only the **first-run** project: three tests timed out waiting for
+`[data-till-ready]`, with `ERR_ABORTED` on later `goto`s and 31 repeated "waiting for `/` navigation to
+finish" polls. That is a **page that keeps reloading**, so the till never hydrates — not a till defect.
+
+Cause, proved rather than assumed: reproduced locally with `CI=true` and a clean `.next` by running the
+acceptance suite and then the first-run suite in one workspace (the order CI uses). The second phase showed
+**108 "Compiled" lines and 134 `GET /` requests** — a rebuild per request. The two dev servers (3100 seeded,
+3200 first-run, separate data roots by design) were sharing **one Turbopack build cache**, so the second
+server invalidated it continuously and pushed HMR full reloads to the browser. Control checks: presence
+writes alone cause no recompiles (9 rows written, zero "Compiled"); a second server on a shared cache with
+plain `curl` does not loop either — the loop needs the browser's HMR client.
+
+Fix: `next.config.ts` reads `NEXT_DIST_DIR` (default `.next`, so production, `next build` and the Docker
+image are untouched); `scripts/e2e-server.mts` gives the first-run installation `.next-fresh` and removes it
+at seed time, exactly like its data root; `.gitignore` and `tsconfig` follow. After the fix the same sequence
+is **184/184 then 3/3 with zero recompile churn**.
 - **Dependency patch in the same PR:** `next` ^16.3.5 → **^16.4.2** (installed 16.4.2), because
   `npm audit --omit=dev` failed on critical advisories against 16.0.0–16.4.0 and that step gates the PR.
   After the bump audit reports **0 vulnerabilities**; every gate above and the whole browser suite were

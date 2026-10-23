@@ -101,13 +101,26 @@ Authentication, the allowlist, identity assignments, household status, finance d
 household backup format, or tenant isolation. Presence lives in the control-plane registry
 (`system/registry.sqlite`), never in a household's database.
 
+## Test-harness fix found by the release gate
+
+The first CI run of this release failed the first-run browser job: the page kept reloading and the
+till never hydrated. Cause, proved by reproducing it locally with `CI=true`: the acceptance suite's
+dev server (port 3100) and the first-run dev server (port 3200) shared one Turbopack build cache, so
+the second server rebuilt on every request and pushed HMR full reloads to the browser. Each
+installation now builds into its own directory (`NEXT_DIST_DIR`, `.next` for the seeded run,
+`.next-fresh` for the first run, cleaned at seed time), which is what two isolated installations
+should have had all along. The exact CI sequence — full acceptance, then first-run — passes locally
+afterwards with no recompile churn. Application behaviour is unchanged; production still builds to
+`.next`.
+
 ## Validation
 
 - `npm test` **1218/1218 across 274 suites** (19 new presence tests).
-- Full browser suite **184/184**, first-run suite **3/3**, including a real heartbeat `POST`.
 - `npm run typecheck`, `npm run format:check`, `npm run themes:check`, `npm run build` and
   `npm audit --omit=dev` (0 vulnerabilities) all green.
-- Required PR checks `gates`, `browser` and `docker` pass on the PR head, then main CI, then Publish.
+- Full browser suite **184/184** and first-run suite **3/3** green in that same sequence locally,
+  including a real heartbeat `POST`. Required PR checks `gates`, `browser` and `docker` must pass on the
+  PR head, then main CI, then Publish.
 
 Only target: `ghcr.io/dougalbob/simple-finance-multi-household`, appdata
 `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never the original

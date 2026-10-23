@@ -44,10 +44,20 @@ import { recentMonthlyDueDay } from './e2e-seed-dates';
 const FRESH = process.env.E2E_FRESH === '1';
 const DATA_DIR = path.resolve(process.cwd(), FRESH ? '.e2e-data-fresh' : '.e2e-data');
 const PORT = Number(process.env.E2E_PORT ?? (FRESH ? 3200 : 3100));
+/**
+ * Each of the two acceptance installations gets its own build cache. They are
+ * separate appdata roots and separate servers; sharing `.next` meant the
+ * second server rebuilt on every request and the browser reloaded instead of
+ * hydrating (v1.39.0 CI). `next.config.ts` reads this; production keeps `.next`.
+ */
+const DIST_DIR = FRESH ? '.next-fresh' : '.next';
 const ACTOR = FRESH ? 'new@example.com' : 'alex@example.com';
 
 function seed(): void {
   rmSync(DATA_DIR, { recursive: true, force: true });
+  // Only the fresh installation starts from a cold build cache; the seeded one
+  // keeps `.next` so its 184-test run is not slowed by a full recompile.
+  if (FRESH) rmSync(path.resolve(process.cwd(), DIST_DIR), { recursive: true, force: true });
   // `E2E_FRESH=1` is the first-run server (docs/ONBOARDING_PLAN.md): a
   // household with a registry assignment and no finance database at all, so
   // the browser suite can walk the setup path from a genuinely empty app.
@@ -629,6 +639,7 @@ const child = spawn('node_modules/.bin/next', ['dev', '-H', '0.0.0.0', '-p', Str
     ...process.env,
     NODE_ENV: 'development',
     NEXT_TELEMETRY_DISABLED: '1',
+    NEXT_DIST_DIR: DIST_DIR,
     DATA_DIR,
     PORT: String(PORT),
     AUTH_DEV_BYPASS: 'true',

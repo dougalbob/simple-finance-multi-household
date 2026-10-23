@@ -30,6 +30,17 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   /**
+   * Build output directory. The default (`.next`) is what `next build`, the
+   * Docker image and production all use. The browser acceptance suite sets
+   * `NEXT_DIST_DIR` so its *two* dev servers — the seeded installation on 3100
+   * and the first-run installation on 3200 — never share one Turbopack cache.
+   * Sharing it made the second server rebuild on every request and push HMR
+   * full reloads to the browser, so the page never finished loading and the
+   * first-run spec timed out waiting for the till to hydrate (v1.39.0 CI).
+   * Two isolated installations should not share a build cache at all.
+   */
+  distDir: process.env.NEXT_DIST_DIR?.trim() || '.next',
+  /**
    * Receipt uploads travel through a server action (`uploadAttachmentAction`),
    * and Next's default 1 MB action body limit rejected real camera photos with
    * an opaque 500 before the attachment pipeline's own 10 MB rule
