@@ -93,8 +93,18 @@ because earlier scratch copies outside git were lost in snapshot resets. Update 
     borrow silences the month, EXP< rows outside totals) flagged ≈ "expected — never received"
     in the projections and Horizon; home page prints "Owe others £X (borrowed, not income)".
     See `docs/BORROWING_PAGE_PLAN.md`.
-16. Long-term forecast — same projection arithmetic across decades of assumptions
-    (guide anchor `longterm`).
+16. **Long-term forecast** — published 2026-10-24 as `Long-term-forecast.md`, with a
+    "This part of the app is still being built" section up front (the household asked for the
+    work-in-progress status to be unmistakable): first version v1.26.0, reworked v1.27.0, the
+    root-level `LONGTERM_FORECASTING.md` still an open working plan, survivor transfer and
+    mortality modelling named follow-up work, no scenarios/Monte Carlo/stress run/IHT or
+    care costs/real annuity quote, the January-vs-6-April indexation approximation, and the
+    warning that an update can change what a saved plan means. Page sections: the draft it
+    starts from (records + reviewed defaults, honesty flags), ask a year or an age (URL-driven
+    answer cards), does the money last (gap vs run-out, three rates), a year line by line
+    (part-year State Pension labels), drawdown vs annuity on the same pot, every calendar year
+    (unmet/ran-out markers), the assumptions editor (save/reset/audit, read-only support view)
+    and the honesty footer. Guide anchor `longterm`.
 
 ### Part 4 — Recipes (not started)
 
@@ -169,3 +179,35 @@ pot to the bank with a checkpoint, what to do when the payday card warns of a lo
   2026-10-19". Horizon (window looked ahead to 2026-11-20): "Expected money in (1 income + 2
   expected support) · £3,950.00" with ≈£1,000.00 and ≈£500.00 tagged expected — never received.
   Home line: "Owe others £1,000.00 (borrowed, not income) · Owed to us £50.00".
+
+## Reference facts for the long-term forecast page (seed draft + filled state, today = 2026-10-24)
+
+- First read of `/longterm` creates the household's single `longterm_plans` row (version 1) as a
+  draft, so captures mutate the demo plan; a server restart reseeds. Draft from the e2e seed:
+  Alex 1970 / Sam 1980 (reviewed defaults), sex unchosen, plan-to filled from the horizon
+  (100 / 90), horizon end 2070-12-31 (younger + 90); State Pension ticked for both at £241.30/wk
+  (starts 2037-01-01 and 2048-01-01, uprating 3.50%); Pension A 2030-01-01 and Pension B
+  2035-01-01 at £0.00, growth 6.00%, annuity rate £5,500 per £100k; Sam "Still earning"
+  £2,450.00/month until 2047-12-31 with "Rises with inflation" ticked (drafted from the salary
+  receipt schedule); ISA and GIA at £0.00; windfall "Inheritance" £250,000 on 2027-01-01;
+  spending baseline £520.32/month; everything else £0.00; inflation 2.50%; thresholds 1.00%;
+  ISA shelter £40,000; rates 4/6/8. Flags: £0 other spending, and Pension A/B with no value —
+  so the assumptions panel opens by default.
+- Draft rendered figures (`?year=2030&rate=middle&person=person-1&age=62`): Income in 2030
+  £27,028.01 (about £24,486.04 today, £5,424.07 estimated tax on £32,452.08 gross; Alex £0.00,
+  Sam £27,028.01); income at age 62 — 2032 £28,284.52; "It covers every year to 2070 … Sam at
+  age 90. It says nothing about years beyond it."; all three rates "covers to 2070"; 2030 line
+  by line: Sam earnings £32,452.08, income tax £3,874.34, NI £1,549.73, spending £6,892.08,
+  surplus £20,135.93, capital £413,359.27 (ISA £142,812.47 · GIA £270,546.80 · pensions £0.00);
+  year table 2026–2070 with 2026 a part year (£7,350.00).
+- Filled state used for the arithmetic screenshots (via the assumptions form, then Save):
+  Pension A £180,000 with a £9,000 drawdown, Pension B £95,000 taken as an annuity rising
+  2.50%, everything else £6,000 — both flags clear. Cards become £36,028.01 (2030) and
+  £37,284.52 (age 62 · 2032); rate table capitals end-2070 £7,150,977.05 / £12,800,759.38 /
+  £24,512,092.74; 2040 line by line: Alex State Pension £20,310.72 + drawdown £9,000.00 +
+  annuity £9,686.04, tax £4,909.57, net £34,087.19; Sam earnings £41,541.48, tax £5,418.52,
+  NI £2,167.41, net £33,955.55; income after estimated tax £68,042.74 (£48,155.73 today);
+  spending £17,300.28; surplus £50,742.46; capital £1,455,219.58 (ISA £820,528.23 · GIA
+  £458,372.00 · pensions £176,319.35). Pension comparison: Pension A projected pot at start
+  £218,649.76 (drawdown £54,662.44 tax-free cash, £9,000.00 a year from £163,987.32; indicative
+  annuity £12,025.74), Pension B projected £155,655.25 (annuity £8,561.04 rising 2.50%).

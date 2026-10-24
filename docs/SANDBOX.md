@@ -1014,3 +1014,30 @@ counterparty and by "has movements yet". Four capture notes worth keeping:
 - The open row's panel is `section[id^="external-"][id$="-panel"]` and the row itself
   `tr#external-{id}`; opening it is pure URL state (`?external=`), so it is a safe,
   non-mutating capture, as are `?who=` (personalised column captions) and `?order=oldest`.
+
+## 38. Long-term forecast captures — the plan row is created on first read, and the draft must be shot before it is filled (2026-10-24)
+
+`/longterm` has no seed of its own: the first GET creates the household's single
+`longterm_plans` row as a draft from records plus `HOUSEHOLD_DEFAULTS` (birth years 1970/1980,
+the £250,000 "Inheritance" windfall on 2027-01-01, pots A/B at £0.00 dated 2030/2035, full
+State Pension weekly rate, inflation 2.50%, rates 4/6/8), so every capture run mutates the demo
+database and a server restart is the only way back to the draft. Two consequences for captures:
+
+- **Shot the draft first.** The two honesty flags (other spending £0.00; pots with no value)
+  vanish the moment the figures are filled, and they open the assumptions panel by default.
+  Capture order is therefore: draft state (viewport top, warnings box, people group), then fill
+  `#longterm-person-0-pot-0-value` / `-drawdown`, `-pot-1-value`, `-pot-1-take-up`,
+  `-pot-1-annuity-escalation` and "Everything else, a year", click **Save assumptions**, wait for
+  "Assumptions saved. The forecast below updates immediately.", re-settle, and shoot the
+  arithmetic sections. Captions must say which state each image is in.
+- **Wait for the hydration guard.** The assumptions island is `inert` until
+  `[data-longterm-ready="true"]` (decision 131); settle on that selector before any fill. The
+  page's own `<header>` sits inside `main`, so the usual `document.querySelector('header')`
+  still hides the app bar and nothing else.
+
+Useful locators: the three-card row is
+`div.grid:has(section[aria-labelledby="longterm-lasts-heading"])`; the people fieldset is
+`getByRole('group', { name: 'The people', exact: true })` (1214x1770 at 1x — legible, publish
+as-is); the honesty footer is `main footer`. The every-calendar-year panel scrolls inside
+itself (`max-h-[32rem]`), so an element shot shows only the first ten years of 2026–2070 — say
+so in the alt text rather than cropping a taller image.
