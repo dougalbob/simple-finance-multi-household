@@ -145,7 +145,9 @@ test.describe('purchases filters', () => {
     await expect(chip).toContainText('Category:');
     // The results really are filtered by it, and the page says so.
     const table = results(page);
-    await expect(table.getByRole('heading', { level: 2 })).not.toContainText('0 entries');
+    // Assert a non-zero count. A negative substring check on '0 entries' is
+    // wrong: '20 entries' contains it.
+    await expect(table.getByRole('heading', { level: 2 })).toHaveText(/^[1-9]\d* entr(y|ies)$/);
 
     // The chip removes the category and nothing else — the window stays.
     const from = new URL(page.url()).searchParams.get('from') ?? '';
