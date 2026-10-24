@@ -52,8 +52,15 @@ because earlier scratch copies outside git were lost in snapshot resets. Update 
     two warning tiers (SPEC §8), Horizon 400-day window, default = day before payday
     (+35 fallback), URL state (`through/pots/daytoday`), ≈ expected support vs + income,
     day-by-day drill, bills-only relabel, pending-debit limitation (SPEC §7.4).
-13. Contracts and renewals — `/contracts` agreement register, review/switch dates, contract
-    end dates are informational and never auto-stop instances (SPEC §22.1), link from schedules.
+13. **Contracts and renewals** — published 2026-10-24: `/contracts` register grouped into
+    insurance policies / service contracts / other reminders; explicit kind + auto-renew
+    yes/no/unknown (never inferred); two independent dates (renewal/cover-end vs fee-free
+    switch, each with its own 0–365-day in-app reminder, default 21); annual date only rolls
+    forward when auto-renew = yes (no/unknown stays a review prompt; 29 Feb → 28); link is
+    navigational only and never stops a payment; one schedule per agreement, two-way anchors
+    (`/recurring#schedule-edit-N`, `/contracts#agreement-N`); Overview Key dates in-window
+    alerts, no duplicates from linked schedules; credit-card payment/promo reviews; supplier
+    follow-up tasks; in-app channel only (email is v2).
 14. Tasks and the bell — reminders wait in-app, no emails/notifications; supplier interaction
     log tasks feed the bell.
 15. Borrowing — loans between household members, expected-support inflows, ledger; borrowed

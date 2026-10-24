@@ -928,3 +928,31 @@ dedicated crop. Detail `<details>` beyond 60-day windows start collapsed; force
 Seed anchors (today 2026-10-24): payday day 27; liquid £2,883.07; low £2,803.08 on 2026-10-26;
 45-day window to 2026-12-08 gives 3 commitments / 2 income + 1 expected support
 ("support from Mum", ≈£1,000) / 9 day-to-day events; bills-only low £2,848.08.
+
+## 35. Fifth snapshot reset and Contracts & Renewals capture selectors (2026-10-24)
+
+Fifth full non-repo wipe, identical in shape to entries 29/30/33: node_modules, /tmp/chromium
++ /tmp/al2023 + /tmp/pwbrowsers, the wiki clone, /home/user/wiki-screenshots and the e2e server
+all gone, working tree back at the 0c928bf merge base with the same stale dirty SANDBOX.md /
+next-env.d.ts / untracked WIKI_BACKLOG.md. Recovery unchanged: discard the stale files,
+`git reset --hard origin/arena/...`, `npm_config_nodedir=/usr/local npm ci`, rebuild chromium
+(entry 8; note `import('@sparticuz/chromium')` as a bare directory fails under Node 22 ESM —
+import the explicit `.../build/index.js` path, while the lambdafs directory import for the
+al2023 inflate works fine), re-clone the wiki, recreate wiki-screenshots, restart
+`node --import tsx scripts/e2e-server.mts` (pid-class process on port 3100, clean reseed).
+
+Contracts captures (`capture-contracts.mts`, view-state only, zero mutations): register is
+`section[aria-labelledby="agreement-register-heading"]`; groups are
+`section[aria-label="Insurance policies" | "Service contracts" | "Other renewal reminders"]`;
+each row is an `article`; the Add disclosure button text is "Add a contract or policy" and the
+form inside is identified by its "Add to the register" submit button; edit disclosure summary
+is "Edit contract or policy details". Follow-ups:
+`section[aria-labelledby="follow-ups-heading"]`; card reviews:
+`section[aria-labelledby="card-payments-heading"]`. Overview's Key dates section has no
+aria-labelledby — locate it with `page.locator('section', { has: getByRole('heading',
+{ name: 'Key dates', level: 2 }) })`, and apply the entry-34 grid-stretch fix
+(`style.height='max-content'; alignSelf='start'`) or the screenshot is mostly blank space.
+Seed facts (today 2026-10-24): 2 insurance policies (Vehicle A auto-renew yes, cover-end
+2026-11-10; Vehicle B no, 2026-11-23), 1 service contract (BroadbandCo, switch 2026-11-05,
+linked to the £34.99 dd schedule, no renewal date); 3 reminders set; one BroadbandCo follow-up
+due in 6 days; no credit-card pots so that section renders its empty state.
