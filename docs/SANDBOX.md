@@ -877,3 +877,33 @@ Insights capture selectors (part-2 work): the panels are
 `?show=…` and render `#month-drill` / `#person-drill` / `#vehicle-drill`, so re-running the
 standard settle (wait `main`, remove nextjs-portal, hide header) after the click is required.
 Whole-panel element screenshots work cleanly; no data mutation is involved, only URL state.
+
+## 33. Fourth snapshot reset, disposable capture scripts, and form-clipping captures (2026-10-24)
+
+Another full non-repo wipe: `node_modules`, `/tmp/chromium`, `/tmp/al2023`, the wiki clone and
+the e2e server all gone again; the recovery in entries 29/30 worked unchanged
+(`git reset --hard origin/arena/...`, `npm_config_nodedir=/usr/local npm ci`, re-inflate
+@sparticuz/chromium into `/tmp/chromium` with `/tmp/al2023/lib` on `LD_LIBRARY_PATH`, re-clone
+the wiki, restart the e2e server). New this time: `/home/user/wiki-screenshots/` was also gone —
+every capture script and every PNG, not just tooling. Treat all capture scripts as disposable:
+the durable copy of each recipe is this file plus `docs/WIKI_BACKLOG.md` (the backlog itself was
+a scratch file lost in an earlier reset and now lives in the app repo, where pushes survive).
+
+Recurring/income capture selectors (part 3). The recurring page settles behind
+`[data-schedules-ready="true"]`; panels are
+`section[aria-labelledby="calendar-heading" | schedules-heading | agreements-heading
+| projection-figures-heading"]`. Calendar day cells are `button[aria-label*="scheduled item"]`;
+clicking one opens a `region` named `/Scheduled items for/`. The schedules panel is a cramped
+half-width column whose two-field form grids make labels collide with controls in element
+screenshots ("Pot", "Active from" clipped, selects truncated). A 480px mobile context does NOT
+fully stack those grids — the fix used for the published shots was an injected stylesheet
+forcing `section[aria-labelledby="schedules-heading"] .grid { grid-template-columns: 1fr }` and
+block-level full-width labels/inputs, with restoring rules scoped to `fieldset` so the
+`schedule-months` checkbox picker keeps its native two-column layout. Element screenshots crop
+to the border box and touch labels at the edge: add inline padding to the element before
+`locator.screenshot()` (the element path captures nodes taller than the viewport in full; a
+page-level `clip` would truncate them). The Add form and each row's Edit panel are `<details>`;
+the Add form's name input is the 4th `input[name="name"]` in the section, so scope to the Add
+details element rather than the section. Income page: h1 "Money coming in", summary region
+`section[aria-label="Income summary"]`, headings `scheduled-income-heading`,
+`one-off-income-heading`, `income-history-heading`; no mutation needed.
