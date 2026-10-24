@@ -44,9 +44,14 @@ because earlier scratch copies outside git were lost in snapshot resets. Update 
     (decision 163), weekend rules (DD/SO keep the day; receipts shift to previous Friday;
     bank holidays deliberately unhandled), cancellation with effective date, income page
     (scheduled + one-off, BAC, no categories/insights, borrowing is never income).
-12. Payday projection and Horizon — to-payday card, projected low point, 400-day look-ahead,
-    how scheduled instances and the grocery/fuel figures feed it (cross-link Insights honesty
-    loop; projection figures also live on the Recurring payments page).
+12. **The payday projection and Horizon** — published 2026-10-24: configured household payday
+    (day 1–31, clamp + Friday shift, independent of receipt schedules), household-net vs
+    liquid-funds starting figures (cards excluded), home card / Overview panel / till weekly
+    pace / pot bills-only transfer watch (5-day lead, worst pot only), anchor-reset day-to-day
+    events (7-day shop, 30-day per-vehicle fill, overdue → tomorrow, suppressed on payday),
+    two warning tiers (SPEC §8), Horizon 400-day window, default = day before payday
+    (+35 fallback), URL state (`through/pots/daytoday`), ≈ expected support vs + income,
+    day-by-day drill, bills-only relabel, pending-debit limitation (SPEC §7.4).
 13. Contracts and renewals — `/contracts` agreement register, review/switch dates, contract
     end dates are informational and never auto-stop instances (SPEC §22.1), link from schedules.
 14. Tasks and the bell — reminders wait in-app, no emails/notifications; supplier interaction

@@ -907,3 +907,24 @@ the Add form's name input is the 4th `input[name="name"]` in the section, so sco
 details element rather than the section. Income page: h1 "Money coming in", summary region
 `section[aria-label="Income summary"]`, headings `scheduled-income-heading`,
 `one-off-income-heading`, `income-history-heading`; no mutation needed.
+
+## 34. Projection/Horizon captures — stretched grid panels and URL-state-only interactions (2026-10-24)
+
+Payday/Horizon screenshots needed no data mutation at all: every state is reachable through GET
+URL params (`/horizon?through=YYYY-MM-DD&daytoday=0&pots=…`), `<details>` disclosure or one
+day-by-day drill button. Key selectors: home card `section[aria-labelledby="payday-summary-heading"]`;
+Overview panel `section[aria-labelledby="projection-heading"]`; Horizon form
+`form[data-horizon-ready="true"]` inside `section[aria-label="Choose the horizon"]`; headline
+cards `main .grid.lg\\:grid-cols-3`; detail wrapper `main div.space-y-4`; drill buttons
+`getByRole('button', { name: /^Commitments on / })`; payday settings `form[aria-label="Household payday"]`.
+Two new cropping gotchas: (1) the Overview panel is a grid item stretched to the neighbouring
+till's height — an element screenshot carries a tall blank area; fix inline with
+`style.height='max-content'; style.alignSelf='start'` before shooting. (2) A bordered paragraph
+shot via the paddedShot helper can balloon (~15× width) because an element with only inline
+padding and no width constraint inside some layouts measures oddly — prefer reusing the same
+sentence where it already appears (the tier verdict is inside the Overview panel) over a
+dedicated crop. Detail `<details>` beyond 60-day windows start collapsed; force
+`document.querySelectorAll('main details').forEach(d => d.open = true)` for the all-blocks shot.
+Seed anchors (today 2026-10-24): payday day 27; liquid £2,883.07; low £2,803.08 on 2026-10-26;
+45-day window to 2026-12-08 gives 3 commitments / 2 income + 1 expected support
+("support from Mum", ≈£1,000) / 9 day-to-day events; bills-only low £2,848.08.
