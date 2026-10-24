@@ -4456,3 +4456,17 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     notes, handoff and current-release docs; require PR gates, main CI and the tagged Publish run.
     No schema, migration, authentication, assignment, household-status, storage-path or
     backup-format change, and no live deployment is authorised by publication.
+
+262. **Friendly names and the app-wide document search (v1.41.0, 2026-10-24).** The household
+    reported that a photographed vehicle MOT arrives as `IMG_4821.jpg` and is impossible to find
+    later. Agreed before building: (a) an optional **friendly label** on every attachment — set at
+    upload or edited inline from the chip — displayed in place of the file name while the stored
+    file name, download name and storage key are untouched; (b) a dedicated **Documents** page that
+    lists and searches every stored attachment by label, file name and owning record, returning the
+    document's context and a link that lands on the page where it appears. The label is cosmetic and
+    deliberately not audited; a blank label means "show the file name". The search reuses the
+    Purchases matching rules, is server-side and household-scoped, matches `stored` attachments only,
+    and caps at 100 results. One release: migration `0021_attachment_labels.sql` adds the nullable
+    `label` column; no change to authentication, household separation, storage paths or the backup
+    format. Ship as **v1.41.0** through one PR with tests, version metadata, release notes, handoff
+    and current-release docs; require PR gates, main CI and the tagged Publish run.

@@ -51,7 +51,7 @@ export const dynamic = 'force-dynamic';
 export default async function IncomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ receipt?: string }>;
+  searchParams: Promise<{ receipt?: string; attachment?: string }>;
 }) {
   const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
@@ -84,6 +84,14 @@ export default async function IncomePage({
     db,
     rows.map((row) => row.id),
   );
+  // The Documents search links a payslip back to its income record with
+  // `?attachment=<id>`; the row scrolls to and rings that document.
+  const focusAttachmentId = (() => {
+    const raw = params.attachment;
+    if (raw === undefined || raw === '') return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  })();
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
@@ -312,6 +320,7 @@ export default async function IncomePage({
                 documents={documents.get(record.id) ?? []}
                 pots={pots.map((pot) => ({ id: pot.id, label: pot.label }))}
                 today={today}
+                focusAttachmentId={focusAttachmentId}
               />
             ))}
           </ul>
@@ -326,11 +335,13 @@ function IncomeRow({
   documents,
   pots,
   today,
+  focusAttachmentId,
 }: {
   record: IncomeRecordView;
   documents: StoredAttachment[];
   pots: Array<{ id: number; label: string }>;
   today: string;
+  focusAttachmentId: number | null;
 }) {
   const summary = `${formatPence(record.amountPence)} · ${record.source} · ${record.occurredDate} · ${record.potLabel}`;
   return (
@@ -355,6 +366,7 @@ function IncomeRow({
       <AttachmentForm
         receiptId={record.id}
         attachments={documents}
+        focusId={focusAttachmentId}
         allowUpload={record.voidedAt === null}
       />
       {record.voidedAt === null ? (

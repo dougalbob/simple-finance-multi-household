@@ -1,3 +1,17 @@
+**v1.41.0 — friendly document names and the app-wide document search (2026-10-24):** every
+attachment can carry an optional **friendly label** — set at upload or edited inline from the chip —
+shown in place of the file name while the stored file name, download name and storage key are
+untouched; a blank label means "show the file name", and renaming is cosmetic and not audited. A new
+**Documents** page (`/documents`, in the menu beside Suppliers) lists and searches every stored
+attachment by label, file name and owning record, returning the document's context and a link that
+lands on the page where it appears (`?attachment=<id>`). The search reuses the Purchases matching
+rules, is server-side and household-scoped, matches `stored` attachments only and is capped at 100
+results. Migration `0021_attachment_labels.sql` adds the nullable `label` column; no authentication,
+household-separation, storage-path or backup-format change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.41.0` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original
+installation or 3007. See [release notes](docs/RELEASE_NOTES_v1.41.0.md) and decision 262.
+
 **v1.40.0 — compact Admin workspace (issue 107, 2026-10-23):** `/admin` is reorganised into a
 shorter two-column laptop/large-tablet layout with compact summary metrics and a task rail.
 Household rows start collapsed to **name and expand arrow only**; expansion reveals status,

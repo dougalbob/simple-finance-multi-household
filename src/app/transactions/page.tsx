@@ -57,6 +57,8 @@ interface SearchParams {
   transfer?: string | string[];
   /** The purchase open in place beneath its row (decision 226). */
   purchase?: string | string[];
+  /** A document id to land on, from the Documents search (v1.41.0). */
+  attachment?: string;
 }
 
 /**
@@ -92,6 +94,14 @@ export default async function TransactionsPage({
   ensureScheduleState(db, now);
 
   const params = await searchParams;
+  // The Documents search links a receipt back to its in-place purchase panel
+  // with `?attachment=<id>`; the panel scrolls to and rings that document.
+  const focusAttachmentId = (() => {
+    const raw = params.attachment;
+    if (raw === undefined || raw === '') return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  })();
   const today = toLocalDateString(now);
   const pots = listPots(db);
   const defaultPotId = getDefaultTransactionsPotId(db);
@@ -401,6 +411,7 @@ export default async function TransactionsPage({
                         people={purchaseEditor.people}
                         vehicles={purchaseEditor.vehicles}
                         striped={false}
+                        focusAttachmentId={focusAttachmentId}
                         pinned={pinnedPurchaseView}
                       />
                     ) : entry.row.family === 'transfer' ? (
@@ -426,6 +437,7 @@ export default async function TransactionsPage({
                         people={purchaseEditor.people}
                         vehicles={purchaseEditor.vehicles}
                         striped={(stripeIndex.get(entry.row.key) ?? 0) % 2 === 1}
+                        focusAttachmentId={focusAttachmentId}
                         pinned={null}
                       />
                     ) : (

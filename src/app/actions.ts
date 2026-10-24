@@ -23,6 +23,7 @@ import {
   AttachmentInputError,
   AttachmentNotFoundError,
   deleteAttachment,
+  renameAttachment,
   storeAttachment,
 } from '@/lib/records/attachments';
 import { toLocalDateString } from '@/lib/time';
@@ -398,6 +399,10 @@ export async function uploadAttachmentAction(
   const file = formData.get('file');
   if (ownerCount !== 1 || !(file instanceof File) || file.size === 0)
     return { status: 'error', message: 'Choose a file to attach.' };
+  // Optional friendly name (v1.41.0). Absent or blank means "show the file
+  // name"; it never replaces the stored file name or the download name.
+  const label = formData.get('label');
+  const labelText = typeof label === 'string' ? label : '';
 
   const bytes = Buffer.from(await file.arrayBuffer());
   try {
@@ -412,25 +417,27 @@ export async function uploadAttachmentAction(
           ? { supplierId }
           : { receiptId: receiptId as number }),
       originalName: file.name,
+      label: labelText,
       bytes,
       actor: user.email,
       documentsDir: user.documentsDir,
     });
     revalidateAttachmentPages();
-    return { status: 'ok', message: `Attached ${stored.originalName}.` };
+    return { status: 'ok', message: `Attached ${stored.label ?? stored.originalName}.` };
   } catch (err) {
     if (err instanceof AttachmentInputError) return { status: 'error', message: err.message };
     throw err;
   }
 }
 
-/** Every page that lists documents: purchases (receipts), All Transactions (in-place purchase panel), income (payslips), suppliers. */
+/** Every page that lists documents: purchases (receipts), All Transactions (in-place purchase panel), income (payslips), suppliers, and the Documents search. */
 function revalidateAttachmentPages(): void {
   revalidatePath('/purchases');
   revalidatePath('/transactions');
   revalidatePath('/overview');
   revalidatePath('/suppliers');
   revalidatePath('/income');
+  revalidatePath('/documents');
 }
 
 /**
@@ -478,6 +485,50 @@ export async function deleteAttachmentAction(
     }
     console.error('[attachments] deleteAttachmentAction failed', err);
     return { status: 'error', message: 'The receipt could not be removed. Please try again.' };
+  }
+}
+
+/**
+ * Give a document a household-friendly display name (v1.41.0). The form posts
+ * the attachment id and the new label; the file name and bytes are untouched.
+ * Cosmetic only — deliberately not audited (the file name and key stay in the
+ * store/delete entries). A blank label clears it, which means "show the file
+ * name".
+ */
+export async function renameAttachmentAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (!user) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const id = numberOrNull(formData.get('attachmentId'));
+  const label = formData.get('label');
+  if (id === null || id <= 0 || typeof label !== 'string') {
+    return {
+      status: 'error',
+      message: 'That friendly name could not be saved. Refresh and try again.',
+    };
+  }
+  try {
+    const result = renameAttachment({ db: user.db, id, label });
+    revalidateAttachmentPages();
+    if (!result.changed) {
+      return { status: 'ok', message: 'That document was already removed.' };
+    }
+    return {
+      status: 'ok',
+      message: result.label === null ? 'Cleared the friendly name.' : 'Friendly name saved.',
+    };
+  } catch (err) {
+    if (err instanceof AttachmentNotFoundError || err instanceof AttachmentInputError) {
+      return { status: 'error', message: err.message };
+    }
+    console.error('[attachments] renameAttachmentAction failed', err);
+    return {
+      status: 'error',
+      message: 'The friendly name could not be saved. Please try again.',
+    };
   }
 }
 

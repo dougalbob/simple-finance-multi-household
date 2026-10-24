@@ -1,3 +1,48 @@
+# v1.41.0 — friendly document names and the app-wide document search (2026-10-24)
+
+## What this session built
+
+Every attachment can carry an optional **friendly label** — the household's own display name — set at
+upload or edited inline from the chip, shown in place of the file name while the stored file name,
+download name and storage key are untouched. A new **Documents** page (`/documents`, in the menu
+beside Suppliers) lists and searches every stored attachment by label, file name and owning record,
+returning the document's context and a link that lands on the page where it appears.
+
+- **Label.** Migration `0021_attachment_labels.sql` adds a nullable `label` column to `attachments`
+  (a plain `ALTER TABLE ADD COLUMN`, no rebuild). `normalizeAttachmentLabel` trims, collapses
+  whitespace, strips control characters and caps at 200; blank is stored as `NULL`, meaning "show
+  the file name". Display is `label ?? originalName` in the chip and the viewer header; the download
+  name and `Content-Disposition` keep `originalName`. Renaming goes through
+  `renameAttachment` / `renameAttachmentAction` and is deliberately **not** audited — the document's
+  identity (file name, key) is unchanged.
+- **Search.** `src/lib/records/attachment-search.ts` joins each stored attachment to its owner
+  (purchase supplier/date/categories/note, income source/date, supplier name/notes) and ranks with
+  the same rules as the Purchases search (`src/lib/search.ts`). `/documents/page.tsx` is a
+  `force-dynamic` server page; `DocumentSearchForm` debounces into `?q=`. Results link to
+  `/purchases`, `/income` or `/suppliers` with `?attachment=<id>`, and the target pages pass that id
+  to `AttachmentForm`, which scrolls to and rings the chip. Household-scoped, `stored` only, capped
+  at 100.
+- **No change** to authentication, household separation, storage paths, the backup format or the
+  orphan report. A label is database metadata carried by the full SQLite snapshot. Dependency
+  maintenance only: `zod` moves to `^4.6.7` to clear a high advisory that otherwise fails the CI
+  audit step.
+
+## Validation
+
+- `npm test`: **1,232/1,232 across 280 suites**; typecheck, Prettier, themes and production build
+  pass. The build emits the new `/documents` route.
+- New focused suites: `tests/attachment-labels.test.ts` (normalisation, store, rename, clear,
+  unknown id) and `tests/attachment-search.test.ts` (matching, ranking, cap, owner-context join).
+- Required remote evidence is still PR `gates`, `browser` and `docker`, then main CI and Publish.
+  Do not treat a local build or merge alone as publication.
+
+## After install
+
+Back up each household and the Admin registry first. Update only
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.41.0` (or `:latest` after publication), keeping
+appdata `/mnt/user/appdata/simple-finance-multi-household` mounted at `/data` and host port **3009**.
+Never touch the original installation or port 3007.
+
 # v1.40.0 — compact Admin workspace (issue 107, 2026-10-23)
 
 ## What this session built

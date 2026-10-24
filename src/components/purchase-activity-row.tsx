@@ -37,6 +37,8 @@ export interface PurchaseActivityRowProps {
   striped: boolean;
   /** Set when the open purchase no longer counts in this list (decision 226). */
   pinned: PinnedPurchaseView | null;
+  /** A document id to land on, from the Documents search (v1.41.0). */
+  focusAttachmentId: number | null;
 }
 
 const BADGE: Record<PinnedPurchaseReason, string> = {
@@ -84,6 +86,7 @@ export function PurchaseActivityRow({
   vehicles,
   striped,
   pinned,
+  focusAttachmentId,
 }: PurchaseActivityRowProps) {
   const purchaseId = row.recordId;
   const { open, openRow, closeRow } = useActivityRow();
@@ -285,7 +288,11 @@ export function PurchaseActivityRow({
                   people={people}
                   vehicles={vehicles}
                 />
-                <AttachmentForm purchaseId={purchaseId} attachments={facts.attachments} />
+                <AttachmentForm
+                  purchaseId={purchaseId}
+                  attachments={facts.attachments}
+                  focusId={focusAttachmentId}
+                />
               </div>
               <div className="min-w-0 md:border-l md:border-border-hairline md:pl-6">
                 <h4 className="text-sm font-semibold text-ink">Void it</h4>

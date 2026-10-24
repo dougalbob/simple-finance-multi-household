@@ -658,7 +658,7 @@ describe('the wiring: the page gives a purchase the Purchases page’s own forms
     assert.ok(row.includes('aria-expanded'), 'a disclosure, announced as one');
     assert.ok(row.includes('PurchaseEditForm'), 'the Purchases page’s edit form');
     assert.ok(
-      row.includes('<AttachmentForm purchaseId={purchaseId} attachments={facts.attachments} />'),
+      row.includes('<AttachmentForm') && row.includes('attachments={facts.attachments}'),
       'and the Purchases page’s receipt attachment block (issue #83)',
     );
     assert.ok(row.includes('VoidForm'), 'and its void form');

@@ -43,7 +43,7 @@ export const dynamic = 'force-dynamic';
 export default async function SuppliersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplierId?: string; id?: string; q?: string }>;
+  searchParams: Promise<{ supplierId?: string; id?: string; q?: string; attachment?: string }>;
 }) {
   const user = await householdContextFromRequest();
   if (user === null) redirect('/unauthorized');
@@ -53,6 +53,15 @@ export default async function SuppliersPage({
   const today = toLocalDateString(now);
   const suppliers = listSuppliers(db);
   const params = await searchParams;
+
+  // The Documents search links a document back to its supplier card with
+  // `?attachment=<id>`; the card scrolls to and rings that document.
+  const focusAttachmentId = (() => {
+    const raw = params.attachment;
+    if (raw === undefined || raw === '') return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  })();
 
   // Tasks and documents for every card at once (decision 175), and the names
   // behind the sign-in emails that wrote each log entry.
@@ -155,6 +164,7 @@ export default async function SuppliersPage({
         overdueCount: 0,
       },
       documents: documentsBySupplier.get(supplier.id) ?? [],
+      focusAttachmentId,
       recentPurchases: purchases.map(({ purchase, allocations }) => {
         const summary = purchaseLineSummary(allocations, categoryNames, names);
         return {

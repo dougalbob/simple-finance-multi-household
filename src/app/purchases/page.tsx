@@ -59,6 +59,8 @@ interface SearchParams {
   paidByPersonId?: string;
   /** The supplier / category / notes search (follow-up to issue #98), as typed. */
   q?: string;
+  /** A document id to land on, from the Documents search (v1.41.0). */
+  attachment?: string;
   scheduleOnly?: string;
   refundsOnly?: string;
   voidedOnly?: string;
@@ -138,6 +140,9 @@ export default async function PurchasesPage({
   // The search matches the Supplier column, every line's category and Notes at
   // once (the follow-up to GitHub issue #98). A blank box is not a filter.
   const search = (params.q ?? '').trim().slice(0, PURCHASE_SEARCH_MAX_LENGTH);
+  // The Documents search links a receipt back to its purchase row with
+  // `?attachment=<id>`; the row scrolls to and rings that document.
+  const focusAttachmentId = toNumber(params.attachment) ?? null;
 
   const filters: PurchaseFilters = {
     potId: toNumber(params.potId),
@@ -389,6 +394,7 @@ export default async function PurchasesPage({
                       targetId: line.targetId,
                     }))}
                     attachments={listStoredAttachments(db, purchase.id)}
+                    focusAttachmentId={focusAttachmentId}
                     fuel={fuelRowDetails(fuelContext, purchase, allocations)}
                     history={listAuditForEntity(db, 'purchase', purchase.id)}
                     openTasks={tasksByPurchase.get(purchase.id)?.open ?? []}
@@ -457,6 +463,8 @@ interface PurchaseRowProps {
   paidVia: string | null;
   version: number;
   attachments: StoredAttachment[];
+  /** A document id to land on, from the Documents search (v1.41.0). */
+  focusAttachmentId: number | null;
   /** Odometer, litres and mpg — fuel purchases only (v0.10.0). */
   fuel: FuelDetailsFormProps | null;
   history: AuditEntry[];
@@ -559,7 +567,11 @@ function PurchaseRow(props: PurchaseRowProps) {
           </div>
         ) : null}
         {props.fuel !== null ? <FuelDetailsForm {...props.fuel} /> : null}
-        <AttachmentForm purchaseId={props.purchaseId} attachments={props.attachments} />
+        <AttachmentForm
+          purchaseId={props.purchaseId}
+          attachments={props.attachments}
+          focusId={props.focusAttachmentId}
+        />
         {props.openTasks.length > 0 ? (
           <div className="mt-1.5 max-w-md text-ink-body">
             <p className="mb-1 text-xs font-medium text-ink-muted">Tasks</p>
