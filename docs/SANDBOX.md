@@ -984,6 +984,10 @@ without navigating. The red count badge and the blue "new" dot occupy the same c
 dot covers the numeral, so photograph the bell *after* one open (dot cleared); the overlap is
 worth telling the household about in the page's limits list. `header` also matches each page's
 own `<header>` — use `header[data-sticky-header]`. Two bell buttons exist in the DOM at every
-width (desktop bar and phone bar), so phone clicks need `>> visible=true`. Finally, small UI
-text (badges, panel lines) is unreadable once a 1400px shot is scaled to wiki width: capture
-those contexts at `deviceScaleFactor: 2` and let element crops display near CSS 1:1.
+width (desktop bar and phone bar), so phone clicks need `>> visible=true`. Finally, capture at the
+default `deviceScaleFactor: 1`: the wiki renders an image narrower than its text column at its
+natural pixel size, so a 2x crop of a 448px panel arrives looking zoomed-in beside the earlier
+pages' 1x crops (414-1120px wide). Element shots at 1x sit at the same apparent type size as
+the rest of the guide, and the household is happy for them not to span the column; only the
+1400px whole-viewport shots scale down (to roughly three quarters), which is the established
+look. The first 2x attempt was replaced on 2026-10-24 after review.

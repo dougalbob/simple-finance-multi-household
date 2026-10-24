@@ -131,6 +131,8 @@ pot to the bank with a checkpoint, what to do when the payday card warns of a lo
   "— 4 new since you last looked" before the first open; panel footer "3 things the app has
   noticed →"; noticed items = BroadbandCo fee-free switch in 12 days, Vehicle A renewal in
   17 days, Vehicle A's £21.49 fill on Fri 23 Oct missing the mileage and the litres.
-- Capture notes: 2x deviceScaleFactor for the small bell/panel text; the count badge and the
-  new dot share a corner, so bell shots are taken after one open (dot cleared) and a
-  visibilitychange nudge; two bell buttons exist in the DOM (desktop bar + phone bar).
+- Capture notes: capture at the default 1x scale — the wiki shows images narrower than its
+  column at natural size, so 2x crops read zoomed-in beside the earlier pages (a first 2x pass
+  was replaced after review); narrow images that do not span the column are fine. The count
+  badge and the new dot share a corner, so bell shots are taken after one open (dot cleared)
+  and a visibilitychange nudge; two bell buttons exist in the DOM (desktop bar + phone bar).
