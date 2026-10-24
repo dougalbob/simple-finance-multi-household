@@ -858,3 +858,22 @@ card element itself (`page.locator('#mix').screenshot()`) after `scrollIntoViewI
 preset manager on Settings (`#commitment-categories`) has its own hydration guard
 `[data-presets-ready="true"]`; creating a preset then mutates the seed (the e2e server reseeds
 `.e2e-data` on restart, so treat it like the other in-UI capture mutations).
+
+## 32. An e2e server can survive a snapshot as an orphan holding port 3100 (2026-10-24)
+
+After a restore, a plain `curl /api/health` may still answer even though every tracked process
+handle is gone: the previous turn's `node --import tsx scripts/e2e-server.mts` can keep running
+as an orphan (its `.e2e-data` therefore also survives, mutated seed and all). A fresh
+`start_process` then fails with `EADDRINUSE 0.0.0.0:3100` and nothing new is started. Recovery:
+`ps aux | grep e2e-server` to find the pid, `kill <pid>`, confirm with `ss -ltn | grep 3100`,
+then start the server normally — booting it reseeds `.e2e-data`, which is also how capture-time
+mutations (voided purchases, saved presets, added categories) are discarded. Do not assume a
+"server DOWN" health check means the port is free; the check and the listener are different
+things when the process is untracked.
+
+Insights capture selectors (part-2 work): the panels are
+`section[aria-labelledby="panel-month-heading" | panel-persons-heading | panel-vehicles-heading
+| panel-mpg-heading | panel-honesty-heading"]`; drill links are full GET navigations carrying
+`?show=…` and render `#month-drill` / `#person-drill` / `#vehicle-drill`, so re-running the
+standard settle (wait `main`, remove nextjs-portal, hide header) after the click is required.
+Whole-panel element screenshots work cleanly; no data mutation is involved, only URL state.
