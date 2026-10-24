@@ -841,3 +841,20 @@ Useful selectors discovered while capturing the part-2 history pages:
   `Remove the <kind> filter: <value>`;
 - the e2e seed contains no refunds or voids, so capture them by mutating the live seed in-UI;
   `scripts/e2e-server.mts` reseeds `.e2e-data` automatically on the next server start.
+
+## 31. Capturing the Charts page — duplicated figures and whole-card screenshots (2026-10-24)
+
+Every chart card (`#forecast`, `#groceries`, `#personal`, `#commitments`, `#mix`, `#months`,
+`#pace`) renders the drawing twice: a 320px phone figure and a 720px laptop figure, one hidden
+by CSS, and each carries its own `Show the numbers` table twin and its own set of `svg a[href]`
+bar links. A naive Playwright locator therefore fails with a strict-mode violation on two
+elements. In a 1400px viewport the laptop figure is the **later** DOM node, so scope with
+`.last()` — e.g. `card.locator('svg a[href]').last().click()` — rather than opening the table
+twin at all: tapping a bar link directly opens the in-place `Line items: …` drill panel
+(`?show=` / `?slice=` URL state), which is the more useful screenshot.
+
+Viewport screenshots of the two-column chart grid always frame a neighbour card; screenshot the
+card element itself (`page.locator('#mix').screenshot()`) after `scrollIntoViewIfNeeded()`. The
+preset manager on Settings (`#commitment-categories`) has its own hydration guard
+`[data-presets-ready="true"]`; creating a preset then mutates the seed (the e2e server reseeds
+`.e2e-data` on restart, so treat it like the other in-UI capture mutations).
