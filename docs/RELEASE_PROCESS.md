@@ -4,6 +4,20 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.41.0 — friendly document names and the app-wide document search (2026-10-24)
+
+The household asked for a way to give an uploaded document a friendly name and then find it from
+anywhere in the app. Agreed before building: an optional **label** displayed in place of the file name
+(file name, download name and storage key untouched; blank means "show the file name"; cosmetic and
+not audited), and a dedicated **Documents** page that searches every stored attachment by label, file
+name and owning record, landing on the page where the document appears. Migration
+`0021_attachment_labels.sql` adds the nullable `label` column. Keep implementation, tests, version
+metadata, release notes, handoff and current-release documentation in **one PR**. Require PR
+`gates`, `browser` and `docker`, merge once, require main CI, then place annotated `v1.41.0` on the
+exact main merge commit and verify Publish. Publish only
+`ghcr.io/dougalbob/simple-finance-multi-household` with matching-digest `v1.41.0`, `latest` and
+`sha-<short>` tags plus a stable GitHub Latest release; publication does not deploy to Unraid.
+
 ## v1.40.0 — issue #107: compact Admin workspace (2026-10-23)
 
 The owner reviewed the Admin redesign in the live Arena preview, asked for households to start as

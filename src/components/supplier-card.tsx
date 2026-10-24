@@ -79,6 +79,8 @@ export interface SupplierCardData {
   };
   /** Letters, policy documents and terms attached to the supplier itself (v0.25.0). */
   documents: StoredAttachment[];
+  /** A document id to land on, from the Documents search (v1.41.0). */
+  focusAttachmentId: number | null;
   /** Recurring schedules linked to this canonical supplier (issue #34). */
   linkedSchedules?: LinkedScheduleSummary[];
   recentPurchases: Array<{
@@ -147,6 +149,7 @@ export function SupplierCard({
   interactions,
   tasks,
   documents,
+  focusAttachmentId,
   linkedSchedules = [],
   recentPurchases,
   isExpanded,
@@ -352,7 +355,11 @@ export function SupplierCard({
           <p className="text-xs text-ink-muted">
             Letters, policy documents and terms — PDF, JPEG or PNG, up to 10 MB each.
           </p>
-          <AttachmentForm supplierId={supplier.id} attachments={documents} />
+          <AttachmentForm
+            supplierId={supplier.id}
+            attachments={documents}
+            focusId={focusAttachmentId}
+          />
 
           <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-ink-muted">
             Recent purchases
@@ -368,7 +375,11 @@ export function SupplierCard({
                   {purchase.extraLines > 0 ? (
                     <span className="ml-1 text-xs text-ink-muted">+{purchase.extraLines} more</span>
                   ) : null}
-                  <AttachmentForm purchaseId={purchase.id} attachments={purchase.attachments} />
+                  <AttachmentForm
+                    purchaseId={purchase.id}
+                    attachments={purchase.attachments}
+                    focusId={focusAttachmentId}
+                  />
                 </li>
               ))}
             </ul>

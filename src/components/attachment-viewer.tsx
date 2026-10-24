@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { AttachmentSummary } from './attachment-form';
+import { attachmentDisplayName, type AttachmentSummary } from './attachment-form';
 import { PdfPages } from './pdf-pages';
 
 /**
@@ -84,7 +84,7 @@ export function AttachmentViewer({
   return (
     <dialog
       ref={dialog}
-      aria-label={`Document: ${attachment.originalName}`}
+      aria-label={`Document: ${attachmentDisplayName(attachment)}`}
       onCancel={onClose}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -96,9 +96,14 @@ export function AttachmentViewer({
           <button type="button" onClick={onClose} className={ACTION}>
             Close
           </button>
-          <span className="min-w-0 flex-1 break-words font-semibold">
-            {attachment.originalName}
-          </span>
+          <div className="min-w-0 flex-1">
+            <span className="block break-words font-semibold">
+              {attachmentDisplayName(attachment)}
+            </span>
+            {attachment.label !== null ? (
+              <span className="block text-xs text-ink-muted">File: {attachment.originalName}</span>
+            ) : null}
+          </div>
           <span className="shrink-0 text-sm text-ink-muted">
             {Math.ceil(attachment.sizeBytes / 1024)} KB
           </span>

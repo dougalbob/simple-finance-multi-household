@@ -730,6 +730,10 @@ export const attachments = sqliteTable(
     supplierId: integer('supplier_id').references(() => suppliers.id),
     fileKey: text('file_key').notNull().unique(),
     originalName: text('original_name').notNull(),
+    // A household's own display name for the document (v1.41.0). Null means
+    // "show the file name". Never used to build a path or a download name:
+    // the stored `original_name` and `file_key` still decide both.
+    label: text('label'),
     mime: text('mime').notNull(),
     sizeBytes: integer('size_bytes').notNull(),
     sha256: text('sha256').notNull(),

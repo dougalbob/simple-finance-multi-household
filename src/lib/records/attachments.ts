@@ -116,6 +116,24 @@ export function sanitizeOriginalName(raw: string): string {
 }
 
 /**
+ * A household's own display name for a document (v1.41.0). Unlike the file
+ * name this is never used to build a path, a download name or a header: it is
+ * pure display text, rendered as text and matched by the document search. So
+ * it only drops control characters (which would corrupt the viewer header and
+ * the markup it lands in) and collapses whitespace; every other character is
+ * allowed. A label of nothing means "show the file name", so it is stored as
+ * NULL rather than an empty string.
+ */
+export function normalizeAttachmentLabel(raw: string): string | null {
+  const cleaned = raw
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+  return cleaned === '' ? null : cleaned;
+}
+
+/**
  * What a document is attached to (decision 138): a purchase (receipts,
  * invoices), since v0.10.0 an income record (payslips), and since v0.25.0 a
  * supplier (letters, policy documents, terms — decision 175). Exactly one;
@@ -135,6 +153,8 @@ export interface StoreAttachmentInput {
   /** A supplier's letter, policy document or terms (v0.25.0). */
   supplierId?: number;
   originalName: string;
+  /** Optional display name (v1.41.0); empty means "show the file name". */
+  label?: string;
   bytes: Buffer;
   actor: string;
   /** Resolved tenant `<dataDir>/households/<id>/documents`, never request input. */
@@ -146,6 +166,8 @@ export interface StoredAttachment {
   id: number;
   fileKey: string;
   originalName: string;
+  /** The household's display name, or null to show the file name. */
+  label: string | null;
   mime: string;
   sizeBytes: number;
   sha256: string;
@@ -190,6 +212,7 @@ export async function storeAttachment(input: StoreAttachmentInput): Promise<Stor
 
   const sha256 = createHash('sha256').update(input.bytes).digest('hex');
   const originalName = sanitizeOriginalName(input.originalName);
+  const label = normalizeAttachmentLabel(input.label ?? '');
   const id = input.db.transaction((tx: DbTx) => {
     const row = tx
       .insert(attachments)
@@ -199,6 +222,7 @@ export async function storeAttachment(input: StoreAttachmentInput): Promise<Stor
         supplierId: owner.kind === 'supplier' ? owner.id : null,
         fileKey,
         originalName,
+        label,
         mime,
         sizeBytes: input.bytes.length,
         sha256,
@@ -213,14 +237,60 @@ export async function storeAttachment(input: StoreAttachmentInput): Promise<Stor
       action: 'attachment.store',
       entity: owner.kind,
       entityId: owner.id,
-      summary: `Attached ${originalName} (${attachmentSizeLabel(input.bytes.length)}, ${mime})`,
-      after: { fileKey, originalName, mime, sizeBytes: input.bytes.length, sha256 },
+      summary: `Attached ${label ?? originalName} (${attachmentSizeLabel(input.bytes.length)}, ${mime})`,
+      after: { fileKey, originalName, label, mime, sizeBytes: input.bytes.length, sha256 },
       now,
     });
     return row.id;
   });
 
-  return { id, fileKey, originalName, mime, sizeBytes: input.bytes.length, sha256 };
+  return { id, fileKey, originalName, label, mime, sizeBytes: input.bytes.length, sha256 };
+}
+
+/**
+ * Give a stored document a household-friendly display name (v1.41.0).
+ *
+ * The file name and the bytes are untouched; only the `label` column moves.
+ * Exactly one stored row is affected. The label is normalised here so a
+ * client cannot store control characters or an unbounded string. A blank
+ * label clears it, which means "show the file name" everywhere.
+ *
+ * The change is deliberately **not** audited: it is cosmetic display text, and
+ * the underlying file name and key stay in the `attachment.store` /
+ * `attachment.delete` entries. A document's identity — which file it is and
+ * where it lives — is unchanged by a label.
+ *
+ * The row must be `stored`; renaming something already removed matches
+ * nothing. `AttachmentNotFoundError` is thrown for an unknown id, so the
+ * caller can distinguish "gone" from "nothing changed".
+ */
+export interface RenameAttachmentInput {
+  db: Db;
+  id: number;
+  label: string;
+  now?: Date;
+}
+
+export interface RenameAttachmentResult {
+  /** True when this call wrote a new label to a stored row. */
+  changed: boolean;
+  /** The stored label after this call (null when the file name is shown). */
+  label: string | null;
+}
+
+export function renameAttachment(input: RenameAttachmentInput): RenameAttachmentResult {
+  const row = input.db.select().from(attachments).where(eq(attachments.id, input.id)).get();
+  if (row === undefined) throw new AttachmentNotFoundError('That document no longer exists.');
+
+  const label = normalizeAttachmentLabel(input.label);
+  const updated = input.db
+    .update(attachments)
+    .set({ label })
+    .where(and(eq(attachments.id, input.id), eq(attachments.state, 'stored')))
+    .returning({ id: attachments.id, label: attachments.label })
+    .all();
+  if (updated.length === 0) return { changed: false, label: row.label };
+  return { changed: true, label: updated[0]!.label };
 }
 
 export interface DeleteAttachmentInput {
@@ -332,6 +402,7 @@ export function listStoredAttachments(db: Db, purchaseId: number): StoredAttachm
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
+      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,
@@ -359,6 +430,7 @@ export function listStoredPurchaseAttachments(
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
+      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,
@@ -393,6 +465,7 @@ export function listStoredReceiptAttachments(
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
+      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,
@@ -426,6 +499,7 @@ export function listStoredSupplierAttachments(
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
+      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,
