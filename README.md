@@ -1,5 +1,17 @@
 # Simple Finance Multi-household
 
+**v1.41.1 — The Documents page, actually shipped:** v1.41.0 linked the menu to `/documents` but
+omitted the page itself, so the item opened Next's 404 (the friendly-label work and search library
+were present and correct). This patch adds the missing **Documents** page — one household-scoped
+search over every stored attachment by friendly name, file name and owning record, with each
+result linking back to Purchases, Income or Suppliers via `?attachment=<id>` so the document's
+chip scrolls into view and rings — plus a unit guard that fails CI if any navigation link points
+at a route without a page, and a Playwright spec covering both navigation surfaces, the search and
+the deep link. No schema, migration, authentication, storage-path or backup-format change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.41.1` (stable also moves `latest`),
+appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. See
+[release notes](docs/RELEASE_NOTES_v1.41.1.md) and [handoff](docs/HANDOFF.md).
+
 **v1.41.0 — Friendly document names and the app-wide document search:** Every attachment can now
 carry an optional **friendly label**, set at upload or edited inline from the chip, that is shown in
 place of the file name while the stored file name, download name and storage key stay untouched; a

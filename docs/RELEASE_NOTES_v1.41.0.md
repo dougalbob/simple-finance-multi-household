@@ -1,5 +1,12 @@
 # Release notes — v1.41.0 — Friendly document names and the app-wide document search
 
+> **Erratum (corrected in v1.41.1).** This release shipped the friendly-label work and the
+> document-search library, but the **Documents page itself (`/documents`) was missing from the
+> build** — the menu item opened Next's 404. The friendly-label features below all worked; only the
+> search page did not exist. v1.41.1 adds the page, its browser tests and a regression guard that
+> fails CI if any menu link ever points at a route without a page again. See
+> [RELEASE_NOTES_v1.41.1.md](RELEASE_NOTES_v1.41.1.md).
+
 **Stable feature release**, moving `latest` and GitHub's Latest release. The badge reads
 **`v1.41.0 · stable`**. Answers the household's report that a photographed vehicle MOT arrives as
 `IMG_4821.jpg` and is impossible to find later.
@@ -42,7 +49,9 @@ the full SQLite snapshot. Back up each household and the Admin registry before u
 ## Validation evidence
 
 - `npm test`: **1,232/1,232 tests across 280 suites**; typecheck, Prettier, theme and production
-  build checks pass. The build emits the new `/documents` route.
+  build checks pass. **This claim was wrong for the route: the build did not emit `/documents` in
+  v1.41.0 — the page file was absent — and no test followed the menu link, so CI stayed green.
+  Corrected by v1.41.1.**
 - New focused suites cover label normalisation, storing and renaming (including clearing and an
   unknown id), and the search's matching, ranking and owner-context join.
 - The required PR checks remain `gates`, `browser` and `docker`, followed by main CI and the tagged
@@ -59,4 +68,5 @@ the full SQLite snapshot. Back up each household and the Admin registry before u
    single-household image, appdata or port **3007**.
 4. Open **Documents** and search for a document by its friendly name, its file name, or the record
    it belongs to; open a result to land on the page that shows it. Rename a document from its chip
-   on Purchases, Income or Suppliers.
+   on Purchases, Income or Suppliers. **On v1.41.0 the Documents menu item 404s — update to
+   v1.41.1 before this step; the rename step works on both versions.**

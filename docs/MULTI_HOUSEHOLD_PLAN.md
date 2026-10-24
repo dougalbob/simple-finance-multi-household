@@ -1,5 +1,17 @@
 # Multi-household edition — active product and safety contract
 
+**v1.41.1 — The Documents page, actually shipped:** v1.41.0's menu linked to `/documents` but the
+page was missing from the build, so the item opened Next's 404; the label work and search library
+were present. This patch adds the **Documents** page — a household-scoped, `force-dynamic` server
+page that searches every `stored` attachment by friendly name, file name and owning record
+(capped at 100), with results deep-linking to Purchases, Income or Suppliers through
+`?attachment=<id>` — plus a unit guard that fails CI if any navigation `href` has no matching
+`src/app/**/page.tsx`, and a Playwright spec for both navigation surfaces, the search and the deep
+link. No schema, migration, authentication, household-separation, storage-path or backup-format
+change. Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.41.1` (stable also moves
+`latest`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`,
+never the original installation or 3007. See `docs/RELEASE_NOTES_v1.41.1.md` and decision 263.
+
 **v1.41.0 — Friendly document names and the app-wide document search:** Every attachment can now
 carry an optional **friendly label**, set at upload or edited inline from the chip, shown in place of
 the file name while the stored file name, download name and storage key stay untouched; a blank

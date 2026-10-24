@@ -1,3 +1,18 @@
+**v1.41.1 — the Documents page, actually shipped (2026-10-24):** v1.41.0 linked the site menu to
+`/documents` but the page file was never committed, so the menu item opened Next's 404 in
+production while CI stayed green — no test followed a menu link. This patch adds
+`src/app/documents/page.tsx`, a `force-dynamic` household-scoped server page over the existing
+`searchAttachments` library and `DocumentSearchForm`: the box debounces into `?q=`, each result
+shows the friendly name (or file name), size and owning-record context, and links to
+`/purchases`, `/income` or `/suppliers` with `?attachment=<id>` so the target chip scrolls to and
+rings. It also adds `tests/site-nav-routes.test.ts`, which fails if any `site-nav.tsx` href lacks a
+matching `src/app/**/page.tsx`, and `e2e/documents.spec.ts` (desktop bar and phone drawer, search,
+deep link, no-match); the size formatter moves to dependency-free `src/lib/format.ts`. No schema,
+migration, authentication, storage-path or backup-format change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.41.1` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original
+installation or 3007. See [release notes](docs/RELEASE_NOTES_v1.41.1.md) and decision 263.
+
 **v1.41.0 — friendly document names and the app-wide document search (2026-10-24):** every
 attachment can carry an optional **friendly label** — set at upload or edited inline from the chip —
 shown in place of the file name while the stored file name, download name and storage key are

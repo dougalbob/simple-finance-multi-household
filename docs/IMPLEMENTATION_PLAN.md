@@ -4470,3 +4470,26 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     `label` column; no change to authentication, household separation, storage paths or the backup
     format. Ship as **v1.41.0** through one PR with tests, version metadata, release notes, handoff
     and current-release docs; require PR gates, main CI and the tagged Publish run.
+
+263. **The missing Documents page (v1.41.1, 2026-10-24).** After v1.41.0 was installed on Unraid the
+    household reported that the Documents menu item opened Next's 404 ("That page is not here").
+    Investigation confirmed `src/app/documents/page.tsx` had never existed in any commit: the
+    release shipped the menu entries, `DocumentSearchForm` and the `searchAttachments` library with
+    nothing importing them, and the release notes/SPEC/handoff all claimed the route was built. CI
+    passed because no unit test mapped nav links to pages and no browser spec followed the menu.
+    Fix as a patch, not by moving the published v1.41.0 tag: (a) add the `force-dynamic`
+    `/documents` server page on the existing `householdContextFromRequest` gate, reading `?q=` and
+    rendering `DocumentSearchForm` plus results (friendly name or file name, size, owning-record
+    context line) whose links carry `?attachment=<id>` to the scroll-and-ring behaviour already on
+    Purchases, Income and Suppliers; (b) add `tests/site-nav-routes.test.ts`, which reads every
+    `href` in `site-nav.tsx` and requires a matching `src/app/**/page.tsx`, and pins the Documents
+    wiring; (c) add `e2e/documents.spec.ts` over the desktop bar, phone drawer, a real receipt
+    search, the deep link and the no-match state, registered in its own Playwright project match;
+    (d) move the byte/KB/MB label into dependency-free `src/lib/format.ts` so a client island never
+    imports the Node-only attachments pipeline (a Turbopack client-build panic caught this locally);
+    (e) root-anchor the `.gitignore` `documents/` rule, whose bare form also ignored
+    `src/app/documents/` and would have hidden the new page from `git add`.
+    Correct the v1.41.0 notes and SPEC §23.5 honestly rather than rewriting history; no schema,
+    migration, authentication, storage-path or backup-format change. Ship as **v1.41.1** through one
+    PR with tests, version metadata, release notes, handoff and current-release docs; require
+    `gates`, `browser` and `docker`, main CI and the tagged Publish run.

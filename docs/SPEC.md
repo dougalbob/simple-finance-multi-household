@@ -2281,7 +2281,13 @@ purchase record stays. There is no undelete in the app.
 - The purchase's History list shows who removed it and when. The chip disappears from every page that
   renders stored receipts.
 
-### 23.5 Friendly names and the app-wide document search (v1.41.0)
+### 23.5 Friendly names and the app-wide document search (v1.41.0; page completed in v1.41.1)
+
+> Delivery note: v1.41.0 shipped the friendly-label work and the search library, but the
+> `/documents` page itself was absent from that build, so the menu item 404'd. v1.41.1 added
+> `src/app/documents/page.tsx`, the Documents browser spec and a guard (`tests/site-nav-routes.test.ts`)
+> that fails CI if any navigation link points at a route without a page. The contract below is the
+> behaviour the app has from v1.41.1.
 
 A photographed MOT arrives as `IMG_4821.jpg`, which says nothing about what it is or where it
 belongs. Two additions fix that without touching the file itself.
@@ -2297,17 +2303,17 @@ key — is unchanged, and those remain in the `attachment.store` / `attachment.d
 renamed document is still the same bytes at the same path, so backups, restore and the orphan
 report are unaffected (migration `0021_attachment_labels.sql` adds the nullable column).
 
-**App-wide document search.** A **Documents** page (`/documents`, in the menu beside Suppliers)
-lists every stored attachment in the household and searches it in one place. The box reads the
-friendly label, the original file name **and** the owning record's context together, using the same
-matching rules as the Purchases search (§12): case and whitespace are normalised, and every
-whitespace-separated word must appear somewhere, in any order. A result shows the document's name,
-its size and a context line — `Purchase · supplier · date · category` for a receipt, `Income ·
-source · date` for a payslip, `Supplier · name` for a letter — and opens the page where the
-document appears (`/purchases`, `/income` or `/suppliers`) with `?attachment=<id>`, which scrolls
-to and briefly rings that document. The query is debounced and lives in the URL (`?q=`), so a
-search is shareable; the server scopes the query to the verified household and returns only
-`stored` attachments, capped at 100 results.
+**App-wide document search.** A **Documents** page (`/documents`, in the menu beside Suppliers;
+delivered in v1.41.1) lists every stored attachment in the household and searches it in one place.
+The box reads the friendly label, the original file name **and** the owning record's context
+together, using the same matching rules as the Purchases search (§12): case and whitespace are
+normalised, and every whitespace-separated word must appear somewhere, in any order. A result
+shows the document's name, its size and a context line — `Purchase · supplier · date · category`
+for a receipt, `Income · source · date` for a payslip, `Supplier · name` for a letter — and opens
+the page where the document appears (`/purchases`, `/income` or `/suppliers`) with
+`?attachment=<id>`, which scrolls to and briefly rings that document. The query is debounced and
+lives in the URL (`?q=`), so a search is shareable; the server scopes the query to the verified
+household and returns only `stored` attachments, capped at 100 results.
 
 ## 24. Credit-card pots, statement reviews and promotional dates
 

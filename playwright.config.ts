@@ -78,9 +78,9 @@ export default defineConfig({
         },
         {
           // Own project: testMatch is per-project, so a new spec file is not picked
-          // up by mobile/desktop; include attachment specs explicitly.
+          // up by mobile/desktop; include attachment and document specs explicitly.
           name: 'attachments',
-          testMatch: /(?:attachments|remainder)\.spec\.ts/,
+          testMatch: /(?:attachments|documents|remainder)\.spec\.ts/,
           use: { viewport: { width: 1400, height: 950 } },
         },
         {
