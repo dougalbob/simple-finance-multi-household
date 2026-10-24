@@ -75,6 +75,22 @@ was already complete (each page parses the id into `focusAttachmentId`; `Attachm
   `ghcr.io/dougalbob/simple-finance-multi-household` tags `v1.41.1`, `latest` and `sha-<short>` on
   one digest, plus the GitHub Latest release. Publication does not deploy.
 
+## Release provenance (complete)
+
+- PR **#111** merged with a merge commit: `340567e7ea6436a29022fae6c492712e5bb376bd` on `main`.
+  All three PR checks green (`gates`, `browser` with 189 browser tests, `docker`), then main CI run
+  40120564837 green on the merge commit. The first browser run (on the earlier push) failed and
+  found the supplier-map bug; the fix plus timestamped, retry-safe test names landed before merge.
+- Annotated tag **`v1.41.1`** points at the exact merge SHA (v1.41.0 left untouched on `34a2bd2`).
+  Publish run **40121575431** succeeded and created the GitHub release, marked **Latest** (not a
+  draft/prerelease).
+- Image `ghcr.io/dougalbob/simple-finance-multi-household` tags `v1.41.1`, `latest` and
+  `sha-340567e` share one registry-verified digest:
+  `sha256:ce63ed8f6dded8c167f65d08c943793a44fd756fc89fbb33ac258b41ab7f553c`.
+- Deployment remains the household's step: update the Unraid container to `:v1.41.1` (appdata
+  `/mnt/user/appdata/simple-finance-multi-household`, host port 3009) and confirm the badge reads
+  `v1.41.1 · stable` and the Documents menu opens the search page.
+
 ## After install
 
 Back up each household and the Admin registry first. Update only
