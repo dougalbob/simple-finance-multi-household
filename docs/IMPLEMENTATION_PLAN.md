@@ -4488,7 +4488,11 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     (d) move the byte/KB/MB label into dependency-free `src/lib/format.ts` so a client island never
     imports the Node-only attachments pipeline (a Turbopack client-build panic caught this locally);
     (e) root-anchor the `.gitignore` `documents/` rule, whose bare form also ignored
-    `src/app/documents/` and would have hidden the new page from `git add`.
+    `src/app/documents/` and would have hidden the new page from `git add`; (f) fix the search
+    library defect the new browser spec exposed — `searchAttachments` only mapped suppliers from
+    attachment-owned rows, so purchase-only households got "Unknown supplier" and supplier-name
+    searches missed; union the purchase rows' supplier ids and pin it with a purchase-receipt-only
+    regression test.
     Correct the v1.41.0 notes and SPEC §23.5 honestly rather than rewriting history; no schema,
     migration, authentication, storage-path or backup-format change. Ship as **v1.41.1** through one
     PR with tests, version metadata, release notes, handoff and current-release docs; require

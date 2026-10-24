@@ -246,4 +246,55 @@ describe('document search in the projection', () => {
       fx.close();
     }
   });
+
+  it('names the supplier of a purchase receipt when no document is supplier-owned', async () => {
+    // Regression (v1.41.1): the supplier map was built only from attachment
+    // rows' own supplierId, which is null for a purchase receipt. A household
+    // whose documents are all purchase receipts therefore got "Unknown
+    // supplier" on every result, and searching by supplier name — the MOT case
+    // this feature exists for — matched nothing.
+    const fx = await createHouseholdFixture();
+    try {
+      const documentsDir = path.join(path.dirname(fx.handle.raw.name), 'documents');
+      const insurer = createSupplier(fx.db, {
+        name: 'Acorn Insurance',
+        actor: 'alex@example.com',
+      });
+      const purchase = createPurchase(fx.db, {
+        supplierId: insurer.id,
+        potId: fx.pots.main.id,
+        totalPence: 1200,
+        occurredDate: '2026-09-27',
+        lines: [
+          {
+            amountPence: 1200,
+            categoryId: fx.categoryId('Vehicle Running', 'Maintenance & Repairs'),
+            targetKind: 'household',
+          },
+        ],
+        actor: 'alex@example.com',
+        now: new Date('2026-09-27T12:00:00Z'),
+      }).purchase.id;
+      await storeAttachment({
+        db: fx.db,
+        purchaseId: purchase,
+        originalName: 'IMG_4821.jpg',
+        label: 'Vehicle MOT',
+        bytes: PNG_BYTES,
+        actor: 'alex@example.com',
+        documentsDir,
+      });
+
+      const results = searchAttachments(fx.db, '');
+      assert.equal(results.length, 1);
+      assert.equal(results[0]!.ownerLabel, 'Acorn Insurance');
+      assert.match(results[0]!.context, /Acorn Insurance/);
+
+      // The whole point: the supplier name is searchable on a purchase receipt.
+      assert.equal(searchAttachments(fx.db, 'acorn insurance').length, 1);
+      assert.equal(searchAttachments(fx.db, 'vehicle mot acorn').length, 1);
+    } finally {
+      fx.close();
+    }
+  });
 });

@@ -126,10 +126,20 @@ export function searchAttachments(db: Db, query: string): AttachmentSearchResult
 
   const purchaseIds = uniqueIds(rows.map((row) => row.purchaseId));
   const receiptIds = uniqueIds(rows.map((row) => row.receiptId));
-  const supplierIds = uniqueIds(rows.map((row) => row.supplierId));
+  const directSupplierIds = uniqueIds(rows.map((row) => row.supplierId));
 
-  const supplierNames = fetchSupplierNames(db, supplierIds);
   const purchaseDetails = fetchPurchaseDetails(db, purchaseIds);
+  // A purchase receipt's supplier lives on the purchase row, not on the
+  // attachment row, so supplier ids have to be collected from both owners.
+  // Reading attachment rows alone left the map empty for a household whose
+  // documents are all purchase receipts: every result printed "Unknown
+  // supplier" and a supplier-name search (the MOT case from SPEC §23.5)
+  // matched nothing at all.
+  const supplierIds = uniqueIds([
+    ...directSupplierIds,
+    ...[...purchaseDetails.values()].map((detail) => detail.supplierId),
+  ]);
+  const supplierNames = fetchSupplierNames(db, supplierIds);
   const receiptDetails = fetchReceiptDetails(db, receiptIds);
   const purchaseCategories = fetchPurchaseCategories(db, purchaseIds);
 

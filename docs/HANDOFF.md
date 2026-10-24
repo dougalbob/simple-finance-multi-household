@@ -39,11 +39,22 @@ was already complete (each page parses the id into `focusAttachmentId`; `Attachm
   ("chunking context does not support external modules (request: node:fs/promises)") because that
   pipeline imports Node-only modules. The pure shared module is the fix — keep Node-only code out of
   client imports.
+- **A second, deeper defect found via the browser spec and fixed in the search library.** The first
+  CI browser run found that a household whose documents are all purchase receipts got "Unknown
+  supplier" on every result and a supplier-name search matched nothing. `searchAttachments` built
+  its supplier-name map only from attachment rows' own `supplierId` — null for a purchase receipt,
+  whose supplier lives on the purchase row. It now unions supplier ids from the purchase details.
+  The existing unit test missed it because its fixture also stored a supplier-owned document, which
+  populated the map by accident; a new regression test stores a purchase receipt alone and fails on
+  the old code. Reproduced locally with a throwaway probe script against the seeded e2e database
+  (deleted after the fix).
 - **`.gitignore` trap fixed.** The runtime-data rule was a bare `documents/` pattern, which also
   ignored `src/app/documents/` — the page existed on disk but `git status` hid it, so a plain
   `git add` would have shipped another release without the route. The rule is now root-anchored
   (`/documents/`; real runtime directories are under `data/` and `.e2e-data/`, already ignored), and
-  the nav-route guard asserts the bare pattern never comes back.
+  the nav-route guard asserts the bare pattern never comes back. The browser spec also uses
+  timestamped supplier/file names so a CI retry cannot collide with the first attempt's rows in the
+  shared e2e database (the first run's retry failed on exactly that duplication).
 - Docs: erratum in `docs/RELEASE_NOTES_v1.41.0.md` (its "build emits `/documents`" claim was false),
   SPEC §23.5 annotated, new `docs/RELEASE_NOTES_v1.41.1.md`, decision 263, and the current-release
   banners in `README.md`, `AGENTS.md`, `docs/MULTI_HOUSEHOLD_PLAN.md` and `docs/RELEASE_PROCESS.md`.
@@ -52,7 +63,7 @@ was already complete (each page parses the id into `focusAttachmentId`; `Attachm
 
 ## Validation
 
-- `npm run typecheck`, `npm run format:check`, `npm test` (**1,236/1,236 across 281 suites**) and
+- `npm run typecheck`, `npm run format:check`, `npm test` (**1,237/1,237 across 281 suites**) and
   `NEXT_TELEMETRY_DISABLED=1 npm run build` all pass locally; the build output now lists
   `ƒ /documents`.
 - Playwright browsers cannot be installed in this sandbox (no download host), so the `browser` gate

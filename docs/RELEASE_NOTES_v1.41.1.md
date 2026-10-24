@@ -25,6 +25,13 @@ test followed a menu link and there was no Documents browser spec. The friendly-
   scrolled to and rang the document's chip on those pages in v1.41.0. Results stay
   household-scoped through the verified request context, include `stored` attachments only and are
   capped at 100.
+- **A search bug found by the new browser spec, fixed in the library.** While exercising the page
+  against a household whose documents are all purchase receipts (the normal case), every result
+  printed **"Unknown supplier"** and a supplier-name search matched nothing. `searchAttachments`
+  built its supplier-name map only from attachment rows' own `supplierId`, which is null for a
+  receipt owned by a purchase; it now collects supplier ids from the purchase rows too. The old unit
+  test missed this because its fixture also stored a supplier-owned document, which populated the
+  map by accident; a new regression test stores a purchase receipt alone.
 - **A regression guard so a menu link can never 404 again.** `tests/site-nav-routes.test.ts` reads
   every `href` rendered by `src/components/site-nav.tsx` (desktop bar and drawer together) and
   fails unless each one resolves to a real `src/app/**/page.tsx`; it also pins the Documents page's
@@ -53,9 +60,9 @@ page makes. Back up each household and the Admin registry before updating, as us
 
 ## Validation evidence
 
-- `npm test`: **1,236/1,236 tests across 281 suites** (the new nav-route guard adds four tests
-  and one suite); typecheck, Prettier and the production build pass, and the build now lists the
-  `ƒ /documents` route.
+- `npm test`: **1,237/1,237 tests across 281 suites** (the new nav-route guard adds four tests
+  and one suite, plus one purchase-receipt-only search regression); typecheck, Prettier and the
+  production build pass, and the build now lists the `ƒ /documents` route.
 - New focused coverage: `tests/site-nav-routes.test.ts` (nav-to-page resolution and Documents
   wiring) and `e2e/documents.spec.ts` (both navigation surfaces, search, deep link, no-match).
 - The required PR checks remain `gates`, `browser` and `docker`, followed by main CI and the tagged

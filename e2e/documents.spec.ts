@@ -8,10 +8,10 @@ import { pickEntryCategory, waitForDocumentSearch, waitForTill } from './support
  * both navigation surfaces open it, the box searches a real stored receipt,
  * and a result lands back on the purchase with its chip scrolled to and rung.
  * It creates its own purchase so it does not depend on seed rows surviving
- * other specs in the shared E2E installation.
+ * other specs in the shared E2E installation. Names carry a timestamp so a
+ * CI retry (the suite retries once) never collides with the first attempt's
+ * rows in the shared database.
  */
-const SHOP_NAME = 'Playwright Documents Shop';
-const RECEIPT_NAME = 'fictional-mot.png';
 /** 1×1 PNG. Generated fixture, not a household document. */
 const PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -50,10 +50,16 @@ test.describe('Documents page', () => {
 
   test('searches a stored receipt and follows it back to its purchase', async ({ page }) => {
     test.slow();
+    // Unique per attempt: the shared E2E database keeps a retried attempt's
+    // rows, so fixed names would make the count assertions see duplicates.
+    const stamp = Date.now();
+    const shopName = `Playwright Documents Shop ${stamp}`;
+    const receiptName = `fictional-mot-${stamp}.png`;
+
     await page.goto('/');
     await waitForTill(page);
     const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
-    await entry.locator('input[name="supplierName"]').fill(SHOP_NAME);
+    await entry.locator('input[name="supplierName"]').fill(shopName);
     await entry.locator('input[name="amount"]').fill('4.50');
     await entry.getByLabel('Line 1 amount').fill('4.50');
     await pickEntryCategory(entry, 'Groceries / Weekly Shop');
@@ -61,7 +67,7 @@ test.describe('Documents page', () => {
     await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
 
     await page.goto('/purchases');
-    const row = page.locator('tbody tr', { hasText: SHOP_NAME });
+    const row = page.locator('tbody tr', { hasText: shopName });
     await expect(row).toHaveCount(1);
     const attachForm = row.locator('form:has(input[type="file"])');
     const choosing = page.waitForEvent('filechooser');
@@ -69,8 +75,8 @@ test.describe('Documents page', () => {
       .locator('label[for^="attachment-file-"]', { hasText: 'Attach receipt' })
       .click();
     const chooser = await choosing;
-    await chooser.setFiles({ name: RECEIPT_NAME, mimeType: 'image/png', buffer: PNG_BYTES });
-    await expect(row.getByRole('link', { name: new RegExp(RECEIPT_NAME) })).toBeVisible({
+    await chooser.setFiles({ name: receiptName, mimeType: 'image/png', buffer: PNG_BYTES });
+    await expect(row.getByRole('link', { name: new RegExp(receiptName) })).toBeVisible({
       timeout: 30_000,
     });
 
@@ -79,17 +85,17 @@ test.describe('Documents page', () => {
       page.getByRole('heading', { name: 'Every stored document', level: 1 }),
     ).toBeVisible();
 
-    // A word from the owning record's context, not the file name: the search
-    // reads label, file name and owner context together.
+    // The owning supplier's name, not the file name: the search reads label,
+    // file name and owner context together. The stamp keeps it unique.
     await waitForDocumentSearch(page);
     const search = page.getByLabel('Search documents');
-    await search.fill('documents shop');
+    await search.fill(`shop ${stamp}`);
     await expect(page).toHaveURL(/\/documents\?q=.+/, { timeout: 30_000 });
 
-    const result = page.getByRole('listitem').filter({ hasText: RECEIPT_NAME });
+    const result = page.getByRole('listitem').filter({ hasText: receiptName });
     await expect(result).toHaveCount(1);
     // The context line names the owning purchase's supplier.
-    await expect(result).toContainText(SHOP_NAME);
+    await expect(result).toContainText(shopName);
     await result.getByRole('link').click();
 
     await expect(page).toHaveURL(/\/purchases\?attachment=\d+#purchase-\d+$/, {
@@ -102,8 +108,8 @@ test.describe('Documents page', () => {
       page.locator(`li[data-attachment-id="${attachmentId}"] .ring-accent`),
     ).toBeVisible();
     await expect(
-      page.locator('tbody tr', { hasText: SHOP_NAME }).getByRole('link', {
-        name: new RegExp(RECEIPT_NAME),
+      page.locator('tbody tr', { hasText: shopName }).getByRole('link', {
+        name: new RegExp(receiptName),
       }),
     ).toBeVisible();
   });
