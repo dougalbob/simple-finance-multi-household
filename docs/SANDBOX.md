@@ -814,3 +814,30 @@ assert `inputValue()` before clicking Save, re-filling if it did not stick.
 Also, Gollum wiki page URLs come from the filename: keep commas out of
 filenames (a `%2C` wikilink 302-redirects to the wiki root) and use a piped
 link `[[Display title, with comma|Exact-File-Name]]` when the title needs one.
+
+## 30. Third snapshot reset — recovery is now a proven routine, plus history-list capture notes (2026-10-24)
+
+A third full restore wiped `node_modules`, `/tmp/chromium` + `/tmp/al2023`, the wiki clone and
+`/home/user/wiki-screenshots`. The entry-29 sequence worked end to end again, with one addition:
+the working tree can come back holding **stale, pre-push dirty copies** of tracked files (this time
+`docs/SANDBOX.md` and `next-env.d.ts`) while the real latest work is already on
+`origin/arena/7422d1ea-simple-finance-multi-household`. After fetching, discard them with
+`git checkout -- next-env.d.ts && git reset --hard origin/<branch>` before rebuilding, rather than
+wondering whether the dirty diff is work to keep.
+
+Useful selectors discovered while capturing the part-2 history pages:
+
+- the filter islands expose hydration guards `form[data-filters-ready="true"]` (Purchases and
+  All Transactions), matching the category editor's `data-category-ready` and the activity row's
+  `data-purchase-ready`; wait on these before driving any filter/editor control;
+- All Transactions' table is `#activity-table`; its in-place purchase panel renders both
+  `heading "Correct it"` and `heading "Void it"`, and after voiding the row shows the literal
+  `voided — not counted`; the void form posts fields `recordId` / `expectedVersion` / `reason`
+  (min length 4);
+- the running-balance column shows `—` when no older checkpoint anchors the row — in the fresh seed
+  the newest row *is* the checkpoint, so every movement in the 30-day window renders `—`;
+- the Purchases result heading text is the assertion point for the as-you-type search
+  (`matching “Greenfield”`), and the `Also filtering` chip has aria-label
+  `Remove the <kind> filter: <value>`;
+- the e2e seed contains no refunds or voids, so capture them by mutating the live seed in-UI;
+  `scripts/e2e-server.mts` reseeds `.e2e-data` automatically on the next server start.
