@@ -76,8 +76,23 @@ because earlier scratch copies outside git were lost in snapshot resets. Update 
     (tickable) + coming-up 7 days + footer links; laptop popover / phone sheet; refetch on
     mount, pathname change, visibilitychange, `sf:tasks-changed` and every 5 minutes; seen-at
     is UI state, not audited; nothing is ever sent (decision 19).
-15. Borrowing — loans between household members, expected-support inflows, ledger; borrowed
-    money is never income (guide anchor `borrowing`); see `docs/BORROWING_PAGE_PLAN.md`.
+15. **Borrowing** — published 2026-10-24: `/borrowing` one card per person with honest status
+    words (we owe / owed to us / Nothing owing / Awaiting first payment / overpaid; "no
+    movements yet" vs "no effective movements — all voided"; repayment greyed out while
+    nothing is owed; Delete only for a movement-free setup); derived balances that cannot
+    drift; two IOUs per person never netted; inline Record borrowing/repayment (and the
+    they_owe mirror) with overpayment and insufficient-cash refusals plus a below-zero
+    warning; cash-vs-bank answered by pot + note with a "Show <pot> around <date>" link;
+    statement-style ledger newest first (order and person filter keep the scroll position,
+    `?who=`/`?order=`/`?external=` URL state), per-person running balance − we owe · + owed
+    to us, greyed next-expected rows with "Record this month's £…", voided rows struck with
+    reason and no balance, in-row detail/correct/void with immutable kind/direction/debt link;
+    setup flow below the ledger (recurring / one-off / just track, Fill the end date);
+    expected support = plan not promise (weekend Friday shift, until date inclusive,
+    forward-looking edits, settled expects nothing, unstarted is not settled, recording the
+    borrow silences the month, EXP< rows outside totals) flagged ≈ "expected — never received"
+    in the projections and Horizon; home page prints "Owe others £X (borrowed, not income)".
+    See `docs/BORROWING_PAGE_PLAN.md`.
 16. Long-term forecast — same projection arithmetic across decades of assumptions
     (guide anchor `longterm`).
 
@@ -136,3 +151,21 @@ pot to the bank with a checkpoint, what to do when the payday card warns of a lo
   was replaced after review); narrow images that do not span the column are fine. The count
   badge and the new dot share a corner, so bell shots are taken after one open (dot cleared)
   and a visibilitychange nudge; two bell buttons exist in the DOM (desktop bar + phone bar).
+
+## Reference facts for the borrowing page (seed + fixture, today = 2026-10-24)
+
+- Seed alone gives one person (Mum, we_owe, £1,000 borrowed into Alex's cash five days ago,
+  expecting £1,000 on day 12 open-ended) — enough for one card and two ledger rows, so the
+  captures ran against a disposable fixture (`/home/user/wiki-screenshots/fixture-borrowing.mts`,
+  idempotent by counterparty; a server restart reseeds and discards it): Our son (they_owe, lent
+  £75 on the 15th, £25 back on the 22nd → owed to us £50.00), The neighbour (we_owe, a £40 borrow
+  voided "recorded twice"), Dave and Maggie (we_owe, no movements, £500 on day 13 until
+  2027-02-11 inclusive) and Sam's brother (they_owe, £60 lent and repaid → Nothing owing).
+- Rendered facts quoted on the page: ledger rows 2026-11-13 Dave and 2026-11-12 Mum as expected
+  — not recorded yet; 2026-10-23 Sam's brother +£60.00 → £0.00; 2026-10-22 Our son +£25.00 →
+  £50.00 (owed); 2026-10-21 The neighbour voided; 2026-10-19 Mum +£1,000.00 → −£1,000.00;
+  2026-10-18 −£60.00 → £60.00 (owed); 2026-10-15 −£75.00 → £75.00 (owed). Open row panel:
+  "Borrowed from Mum", "Came in as cash to Alex's cash.", "No note.", "Show Alex's cash around
+  2026-10-19". Horizon (window looked ahead to 2026-11-20): "Expected money in (1 income + 2
+  expected support) · £3,950.00" with ≈£1,000.00 and ≈£500.00 tagged expected — never received.
+  Home line: "Owe others £1,000.00 (borrowed, not income) · Owed to us £50.00".

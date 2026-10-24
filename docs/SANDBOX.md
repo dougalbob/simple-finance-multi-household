@@ -991,3 +991,26 @@ pages' 1x crops (414-1120px wide). Element shots at 1x sit at the same apparent 
 the rest of the guide, and the household is happy for them not to span the column; only the
 1400px whole-viewport shots scale down (to roughly three quarters), which is the established
 look. The first 2x attempt was replaced on 2026-10-24 after review.
+
+## 37. Borrowing page captures — debt fixture, Horizon's default window, and ledger selectors (2026-10-24)
+
+The seed's borrowing story is one person (Mum), so `/borrowing` needed a fixture to show the
+ledger at all: `/home/user/wiki-screenshots/fixture-borrowing.mts` writes debts, loan movements
+and one void straight into `.e2e-data` through the record modules (`createDebt`, `editDebt` for
+the expected plan, `createExternalMovement`, `voidExternalMovement`), idempotent by
+counterparty and by "has movements yet". Four capture notes worth keeping:
+
+- **Horizon's default window hides expected support.** `defaultHorizonThrough` ends on the day
+  before the configured payday — 26 Oct today — so a plan paying on the 12th/13th of next month
+  renders "Expected money in (0)". Capture `/horizon?through=2026-11-20` (valid URL state,
+  decision 150) and say in the alt text that the window was looked ahead; the ≈ rows and their
+  "expected — never received" tag then appear in the "Expected money in" details, which is open
+  by default whenever the window is ≤ 60 days.
+- **Ledger amount buttons are hydration-gated** on `[data-borrowing-ready="true"]` (the shared
+  in-place row contract); wait for it before clicking, or the click lands on an `inert` button.
+- **Person-card element ids contain the counterparty verbatim** (`person-sam's-brother-heading`),
+  so CSS id selectors need escaping — locate cards the way `e2e/borrowing.spec.ts` does,
+  `section` having the exact heading, instead.
+- The open row's panel is `section[id^="external-"][id$="-panel"]` and the row itself
+  `tr#external-{id}`; opening it is pure URL state (`?external=`), so it is a safe,
+  non-mutating capture, as are `?who=` (personalised column captions) and `?order=oldest`.
