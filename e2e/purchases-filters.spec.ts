@@ -147,7 +147,7 @@ test.describe('purchases filters', () => {
     const table = results(page);
     // Assert a non-zero count. A negative substring check on '0 entries' is
     // wrong: '20 entries' contains it.
-    await expect(table.getByRole('heading', { level: 2 })).toHaveText(/^[1-9]\d* entr(y|ies)$/);
+    await expect(table.getByRole('heading', { level: 2 })).toHaveText(/^[1-9]\d* entr(y|ies)\b/);
 
     // The chip removes the category and nothing else — the window stays.
     const from = new URL(page.url()).searchParams.get('from') ?? '';
