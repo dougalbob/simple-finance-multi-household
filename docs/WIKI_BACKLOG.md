@@ -106,12 +106,20 @@ because earlier scratch copies outside git were lost in snapshot resets. Update 
     (unmet/ran-out markers), the assumptions editor (save/reset/audit, read-only support view)
     and the honesty footer. Guide anchor `longterm`.
 
-### Part 4 — Recipes (not started)
+### Part 4 — Recipes (published)
 
-Short "how do I…?" pages for real household questions; topics to harvest from support wording
-and `src/lib/guide.ts`. Candidates: correcting a wrong direct debit, starting the app
-mid-month (backfill), pausing a payment over the summer, recording a cash gift, reconciling a
-pot to the bank with a checkpoint, what to do when the payday card warns of a low point.
+17. **How do I…?** — published 2026-10-24 as `Recipes.md` (sidebar "How do I…?"), completing the
+    roadmap: six recipes, each a path through existing buttons with its honest limit and a link
+    to the topic page — correct a direct debit that came out wrong (record vs schedule, in-place
+    correction, void with reason, edit-schedule applies from the next instance); start mid-month
+    (checkpoint first, active-from backfill ~3 years, skip-not-duplicate, void-your-copy-first);
+    pause a payment over the summer (excluded months repeat yearly, apply from the next
+    instance; cancellation for a true end; no auto-resuming pause exists); record a cash gift
+    (one-off income, pot answers cash-vs-bank; a repayable gift is Borrowing; own cash moving is
+    a transfer); check a pot against the bank (checkpoint resets the score, never explains a
+    difference); read a low-point warning (what the card counts, two tiers in words, Horizon day
+    drill, per-pot "Plan a transfer?" notice with its 5-day lead, pending debits never counted,
+    the app never moves a payment).
 
 ## Conventions for captures and pages
 
@@ -211,3 +219,23 @@ pot to the bank with a checkpoint, what to do when the payday card warns of a lo
   £458,372.00 · pensions £176,319.35). Pension comparison: Pension A projected pot at start
   £218,649.76 (drawdown £54,662.44 tax-free cash, £9,000.00 a year from £163,987.32; indicative
   annuity £12,025.74), Pension B projected £155,655.25 (annuity £8,561.04 rising 2.50%).
+
+## Reference facts for the recipes page (seed, today = 2026-10-24)
+
+- The one new capture is `images/recipes-dd-in-place.png`: the seed's converted BroadbandCo
+  fibre row (2026-09-26, DD, −£34.99, "From schedule \"BroadbandCo fibre\"", category Vehicle
+  Running / Insurance (household)) opened in place on `/transactions` — panel heading "Direct
+  debit #126 · BroadbandCo", subtitle "£34.99 on 2026-09-26 · recorded by system · a payment the
+  schedule made itself — correcting it here never rewrites the schedule", Correct it (When it
+  happened, Spent for, Amount, Category, Add a line, Note, Paid via, Save purchase, Attach
+  receipt) beside Void it ("Why are you voiding this? (BroadbandCo, £34.99)", Void purchase).
+  The other five recipes reuse images already published on their topic pages
+  (schedules-add-form, schedules-excluded-months, income-page, till-checkpoint-tab,
+  projection-home-card, horizon-day-drill) — re-capturing them would only risk drift.
+- Verified wording the recipes quote: income page "Something sold, a refund, a gift, a one-off
+  job — money that arrived once. Cash or bank transfer is simply which pot it landed in";
+  one-off form labels "What was it / who from? (optional)" and "Note (optional)"; excluded
+  months helper (rule repeats every year, changes apply from the next instance); checkpoint tab
+  (pot, balance now, optional effective date and note); warning tiers (heads-up below £0 within
+  the bank threshold; warning past a named threshold); "Plan a transfer?" bills-only notice with
+  its five-day lead.

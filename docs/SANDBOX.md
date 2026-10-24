@@ -1041,3 +1041,23 @@ Useful locators: the three-card row is
 as-is); the honesty footer is `main footer`. The every-calendar-year panel scrolls inside
 itself (`max-h-[32rem]`), so an element shot shows only the first ten years of 2026–2070 — say
 so in the alt text rather than cropping a taller image.
+
+## 39. Recipes captures — the in-place panel is a sibling row, and reuse beats re-capture (2026-10-24)
+
+Part 4 needed one new screenshot: a converted direct-debit row opened in place on
+`/transactions`, because the published in-place image is a Corner Foods purchase and the
+recipe's point is the *from schedule* badge plus the "Open the schedule" link. Two capture
+notes:
+
+- **The panel is not inside the record's `tr`.** `ActivityPanel` (src/components/
+  activity-open-row.tsx) renders a full-width `<tr>` *after* the row, so an element screenshot of
+  the row alone is a 61px sliver. Locate the panel's row with
+  `tr:has(> td > div > section[id$="-panel"])`, scroll the record row into view, then take one
+  `page.screenshot({ clip })` over the union of the two `boundingBox()`es (viewport coordinates,
+  both rows visible inside the 1100px viewport). Opening the row is pure client state — no
+  mutation, no reseed needed afterwards.
+- **Reuse published images for the other five recipes.** schedules-add-form,
+  schedules-excluded-months, income-page, till-checkpoint-tab, projection-home-card and
+  horizon-day-drill already show exactly the flows the recipes describe, verified on their
+  topic pages; re-capturing them would only risk the two copies drifting apart. Write fresh alt
+  text for the recipe's context, but keep it true to what the image contains.
