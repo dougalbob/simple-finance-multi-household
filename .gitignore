@@ -33,7 +33,12 @@ backups/
 receipts/
 uploads/
 exports/
-documents/
+# Anchored to the repo root: runtime document directories always live under
+# <dataDir>/households/<id>/documents/ (already covered by data/ and
+# .e2e-data/). A bare `documents/` pattern also ignored the App Router page
+# directory src/app/documents/, which let the v1.41.0 missing-page defect slip
+# past `git add`; the nav-route guard test now fails if that page disappears.
+/documents/
 logging/
 *.db
 *.db-wal

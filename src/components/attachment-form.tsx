@@ -8,6 +8,7 @@ import {
 } from '@/app/actions';
 import { AttachmentViewer } from './attachment-viewer';
 import { initialActionState } from '@/lib/action-state';
+import { formatAttachmentSize } from '@/lib/format';
 
 export interface AttachmentSummary {
   id: number;
@@ -25,12 +26,6 @@ export function attachmentDisplayName(attachment: {
   label: string | null;
 }): string {
   return attachment.label ?? attachment.originalName;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -188,7 +183,9 @@ export function AttachmentForm({
                     <span className="max-w-[160px] truncate">
                       {attachmentDisplayName(attachment)}
                     </span>
-                    <span className="text-warning-600">{formatSize(attachment.sizeBytes)}</span>
+                    <span className="text-warning-600">
+                      {formatAttachmentSize(attachment.sizeBytes)}
+                    </span>
                   </a>
                 </span>
                 <button

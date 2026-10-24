@@ -4,6 +4,27 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.41.1 — patch: the Documents page, actually shipped (2026-10-24)
+
+v1.41.0 was published with the menu linking to `/documents` but no `src/app/documents/page.tsx` in
+the tree, so the household's installed app opened Next's 404 from the Documents menu item while CI
+stayed green — no test followed a menu link and the e2e suite had no Documents spec. The
+friendly-label work and the `searchAttachments` / `DocumentSearchForm` modules were all present and
+correct; only the page was missing. Agreed fix, one patch PR: add the `force-dynamic` Documents
+server page on the existing household-context gate and search library (results deep-link with
+`?attachment=<id>`, the scroll/ring behaviour already shipped in v1.41.0), add
+`tests/site-nav-routes.test.ts` so every `site-nav.tsx` href must resolve to a real
+`src/app/**/page.tsx`, and add `e2e/documents.spec.ts` covering the desktop bar, the phone drawer,
+a real search and the deep link. Correct the false route claim in the v1.41.0 notes and SPEC §23.5;
+bump `package.json`, the lockfile and `src/lib/version.ts` together. No schema, migration,
+authentication, storage-path or backup-format change. Require PR `gates`, `browser` and `docker`,
+merge once with a merge commit, require main CI, then place annotated `v1.41.1` on the exact merge
+commit and verify Publish pushed only to
+`ghcr.io/dougalbob/simple-finance-multi-household` with `v1.41.1`, `latest` and `sha-<short>` on one
+digest. No deployment is part of publication. Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or 3007.
+
 ## v1.41.0 — friendly document names and the app-wide document search (2026-10-24)
 
 The household asked for a way to give an uploaded document a friendly name and then find it from

@@ -1,3 +1,90 @@
+# v1.41.1 — the Documents page, actually shipped (2026-10-24)
+
+## Why this session happened
+
+The household installed v1.41.0 on Unraid and reported that the **Documents** menu item opens Next's
+404 ("That page is not here"), although renaming a document label works. The previous session's
+handoff diagnosed it but shipped no code; this session verified every claim against the tree and
+fixed it. Confirmed facts at the start: `src/app/documents/page.tsx` never existed in any commit
+(`git log --all -- 'src/app/documents*'` empty), `site-nav.tsx` links to `/documents` in both the
+desktop bar and the phone drawer, and `DocumentSearchForm` / `searchAttachments` were present with
+zero importers. The `?attachment=<id>` scroll-and-ring behaviour on Purchases, Income and Suppliers
+was already complete (each page parses the id into `focusAttachmentId`; `AttachmentForm` rings
+`li[data-attachment-id]`), so result links needed no target-page work.
+
+## What this session built
+
+- **`src/app/documents/page.tsx`** — the missing `force-dynamic` server page. It gates on
+  `householdContextFromRequest()` (redirect to `/unauthorized` when null, same as every finance
+  page), reads and trims/caps `?q=` with `ATTACHMENT_SEARCH_MAX_LENGTH`, and calls
+  `searchAttachments(user.db, q)` — household scope comes from the verified request context, never
+  the URL. It renders the existing `DocumentSearchForm`, a results count, and one card per result:
+  friendly name (or file name), original file name when a label is set, size, the owning-record
+  context line, and the deep link the search library already builds. Blank query with no documents
+  gets an onboarding empty state; a query with no matches gets a "Nothing matches" panel with
+  **Clear the search**.
+- **`tests/site-nav-routes.test.ts`** — the regression guard: every literal `href` in
+  `site-nav.tsx` (both nav surfaces) must resolve to a real `src/app/**/page.tsx`, and the
+  Documents page is pinned to its form, search call, household gate and `force-dynamic`. This fails
+  on the exact v1.41.0 defect.
+- **`e2e/documents.spec.ts`** — browser coverage: a direct `/documents` request is 200; the desktop
+  menu and the phone drawer both open the page; a purchase recorded through the till with a
+  fictional PNG receipt is found from Documents by owning-record context, and following the result
+  lands on `/purchases?attachment=<id>#purchase-<id>` with the chip visibly rung; plus the
+  no-match message and Clear. Registered by widening the existing `attachments` Playwright project's
+  `testMatch` (per-project `testMatch` means a new spec file is otherwise silently not run).
+- **`src/lib/format.ts`** — new dependency-free `formatAttachmentSize` shared by the chip
+  (`attachment-form.tsx`, whose private copy is removed) and the page. First attempt imported the
+  helper from `src/lib/records/attachments.ts` into the client component; Turbopack then panicked
+  ("chunking context does not support external modules (request: node:fs/promises)") because that
+  pipeline imports Node-only modules. The pure shared module is the fix — keep Node-only code out of
+  client imports.
+- **A second, deeper defect found via the browser spec and fixed in the search library.** The first
+  CI browser run found that a household whose documents are all purchase receipts got "Unknown
+  supplier" on every result and a supplier-name search matched nothing. `searchAttachments` built
+  its supplier-name map only from attachment rows' own `supplierId` — null for a purchase receipt,
+  whose supplier lives on the purchase row. It now unions supplier ids from the purchase details.
+  The existing unit test missed it because its fixture also stored a supplier-owned document, which
+  populated the map by accident; a new regression test stores a purchase receipt alone and fails on
+  the old code. Reproduced locally with a throwaway probe script against the seeded e2e database
+  (deleted after the fix).
+- **`.gitignore` trap fixed.** The runtime-data rule was a bare `documents/` pattern, which also
+  ignored `src/app/documents/` — the page existed on disk but `git status` hid it, so a plain
+  `git add` would have shipped another release without the route. The rule is now root-anchored
+  (`/documents/`; real runtime directories are under `data/` and `.e2e-data/`, already ignored), and
+  the nav-route guard asserts the bare pattern never comes back. The browser spec also uses
+  timestamped supplier/file names so a CI retry cannot collide with the first attempt's rows in the
+  shared e2e database (the first run's retry failed on exactly that duplication).
+- Docs: erratum in `docs/RELEASE_NOTES_v1.41.0.md` (its "build emits `/documents`" claim was false),
+  SPEC §23.5 annotated, new `docs/RELEASE_NOTES_v1.41.1.md`, decision 263, and the current-release
+  banners in `README.md`, `AGENTS.md`, `docs/MULTI_HOUSEHOLD_PLAN.md` and `docs/RELEASE_PROCESS.md`.
+  Version bumped in lockstep: `package.json`, `package-lock.json` (root and `packages[""]`),
+  `src/lib/version.ts`. No schema, migration, authentication, storage-path or backup-format change.
+
+## Validation
+
+- `npm run typecheck`, `npm run format:check`, `npm test` (**1,237/1,237 across 281 suites**) and
+  `NEXT_TELEMETRY_DISABLED=1 npm run build` all pass locally; the build output now lists
+  `ƒ /documents`.
+- Playwright browsers cannot be installed in this sandbox (no download host), so the `browser` gate
+  is evidenced by PR CI, as in previous releases. Local install needs
+  `npm_config_nodedir=/usr/local npm ci` (node-gyp's nodejs.org header download is blocked).
+- Release contract: v1.41.0 is published and tagged; do not move its tag. Ship v1.41.1 as one PR
+  requiring `gates`, `browser` and `docker`, merge with a merge commit, wait for main CI, then place
+  annotated `v1.41.1` on the exact merge SHA and verify Publish pushes
+  `ghcr.io/dougalbob/simple-finance-multi-household` tags `v1.41.1`, `latest` and `sha-<short>` on
+  one digest, plus the GitHub Latest release. Publication does not deploy.
+
+## After install
+
+Back up each household and the Admin registry first. Update only
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.41.1` (or `:latest` after publication), keeping
+appdata `/mnt/user/appdata/simple-finance-multi-household` mounted at `/data` and host port **3009**
+mapped to container port 3000. Never touch the original installation or port 3007. The badge should
+read **v1.41.1 · stable**; the Documents menu must open the search page rather than the 404.
+
+---
+
 # v1.41.0 — friendly document names and the app-wide document search (2026-10-24)
 
 ## What this session built
@@ -30,7 +117,8 @@ returning the document's context and a link that lands on the page where it appe
 ## Validation
 
 - `npm test`: **1,232/1,232 across 280 suites**; typecheck, Prettier, themes and production build
-  pass. The build emits the new `/documents` route.
+  pass. The build emits the new `/documents` route. **This was wrong — see the v1.41.1 handoff at
+  the top of this file: no `/documents` page existed in v1.41.0; it was added by v1.41.1.**
 - New focused suites: `tests/attachment-labels.test.ts` (normalisation, store, rename, clear,
   unknown id) and `tests/attachment-search.test.ts` (matching, ranking, cap, owner-context join).
 - Required remote evidence is still PR `gates`, `browser` and `docker`, then main CI and Publish.

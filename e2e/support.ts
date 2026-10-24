@@ -74,6 +74,18 @@ export async function waitForScheduleFilter(page: Page): Promise<void> {
 }
 
 /**
+ * Wait until the Documents search box is listening (SPEC §15.1 — the
+ * decision 131 rule the other filter islands follow). The box is a client
+ * island: a keystroke before React hydrates it is wiped by the hydration
+ * render, so a fast test on a cold dev server would type into a box that
+ * never navigates. It is `inert` until then and publishes
+ * `data-doc-search-ready`.
+ */
+export async function waitForDocumentSearch(page: Page): Promise<void> {
+  await expect(page.locator('[data-doc-search-ready="true"]')).toBeAttached();
+}
+
+/**
  * Wait until a transfer row's in-place toggle is listening (decision 225 —
  * the decision 131 rule applied to All Transactions). Each transfer row is a
  * client island: a click on its pot name before React hydrates it would open

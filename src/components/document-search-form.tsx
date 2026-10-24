@@ -17,11 +17,22 @@ export function DocumentSearchForm({ q }: { q: string }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [value, setValue] = useState(q);
+  /**
+   * Until React has hydrated this island, a keystroke into the controlled
+   * input is wiped by the hydration render and no debounced navigation can
+   * fire (SPEC §15.1 · the decision 131 rule every other filter island
+   * follows). The input publishes `data-doc-search-ready` and stays `inert`
+   * until it is actually listening, so the browser spec waits on the signal
+   * instead of typing into a dead box on a cold dev server.
+   */
+  const [ready, setReady] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The query the current render was produced from, so a keystroke does not
   // fight the server's echo of our own navigation.
   const applied = useRef(q);
   applied.current = q;
+
+  useEffect(() => setReady(true), []);
 
   useEffect(() => {
     setValue((current) => (current === q ? current : q));
@@ -58,6 +69,8 @@ export function DocumentSearchForm({ q }: { q: string }) {
       maxLength={ATTACHMENT_SEARCH_MAX_LENGTH}
       autoComplete="off"
       spellCheck={false}
+      data-doc-search-ready={ready ? 'true' : 'false'}
+      inert={!ready}
       className="w-full rounded border border-border-strong bg-surface px-3 py-2 text-sm focus:border-border-emphasis focus:outline-none"
     />
   );
