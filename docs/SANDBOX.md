@@ -956,3 +956,34 @@ Seed facts (today 2026-10-24): 2 insurance policies (Vehicle A auto-renew yes, c
 2026-11-10; Vehicle B no, 2026-11-23), 1 service contract (BroadbandCo, switch 2026-11-05,
 linked to the £34.99 dd schedule, no renewal date); 3 reminders set; one BroadbandCo follow-up
 due in 6 days; no credit-card pots so that section renders its empty state.
+
+## 36. Sixth snapshot reset, recovering the previous session's docs branch, and Tasks/bell capture gotchas (2026-10-24)
+
+Same wipe shape as entries 29/30/33/35, with one new twist: this session's branch starts at the
+`0c928bf` merge base, while the previous wiki session's docs (SANDBOX 27–35, WIKI_BACKLOG.md)
+live only on `arena/7422d1ea-simple-finance-multi-household`, which a fresh clone's narrowed
+refspec hides (entry 19). `gh api repos/…/branches` confirmed the branch still exists; fetching
+just that ref (`git fetch origin <branch>:refs/remotes/origin/<branch>`) and then
+`git merge --ff-only` onto the current session branch restored the docs history without ever
+checking out or pushing the other branch. The rest of recovery was unchanged: `npm ci` with the
+nodedir flag, the @sparticuz chromium inflate, re-clone the wiki, restart the e2e server.
+
+A **disposable fixture** made the Tasks page photographable (the bare seed has two open tasks
+and none closed): `/home/user/wiki-screenshots/fixture-tasks.mts` imports the app's record
+modules by relative path and writes straight into `.e2e-data` (WAL + busy_timeout make a second
+process safe). Three traps: a scratch dir outside the repo cannot resolve bare package imports
+— symlink the repo's `node_modules` into it; `db.delete(table)` with no `where` builds invalid
+SQL in this drizzle version (use `raw.exec('DELETE …')`); and `tasks` has no `status` column
+(open = `completed_at IS NULL`, and `listTasks` defaults to open). Make such fixtures idempotent
+by title: one half-failed run left every task duplicated and only a server restart (reseed)
+cleaned it.
+
+Bell capture gotchas. Opening the panel POSTs `/api/attention/seen`, but the client keeps its
+last GET until something refetches — dispatch `visibilitychange` on `document` to refresh it
+without navigating. The red count badge and the blue "new" dot occupy the same corner and the
+dot covers the numeral, so photograph the bell *after* one open (dot cleared); the overlap is
+worth telling the household about in the page's limits list. `header` also matches each page's
+own `<header>` — use `header[data-sticky-header]`. Two bell buttons exist in the DOM at every
+width (desktop bar and phone bar), so phone clicks need `>> visible=true`. Finally, small UI
+text (badges, panel lines) is unreadable once a 1400px shot is scaled to wiki width: capture
+those contexts at `deviceScaleFactor: 2` and let element crops display near CSS 1:1.

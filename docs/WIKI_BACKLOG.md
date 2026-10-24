@@ -61,8 +61,21 @@ because earlier scratch copies outside git were lost in snapshot resets. Update 
     (`/recurring#schedule-edit-N`, `/contracts#agreement-N`); Overview Key dates in-window
     alerts, no duplicates from linked schedules; credit-card payment/promo reviews; supplier
     follow-up tasks; in-app channel only (email is v2).
-14. Tasks and the bell — reminders wait in-app, no emails/notifications; supplier interaction
-    log tasks feed the bell.
+14. **Tasks and the bell** — published 2026-10-24: `/tasks` two columns (Your tasks with tick
+    boxes vs The app has noticed, derived and untickable); four due groups in fixed order
+    (overdue → today → coming up → undated) with states always in words; overdue stays at the
+    top until closed; "For: Everyone / Only me" (assigned_to) — the task stays visible to both
+    but only counts in that person's bell; tick/edit/close-with-note/reopen with version
+    guards; Done in the last 30 days with who-closed-what; noticed = in-window key dates +
+    fuel fills missing litres/mileage + no-full-tank vehicles, each linking to its cure;
+    tasks also live on supplier cards (header counts in words), purchase rows and the
+    Suppliers "Promised follow-ups" banner; bell counts overdue/today tasks relevant to me
+    plus key dates today/past/available/rolled, never in-window or coming-up, zero = no badge,
+    accessible name in words; panel = new-since-you-last-looked (audit rows by the other
+    person, 7-day first look-back, cap 20, names from linked sign-in emails) + needs-attention
+    (tickable) + coming-up 7 days + footer links; laptop popover / phone sheet; refetch on
+    mount, pathname change, visibilitychange, `sf:tasks-changed` and every 5 minutes; seen-at
+    is UI state, not audited; nothing is ever sent (decision 19).
 15. Borrowing — loans between household members, expected-support inflows, ledger; borrowed
     money is never income (guide anchor `borrowing`); see `docs/BORROWING_PAGE_PLAN.md`.
 16. Long-term forecast — same projection arithmetic across decades of assumptions
@@ -99,3 +112,25 @@ pot to the bank with a checkpoint, what to do when the payday card warns of a lo
 - Salary: receipt, £2,450.00, day 27, into Salary account; one-off "Sale of bicycle" £45.00.
 - Key limits: materialisation horizon 400 days ahead; backfill cap
   `MAX_BACKFILL_SPAN_DAYS = 1500 − 400 = 1100` days; error names the earliest acceptable date.
+
+## Reference facts for the tasks & bell page (seed + fixture, today = 2026-10-24)
+
+- The bare seed has only two open tasks (the BroadbandCo call-back, "In 6 days · Fri 30 Oct",
+  and Sam's bell task, due today+3) and no closed ones — too thin to show the groups, so the
+  captures ran against a **disposable fixture** (`/home/user/wiki-screenshots/fixture-tasks.mts`,
+  idempotent by title; a server restart reseeds and discards it). Fixture tasks: "Query the
+  brake-disc invoice" (Vehicle B, overdue by 1 day, Only for Alex), "Ring Wattstream Energy
+  about the tariff" (due today), "Call InsurerCo about the no-claims discount" (due today,
+  Only for Sam), "Research cheaper tariffs" (BroadbandCo, undated); closed: "Book Vehicle A's
+  MOT" (Alex, note "Booked for the first week of November.") and "Order the replacement wheel
+  trims" (Sam, note "Arriving Tuesday."). Sam's person row is linked to sam@example.com so
+  names print as "Sam", and Sam's seeded task is reworded to "Chase the refund for the faulty
+  kettle".
+- Rendered facts quoted on the page: "6 open · 1 overdue"; bell accessible name
+  "Needs attention: 2 — 1 overdue, 1 due today" (Sam's own due-today task excluded) and
+  "— 4 new since you last looked" before the first open; panel footer "3 things the app has
+  noticed →"; noticed items = BroadbandCo fee-free switch in 12 days, Vehicle A renewal in
+  17 days, Vehicle A's £21.49 fill on Fri 23 Oct missing the mileage and the litres.
+- Capture notes: 2x deviceScaleFactor for the small bell/panel text; the count badge and the
+  new dot share a corner, so bell shots are taken after one open (dot cleared) and a
+  visibilitychange nudge; two bell buttons exist in the DOM (desktop bar + phone bar).
