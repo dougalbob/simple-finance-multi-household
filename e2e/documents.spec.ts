@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { pickEntryCategory, waitForTill } from './support';
+import { pickEntryCategory, waitForDocumentSearch, waitForTill } from './support';
 
 /**
  * The Documents page (SPEC §23.5). v1.41.0 shipped the menu entry, the search
@@ -81,6 +81,7 @@ test.describe('Documents page', () => {
 
     // A word from the owning record's context, not the file name: the search
     // reads label, file name and owner context together.
+    await waitForDocumentSearch(page);
     const search = page.getByLabel('Search documents');
     await search.fill('documents shop');
     await expect(page).toHaveURL(/\/documents\?q=.+/, { timeout: 30_000 });
@@ -109,6 +110,7 @@ test.describe('Documents page', () => {
 
   test('says so when nothing matches and can clear the search', async ({ page }) => {
     await page.goto('/documents');
+    await waitForDocumentSearch(page);
     const search = page.getByLabel('Search documents');
     await search.fill('zzqx no such document 9281');
     await expect(page).toHaveURL(/\/documents\?q=.+/, { timeout: 30_000 });
