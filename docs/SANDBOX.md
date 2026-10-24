@@ -1061,3 +1061,15 @@ notes:
   horizon-day-drill already show exactly the flows the recipes describe, verified on their
   topic pages; re-capturing them would only risk the two copies drifting apart. Write fresh alt
   text for the recipe's context, but keep it true to what the image contains.
+
+## 40. Gollum wikilink pipe order is Display|Target — a reversed pipe is a silent red link (2026-10-24)
+
+Five published links were written `[[Target|Display]]` and therefore pointed at pages that do
+not exist ("bell", "Tasks page", "Tasks list", "Accounts,-Pots-&-Checkpoints"); GitHub renders
+them as create-links rather than erroring, so nothing complains until someone clicks. Gollum's
+order is `[[Display|Target]]` — the sidebar's `[[Start here|Home]]` is the canonical example.
+After fixing them (wiki 1994144) the upkeep pass is part of the routine: resolve every
+`[[…]]` target (text after the pipe, `#anchor` stripped, spaces to dashes) and every
+`![…](images/…)` source against the wiki clone's filenames, and treat any miss as a broken
+link. Bare `[[Pots and checkpoints]]` form is safe — Gollum maps spaces to dashes — so prefer
+it unless the display text must differ from the page name.

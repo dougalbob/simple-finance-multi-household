@@ -120,6 +120,13 @@ because earlier scratch copies outside git were lost in snapshot resets. Update 
     difference); read a low-point warning (what the card counts, two tiers in words, Horizon day
     drill, per-pot "Plan a transfer?" notice with its 5-day lead, pending debits never counted,
     the app never moves a payment).
+18. **Wiki upkeep** — 2026-10-24: five reversed-pipe wikilinks that rendered as red links fixed
+    (Gollum's order is `[[Display|Target]]`: `[[Tasks and the bell|bell]]` and friends linked to
+    non-existent pages "bell", "Tasks page", "Tasks list", and Borrowing's Pots link to
+    "Accounts,-Pots-&-Checkpoints"); the two stale "coming next" placeholders in
+    Pots-and-checkpoints replaced with live links; sidebar footer now says the planned pages are
+    published. A link-and-image integrity pass (every `[[…]]` target and `images/…` src resolved
+    against the wiki's filenames) runs over all pages and is clean.
 
 ## Conventions for captures and pages
 
