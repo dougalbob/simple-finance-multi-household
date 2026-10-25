@@ -9,8 +9,8 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.40.0 is the stable production release and moves :latest (issue #107:
-  a compact, task-oriented Admin workspace with collapsible household rows).
+  v1.43.0 is the stable production release and moves :latest (a Wiki link with
+  the GitHub mark in the site menu, on the desktop bar and in the phone drawer).
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +47,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.37.0 is the stable production release and moves :latest. Admin gains read-only Cloudflare policy inspection for the bootstrap administrator, comparing registry emails with direct policy entries. Configure the four CLOUDFLARE_* connection variables with an account-scoped Read token and restart. No Cloudflare writes or storage changes.
+    v1.43.0 is the stable production release and moves :latest. The site menu gains a Wiki link (GitHub mark) to the project wiki, opening in a new tab. No schema, data or storage changes.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

@@ -231,7 +231,8 @@ test.describe('bell — phone layout', () => {
     const links = drawerNav.getByRole('link');
     // The Cloudflare test harness now configures Alex as REGISTRY_ADMIN_EMAIL,
     // so the existing admin-only link adds one to the 19 ordinary destinations.
-    // Check actual destinations rather than accepting an arbitrary extra link.
+    // The external project Wiki link (v1.43.0) sits in the More group before
+    // Admin. Check actual destinations rather than accepting an arbitrary extra link.
     const destinations = [
       '/#quick-entry',
       '/purchases',
@@ -252,6 +253,7 @@ test.describe('bell — phone layout', () => {
       '/tasks',
       '/projects',
       '/start',
+      'https://github.com/dougalbob/simple-finance-multi-household/wiki',
       '/admin',
     ];
     await expect(links).toHaveCount(destinations.length);

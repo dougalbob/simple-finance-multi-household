@@ -4,6 +4,10 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.43.0 — Wiki link in the site menu (2026-10-25)
+
+The owner asked for a **Wiki** entry in the site menu, shown as the GitHub mark followed by the label, linking to the project wiki, and approved it on both the desktop bar and the phone drawer. Ship as one stable feature release: the menu change, its route-guard test, version metadata, release notes, handoff and current-release docs in **one PR**. Require PR `gates`, `browser` and `docker`, merge once with a merge commit, require main CI, then place annotated `v1.43.0` on the exact merge commit and verify Publish pushed only to `ghcr.io/dougalbob/simple-finance-multi-household` with `v1.43.0`, `latest` and `sha-<short>` on one digest, plus the GitHub Latest release. No schema, migration, backup-format or storage change. Publication authorises an Unraid **Force Update** but is not itself a deployment. Only target appdata `/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original installation or 3007.
+
 ## v1.42.1 — the app icon ships with every release (issue 115, 2026-10-25)
 
 The owner asked for the repository PNG to become part of each release, approved the implementation,

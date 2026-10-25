@@ -58,3 +58,24 @@ describe('site navigation routes', () => {
     );
   });
 });
+
+describe('site navigation wiki link', () => {
+  const navSource = repoFile('src/components/site-nav.tsx');
+
+  it('links to the project wiki in a new tab, with the GitHub icon', () => {
+    assert.match(
+      navSource,
+      /const WIKI_URL = 'https:\/\/github\.com\/dougalbob\/simple-finance-multi-household\/wiki';/,
+    );
+    assert.match(navSource, /const WIKI_LABEL = 'Wiki';/);
+    // Rendered in both the desktop bar and the phone drawer.
+    const wikiLinks = navSource.match(/href=\{WIKI_URL\}[\s\S]*?<\/a>/g) ?? [];
+    assert.equal(wikiLinks.length, 2, 'expected the wiki link in the desktop bar and the drawer');
+    for (const link of wikiLinks) {
+      assert.match(link, /target="_blank"/);
+      assert.match(link, /rel="noopener noreferrer"/);
+      assert.match(link, /<GitHubIcon/);
+      assert.match(link, /\{WIKI_LABEL\}/);
+    }
+  });
+});
