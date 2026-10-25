@@ -1,3 +1,40 @@
+# v1.43.0 — Wiki link in the site menu (2026-10-25)
+
+## Why this session happened
+
+The household asked for a **Wiki** entry in the site menu, shown as the GitHub mark followed by the
+label, linking to the project wiki. It is wanted in both the desktop bar and the phone drawer.
+
+## What this session built
+
+- `src/components/site-nav.tsx`: a `WIKI_URL` and `WIKI_LABEL` constant, an inline `GitHubIcon`
+  (Octicons mark, currentColor), and the Wiki link in the desktop bar and at the end of the drawer's
+  "More" group. Both open in a new tab with `rel="noopener noreferrer"`, and the drawer closes on tap.
+- `tests/site-nav-routes.test.ts`: a new case pins the URL, new-tab attributes, icon and the two
+  render locations. The existing route guard still passes, because the URL is not a literal `href`.
+- Version metadata moved to **1.43.0** (`package.json`, `package-lock.json`, `src/lib/version.ts`),
+  and the Unraid template header and description now name v1.43.0. The description had been stale at
+  v1.37.0.
+
+The owner approved the change in both places and asked for publication so Unraid can Force Update.
+Ship as stable **v1.43.0** through one PR. No schema, migration, backup-format, storage-path or
+authentication change.
+
+## Validation
+
+- `npm run typecheck` passes.
+- `tests/site-nav-routes.test.ts` and `tests/version.test.ts` pass locally.
+- The e2e drawer and desktop specs assert links by name, so the extra entry does not change them.
+- PR checks `gates`, `browser` and `docker`, then main CI and the Publish run, are recorded below
+  once they complete.
+
+## After publication
+
+In Unraid, back up the households and Admin registry, then **Force Update** only the **Simple Finance
+Multi-household** container on `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or pin
+`:v1.43.0`). Keep appdata `/mnt/user/appdata/simple-finance-multi-household` and host port **3009**.
+Never touch the original installation (`/mnt/user/appdata/simple-finance`, port 3007).
+
 # v1.42.1 — versioned app icon release asset (issue 115, 2026-10-25)
 
 ## Why this session happened

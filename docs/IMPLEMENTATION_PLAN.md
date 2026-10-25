@@ -4548,3 +4548,5 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     Unraid can Force Update: ship as **v1.42.1** through PR #116. The versioned image changes, but
     this remains release infrastructure only, with no app behaviour, schema, migration, UI or data
     change.
+
+266. **Wiki link in the site menu (v1.43.0, 2026-10-25).** The owner asked for a Wiki entry in the menu, shown as the GitHub mark followed by "Wiki", linking to `https://github.com/dougalbob/simple-finance-multi-household/wiki`. It is rendered in both the desktop bar and the phone drawer. Because the wiki is a GitHub page rather than an app route, it opens in a new tab and is kept out of the literal `href` list that the route-guard test reads. The owner approved it in both places and asked for publication so Unraid can Force Update. Ship as stable **v1.43.0** through one PR; no schema, migration, backup-format or storage change.
