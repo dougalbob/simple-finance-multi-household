@@ -4543,6 +4543,8 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     release, upload a missing asset, or download and byte-compare an existing asset; refuse a
     mismatched or ambiguous existing asset rather than silently replacing published bytes. The
     source is always the release-tag checkout, never the moving `main` branch. Existing PWA icons and
-    the Unraid template URL stay unchanged. Do not backfill or otherwise rewrite v1.42.0. This is
-    release infrastructure only, with no app version, schema, migration, UI, container or data
+    the Unraid template URL stay unchanged. Do not backfill or otherwise rewrite v1.42.0. After the
+    implementation passed review, the owner explicitly requested merge and stable publication so
+    Unraid can Force Update: ship as **v1.42.1** through PR #116. The versioned image changes, but
+    this remains release infrastructure only, with no app behaviour, schema, migration, UI or data
     change.

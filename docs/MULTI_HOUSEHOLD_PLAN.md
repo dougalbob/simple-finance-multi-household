@@ -1,5 +1,15 @@
 # Multi-household edition — active product and safety contract
 
+**v1.42.1 — The app icon ships with every release (issue 115):** stable releases and prereleases now
+carry the canonical 512 × 512 PNG as `simple-finance-multi-household-icon.png`. Publish validates
+that image and uploads the exact bytes from the checked-out release tag; a rerun uploads a missing
+asset or byte-verifies the existing one and refuses a mismatch. This is release infrastructure only:
+no app behaviour, schema, migration, authentication, household separation, PWA icon, Unraid
+template, storage-path or backup-format change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.42.1` (stable also moves `latest`), Unraid host
+port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`, never the original
+installation or 3007. See `docs/RELEASE_NOTES_v1.42.1.md` and decision 265.
+
 **v1.42.0 — Renaming a document renames the file (issue 112):** the v1.41.0 friendly name is removed
 from the interface and **Rename** edits the document's stored file name — the one name the chip, the
 viewer, the download name and the Documents search all read. The editor opens pre-filled with the

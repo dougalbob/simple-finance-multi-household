@@ -4,6 +4,24 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.42.1 — the app icon ships with every release (issue 115, 2026-10-25)
+
+The owner asked for the repository PNG to become part of each release, approved the implementation,
+and then explicitly asked to merge and publish so Unraid can **Force Update**. Ship one stable patch:
+validate `docs/assets/simple-finance-icon.png` as a complete 512 × 512 PNG, upload its exact
+release-tag bytes to stable releases and prereleases as
+`simple-finance-multi-household-icon.png`, and make reruns converge by filling in a missing asset or
+byte-verifying an existing one while refusing mismatches. Do not rewrite v1.42.0. No application
+behaviour, schema, migration, PWA icon, Unraid-template, storage-path or backup-format change. Keep
+workflow, validator, tests, version metadata, release notes, handoff and current-release docs in PR
+#116. Require PR `gates`, `browser` and `docker`, merge once with a merge commit, require main CI,
+then place annotated `v1.42.1` on the exact merge commit and verify Publish pushed only to
+`ghcr.io/dougalbob/simple-finance-multi-household` with `v1.42.1`, `latest` and `sha-<short>` on one
+digest, plus the GitHub Latest release carrying the byte-matched PNG. Publication authorises an
+Unraid **Force Update** but is not itself a deployment. Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or 3007.
+
 ## v1.42.0 — renaming a document renames the file (issue 112, 2026-10-25)
 
 The household reported that the v1.41.0 friendly name did not work as expected — pressing Save in
@@ -347,8 +365,8 @@ Every stable release and prerelease also carries the canonical 512 × 512 app ic
 asset **`simple-finance-multi-household-icon.png`**. Publish validates
 `docs/assets/simple-finance-icon.png` from the checked-out release tag, never fetches it from the
 moving `main` branch, and verifies the downloaded release asset byte for byte. A rerun fills in a
-missing icon but refuses to overwrite one whose bytes differ. This contract begins with the first
-release after v1.42.0; do not edit the already-published v1.42.0 release to backfill it.
+missing icon but refuses to overwrite one whose bytes differ. This contract begins with v1.42.1;
+do not edit the already-published v1.42.0 release to backfill it.
 
 ## 7. After the release
 

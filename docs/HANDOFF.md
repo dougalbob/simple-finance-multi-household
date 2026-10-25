@@ -1,4 +1,4 @@
-# Unreleased — versioned app icon release asset (issue 115, 2026-10-25)
+# v1.42.1 — versioned app icon release asset (issue 115, 2026-10-25)
 
 ## Why this session happened
 
@@ -25,9 +25,11 @@ downloadable assets.
   damaged-image rejection, the exact Publish command/asset contract, and preservation of the Unraid
   and PWA icon references.
 
-This is release-infrastructure work only: no app version bump, schema, migration, app UI, container
-contents, PWA asset or Unraid template change. It first takes effect in the next release whose tag
-contains this workflow; the already-published v1.42.0 release is deliberately untouched.
+After reviewing the implementation and passing PR checks, the owner explicitly asked to merge and
+publish so Unraid can **Force Update**. Ship it as stable patch **v1.42.1**: the app version and image
+change so Unraid can pull a new digest, but household-facing behaviour does not. There is no schema,
+migration, app UI, PWA asset, Unraid template, storage-path or backup-format change. The
+already-published v1.42.0 release remains deliberately untouched.
 
 ## Validation
 
@@ -37,8 +39,18 @@ contains this workflow; the already-published v1.42.0 release is deliberately un
 - `npm test`: **1,253/1,253 tests across 283 suites**; `npm run typecheck`,
   `npm run format:check`, `npm run themes:check`, `npm audit --omit=dev` (zero production
   vulnerabilities) and `NEXT_TELEMETRY_DISABLED=1 npm run build` all pass locally.
-- The real upload/download comparison necessarily first runs from the next tag after merge; no test
-  release was created and v1.42.0 was not modified.
+- PR #116 must pass `gates`, `browser` and `docker` after the v1.42.1 release commit. Merge once with
+  a merge commit, require main CI, tag that exact merge as annotated `v1.42.1`, and require Publish
+  to verify the three GHCR tags on one digest plus the downloaded PNG bytes. No test release was
+  created and v1.42.0 was not modified.
+
+## After publication
+
+In Unraid, back up the households and Admin registry, then **Force Update** only the **Simple Finance
+Multi-household** container on `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or pin
+`:v1.42.1`). Keep appdata `/mnt/user/appdata/simple-finance-multi-household` mounted at `/data` and
+host port **3009** mapped to container port 3000. The badge must read **v1.42.1 · stable**. Never
+change the original single-household app, appdata or port 3007.
 
 ---
 
