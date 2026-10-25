@@ -1,5 +1,7 @@
 # Multi-household edition — active product and safety contract
 
+**v1.43.0 — Wiki link in the site menu:** the site menu gains a **Wiki** entry, shown with the GitHub mark before the label, linking to the project wiki in a new tab. It appears on the desktop bar and in the phone drawer. External link only: no route, schema, migration, backup-format or storage change. Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.43.0` (stable also moves `latest`), Unraid host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`. See `docs/RELEASE_NOTES_v1.43.0.md` and decision 266.
+
 **v1.42.1 — The app icon ships with every release (issue 115):** stable releases and prereleases now
 carry the canonical 512 × 512 PNG as `simple-finance-multi-household-icon.png`. Publish validates
 that image and uploads the exact bytes from the checked-out release tag; a rerun uploads a missing
