@@ -4532,3 +4532,19 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     Ship as **v1.42.0** through one PR with tests, version metadata, release notes, handoff and
     current-release docs; require `gates`, `browser` and `docker`, main CI and the tagged Publish
     run. Publication does not deploy.
+
+265. **Issue 115 — version the canonical PNG with each future GitHub release (2026-10-25).** The
+    repository already carries `docs/assets/simple-finance-icon.png` (the 512 × 512 icon referenced
+    by the Unraid template), but GitHub release pages had no downloadable assets. Starting with the
+    next tag that contains this change, Publish validates that checked-out file as a real 512 × 512
+    PNG (signature, chunks and CRCs, IHDR metadata, compressed scanlines and filters), copies it to
+    the stable download name `simple-finance-multi-household-icon.png`, and attaches it to both stable
+    and prerelease GitHub releases. The release step converges safely on rerun: create a missing
+    release, upload a missing asset, or download and byte-compare an existing asset; refuse a
+    mismatched or ambiguous existing asset rather than silently replacing published bytes. The
+    source is always the release-tag checkout, never the moving `main` branch. Existing PWA icons and
+    the Unraid template URL stay unchanged. Do not backfill or otherwise rewrite v1.42.0. After the
+    implementation passed review, the owner explicitly requested merge and stable publication so
+    Unraid can Force Update: ship as **v1.42.1** through PR #116. The versioned image changes, but
+    this remains release infrastructure only, with no app behaviour, schema, migration, UI or data
+    change.

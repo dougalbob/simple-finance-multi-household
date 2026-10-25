@@ -33,6 +33,13 @@ permissions:
   contents: write
   packages: write
 
+# This is the canonical repository icon, not one of the resized PWA icons.
+# The checkout is pinned to the release tag, so these are the exact bytes that
+# will accompany that version even if main changes later.
+env:
+  RELEASE_ICON_SOURCE: docs/assets/simple-finance-icon.png
+  RELEASE_ICON_NAME: simple-finance-multi-household-icon.png
+
 jobs:
   publish:
     name: Build, smoke test and push the release image
@@ -104,6 +111,9 @@ jobs:
           test "v${PKG_VERSION}" = "$VERSION" || { echo "package.json ($PKG_VERSION) does not match $VERSION" >&2; exit 1; }
           test "v${MODULE_VERSION}" = "$VERSION" || { echo "src/lib/version.ts ($MODULE_VERSION) does not match $VERSION" >&2; exit 1; }
           echo "version metadata agrees with $VERSION"
+
+      - name: Validate the GitHub release icon
+        run: node scripts/validate-release-icon.mjs "$RELEASE_ICON_SOURCE"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -324,7 +334,7 @@ jobs:
           echo "digest=$LOCAL_ONLY" >> "$GITHUB_OUTPUT"
           echo "### All published tag digests verified: $LOCAL_ONLY" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Create the GitHub release from the checked-in notes
+      - name: Create or verify the GitHub release and icon
         env:
           GH_TOKEN: ${{ github.token }}
           IMAGE: ${{ steps.meta.outputs.image }}
@@ -344,10 +354,6 @@ jobs:
           if [ ! -f "$NOTES" ]; then
             echo "$NOTES is missing - a release requires checked-in release notes" >&2
             exit 1
-          fi
-          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "GitHub release $VERSION already exists - leaving it untouched."
-            exit 0
           fi
           TITLE="$(sed -n '1s/^# Release notes — //p' "$NOTES")"
           case "$TITLE" in
@@ -372,7 +378,14 @@ jobs:
             echo
             echo "[Release notes document](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/RELEASE_NOTES_${VERSION}.md)"
           } > /tmp/release-body.md
-          if [ "$PRERELEASE" = true ]; then
+
+          # Creating the release and reconciling its asset are deliberately
+          # separate. If publication stops between them, a workflow rerun sees
+          # the existing release and uploads the missing icon. If the icon is
+          # already present, its bytes must match this checked-out tag exactly.
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub release $VERSION already exists; checking its release icon."
+          elif [ "$PRERELEASE" = true ]; then
             gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" --notes-file /tmp/release-body.md --prerelease
             echo "### GitHub prerelease $VERSION created; Latest was not changed" >> "$GITHUB_STEP_SUMMARY"
@@ -381,3 +394,32 @@ jobs:
               --title "$TITLE" --notes-file /tmp/release-body.md --latest
             echo "### Stable GitHub release $VERSION created and marked Latest" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+          ASSET_PATH="$RUNNER_TEMP/$RELEASE_ICON_NAME"
+          cp "$RELEASE_ICON_SOURCE" "$ASSET_PATH"
+          ASSET_NAMES="$(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          ASSET_COUNT="$(printf '%s\n' "$ASSET_NAMES" | awk -v name="$RELEASE_ICON_NAME" '$0 == name { count += 1 } END { print count + 0 }')"
+          case "$ASSET_COUNT" in
+            0)
+              gh release upload "$VERSION" --repo "$GITHUB_REPOSITORY" "$ASSET_PATH"
+              echo "Uploaded release icon $RELEASE_ICON_NAME"
+              ;;
+            1)
+              echo "Release icon $RELEASE_ICON_NAME already exists; verifying its bytes."
+              ;;
+            *)
+              echo "Release $VERSION has $ASSET_COUNT assets named $RELEASE_ICON_NAME; refusing an ambiguous publication." >&2
+              exit 1
+              ;;
+          esac
+
+          DOWNLOAD_DIR="$(mktemp -d)"
+          trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$RELEASE_ICON_NAME" --dir "$DOWNLOAD_DIR"
+          if ! cmp -s "$RELEASE_ICON_SOURCE" "$DOWNLOAD_DIR/$RELEASE_ICON_NAME"; then
+            echo "Release icon bytes do not match $RELEASE_ICON_SOURCE from tag $VERSION; refusing to overwrite a published asset." >&2
+            exit 1
+          fi
+          ICON_SHA256="$(sha256sum "$RELEASE_ICON_SOURCE" | awk '{print $1}')"
+          echo "### Release icon verified: $RELEASE_ICON_NAME (sha256:$ICON_SHA256)" >> "$GITHUB_STEP_SUMMARY"
