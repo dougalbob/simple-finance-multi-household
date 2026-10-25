@@ -343,6 +343,13 @@ For example:
 
 Include what changed; schema/data caveats; who is affected and what to do; validation evidence; appdata, backup and Unraid instructions; whether it is an RC or stable release; and the version badge users should see. For RCs, state that `latest` is not moved and give the exact tag to install. The Publish workflow prepends date, merge commit, actual image tags and verified digest and creates a pre-release GitHub release for an RC or a Latest GitHub release for stable.
 
+Every stable release and prerelease also carries the canonical 512 × 512 app icon as the downloadable
+asset **`simple-finance-multi-household-icon.png`**. Publish validates
+`docs/assets/simple-finance-icon.png` from the checked-out release tag, never fetches it from the
+moving `main` branch, and verifies the downloaded release asset byte for byte. A rerun fills in a
+missing icon but refuses to overwrite one whose bytes differ. This contract begins with the first
+release after v1.42.0; do not edit the already-published v1.42.0 release to backfill it.
+
 ## 7. After the release
 
 After successful publication, verify the GitHub release type (pre-release vs stable), title, package link and digest. Report only verified facts. Add merge SHA, PR/check run IDs, Publish run and digest to the next working session's `docs/HANDOFF.md`; do not create a separate post-merge documentation PR. For an RC, gather acceptance feedback and publish a higher RC number for changes; only after acceptance prepare the separate stable `v1.0.0` release.

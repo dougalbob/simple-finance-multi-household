@@ -1,3 +1,47 @@
+# Unreleased — versioned app icon release asset (issue 115, 2026-10-25)
+
+## Why this session happened
+
+The household asked whether the repository's PNG could become part of each GitHub release, then asked
+for the issue to be implemented. The canonical `docs/assets/simple-finance-icon.png` was already in
+each source tag and used by the Unraid template, but GitHub release pages (including v1.42.0) had no
+downloadable assets.
+
+## What this session built
+
+- **Publish validation.** `scripts/validate-release-icon.mjs` validates the canonical image using
+  Node built-ins only: PNG signature and framing, chunk CRCs, one correct IHDR/IEND sequence, exact
+  512 × 512 dimensions, supported colour/depth metadata, zlib image data, decoded scanline length
+  and row filters. Publish runs it against the release-tag checkout before building the image.
+- **Versioned release asset.** `.github/workflows/publish.yml` copies those checked-out bytes to the
+  stable download name `simple-finance-multi-household-icon.png` and uploads it after creating either
+  a stable release or a prerelease. It does not fetch the moving `main` branch.
+- **Rerun convergence.** An existing GitHub release no longer causes the final step to exit early.
+  Publish uploads the icon when it is missing; when it already exists, it downloads it and requires
+  a byte-for-byte match. A mismatch fails closed rather than overwriting an immutable published
+  asset, and the verified SHA-256 is written to the workflow summary. This also recovers safely if a
+  first run creates the release but stops before the upload.
+- **Regression coverage.** `tests/release-icon.test.ts` validates the real image, wrong-dimension and
+  damaged-image rejection, the exact Publish command/asset contract, and preservation of the Unraid
+  and PWA icon references.
+
+This is release-infrastructure work only: no app version bump, schema, migration, app UI, container
+contents, PWA asset or Unraid template change. It first takes effect in the next release whose tag
+contains this workflow; the already-published v1.42.0 release is deliberately untouched.
+
+## Validation
+
+- `node scripts/validate-release-icon.mjs docs/assets/simple-finance-icon.png` passes and reports the
+  checked-in image as a 512 × 512, 8-bit PNG.
+- Focused release/PWA/version contract suites pass: **18/18 tests across 4 suites**.
+- `npm test`: **1,253/1,253 tests across 283 suites**; `npm run typecheck`,
+  `npm run format:check`, `npm run themes:check`, `npm audit --omit=dev` (zero production
+  vulnerabilities) and `NEXT_TELEMETRY_DISABLED=1 npm run build` all pass locally.
+- The real upload/download comparison necessarily first runs from the next tag after merge; no test
+  release was created and v1.42.0 was not modified.
+
+---
+
 # v1.42.0 — renaming a document renames the file (2026-10-25)
 
 ## Why this session happened
