@@ -20,7 +20,10 @@ import { attachments, purchases, receipts, suppliers } from '../db/schema';
  *   pattern is what makes an archive member safe to restore (SPEC §18.4);
  * - removal flips `state` to `deleted` and audits it, and only then unlinks
  *   the file (SPEC §23.4). The other way around would make the next backup
- *   fail closed if the process died in between.
+ *   fail closed if the process died in between;
+ * - a rename changes only the display/download **name** (v1.42.0) and audits
+ *   it — the storage key, the bytes and the sniffed MIME type are untouched,
+ *   so a name can never redirect the app at a file it did not write.
  */
 
 /** Per-file limit (plan OQ12). Enforced on upload and on restore. */
@@ -116,21 +119,63 @@ export function sanitizeOriginalName(raw: string): string {
 }
 
 /**
- * A household's own display name for a document (v1.41.0). Unlike the file
- * name this is never used to build a path, a download name or a header: it is
- * pure display text, rendered as text and matched by the document search. So
- * it only drops control characters (which would corrupt the viewer header and
- * the markup it lands in) and collapses whitespace; every other character is
- * allowed. A label of nothing means "show the file name", so it is stored as
- * NULL rather than an empty string.
+ * The extensions this app stores, and the one extension each sniffed MIME
+ * type is named with (v1.42.0). A document's *name* is display and download
+ * text; its **storage key** is minted from the sniffed bytes and never
+ * changes, so a name can never point the app at a path it did not create.
  */
-export function normalizeAttachmentLabel(raw: string): string | null {
-  const cleaned = raw
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 200);
-  return cleaned === '' ? null : cleaned;
+const DOCUMENT_EXTENSION_PATTERN = /\.(png|jpe?g|pdf)$/i;
+
+/** `application/pdf` → `pdf`, `image/jpeg` → `jpg`, `image/png` → `png`. */
+export function canonicalExtension(mime: string): 'png' | 'jpg' | 'pdf' | null {
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime === 'image/jpeg') return 'jpg';
+  if (mime === 'image/png') return 'png';
+  return null;
+}
+
+function extensionOf(name: string): string | null {
+  const match = /\.([a-z0-9]+)$/i.exec(name);
+  return match === null ? null : match[1]!.toLowerCase();
+}
+
+export interface DocumentFileName {
+  /** The full name to store, extension included. */
+  name: string;
+  /** True when the extension was added or corrected, not typed by the household. */
+  extensionAdded: boolean;
+}
+
+/**
+ * A document name as the app stores it (v1.42.0, issue 112): sanitised, and
+ * ending in the extension of the file's **sniffed** type.
+ *
+ * The household types a name — `Vehicle MOT`, or `Vehicle MOT.pdf`. A name
+ * that already ends in the document's own extension is kept exactly as typed
+ * (case and all); `.jpeg` is accepted as another spelling of `.jpg`. Anything
+ * else gets the extension appended, and a name ending in a *different*
+ * document extension has that one replaced rather than doubled, so a PDF can
+ * never be saved as `MOT.png` and a name is never `MOT.png.pdf`. A trailing
+ * non-document suffix (`MOT 2026.v2`) is not an extension and is kept.
+ *
+ * The extension comes from the MIME type content sniffing decided at upload,
+ * never from the typed name: the name is display text, the bytes decide what
+ * the file really is.
+ */
+export function withDocumentExtension(typed: string, mime: string): DocumentFileName {
+  const sanitized = sanitizeOriginalName(typed);
+  const canonical = canonicalExtension(mime);
+  if (canonical === null) return { name: sanitized, extensionAdded: false };
+  const current = extensionOf(sanitized);
+  const alreadyRight = current === canonical || (canonical === 'jpg' && current === 'jpeg');
+  if (alreadyRight) return { name: sanitized, extensionAdded: false };
+  const base = sanitized.replace(DOCUMENT_EXTENSION_PATTERN, '');
+  const suffix = `.${canonical}`;
+  const trimmedBase = base === '' ? 'attachment' : base;
+  return {
+    name: `${trimmedBase.slice(0, 200 - suffix.length)}${suffix}`,
+    extensionAdded: true,
+  };
 }
 
 /**
@@ -153,8 +198,6 @@ export interface StoreAttachmentInput {
   /** A supplier's letter, policy document or terms (v0.25.0). */
   supplierId?: number;
   originalName: string;
-  /** Optional display name (v1.41.0); empty means "show the file name". */
-  label?: string;
   bytes: Buffer;
   actor: string;
   /** Resolved tenant `<dataDir>/households/<id>/documents`, never request input. */
@@ -166,8 +209,6 @@ export interface StoredAttachment {
   id: number;
   fileKey: string;
   originalName: string;
-  /** The household's display name, or null to show the file name. */
-  label: string | null;
   mime: string;
   sizeBytes: number;
   sha256: string;
@@ -211,8 +252,7 @@ export async function storeAttachment(input: StoreAttachmentInput): Promise<Stor
   });
 
   const sha256 = createHash('sha256').update(input.bytes).digest('hex');
-  const originalName = sanitizeOriginalName(input.originalName);
-  const label = normalizeAttachmentLabel(input.label ?? '');
+  const originalName = withDocumentExtension(input.originalName, mime).name;
   const id = input.db.transaction((tx: DbTx) => {
     const row = tx
       .insert(attachments)
@@ -222,7 +262,6 @@ export async function storeAttachment(input: StoreAttachmentInput): Promise<Stor
         supplierId: owner.kind === 'supplier' ? owner.id : null,
         fileKey,
         originalName,
-        label,
         mime,
         sizeBytes: input.bytes.length,
         sha256,
@@ -237,60 +276,96 @@ export async function storeAttachment(input: StoreAttachmentInput): Promise<Stor
       action: 'attachment.store',
       entity: owner.kind,
       entityId: owner.id,
-      summary: `Attached ${label ?? originalName} (${attachmentSizeLabel(input.bytes.length)}, ${mime})`,
-      after: { fileKey, originalName, label, mime, sizeBytes: input.bytes.length, sha256 },
+      summary: `Attached ${originalName} (${attachmentSizeLabel(input.bytes.length)}, ${mime})`,
+      after: { fileKey, originalName, mime, sizeBytes: input.bytes.length, sha256 },
       now,
     });
     return row.id;
   });
 
-  return { id, fileKey, originalName, label, mime, sizeBytes: input.bytes.length, sha256 };
+  return { id, fileKey, originalName, mime, sizeBytes: input.bytes.length, sha256 };
 }
 
 /**
- * Give a stored document a household-friendly display name (v1.41.0).
+ * Rename a stored document (v1.42.0, issue 112): the household's own name for
+ * the file, in place of `IMG_4821.jpg`.
  *
- * The file name and the bytes are untouched; only the `label` column moves.
- * Exactly one stored row is affected. The label is normalised here so a
- * client cannot store control characters or an unbounded string. A blank
- * label clears it, which means "show the file name" everywhere.
+ * What changes is the stored **file name** — the name the chip shows, the name
+ * the viewer's header shows and the name the download saves as. What does not
+ * change is anything that decides where bytes live: the storage key, the bytes,
+ * the sniffed MIME type, the size and the sha256 are all untouched, so backups,
+ * restore, the orphan report and the serving route cannot notice a rename. The
+ * extension rule is `withDocumentExtension`: a typed name that lacks the
+ * document's own extension gets it, and one that carries a *different* document
+ * extension has it replaced.
  *
- * The change is deliberately **not** audited: it is cosmetic display text, and
- * the underlying file name and key stay in the `attachment.store` /
- * `attachment.delete` entries. A document's identity — which file it is and
- * where it lives — is unchanged by a label.
- *
- * The row must be `stored`; renaming something already removed matches
- * nothing. `AttachmentNotFoundError` is thrown for an unknown id, so the
- * caller can distinguish "gone" from "nothing changed".
+ * The rename **is** audited (`attachment.rename`, against the owning record):
+ * unlike the cosmetic v1.41.0 label, the file name is what the download name
+ * and the archive's manifest lines show, so the trail should say when it
+ * changed. Exactly one `stored` row is affected; renaming something already
+ * removed writes nothing and reports `removed`, and an unknown id throws
+ * `AttachmentNotFoundError`.
  */
 export interface RenameAttachmentInput {
   db: Db;
   id: number;
-  label: string;
+  /** What the household typed. The document's extension is added when missing. */
+  name: string;
+  actor: string;
   now?: Date;
 }
 
+export type RenameAttachmentOutcome = 'renamed' | 'unchanged' | 'removed';
+
 export interface RenameAttachmentResult {
-  /** True when this call wrote a new label to a stored row. */
-  changed: boolean;
-  /** The stored label after this call (null when the file name is shown). */
-  label: string | null;
+  /** `renamed` wrote a new file name; `unchanged` had nothing to do; `removed` is a deleted row. */
+  outcome: RenameAttachmentOutcome;
+  /** The document's file name after this call. */
+  originalName: string;
+  /** True when the extension was added (or corrected) because it was missing or wrong. */
+  extensionAdded: boolean;
 }
 
-export function renameAttachment(input: RenameAttachmentInput): RenameAttachmentResult {
+export function renameAttachmentFile(input: RenameAttachmentInput): RenameAttachmentResult {
   const row = input.db.select().from(attachments).where(eq(attachments.id, input.id)).get();
   if (row === undefined) throw new AttachmentNotFoundError('That document no longer exists.');
+  if (input.name.trim() === '') throw new AttachmentInputError('Give the document a name.');
 
-  const label = normalizeAttachmentLabel(input.label);
-  const updated = input.db
-    .update(attachments)
-    .set({ label })
-    .where(and(eq(attachments.id, input.id), eq(attachments.state, 'stored')))
-    .returning({ id: attachments.id, label: attachments.label })
-    .all();
-  if (updated.length === 0) return { changed: false, label: row.label };
-  return { changed: true, label: updated[0]!.label };
+  const { name, extensionAdded } = withDocumentExtension(input.name, row.mime);
+  if (row.state !== 'stored') {
+    return { outcome: 'removed', originalName: row.originalName, extensionAdded };
+  }
+  if (name === row.originalName) {
+    return { outcome: 'unchanged', originalName: row.originalName, extensionAdded };
+  }
+
+  const now = input.now ?? new Date();
+  const renamed = input.db.transaction((tx: DbTx) => {
+    const updated = tx
+      .update(attachments)
+      .set({ originalName: name })
+      .where(and(eq(attachments.id, row.id), eq(attachments.state, 'stored')))
+      .returning({ id: attachments.id, originalName: attachments.originalName })
+      .all();
+    if (updated.length === 0) return null;
+    const owner = ownerOfRow(row);
+    recordAudit(tx, {
+      actor: input.actor,
+      action: 'attachment.rename',
+      entity: owner.kind,
+      entityId: owner.id,
+      summary: `Renamed ${row.originalName} to ${name}`,
+      before: { fileKey: row.fileKey, originalName: row.originalName },
+      after: { fileKey: row.fileKey, originalName: name },
+      now,
+    });
+    return updated[0]!;
+  });
+
+  if (renamed === null) {
+    return { outcome: 'removed', originalName: row.originalName, extensionAdded };
+  }
+  return { outcome: 'renamed', originalName: renamed.originalName, extensionAdded };
 }
 
 export interface DeleteAttachmentInput {
@@ -402,7 +477,6 @@ export function listStoredAttachments(db: Db, purchaseId: number): StoredAttachm
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
-      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,
@@ -430,7 +504,6 @@ export function listStoredPurchaseAttachments(
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
-      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,
@@ -465,7 +538,6 @@ export function listStoredReceiptAttachments(
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
-      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,
@@ -499,7 +571,6 @@ export function listStoredSupplierAttachments(
       id: attachments.id,
       fileKey: attachments.fileKey,
       originalName: attachments.originalName,
-      label: attachments.label,
       mime: attachments.mime,
       sizeBytes: attachments.sizeBytes,
       sha256: attachments.sha256,

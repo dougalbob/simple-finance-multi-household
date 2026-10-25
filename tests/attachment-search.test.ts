@@ -10,7 +10,7 @@ import {
   searchAttachments,
   type AttachmentSearchResult,
 } from '../src/lib/records/attachment-search';
-import { storeAttachment } from '../src/lib/records/attachments';
+import { renameAttachmentFile, storeAttachment } from '../src/lib/records/attachments';
 import { createPurchase } from '../src/lib/records/purchases';
 import { createReceipt } from '../src/lib/records/receipts';
 import { createSupplier } from '../src/lib/records/suppliers';
@@ -22,16 +22,16 @@ const PNG_BYTES = Buffer.from(
 );
 
 /**
- * The app-wide document search (v1.41.0): finds any stored attachment by its
- * friendly label, its file name, or the record it belongs to, and returns it
- * with the context of the page where it appears. The ranking rules are pure
- * and pinned here; the projection half proves the join to the owner and the
- * context each result carries.
+ * The app-wide document search (v1.41.0, one name since v1.42.0): finds any
+ * stored attachment by the name it carries — the file name, which is now the
+ * only name and the one a rename edits — or by the record it belongs to, and
+ * returns it with the context of the page where it appears. The ranking rules
+ * are pure and pinned here; the projection half proves the join to the owner
+ * and the context each result carries.
  */
 describe('document search matching', () => {
   const mot = {
-    displayName: 'Vehicle MOT',
-    originalName: 'IMG_4821.jpg',
+    displayName: 'Vehicle MOT.jpg',
     context: 'Purchase · Acorn Insurance · 2026-09-27 · Vehicle Running / Service',
   };
 
@@ -41,22 +41,18 @@ describe('document search matching', () => {
     assert.equal(normalizeAttachmentSearch('  Vehicle   MOT '), 'vehicle mot');
   });
 
-  it('finds the friendly label', () => {
+  it('finds the document by its name, extension and all', () => {
     assert.equal(attachmentMatchesSearch(mot, 'vehicle'), true);
     assert.equal(attachmentMatchesSearch(mot, 'mot'), true);
-    // A document whose label, file name and context all lack the word is a miss.
+    assert.equal(attachmentMatchesSearch(mot, 'mot.jpg'), true);
+    // A document whose name and context both lack the word is a miss.
     assert.equal(
       attachmentMatchesSearch(
-        { displayName: 'payslip', originalName: 'payslip.pdf', context: 'Income · Salary' },
+        { displayName: 'payslip.pdf', context: 'Income · Salary' },
         'vehicle',
       ),
       false,
     );
-  });
-
-  it('still finds the file name when a label is set', () => {
-    assert.equal(attachmentMatchesSearch(mot, 'img_4821'), true);
-    assert.equal(attachmentMatchesSearch(mot, 'jpg'), true);
   });
 
   it('finds the owning record’s context, not just the document', () => {
@@ -81,14 +77,13 @@ describe('document search matching', () => {
 describe('document search ranking', () => {
   function result(fields: {
     displayName: string;
-    originalName: string;
     context: string;
     createdAt: Date;
   }): AttachmentSearchResult {
     return {
       id: 0,
       fileKey: 'key',
-      label: null,
+      originalName: fields.displayName,
       mime: 'image/png',
       sizeBytes: 1,
       ownerKind: 'purchase',
@@ -102,13 +97,11 @@ describe('document search ranking', () => {
   it('puts a phrase-at-the-start match before a scattered one', () => {
     const exact = result({
       displayName: 'MOT certificate',
-      originalName: 'mot.pdf',
       context: 'Purchase · Acorn',
       createdAt: new Date('2026-09-20T00:00:00Z'),
     });
     const scattered = result({
       displayName: 'Vehicle history',
-      originalName: 'car.pdf',
       context: 'MOT · Acorn',
       createdAt: new Date('2026-09-21T00:00:00Z'),
     });
@@ -123,7 +116,6 @@ describe('document search ranking', () => {
     const rows = Array.from({ length: ATTACHMENT_SEARCH_RESULT_LIMIT + 5 }, (_unused, index) =>
       result({
         displayName: `doc ${index}`,
-        originalName: `doc-${index}.png`,
         context: 'Purchase · Acorn',
         // Newest first, as `searchAttachments` hands them over.
         createdAt: new Date(Date.UTC(2026, 8, 20) - index * 1000),
@@ -136,14 +128,12 @@ describe('document search ranking', () => {
 
   it('drops a document whose context does not contain every word', () => {
     const kept = result({
-      displayName: 'MOT',
-      originalName: 'mot.pdf',
+      displayName: 'MOT.pdf',
       context: 'Purchase · Acorn',
       createdAt: new Date(),
     });
     const dropped = result({
-      displayName: 'MOT',
-      originalName: 'mot.pdf',
+      displayName: 'MOT.pdf',
       context: 'Purchase · Other',
       createdAt: new Date(),
     });
@@ -186,15 +176,16 @@ describe('document search in the projection', () => {
         now: at('2026-09-25'),
       });
 
-      await storeAttachment({
+      const motDocument = await storeAttachment({
         db: fx.db,
         purchaseId: purchase,
         originalName: 'IMG_4821.jpg',
-        label: 'Vehicle MOT',
         bytes: PNG_BYTES,
         actor: 'alex@example.com',
         documentsDir,
       });
+      // The fixture bytes are PNGs, and since v1.42.0 the stored name ends in
+      // the extension of the type the bytes really are.
       await storeAttachment({
         db: fx.db,
         supplierId: insurer.id,
@@ -206,7 +197,7 @@ describe('document search in the projection', () => {
       await storeAttachment({
         db: fx.db,
         receiptId: salary.id,
-        originalName: 'payslip.pdf',
+        originalName: 'payslip',
         bytes: PNG_BYTES,
         actor: 'alex@example.com',
         documentsDir,
@@ -215,23 +206,37 @@ describe('document search in the projection', () => {
       // An empty query lists every stored document.
       assert.equal(searchAttachments(fx.db, '').length, 3);
 
-      // The friendly label is found, and the result carries its context.
+      // As uploaded, the camera's own name is what the search reads.
+      const byFileName = searchAttachments(fx.db, 'img_4821');
+      assert.equal(byFileName.length, 1);
+      // The bytes are a PNG, so the stored name carries `.png` whatever the
+      // browser called the file.
+      assert.equal(byFileName[0]!.displayName, 'IMG_4821.png');
+      assert.equal(searchAttachments(fx.db, 'vehicle mot').length, 0);
+
+      // Renaming the file is what makes it findable by what it is (v1.42.0),
+      // and the search reads the renamed file name in the owner's context.
+      renameAttachmentFile({
+        db: fx.db,
+        id: motDocument.id,
+        name: 'Vehicle MOT',
+        actor: 'alex@example.com',
+      });
       const mot = searchAttachments(fx.db, 'vehicle mot');
       assert.equal(mot.length, 1);
-      assert.equal(mot[0]!.displayName, 'Vehicle MOT');
+      assert.equal(mot[0]!.displayName, 'Vehicle MOT.png');
+      assert.equal(mot[0]!.originalName, 'Vehicle MOT.png');
       assert.equal(mot[0]!.ownerKind, 'purchase');
       assert.match(mot[0]!.context, /Acorn Insurance/);
       assert.match(mot[0]!.context, /Vehicle Running \/ Maintenance & Repairs/);
       assert.match(mot[0]!.href, /^\/purchases\?attachment=\d+#purchase-\d+$/);
-
-      // The file name still finds it when a label is set.
-      assert.equal(searchAttachments(fx.db, 'img_4821').length, 1);
+      assert.equal(searchAttachments(fx.db, 'img_4821').length, 0);
 
       // The supplier’s own document is found through its owner.
       const supplierDoc = searchAttachments(fx.db, 'policy');
       assert.equal(supplierDoc.length, 1);
       assert.equal(supplierDoc[0]!.ownerKind, 'supplier');
-      assert.equal(supplierDoc[0]!.displayName, 'policy.pdf');
+      assert.equal(supplierDoc[0]!.displayName, 'policy.png');
       assert.match(supplierDoc[0]!.href, /^\/suppliers\?attachment=\d+#supplier-\d+$/);
 
       // The payslip is found through its income source.
@@ -275,11 +280,10 @@ describe('document search in the projection', () => {
         actor: 'alex@example.com',
         now: new Date('2026-09-27T12:00:00Z'),
       }).purchase.id;
-      await storeAttachment({
+      const motDocument = await storeAttachment({
         db: fx.db,
         purchaseId: purchase,
         originalName: 'IMG_4821.jpg',
-        label: 'Vehicle MOT',
         bytes: PNG_BYTES,
         actor: 'alex@example.com',
         documentsDir,
@@ -292,6 +296,13 @@ describe('document search in the projection', () => {
 
       // The whole point: the supplier name is searchable on a purchase receipt.
       assert.equal(searchAttachments(fx.db, 'acorn insurance').length, 1);
+      // Renaming the file name is what makes the supplier-name search useful.
+      renameAttachmentFile({
+        db: fx.db,
+        id: motDocument.id,
+        name: 'Vehicle MOT',
+        actor: 'alex@example.com',
+      });
       assert.equal(searchAttachments(fx.db, 'vehicle mot acorn').length, 1);
     } finally {
       fx.close();

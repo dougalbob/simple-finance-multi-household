@@ -4,6 +4,27 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.42.0 — renaming a document renames the file (issue 112, 2026-10-25)
+
+The household reported that the v1.41.0 friendly name did not work as expected — pressing Save in
+the chip's inline editor saved nothing they could see, and the upload field's friendly name never
+showed on the document — and proposed the simplification adopted here: **remove the friendly-name
+field from the interface** (hide it, do not migrate it away) and make **Rename** rename the real
+file name, automatically adding the file's own extension when it is left off. Agreed before building:
+no long signposting label on the chip — the **Rename** disclosure pre-fills the whole current name
+and carries one short line inside the panel; the extension comes from the content-sniffed type; a
+wrong document extension is replaced, never doubled; the name is sanitised and capped like any
+display name; only `original_name` is written, so storage keys, bytes, the backup format and private
+serving are untouched; the rename is audited (`attachment.rename`); and the `label` column and
+migration `0021` are retained but unused, so **no migration ships**. Keep implementation, tests,
+browser spec, version metadata, release notes, handoff and current-release documentation in **one
+PR**. Require PR `gates`, `browser` and `docker`, merge once with a merge commit, require main CI,
+then place annotated `v1.42.0` on the exact merge commit and verify Publish pushed only to
+`ghcr.io/dougalbob/simple-finance-multi-household` with `v1.42.0`, `latest` and `sha-<short>` on one
+digest, plus the GitHub Latest release. No deployment is part of publication. Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or 3007.
+
 ## v1.41.1 — patch: the Documents page, actually shipped (2026-10-24)
 
 v1.41.0 was published with the menu linking to `/documents` but no `src/app/documents/page.tsx` in

@@ -4,17 +4,18 @@
  * and shows it **in the context of the record it belongs to**.
  *
  * The household's problem this solves is that a photographed MOT arrives as
- * `IMG_4821.jpg` and is impossible to find later. A friendly label fixes what
- * the document *is*; this search fixes *where it lives*. A result therefore
- * carries both the document's own name (label, falling back to the file name)
- * and the owning record — the supplier, the purchase date and its categories,
- * or the income source and date — plus a link that opens that page.
+ * `IMG_4821.jpg` and is impossible to find later. Renaming the document fixes
+ * what it *is* (v1.42.0 — the file name itself, so nothing can fall out of
+ * step with it); this search fixes *where it lives*. A result therefore
+ * carries the document's name and the owning record — the supplier, the
+ * purchase date and its categories, or the income source and date — plus a
+ * link that opens that page.
  *
  * Matching follows the same rules as the Purchases search
  * (`src/lib/search.ts`): case and repeated whitespace are normalised, and
  * every whitespace-separated word must appear somewhere across the document's
- * label, its file name and its owner's context, in any order. So
- * `vehicle mot` finds a supplier document even when the file is `IMG_4821.jpg`.
+ * name and its owner's context, in any order. So `vehicle mot acorn` finds the
+ * renamed MOT receipt and the supplier it came from.
  *
  * Pure and framework-free so the ranking is unit-tested without a database;
  * the database read lives in `searchAttachments`.
@@ -32,12 +33,10 @@ export const ATTACHMENT_SEARCH_RESULT_LIMIT = 100;
 
 export type AttachmentOwnerKind = 'purchase' | 'receipt' | 'supplier';
 
-/** What the matcher needs: the document's own text and its owner's context. */
+/** What the matcher needs: the document's own name and its owner's context. */
 export interface AttachmentSearchFields {
-  /** The label, or the file name when there is no label. */
+  /** The document's name — the file name it was uploaded or renamed to. */
   displayName: string;
-  /** The stored file name, always searchable even when a label is set. */
-  originalName: string;
   /** The context line, e.g. "Purchase · Sainsbury's · 2026-10-01 · Groceries / Weekly Shop". */
   context: string;
 }
@@ -45,7 +44,8 @@ export interface AttachmentSearchFields {
 export interface AttachmentSearchResult extends AttachmentSearchFields {
   id: number;
   fileKey: string;
-  label: string | null;
+  /** The stored file name — the same name as `displayName` (v1.42.0). */
+  originalName: string;
   mime: string;
   sizeBytes: number;
   createdAt: Date;
@@ -54,7 +54,7 @@ export interface AttachmentSearchResult extends AttachmentSearchFields {
   ownerLabel: string;
   /** Where the document can be opened in the app. */
   href: string;
-  /** Normalised match haystack (`displayName originalName context`). */
+  /** Normalised match haystack (`displayName context`). */
   haystack: string;
 }
 
@@ -63,9 +63,9 @@ export function normalizeAttachmentSearch(query: string): string {
   return normalizeSearchText(query).slice(0, ATTACHMENT_SEARCH_MAX_LENGTH);
 }
 
-/** The searchable text of one document: its own name (both forms) and its context. */
+/** The searchable text of one document: its name and its owner's context. */
 export function attachmentSearchHaystack(fields: AttachmentSearchFields): string {
-  return normalizeSearchText(`${fields.displayName} ${fields.originalName} ${fields.context}`);
+  return normalizeSearchText(`${fields.displayName} ${fields.context}`);
 }
 
 /**
@@ -118,7 +118,17 @@ export function rankAttachmentMatches(
 /** Read every stored attachment, with its owner's context, newest first. */
 export function searchAttachments(db: Db, query: string): AttachmentSearchResult[] {
   const rows = db
-    .select()
+    .select({
+      id: attachments.id,
+      fileKey: attachments.fileKey,
+      originalName: attachments.originalName,
+      mime: attachments.mime,
+      sizeBytes: attachments.sizeBytes,
+      createdAt: attachments.createdAt,
+      purchaseId: attachments.purchaseId,
+      receiptId: attachments.receiptId,
+      supplierId: attachments.supplierId,
+    })
     .from(attachments)
     .where(eq(attachments.state, 'stored'))
     .orderBy(desc(attachments.createdAt), asc(attachments.id))
@@ -204,7 +214,6 @@ function buildResult(
     id: number;
     fileKey: string;
     originalName: string;
-    label: string | null;
     mime: string;
     sizeBytes: number;
     createdAt: Date;
@@ -216,7 +225,9 @@ function buildResult(
     href: string;
   },
 ): AttachmentSearchResult {
-  const displayName = row.label ?? row.originalName;
+  // One name, not two (v1.42.0): a rename edits the file name itself, so the
+  // document cannot be shown under one name and downloaded under another.
+  const displayName = row.originalName;
   return {
     ...row,
     displayName,
@@ -224,11 +235,7 @@ function buildResult(
     ownerLabel: extra.ownerLabel,
     context: extra.context,
     href: extra.href,
-    haystack: attachmentSearchHaystack({
-      displayName,
-      originalName: row.originalName,
-      context: extra.context,
-    }),
+    haystack: attachmentSearchHaystack({ displayName, context: extra.context }),
   };
 }
 

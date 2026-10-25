@@ -100,9 +100,6 @@ export function AttachmentViewer({
             <span className="block break-words font-semibold">
               {attachmentDisplayName(attachment)}
             </span>
-            {attachment.label !== null ? (
-              <span className="block text-xs text-ink-muted">File: {attachment.originalName}</span>
-            ) : null}
           </div>
           <span className="shrink-0 text-sm text-ink-muted">
             {Math.ceil(attachment.sizeBytes / 1024)} KB

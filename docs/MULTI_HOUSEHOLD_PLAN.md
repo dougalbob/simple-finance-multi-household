@@ -1,5 +1,19 @@
 # Multi-household edition — active product and safety contract
 
+**v1.42.0 — Renaming a document renames the file (issue 112):** the v1.41.0 friendly name is removed
+from the interface and **Rename** edits the document's stored file name — the one name the chip, the
+viewer, the download name and the Documents search all read. The editor opens pre-filled with the
+whole current name; the file's own extension is added automatically when left off, a wrong document
+extension is replaced rather than doubled, and the extension comes from the content-sniffed type.
+Only `original_name` is written (storage key, bytes, MIME type and sha256 untouched, so backups,
+restore, the orphan report and private serving cannot notice a rename) and the change is audited as
+`attachment.rename`. The nullable `label` column and migration `0021` are kept but unused: no
+migration in this release, no data lost, existing labels preserved in the database and backups and no
+longer displayed. No authentication, household-separation, storage-path or backup-format change.
+Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.42.0` (stable also moves `latest`), Unraid
+host port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`, never the original
+installation or 3007. See `docs/RELEASE_NOTES_v1.42.0.md` and decision 264.
+
 **v1.41.1 — The Documents page, actually shipped:** v1.41.0's menu linked to `/documents` but the
 page was missing from the build, so the item opened Next's 404; the label work and search library
 were present. This patch adds the **Documents** page — a household-scoped, `force-dynamic` server

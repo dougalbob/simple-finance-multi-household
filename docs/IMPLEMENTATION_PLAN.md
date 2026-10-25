@@ -4497,3 +4497,38 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     migration, authentication, storage-path or backup-format change. Ship as **v1.41.1** through one
     PR with tests, version metadata, release notes, handoff and current-release docs; require
     `gates`, `browser` and `docker`, main CI and the tagged Publish run.
+
+264. **Issue 112 — renaming a document renames the file (v1.42.0, 2026-10-25).** The household
+    reported that the v1.41.0 friendly name did not behave as expected: pressing Save in the chip's
+    inline editor did not save the friendly name whether or not the file name was edited as well,
+    and the upload field's "friendly name" never appeared on the document afterwards. The owner
+    proposed the simplification the release adopts: (a) **remove the friendly-name field from the
+    interface** — hide it, do not migrate it away, in case a second display name is wanted later;
+    (b) make **Rename** rename the document's real file name, and have the app **add the file's own
+    extension** to a typed name that lacks it (`Newfilename` → `Newfilename.jpg`). They also asked
+    whether signposting the extension rule would need a long chip label that would eat a phone's
+    width. Agreed answer: no label on the chip — the **Rename** disclosure pre-fills the text box
+    with the document's whole current name (so the thing to edit is already there) and carries one
+    short line inside the panel, *the file's own extension is added if you leave it off*. Decisions
+    taken while building: the extension comes from the **content-sniffed** MIME type, never the
+    typed name; `.jpeg` counts as `.jpg`; a *wrong* document extension is replaced rather than
+    doubled (`MOT.png` on a PDF → `MOT.pdf`) while a non-document suffix stays part of the name
+    (`MOT 2026.v2` → `MOT 2026.v2.pdf`); the name is sanitised exactly like any display name and
+    capped at 200 characters including the extension, and an empty name is refused; uploads get the
+    same treatment, so a PNG the camera calls `IMG_4821` is stored as `IMG_4821.png`; a rename writes
+    only `original_name` — the storage key, bytes, MIME type, size and sha256 are untouched, so
+    backups, restore, the orphan report and private serving cannot notice it; and because the name is
+    what the download and the archive's manifest lines show, a rename **is** audited
+    (`attachment.rename`, both names plus the unchanged key) whereas the cosmetic label was not. The
+    `label` column and migration `0021` are **kept**, unused: no migration in this release, no data
+    lost, and existing labels are preserved in the database and backups but no longer displayed, so
+    a document with a label shows its file name. The Documents search now reads the one name (plus
+    the owning record's context) and no longer matches labels. Evidence: `tests/attachment-rename.test.ts`
+    (extension rules, sanitiser, cap, untouched key/bytes/sha256, audit, the three outcomes and two
+    interface guards) plus updated search and pipeline suites — 1,247 tests across 282 suites — and a
+    real form POST against the seeded dev server showing the rename, the audit entry and
+    `/documents?q=` finding the new name; `e2e/attachments.spec.ts` gains the browser spec. No
+    schema, migration, authentication, household-separation, storage-path or backup-format change.
+    Ship as **v1.42.0** through one PR with tests, version metadata, release notes, handoff and
+    current-release docs; require `gates`, `browser` and `docker`, main CI and the tagged Publish
+    run. Publication does not deploy.

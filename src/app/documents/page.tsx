@@ -41,9 +41,9 @@ export default async function DocumentsPage({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Documents</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Every stored document</h1>
         <p className="mt-1 text-sm text-ink-soft">
-          One search over every receipt, invoice and letter in this household — the friendly name,
-          the file name and the record it belongs to. Open a result to land where the document
-          lives, on Purchases, Income or Suppliers.
+          One search over every receipt, invoice and letter in this household — the document&rsquo;s
+          name and the record it belongs to. Rename a document where it is listed and it is found by
+          that name here; open a result to land where it lives, on Purchases, Income or Suppliers.
         </p>
       </header>
 
@@ -83,8 +83,8 @@ export default async function DocumentsPage({
               </>
             ) : (
               <p>
-                Nothing matches <span className="font-medium">“{q}”</span> in a document name, file
-                name or owning record.{' '}
+                Nothing matches <span className="font-medium">“{q}”</span> in a document name or
+                owning record.{' '}
                 <Link href="/documents" className="sf-link">
                   Clear the search
                 </Link>
@@ -103,9 +103,6 @@ export default async function DocumentsPage({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-ink-emphasis">{doc.displayName}</p>
-                      {doc.label !== null ? (
-                        <p className="mt-0.5 truncate text-xs text-ink-muted">{doc.originalName}</p>
-                      ) : null}
                       <p className="mt-1 truncate text-xs text-ink-soft">{doc.context}</p>
                     </div>
                     <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-ink-muted">

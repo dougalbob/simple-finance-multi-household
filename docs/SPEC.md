@@ -2236,6 +2236,10 @@ enforces the same rule as the upload action.
   browser with JavaScript off, where the same label is only a label; React hides it on mount. The
   input's value is cleared once each upload reports back, so the same file can be chosen a second
   time after a failure.
+- **The name it keeps.** Uploading keeps the browser's file name, extended to the sniffed type when
+  it has none (a PNG the camera calls `IMG_4821` is stored as `IMG_4821.png`), so the download opens
+  as what the file really is. There is no second "friendly name" field to fill in: renaming later
+  edits this name everywhere (§23.5).
 - **The till moment stays fast:** the purchase save never waits on an attachment upload. Attachment lifecycle
   is independent (`pending → stored | failed`), retryable, and a receipt can be attached days later. The
   online-only stance is unchanged (§14).
@@ -2243,9 +2247,12 @@ enforces the same rule as the upload action.
 ### 23.2 Storage and serving
 
 Files live under `/data/households/<opaque-household-id>/documents/` (§18.1) with server-generated storage keys — never user-controlled paths. The selected directory comes from the authenticated household context, never a request path.
-The database stores the original filename (for display/download naming only), an optional **friendly
-label** (§23.5), MIME type, size, sha256, uploader and timestamp. Viewing/downloading an attachment requires authentication; responses are private and
-uncached, with `Content-Disposition` using a sanitized display name.
+The database stores the document's **name** — the file name it was uploaded or renamed to, used for
+display and download naming only (§23.5) — its sniffed MIME type, size, sha256, uploader and
+timestamp. Viewing/downloading an attachment requires authentication; responses are private and
+uncached, with `Content-Disposition` using the sanitized name, so a renamed document also downloads
+under its new name. The nullable `label` column added by v1.41.0 is retained in the schema and in
+every backup, but the app neither writes nor displays it since v1.42.0 (§23.5).
 
 **In-app viewer (v0.27.0, decision 177; layout revised by decision 191; PDF drawing by decision 192):** attachment links open a native modal on phone and desktop, not a new tab or a browser window inside the installed PWA. Below 640px the viewer fills the screen; from 640px up it is a centred panel. The header holds Close, the file name (which wraps rather than being cut short) and the size. The footer always holds the actions: **Open in PDF app** for a PDF (**Share** for an image), offered when the browser can share files, which hands the file to the system share sheet so the household's own PDF app can open it; and **Download**, always offered. Images use the browser's normal zoom. A PDF is drawn page by page in the app by **pdf.js** (`pdfjs-dist`, Apache-2.0; its legacy build, so that older phone browsers run it too). Each page is fitted to the viewer's width and drawn at the device's pixel ratio, capped at 2. Only pages near the screen are drawn, and a page that scrolls well away is released, so a long document does not exhaust a phone's memory. pdf.js loads only when a PDF is opened. The same code runs on every device; nothing checks which phone it is. The reader draws pages only: text cannot be selected or searched, links and form fields are not active, and a font the PDF does not embed is drawn with a stand-in while its positions still come from the PDF. Open in PDF app always gives the exact file. A PDF the reader cannot open shows a plain message and the footer buttons. Close, Escape and backdrop dismissal return focus to the originating link without navigating or losing scroll. The modal traps keyboard focus and locks background scrolling. Loading and unavailable/offline states keep Close usable. Bytes are fetched through the same independently authenticated API with `no-store`, held only in a temporary blob URL and revoked on close. No offline document cache and no new tab. The worker is served from this app's own static files, so no PDF content or request goes to another site. Printing remains via the browser/OS PDF viewer or the downloaded file rather than an unreliable mobile print button.
 
@@ -2281,39 +2288,61 @@ purchase record stays. There is no undelete in the app.
 - The purchase's History list shows who removed it and when. The chip disappears from every page that
   renders stored receipts.
 
-### 23.5 Friendly names and the app-wide document search (v1.41.0; page completed in v1.41.1)
+### 23.5 Document names and the app-wide document search (v1.41.0; naming reworked in v1.42.0)
 
-> Delivery note: v1.41.0 shipped the friendly-label work and the search library, but the
-> `/documents` page itself was absent from that build, so the menu item 404'd. v1.41.1 added
-> `src/app/documents/page.tsx`, the Documents browser spec and a guard (`tests/site-nav-routes.test.ts`)
-> that fails CI if any navigation link points at a route without a page. The contract below is the
-> behaviour the app has from v1.41.1.
+> Delivery note: v1.41.0 shipped an optional **friendly label** set at upload or from the chip's
+> inline editor, and v1.41.1 added the `/documents` page that release had left out. The label did
+> not behave as the household expected — saving it from the chip often changed nothing they could
+> see, and the upload field anticipated a "Save" that never appeared — so **v1.42.0 (issue 112)
+> removes it from the interface and makes Rename rename the file name itself**. The `/documents`
+> search delivered in v1.41.1 is unchanged apart from reading that one name.
 
-A photographed MOT arrives as `IMG_4821.jpg`, which says nothing about what it is or where it
-belongs. Two additions fix that without touching the file itself.
+**One name per document.** A document has exactly one name: its stored file name. The chip, the
+viewer header, the download name, the `Content-Disposition` name and the Documents search all read
+it, so the app can never show one name and save another (SPEC §23.3).
 
-**Friendly label.** Every attachment carries an optional `label` — the household's own display
-name. It is set at upload (an optional field beside the picker) or edited later from the chip's
-inline **Rename** control, and it is what the chip, the viewer header and the search read. The
-stored file name, the download name and the `Content-Disposition` name are never changed, and a
-blank label means "show the file name". The label is normalised (trimmed, whitespace-collapsed,
-control characters removed, capped at 200 characters) and stored as `NULL` when blank. Renaming
-is cosmetic and deliberately **not** audited: the document's identity — its file name and storage
-key — is unchanged, and those remain in the `attachment.store` / `attachment.delete` entries. A
-renamed document is still the same bytes at the same path, so backups, restore and the orphan
-report are unaffected (migration `0021_attachment_labels.sql` adds the nullable column).
+**Rename.** Each chip carries a **Rename** control: a native disclosure holding the document's whole
+current name in a text box, a **Save** button and a one-line hint. The box arrives pre-filled with
+the name — `IMG_4821.jpg` — so the thing to edit is right there, and the only signposting is that
+short line inside the panel: *the file's own extension is added if you leave it off*. Nothing long
+has to sit on the chip, which matters on a phone. On save:
+
+- a name without the document's own extension gets it (`Vehicle MOT` → `Vehicle MOT.png`);
+- the extension comes from the **sniffed** MIME type, never from the typed name, so a PDF can never
+  be saved as `.png`; `.jpeg` is accepted as `.jpg`;
+- a name that ends in a *different* document extension has it replaced rather than doubled
+  (`MOT.png` on a PDF becomes `MOT.pdf`, not `MOT.png.pdf`);
+- a suffix that is not a document extension is part of the name (`MOT 2026.v2` →
+  `MOT 2026.v2.pdf`);
+- the name is sanitised exactly like any display name (basename only; control characters, quotes,
+  slashes and the Windows reserved set replaced; 200 characters including the extension), and an
+  empty name is refused with a message rather than stored.
+
+The rename writes `original_name` and nothing else: the storage key, the bytes, the MIME type, the
+size and the sha256 are untouched, so backups, restore, the orphan report and the serving route
+cannot notice it, and a name can never point the app at a file it did not write. A rename **is**
+audited (`attachment.rename`, against the owning purchase, income record or supplier, recording both
+names and the unchanged key) — unlike the v1.41.0 label it is not cosmetic, because the name is what
+the download and the archive's manifest lines show.
+
+**The friendly label is hidden, not migrated away.** The nullable `label` column added by migration
+`0021_attachment_labels.sql` stays in the schema, in existing rows and in every backup; since
+v1.42.0 the app does not write it, does not display it and does not search it, so a document with an
+old label simply shows its file name, and re-introducing a second display name later needs no
+migration. v1.42.0 adds no migration of its own.
 
 **App-wide document search.** A **Documents** page (`/documents`, in the menu beside Suppliers;
 delivered in v1.41.1) lists every stored attachment in the household and searches it in one place.
-The box reads the friendly label, the original file name **and** the owning record's context
-together, using the same matching rules as the Purchases search (§12): case and whitespace are
-normalised, and every whitespace-separated word must appear somewhere, in any order. A result
-shows the document's name, its size and a context line — `Purchase · supplier · date · category`
-for a receipt, `Income · source · date` for a payslip, `Supplier · name` for a letter — and opens
-the page where the document appears (`/purchases`, `/income` or `/suppliers`) with
-`?attachment=<id>`, which scrolls to and briefly rings that document. The query is debounced and
-lives in the URL (`?q=`), so a search is shareable; the server scopes the query to the verified
-household and returns only `stored` attachments, capped at 100 results.
+The box reads the document's name and the owning record's context together, using the same matching
+rules as the Purchases search (§12): case and whitespace are normalised, and every
+whitespace-separated word must appear somewhere, in any order. A result shows the document's name,
+its size and a context line — `Purchase · supplier · date · category` for a receipt,
+`Income · source · date` for a payslip, `Supplier · name` for a letter — and opens the page where
+the document appears (`/purchases`, `/income` or `/suppliers`) with `?attachment=<id>`, which scrolls
+to and briefly rings that document. The query is debounced and lives in the URL (`?q=`), so a search
+is shareable; the server scopes the query to the verified household and returns only `stored`
+attachments, capped at 100 results. Renaming a document is what makes `vehicle mot` find a
+photographed MOT, and the search reads the renamed name immediately.
 
 ## 24. Credit-card pots, statement reviews and promotional dates
 
