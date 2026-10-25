@@ -13,19 +13,19 @@ import { formatAttachmentSize } from '@/lib/format';
 export interface AttachmentSummary {
   id: number;
   fileKey: string;
+  /**
+   * The document's file name — what the chip, the viewer header and the
+   * download use (v1.42.0). Rename edits this, so there is no second name to
+   * fall out of step with it.
+   */
   originalName: string;
-  /** The household's friendly display name, or null to show the file name. */
-  label: string | null;
   mime: string;
   sizeBytes: number;
 }
 
-/** The name a document is shown by: its friendly label, or the file name. */
-export function attachmentDisplayName(attachment: {
-  originalName: string;
-  label: string | null;
-}): string {
-  return attachment.label ?? attachment.originalName;
+/** The name a document is shown and downloaded by. */
+export function attachmentDisplayName(attachment: { originalName: string }): string {
+  return attachment.originalName;
 }
 
 /**
@@ -60,14 +60,17 @@ const OWNER_WORDS = {
  * (SPEC §23.1, §23.4). A purchase's receipts, since v0.10.0 an income
  * record's payslips (pass `receiptId`), and since v0.25.0 a supplier's
  * letters and policy documents (pass `supplierId`) — exactly one owner id.
- * Viewing, attaching, labelling and removing are authenticated; the
+ * Viewing, attaching, renaming and removing are authenticated; the
  * attachment lifecycle is independent of the record's save, so this form
  * never blocks entry and a document can be added, renamed or removed later.
  *
  * The chip is a container, not a link wrapping a button: a button inside an
  * anchor is invalid HTML and hydration-hostile. Removal is a two-click
  * confirm — irreversible for this installation; an older backup is the way
- * back. Renaming is a one-field inline edit that saves on submit.
+ * back. Renaming is a one-field editor behind a **Rename** disclosure that
+ * saves on submit (v1.42.0): the file name itself changes, so the chip, the
+ * viewer and the download all follow, and no separate display label exists to
+ * disagree with it.
  */
 export function AttachmentForm({
   purchaseId,
@@ -95,7 +98,6 @@ export function AttachmentForm({
     trigger: HTMLAnchorElement;
   } | null>(null);
   const [state, formAction, pending] = useActionState(uploadAttachmentAction, initialActionState);
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const listRef = useRef<HTMLUListElement | null>(null);
@@ -150,78 +152,49 @@ export function AttachmentForm({
       ) : null}
       {attachments.length > 0 ? (
         <ul ref={listRef} className="flex flex-wrap gap-2">
-          {attachments.map((attachment) =>
-            editingId === attachment.id ? (
-              <li key={attachment.id} className="flex flex-wrap items-center gap-1">
-                <RenameAttachmentControl
-                  attachment={attachment}
-                  onDone={() => setEditingId(null)}
-                />
-              </li>
-            ) : (
-              <li
-                key={attachment.id}
-                data-attachment-id={attachment.id}
-                className="flex flex-wrap items-center gap-1"
+          {attachments.map((attachment) => (
+            <li
+              key={attachment.id}
+              data-attachment-id={attachment.id}
+              className="flex flex-wrap items-center gap-1"
+            >
+              <span
+                className={`inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 font-medium text-warning${
+                  attachment.id === highlightId
+                    ? ' ring-2 ring-accent ring-offset-1 ring-offset-warning-50'
+                    : ''
+                }`}
               >
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 font-medium text-warning${
-                    attachment.id === highlightId
-                      ? ' ring-2 ring-accent ring-offset-1 ring-offset-warning-50'
-                      : ''
-                  }`}
+                <a
+                  href={`/api/attachments/${attachment.fileKey}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setViewing({ attachment, trigger: event.currentTarget });
+                  }}
+                  className="inline-flex items-center gap-1 underline underline-offset-2"
                 >
-                  <a
-                    href={`/api/attachments/${attachment.fileKey}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setViewing({ attachment, trigger: event.currentTarget });
-                    }}
-                    className="inline-flex items-center gap-1 underline underline-offset-2"
-                  >
-                    <span aria-hidden="true">📎</span>
-                    <span className="max-w-[160px] truncate">
-                      {attachmentDisplayName(attachment)}
-                    </span>
-                    <span className="text-warning-600">
-                      {formatAttachmentSize(attachment.sizeBytes)}
-                    </span>
-                  </a>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingId(attachment.id)}
-                  aria-label={`Rename ${attachmentDisplayName(attachment)}`}
-                  className="rounded px-1 py-0.5 font-medium text-ink-muted hover:bg-surface-muted hover:text-ink-emphasis"
-                >
-                  Rename
-                </button>
-                <RemoveReceiptControl
-                  attachmentId={attachment.id}
-                  displayName={attachmentDisplayName(attachment)}
-                  noun={words.noun}
-                />
-              </li>
-            ),
-          )}
+                  <span aria-hidden="true">📎</span>
+                  <span className="max-w-[160px] truncate">
+                    {attachmentDisplayName(attachment)}
+                  </span>
+                  <span className="text-warning-600">
+                    {formatAttachmentSize(attachment.sizeBytes)}
+                  </span>
+                </a>
+              </span>
+              <RenameAttachmentControl attachment={attachment} />
+              <RemoveReceiptControl
+                attachmentId={attachment.id}
+                displayName={attachmentDisplayName(attachment)}
+                noun={words.noun}
+              />
+            </li>
+          ))}
         </ul>
       ) : null}
       {allowUpload ? (
         <form action={formAction} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name={words.field} value={ownerId} />
-          {/*
-            Optional friendly name (v1.41.0): typed before the file is chosen,
-            saved with it. Left blank the document shows its file name; it
-            never replaces the stored file name or the download name.
-          */}
-          <input
-            type="text"
-            name="label"
-            maxLength={200}
-            placeholder="Friendly name (optional)"
-            aria-label="Friendly name (optional)"
-            className="w-44 rounded border border-border-strong bg-surface px-2 py-1 text-xs"
-          />
           <input
             id={inputId}
             ref={fileRef}
@@ -280,65 +253,65 @@ export function AttachmentForm({
 }
 
 /**
- * Inline friendly-name editor for one document (v1.41.0). Replaces the chip
- * while editing: a text field seeded with the current label (blank when the
- * file name is shown), Save and Cancel. Save posts the attachment id and the
- * raw label; the domain normalises it, so an all-space entry clears the label
- * and an empty one means "show the file name". The page revalidates on
- * success, so the chip redraws with the new name and this closes itself.
+ * Rename one document (v1.42.0, issue 112): a native disclosure holding the
+ * document's current name in a text box, a Save button and a one-line hint.
+ *
+ * The button is named **Rename** and the box arrives pre-filled with the whole
+ * name — `IMG_4821.jpg` — so the thing to edit is right there and no long
+ * explanation has to sit on the chip: the hint inside the panel says the file's
+ * extension is added if it is left off, and that is the only signposting a
+ * phone's width has to carry. Saving renames the file everywhere it is shown
+ * (the chip, the viewer, the download name and the Documents search); the
+ * stored bytes and storage key are untouched. The name box is keyed on the
+ * saved name, so after a save it shows exactly what the server stored
+ * (`Vehicle MOT` becoming `Vehicle MOT.pdf`).
  */
-function RenameAttachmentControl({
-  attachment,
-  onDone,
-}: {
-  attachment: AttachmentSummary;
-  onDone: () => void;
-}) {
+function RenameAttachmentControl({ attachment }: { attachment: AttachmentSummary }) {
   const [state, formAction, pending] = useActionState(renameAttachmentAction, initialActionState);
-  const [value, setValue] = useState(attachment.label ?? '');
-  // Re-seed if the server re-render arrives with a different label (a second
-  // save elsewhere, or the clear-and-rename round trip).
-  const doneRef = useRef(onDone);
-  doneRef.current = onDone;
-  useEffect(() => {
-    setValue(attachment.label ?? '');
-  }, [attachment.label]);
-  useEffect(() => {
-    if (state.status === 'ok') doneRef.current();
-  }, [state]);
+  const inputId = `attachment-rename-${attachment.id}`;
+  const hintId = `attachment-rename-hint-${attachment.id}`;
   return (
-    <form action={formAction} className="inline-flex flex-wrap items-center gap-1">
-      <input type="hidden" name="attachmentId" value={attachment.id} />
-      <input
-        type="text"
-        name="label"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder={attachment.originalName}
-        maxLength={200}
-        aria-label={`Friendly name for ${attachmentDisplayName(attachment)}`}
-        className="w-44 rounded border border-warning-300 bg-surface px-2 py-0.5 text-xs"
-      />
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded border border-warning-300 bg-surface px-1.5 py-0.5 font-medium text-warning hover:bg-warning-50 disabled:opacity-60"
+    <details className="min-w-0" data-attachment-rename={attachment.id}>
+      <summary
+        aria-label={`Rename ${attachmentDisplayName(attachment)}`}
+        className="cursor-pointer rounded px-1 py-0.5 font-medium text-ink-muted hover:bg-surface-muted hover:text-ink-emphasis"
       >
-        {pending ? 'Saving…' : 'Save'}
-      </button>
-      <button
-        type="button"
-        onClick={() => doneRef.current()}
-        className="rounded px-1 py-0.5 text-ink-muted hover:text-ink-emphasis"
-      >
-        Cancel
-      </button>
-      {state.message !== null ? (
-        <span role="status" className={state.status === 'error' ? 'text-danger' : 'text-positive'}>
-          {state.message}
+        Rename
+      </summary>
+      <form action={formAction} className="mt-1 flex flex-wrap items-center gap-1">
+        <input type="hidden" name="attachmentId" value={attachment.id} />
+        <input
+          key={attachment.originalName}
+          id={inputId}
+          type="text"
+          name="name"
+          defaultValue={attachment.originalName}
+          maxLength={200}
+          required
+          aria-label={`New name for ${attachmentDisplayName(attachment)}`}
+          aria-describedby={hintId}
+          className="w-56 rounded border border-warning-300 bg-surface px-2 py-0.5 text-xs"
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded border border-warning-300 bg-surface px-1.5 py-0.5 font-medium text-warning hover:bg-warning-50 disabled:opacity-60"
+        >
+          {pending ? 'Saving…' : 'Save'}
+        </button>
+        {state.message !== null ? (
+          <span
+            role="status"
+            className={state.status === 'error' ? 'text-danger' : 'text-positive'}
+          >
+            {state.message}
+          </span>
+        ) : null}
+        <span id={hintId} className="w-full text-[11px] text-ink-muted">
+          The file&rsquo;s own extension is added if you leave it off.
         </span>
-      ) : null}
-    </form>
+      </form>
+    </details>
   );
 }
 

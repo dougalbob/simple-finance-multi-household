@@ -1,5 +1,18 @@
 # Simple Finance Multi-household
 
+**v1.42.0 — Renaming a document renames the file (issue 112):** the v1.41.0 **friendly name** is gone
+from the interface — it did not behave as the household expected — and **Rename** now edits the
+document's real file name, which is the one name the chip, the viewer, the download and the
+Documents search use. The editor opens pre-filled with the whole current name, and the file's own
+extension is added automatically when it is left off (`Vehicle MOT` → `Vehicle MOT.png`); a wrong
+document extension is replaced rather than doubled, and the extension always comes from the file's
+content-sniffed type. Uploads are named the same way. A rename touches only the name — storage key,
+bytes and the backup format are untouched — and is recorded in the record's History. The `label`
+column is kept but unused: **no migration**, and nothing to re-enter. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.42.0` (stable also moves `latest`),
+appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. See
+[release notes](docs/RELEASE_NOTES_v1.42.0.md) and [handoff](docs/HANDOFF.md).
+
 **v1.41.1 — The Documents page, actually shipped:** v1.41.0 linked the menu to `/documents` but
 omitted the page itself, so the item opened Next's 404 (the friendly-label work and search library
 were present and correct). This patch adds the missing **Documents** page — one household-scoped

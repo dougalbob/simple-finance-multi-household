@@ -1,3 +1,21 @@
+**v1.42.0 — renaming a document renames the file (issue 112, 2026-10-25):** the v1.41.0 **friendly
+name** did not work as the household expected, so it is gone from the interface: **Rename** now edits
+the document's stored file name, which is the one name the chip, the viewer, the download name, the
+`Content-Disposition` and the Documents search all use. The box arrives pre-filled with the whole
+current name and the file's own extension is added when it is left off (`Vehicle MOT` →
+`Vehicle MOT.png`), replaced when it is the wrong document extension (`MOT.png` on a PDF →
+`MOT.pdf`) and never doubled; the extension comes from the content-sniffed type, the name is
+sanitised and capped at 200 characters, and an empty name is refused. Uploads are named the same way
+(a PNG the camera calls `IMG_4821` is stored as `IMG_4821.png`). A rename writes `original_name` only
+— storage key, bytes, MIME type, size and sha256 untouched, so backups, restore, the orphan report
+and private serving cannot notice it — and is audited as `attachment.rename` against the owning
+record. The nullable `label` column and migration `0021` are **kept but unused**: no migration in
+this release, existing labels preserved in the database and backups, no longer displayed. No
+authentication, household-separation, storage-path or backup-format change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.42.0` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original
+installation or 3007. See [release notes](docs/RELEASE_NOTES_v1.42.0.md) and decision 264.
+
 **v1.41.1 — the Documents page, actually shipped (2026-10-24):** v1.41.0 linked the site menu to
 `/documents` but the page file was never committed, so the menu item opened Next's 404 in
 production while CI stayed green — no test followed a menu link. This patch adds

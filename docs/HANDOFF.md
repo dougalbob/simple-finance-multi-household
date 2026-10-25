@@ -1,3 +1,85 @@
+# v1.42.0 — renaming a document renames the file (2026-10-25)
+
+## Why this session happened
+
+GitHub issue #112, filed after v1.41.1 was installed: the **friendly name** did not behave as
+expected. In the household's words, pressing **Save** in the chip's inline editor did not save the
+friendly name whether or not the file name was edited as well, the upload field's optional friendly
+name never appeared on the document, and they had expected a **Save** to appear as soon as they began
+typing one. Their suggested simplification — drop the friendly name from the interface and have
+**Rename** rename the real `filename.pdf`, adding the file's own extension when they leave it off —
+is what this release implements. They also asked whether the extension rule needs a long chip label;
+it does not (see below).
+
+## What this session built
+
+- **`src/lib/records/attachments.ts`** — `normalizeAttachmentLabel` and `renameAttachment` (label
+  writers) are replaced by `withDocumentExtension(typed, mime)` (pure: sanitise, then keep, replace or
+  append the sniffed type's extension) and `renameAttachmentFile({ db, id, name, actor })`, which
+  writes `original_name` only, audits `attachment.rename` against the owning record with both names
+  and the unchanged key, and reports `renamed` / `unchanged` / `removed`. `StoreAttachmentInput` and
+  `StoredAttachment` no longer carry `label`; the list helpers stop selecting it. Uploads go through
+  the same name rule, so the stored name always ends in the sniffed type's extension.
+- **`src/components/attachment-form.tsx`** — the friendly-name input is gone from the upload form,
+  the bespoke `editingId` client state is gone, and **Rename** is now a native `<details>` disclosure
+  (the pattern `FuelDetailsForm` and the other inline editors already use) holding a text box
+  pre-filled with the whole current name, a **Save** button and a one-line hint. The input is keyed on
+  the saved name so it always shows what the server stored. `AttachmentSummary` drops `label`;
+  `attachmentDisplayName` remains as the single display-name source and returns the file name.
+- **`src/app/actions.ts`** — `uploadAttachmentAction` no longer reads a label,
+  `renameAttachmentAction` posts `attachmentId` + `name` and answers with the extension-aware message
+  (`Renamed to “X.png” — the extension was added.`).
+- **`src/lib/records/attachment-search.ts`, `src/app/documents/page.tsx`,
+  `src/components/document-search-form.tsx`** — one name per result: the search haystack is the file
+  name plus the owner's context, the row select is explicit (no label), and the page shows one name
+  with no "File:" second line. Copy updated throughout.
+- **Tests** — `tests/attachment-labels.test.ts` is replaced by `tests/attachment-rename.test.ts`
+  (extension rules, sanitiser, cap, untouched key/bytes/sha256, audit entry, three outcomes, supplier
+  audit entity, and two interface guards: no friendly-name field, and the `label` column + migration
+  `0021` must remain). `tests/attachment-search.test.ts` and `tests/attachment-pipeline.test.ts`
+  updated for the one-name model and for names that follow the sniffed type.
+  `e2e/attachments.spec.ts` gains a browser spec for the whole rename flow.
+- **Docs** — SPEC §23.1, §23.2 and §23.5 rewritten around the one-name contract and the extension
+  rule (with a delivery note explaining what v1.41.x did), `docs/RELEASE_NOTES_v1.42.0.md`, decision
+  264, and the current-release banner in `README.md`, `AGENTS.md`, `docs/MULTI_HOUSEHOLD_PLAN.md` and
+  `docs/RELEASE_PROCESS.md`. Version bumped in lockstep: `package.json`, `package-lock.json` (root and
+  `packages[""]`) and `src/lib/version.ts`.
+
+## Answer to the household's question about signposting
+
+No long label is needed on the chip. **Rename** pre-fills the box with the document's whole current
+name (`IMG_4821.jpg`), so the extension is visible in the thing being edited, and the only hint is one
+small line inside the opened panel: *the file's own extension is added if you leave it off*. The chip
+keeps just the name, the size, **Rename** and **Remove**.
+
+## Validation
+
+- `npm run typecheck`, `npm run format:check`, `npm test` (**1,247/1,247 across 282 suites**) and
+  `NEXT_TELEMETRY_DISABLED=1 npm run build` all pass locally. Local install in this sandbox needs
+  `npm_config_nodedir=/usr/local npm ci` (node-gyp's nodejs.org header download is blocked); Playwright
+  browsers still cannot be installed here, so the `browser` gate is evidenced by PR CI.
+- The rename was exercised against the seeded dev server (`scripts/e2e-server.mts`, `.e2e-data`) as a
+  real form POST from the served HTML: `IMG_4821.png` → `Vehicle MOT 2026` became
+  `Vehicle MOT 2026.png`, the storage key and bytes were unchanged, `attachment.rename` was recorded,
+  and `/documents?q=vehicle mot` returned the renamed document.
+- Release contract: v1.41.1 is published and tagged; do not move its tag. Ship v1.42.0 as one PR
+  requiring `gates`, `browser` and `docker`, merge with a merge commit, wait for main CI, then place
+  annotated `v1.42.0` on the exact merge SHA and verify Publish pushes
+  `ghcr.io/dougalbob/simple-finance-multi-household` tags `v1.42.0`, `latest` and `sha-<short>` on one
+  digest, plus the GitHub Latest release. Publication does not deploy.
+
+## After install
+
+Back up each household and the Admin registry first. Update only
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.42.0` (or `:latest` after publication), keeping
+appdata `/mnt/user/appdata/simple-finance-multi-household` mounted at `/data` and host port **3009**
+mapped to container port 3000. Never touch the original installation or port 3007. The badge should
+read **v1.42.0 · stable**. There is **no migration to apply** and nothing to re-enter: rename a
+document from its chip on Purchases, Income or Suppliers, and press **Save**. Any friendly label saved
+under v1.41.x stays in the database and the backups but is no longer displayed.
+
+---
+
 # v1.41.1 — the Documents page, actually shipped (2026-10-24)
 
 ## Why this session happened

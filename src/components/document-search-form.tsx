@@ -64,7 +64,7 @@ export function DocumentSearchForm({ q }: { q: string }) {
       type="search"
       value={value}
       onChange={(event) => change(event.target.value)}
-      placeholder="Search documents, labels, suppliers and notes…"
+      placeholder="Search document names, suppliers and notes…"
       aria-label="Search documents"
       maxLength={ATTACHMENT_SEARCH_MAX_LENGTH}
       autoComplete="off"

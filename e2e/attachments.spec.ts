@@ -60,6 +60,124 @@ async function isBluePixel(canvas: Locator): Promise<boolean> {
   });
 }
 
+/**
+ * Renaming a document (v1.42.0, issue 112). The **Rename** control opens a
+ * native disclosure holding the document's whole current name, so the thing to
+ * edit is right there and no long hint has to sit on the chip; the file's own
+ * extension is added when it is left off, and a wrong document extension is
+ * replaced rather than doubled. The name is the file name everywhere it is
+ * shown — chip, viewer, download — and there is no second "friendly" name
+ * beside it. This spec creates its own purchase and timestamped names so a CI
+ * retry cannot collide with the first attempt's rows.
+ */
+test.describe('renaming a receipt', () => {
+  test('adds the extension left off, keeps viewer and download in step, and persists', async ({
+    page,
+  }) => {
+    test.slow();
+    const stamp = Date.now();
+    const shopName = `Playwright Rename Shop ${stamp}`;
+    const uploadedName = `fictional-mot-${stamp}.png`;
+    const typedName = `Vehicle MOT ${stamp}`;
+    const savedName = `${typedName}.png`;
+    const secondName = `MOT certificate ${stamp}`;
+    const secondSaved = `${secondName}.png`;
+
+    await page.goto('/');
+    await waitForTill(page);
+    const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
+    await entry.locator('input[name="supplierName"]').fill(shopName);
+    await entry.locator('input[name="amount"]').fill('6.50');
+    await entry.getByLabel('Line 1 amount').fill('6.50');
+    await pickEntryCategory(entry, 'Groceries / Weekly Shop');
+    await entry.getByRole('button', { name: 'Save purchase' }).click();
+    await expect(entry.getByRole('status')).toContainText(/saved/i, { timeout: 30_000 });
+
+    await page.goto('/purchases');
+    const row = page.locator('tbody tr', { hasText: shopName });
+    await expect(row).toHaveCount(1);
+    const attachForm = row.locator('form:has(input[type="file"])');
+    // The friendly-name field is gone (issue 112): one name per document, and
+    // the upload asks for nothing but the file.
+    await expect(attachForm.locator('input[name="label"]')).toHaveCount(0);
+
+    await row.locator('input[type="file"]').setInputFiles({
+      name: uploadedName,
+      mimeType: 'image/png',
+      buffer: PNG_BYTES,
+    });
+    const chip = row.getByRole('link', { name: new RegExp(uploadedName) });
+    await expect(chip).toBeVisible({ timeout: 30_000 });
+
+    const renamePanel = row.locator('details').filter({ hasText: 'Rename' }).first();
+    const nameBox = renamePanel.locator('input[name="name"]');
+    /** The disclosure stays open across saves; open it only when it is shut. */
+    const openRename = async (): Promise<void> => {
+      const open = await renamePanel
+        .locator('summary')
+        .evaluate((node) => (node.parentElement as HTMLDetailsElement).open);
+      if (!open) await renamePanel.locator('summary').click();
+    };
+
+    // Rename: the box arrives holding the whole current name.
+    await openRename();
+    await expect(nameBox).toHaveValue(uploadedName);
+    await expect(renamePanel).toContainText(/extension is added if you leave it off/i);
+    await nameBox.fill(typedName);
+    await renamePanel.getByRole('button', { name: 'Save' }).click();
+    await expect(renamePanel.getByRole('status')).toContainText(
+      `Renamed to “${savedName}” — the extension was added.`,
+      { timeout: 30_000 },
+    );
+
+    // The chip, the viewer header and the download name all follow the rename.
+    const renamed = row.getByRole('link', { name: new RegExp(`Vehicle MOT ${stamp}\\.png`) });
+    await expect(renamed).toBeVisible({ timeout: 30_000 });
+    await expect(row.getByRole('link', { name: new RegExp(uploadedName) })).toHaveCount(0);
+    await renamed.click();
+    const viewer = page.getByRole('dialog', { name: `Document: ${savedName}` });
+    await expect(viewer.getByRole('link', { name: 'Download' })).toHaveAttribute(
+      'download',
+      savedName,
+    );
+    await viewer.getByRole('button', { name: 'Close', exact: true }).click();
+
+    // A typed name that carries a different document extension has it replaced,
+    // not doubled: a PNG is never saved as `.pdf`.
+    await openRename();
+    await nameBox.fill(`${secondName}.pdf`);
+    await renamePanel.getByRole('button', { name: 'Save' }).click();
+    await expect(row.getByRole('link', { name: new RegExp(`${secondName}\\.png`) })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(row.getByRole('link', { name: new RegExp(`${stamp}\\.pdf`) })).toHaveCount(0);
+
+    // Server truth, not just a client re-render.
+    await page.reload();
+    const reloaded = page.locator('tbody tr', { hasText: shopName });
+    await expect(
+      reloaded.getByRole('link', { name: new RegExp(`${secondName}\\.png`) }),
+    ).toBeVisible();
+
+    // The Documents search finds it by the name it was renamed to.
+    await page.goto(`/documents?q=${encodeURIComponent(`mot certificate ${stamp}`)}`);
+    const result = page.getByRole('listitem').filter({ hasText: shopName });
+    await expect(result).toHaveCount(1);
+    await expect(result).toContainText(secondSaved);
+
+    // The purchase's History names both ends of the rename (it is audited).
+    await page.goto('/purchases');
+    const historyRow = page.locator('tbody tr', { hasText: shopName });
+    await historyRow.getByText('History', { exact: true }).click();
+    await expect(
+      historyRow.locator('li', { hasText: `Renamed ${uploadedName} to ${savedName}` }),
+    ).toBeVisible();
+    await expect(
+      historyRow.locator('li', { hasText: `Renamed ${savedName} to ${secondSaved}` }),
+    ).toBeVisible();
+  });
+});
+
 test.describe('removing a receipt', () => {
   test('removes it from Purchases and Suppliers, and keeps the audit', async ({ page }) => {
     test.slow();

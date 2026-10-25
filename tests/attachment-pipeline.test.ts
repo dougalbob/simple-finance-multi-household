@@ -272,6 +272,9 @@ describe('GET /api/attachments/[fileKey]', () => {
       const stored = await storeAttachment({
         db,
         purchaseId: saved.purchase.id,
+        // The bytes are a JPEG whatever the browser called the file, and
+        // since v1.42.0 the stored name (and so the download name) says what
+        // the file really is.
         originalName: 'till receipt.png',
         bytes: JPEG_BYTES,
         actor: 'dev@example.com',
@@ -285,7 +288,7 @@ describe('GET /api/attachments/[fileKey]', () => {
       assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
       assert.equal(
         response.headers.get('content-disposition'),
-        'inline; filename="till receipt.png"',
+        'inline; filename="till receipt.jpg"',
       );
       assert.deepEqual(Buffer.from(await response.arrayBuffer()), JPEG_BYTES);
 

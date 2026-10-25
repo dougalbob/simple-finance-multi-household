@@ -23,7 +23,7 @@ import {
   AttachmentInputError,
   AttachmentNotFoundError,
   deleteAttachment,
-  renameAttachment,
+  renameAttachmentFile,
   storeAttachment,
 } from '@/lib/records/attachments';
 import { toLocalDateString } from '@/lib/time';
@@ -399,10 +399,6 @@ export async function uploadAttachmentAction(
   const file = formData.get('file');
   if (ownerCount !== 1 || !(file instanceof File) || file.size === 0)
     return { status: 'error', message: 'Choose a file to attach.' };
-  // Optional friendly name (v1.41.0). Absent or blank means "show the file
-  // name"; it never replaces the stored file name or the download name.
-  const label = formData.get('label');
-  const labelText = typeof label === 'string' ? label : '';
 
   const bytes = Buffer.from(await file.arrayBuffer());
   try {
@@ -417,13 +413,12 @@ export async function uploadAttachmentAction(
           ? { supplierId }
           : { receiptId: receiptId as number }),
       originalName: file.name,
-      label: labelText,
       bytes,
       actor: user.email,
       documentsDir: user.documentsDir,
     });
     revalidateAttachmentPages();
-    return { status: 'ok', message: `Attached ${stored.label ?? stored.originalName}.` };
+    return { status: 'ok', message: `Attached ${stored.originalName}.` };
   } catch (err) {
     if (err instanceof AttachmentInputError) return { status: 'error', message: err.message };
     throw err;
@@ -489,11 +484,12 @@ export async function deleteAttachmentAction(
 }
 
 /**
- * Give a document a household-friendly display name (v1.41.0). The form posts
- * the attachment id and the new label; the file name and bytes are untouched.
- * Cosmetic only — deliberately not audited (the file name and key stay in the
- * store/delete entries). A blank label clears it, which means "show the file
- * name".
+ * Rename one document (v1.42.0, issue 112). The form posts the attachment id and
+ * the name the household typed; the domain adds the file's own extension when
+ * it is missing and audits the change. The stored file name — not a label — is
+ * what the chip, the viewer, the download name and the Documents search use, so
+ * saving the name is what renames the file everywhere. The storage key and the
+ * bytes are untouched.
  */
 export async function renameAttachmentAction(
   _previous: ActionState,
@@ -503,22 +499,28 @@ export async function renameAttachmentAction(
   if (!user) return NOT_SIGNED_IN;
   if (user.readOnly) return READ_ONLY_VIEW;
   const id = numberOrNull(formData.get('attachmentId'));
-  const label = formData.get('label');
-  if (id === null || id <= 0 || typeof label !== 'string') {
+  const name = formData.get('name');
+  if (id === null || id <= 0 || typeof name !== 'string') {
     return {
       status: 'error',
-      message: 'That friendly name could not be saved. Refresh and try again.',
+      message: 'That document name could not be saved. Refresh and try again.',
     };
   }
   try {
-    const result = renameAttachment({ db: user.db, id, label });
+    const result = renameAttachmentFile({ db: user.db, id, name, actor: user.email });
     revalidateAttachmentPages();
-    if (!result.changed) {
+    if (result.outcome === 'removed') {
       return { status: 'ok', message: 'That document was already removed.' };
+    }
+    if (result.outcome === 'unchanged') {
+      return { status: 'ok', message: `Already called “${result.originalName}”.` };
     }
     return {
       status: 'ok',
-      message: result.label === null ? 'Cleared the friendly name.' : 'Friendly name saved.',
+      message:
+        result.extensionAdded && result.originalName.includes('.')
+          ? `Renamed to “${result.originalName}” — the extension was added.`
+          : `Renamed to “${result.originalName}”.`,
     };
   } catch (err) {
     if (err instanceof AttachmentNotFoundError || err instanceof AttachmentInputError) {
@@ -527,7 +529,7 @@ export async function renameAttachmentAction(
     console.error('[attachments] renameAttachmentAction failed', err);
     return {
       status: 'error',
-      message: 'The friendly name could not be saved. Please try again.',
+      message: 'The document name could not be saved. Please try again.',
     };
   }
 }
