@@ -52,6 +52,9 @@ test.describe('energy tracking', () => {
     await waitForTill(page);
     const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
     await entry.locator('input[name="supplierName"]').fill(supplierName);
+    // The settings project's default-pot tests end with the till's default
+    // cleared, so name the pot rather than relying on a household setting.
+    await entry.getByLabel('Pot').selectOption({ label: 'Main account' });
     await entry.locator('input[name="amount"]').fill('151.49');
     await entry.getByLabel('Line 1 amount').fill('151.49');
     await pickEntryCategory(entry, 'Utilities / Energy');
@@ -139,6 +142,7 @@ test.describe('energy tracking', () => {
     await waitForTill(page);
     const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
     await entry.locator('input[name="supplierName"]').fill(shopName);
+    await entry.getByLabel('Pot').selectOption({ label: 'Main account' });
     await entry.locator('input[name="amount"]').fill('6.20');
     await entry.getByLabel('Line 1 amount').fill('6.20');
     await pickEntryCategory(entry, 'Groceries / Weekly Shop');
