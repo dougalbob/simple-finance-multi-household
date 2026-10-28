@@ -230,7 +230,7 @@ test.describe('bell — phone layout', () => {
     await expect(drawerNav).toBeVisible();
     const links = drawerNav.getByRole('link');
     // The Cloudflare test harness now configures Alex as REGISTRY_ADMIN_EMAIL,
-    // so the existing admin-only link adds one to the 19 ordinary destinations.
+    // so the existing admin-only link adds one to the 20 ordinary destinations.
     // The external project Wiki link (v1.43.0) sits in the More group before
     // Admin. Check actual destinations rather than accepting an arbitrary extra link.
     const destinations = [
@@ -245,6 +245,7 @@ test.describe('bell — phone layout', () => {
       '/income',
       '/pots',
       '/borrowing',
+      '/energy',
       '/insights',
       '/settings',
       '/suppliers',

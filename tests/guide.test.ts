@@ -23,8 +23,8 @@ const repoFile = (relativePath: string) =>
  * that is built and tested elsewhere; if a phrase here ever stops being true,
  * that is a decision, not an edit.
  */
-describe('the guide: nine anchored ideas, pinned to what the app really does', () => {
-  it('is the nine sections the plan names, in reading order', () => {
+describe('the guide: ten anchored ideas, pinned to what the app really does', () => {
+  it('is the ten sections the plan names, in reading order', () => {
     assert.deepEqual(
       [...GUIDE_ANCHORS],
       [
@@ -35,6 +35,7 @@ describe('the guide: nine anchored ideas, pinned to what the app really does', (
         'schedules',
         'projection',
         'longterm',
+        'energy',
         'noticed',
         'never',
       ],

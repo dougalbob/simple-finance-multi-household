@@ -9,8 +9,10 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.43.0 is the stable production release and moves :latest (a Wiki link with
-  the GitHub mark in the site menu, on the desktop bar and in the phone drawer).
+  v1.44.0 is the stable production release and moves :latest (optional energy
+  tracking: a bill's gas and electricity kWh recorded on the purchase that paid
+  it, an Energy page drawing the last year, and a switching comparison).
+  Migration 0022 adds one optional table; back up before updating.
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -47,7 +49,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.43.0 is the stable production release and moves :latest. The site menu gains a Wiki link (GitHub mark) to the project wiki, opening in a new tab. No schema, data or storage changes.
+    v1.44.0 is the stable production release and moves :latest. Any purchase paid under Utilities / Energy can carry an optional, collapsed Energy details block: the bill's gas and electricity kWh, the billing period, meter readings on a smart meter, and the supplier's estimated annual usage. A new Energy page draws the last twelve months, lists every bill, holds one tariff per fuel and compares a typed quote on the same usage — arithmetic only, no supplier data and no advice. Migration 0022 adds the energy_bills table; back up the household and the Admin registry before updating.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

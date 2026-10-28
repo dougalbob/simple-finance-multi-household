@@ -3,6 +3,12 @@ import { recordAudit, type DbTx } from '../audit';
 import type { Db } from '../db/client';
 import { categories, pots, settings } from '../db/schema';
 import { isValidPenceAmount, MAX_ABS_PENCE } from '../money';
+import {
+  parseEnergyTariff,
+  serialiseEnergyTariff,
+  type EnergyFuel,
+  type EnergyTariff,
+} from './energy-usage';
 
 /**
  * Private runtime settings (plan data-model sketch, docs/SPEC.md §15.2
@@ -30,6 +36,19 @@ const KEY_DEFAULT_PURCHASE_POT = 'default_purchase_pot_id';
 const KEY_DEFAULT_TRANSACTIONS_POT = 'default_transactions_pot_id';
 const KEY_DEFAULT_SCHEDULE_POT = 'default_schedule_pot_id';
 const KEY_COMMITMENT_CATEGORIES = 'commitment_category_ids';
+/**
+ * Energy tracking (issue 118, v1.44.0; SPEC §29). The energy category, which
+ * meters are smart (the reading fields only appear for those), what the gas
+ * meter prints, one saved tariff per fuel, and whether the purchase row shows
+ * the optional block at all.
+ */
+const KEY_ENERGY_CATEGORY = 'energy_category_id';
+const KEY_ENERGY_SMART_GAS = 'energy_smart_gas';
+const KEY_ENERGY_SMART_ELECTRIC = 'energy_smart_electric';
+const KEY_ENERGY_GAS_UNIT = 'energy_gas_reading_unit';
+const KEY_ENERGY_TARIFF_GAS = 'energy_tariff_gas';
+const KEY_ENERGY_TARIFF_ELECTRIC = 'energy_tariff_electric';
+const KEY_ENERGY_SHOW_ON_PURCHASES = 'energy_show_on_purchases';
 
 export const DEFAULT_RENEWAL_WARNING_LEAD_DAYS = 21;
 export const DEFAULT_CONTRACT_END_WARNING_LEAD_DAYS = 21;
@@ -417,4 +436,138 @@ function checkedLeadDays(days: number): number {
     );
   }
   return days;
+}
+
+/* ------------------------------------------------------- energy (v1.44.0) */
+
+export type EnergyGasReadingUnit = 'm3' | 'kwh';
+
+export interface EnergySetup {
+  /** A child category id, or null to follow `Utilities > Energy` by name. */
+  categoryId: number | null;
+  gasSmart: boolean;
+  electricSmart: boolean;
+  gasReadingUnit: EnergyGasReadingUnit;
+  showOnPurchases: boolean;
+}
+
+/**
+ * How the household's energy is set up (issue 118). Every field is a
+ * preference, not a fact about the household's money: the defaults are "no
+ * smart meter" (so no reading boxes appear until the household says otherwise)
+ * and "gas meter prints m³", which is what most UK gas meters show.
+ */
+export function getEnergySetup(db: Db): EnergySetup {
+  const categoryRow = settingRow(db, KEY_ENERGY_CATEGORY);
+  const categoryId = categoryRow === null ? null : Number(categoryRow.value);
+  const gasUnit = settingRow(db, KEY_ENERGY_GAS_UNIT)?.value;
+  return {
+    categoryId:
+      categoryId !== null &&
+      Number.isInteger(categoryId) &&
+      categoryId > 0 &&
+      isChildCategory(db, categoryId)
+        ? categoryId
+        : null,
+    gasSmart: settingRow(db, KEY_ENERGY_SMART_GAS)?.value === '1',
+    electricSmart: settingRow(db, KEY_ENERGY_SMART_ELECTRIC)?.value === '1',
+    gasReadingUnit: gasUnit === 'kwh' ? 'kwh' : 'm3',
+    showOnPurchases: settingRow(db, KEY_ENERGY_SHOW_ON_PURCHASES)?.value !== '0',
+  };
+}
+
+/** Empty clears the override and returns the household to the default category. */
+export function setEnergyCategoryId(
+  db: Db,
+  categoryId: number | null,
+  actor: string,
+  now?: Date,
+): void {
+  if (categoryId !== null && (!Number.isInteger(categoryId) || !isChildCategory(db, categoryId))) {
+    throw new InvalidSettingValueError(
+      'Energy is tracked by child category — that category does not exist.',
+    );
+  }
+  upsertSetting(
+    db,
+    KEY_ENERGY_CATEGORY,
+    categoryId === null ? '' : String(categoryId),
+    actor,
+    'energy',
+    now,
+  );
+}
+
+export function setEnergySmartMeter(
+  db: Db,
+  fuel: EnergyFuel,
+  smart: boolean,
+  actor: string,
+  now?: Date,
+): void {
+  const key = fuel === 'gas' ? KEY_ENERGY_SMART_GAS : KEY_ENERGY_SMART_ELECTRIC;
+  upsertSetting(db, key, smart ? '1' : '0', actor, 'energy', now);
+}
+
+export function setEnergyGasReadingUnit(
+  db: Db,
+  unit: EnergyGasReadingUnit,
+  actor: string,
+  now?: Date,
+): void {
+  upsertSetting(db, KEY_ENERGY_GAS_UNIT, unit === 'kwh' ? 'kwh' : 'm3', actor, 'energy', now);
+}
+
+export function setEnergyShowOnPurchases(db: Db, show: boolean, actor: string, now?: Date): void {
+  upsertSetting(db, KEY_ENERGY_SHOW_ON_PURCHASES, show ? '1' : '0', actor, 'energy', now);
+}
+
+/**
+ * The household's saved tariff for one fuel, validated on the way out: a
+ * corrupt or hand-edited row throws rather than being half-believed, and the
+ * Energy page shows that fuel's card as unreadable with a form to replace it.
+ */
+export function getEnergyTariff(db: Db, fuel: EnergyFuel): EnergyTariff | null {
+  const row = settingRow(db, fuel === 'gas' ? KEY_ENERGY_TARIFF_GAS : KEY_ENERGY_TARIFF_ELECTRIC);
+  if (row === null) return null;
+  try {
+    return parseEnergyTariff(row.value);
+  } catch (err) {
+    throw new InvalidSettingValueError(
+      err instanceof Error
+        ? `${fuel === 'gas' ? 'Gas' : 'Electricity'} tariff: ${err.message}`
+        : 'The saved tariff is not readable.',
+    );
+  }
+}
+
+/** A null tariff clears the card. Rates are thousandths of a penny, ex VAT. */
+export function setEnergyTariff(
+  db: Db,
+  fuel: EnergyFuel,
+  tariff: EnergyTariff | null,
+  actor: string,
+  now?: Date,
+): void {
+  if (tariff !== null) {
+    if (tariff.supplier.trim() === '' || tariff.tariffName.trim() === '') {
+      throw new InvalidSettingValueError('A tariff needs a supplier and a tariff name.');
+    }
+    if (
+      !Number.isSafeInteger(tariff.unitRateMilliPencePerKwh) ||
+      tariff.unitRateMilliPencePerKwh < 0 ||
+      !Number.isSafeInteger(tariff.standingChargeMilliPencePerDay) ||
+      tariff.standingChargeMilliPencePerDay < 0
+    ) {
+      throw new InvalidSettingValueError('A tariff needs a unit rate and a standing charge.');
+    }
+  }
+  upsertSetting(
+    db,
+    fuel === 'gas' ? KEY_ENERGY_TARIFF_GAS : KEY_ENERGY_TARIFF_ELECTRIC,
+    tariff === null ? '' : serialiseEnergyTariff(tariff),
+    actor,
+    'energy',
+    now,
+  );
 }

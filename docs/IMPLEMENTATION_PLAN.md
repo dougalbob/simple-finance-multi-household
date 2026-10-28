@@ -4550,3 +4550,49 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     change.
 
 266. **Wiki link in the site menu (v1.43.0, 2026-10-25).** The owner asked for a Wiki entry in the menu, shown as the GitHub mark followed by "Wiki", linking to `https://github.com/dougalbob/simple-finance-multi-household/wiki`. It is rendered in both the desktop bar and the phone drawer. Because the wiki is a GitHub page rather than an app route, it opens in a new tab and is kept out of the literal `href` list that the route-guard test reads. The owner approved it in both places and asked for publication so Unraid can Force Update. Ship as stable **v1.43.0** through one PR; no schema, migration, backup-format or storage change.
+
+267. **Issue 118 — energy tracking, the bill beside the direct debit (v1.44.0, 2026-10-28).** The
+    household asked for an optional, hidden-by-default way to record a month's gas and electricity on
+    the purchase its direct debit pays, so usage can be tracked over time and a switch can be decided
+    on real figures, plus (held for later) clickable pot names on Overview. Four design answers were
+    given before any code: record **gas/electric kWh + the billing period + meter readings, with the
+    readings only where the meter is smart** (estimates drift until an actual reading); put it on a
+    **new `/energy` page**; ship the **switching comparison in the same release**; and **hold the
+    Overview pot links** for a later patch. A real UK bill then fixed the precision and three
+    behaviours: rates print to **three decimals** (4.748p, 25.902p a day) so they are stored in
+    thousandths of a penny; readings print to **four decimals** (13 770.4660 m³) so they are stored in
+    ten-thousandths; usage prints two decimals (755.23 kWh) so it is stored as **watt-hours**; the
+    period runs **mid-month to mid-month**, so a bill is bucketed into the month its period **ends**
+    in; the bill prints the **supplier's own estimated annual usage** (21,699 kWh), which becomes the
+    comparison's fallback basis; and the **exit fee is live only until the price guarantee ends**.
+    Gas is never converted from m³ — the app checks the implied factor (9–13 kWh/m³) and says when it
+    looks wrong — while electricity may be derived from two readings when the bill's kWh box is blank.
+    Storage is one optional side table, `energy_bills`, keyed to the purchase (migration
+    `0022_energy_bills.sql`); the purchase keeps its version and the audit (`purchase.energy_details`)
+    so corrections behave exactly like the fuel details'. The meter setup and one tariff per fuel live
+    in the existing audited settings key/value table (`energy_category_id`, `energy_smart_gas`,
+    `energy_smart_electric`, `energy_gas_reading_unit`, `energy_tariff_gas`, `energy_tariff_electric`,
+    `energy_show_on_purchases`) — no second migration. Cost arithmetic: each product rounded half-up
+    into whole pence once, **VAT at 5% added per fuel** and rounded once. The comparison uses the same
+    usage on both sides (the household's own bills once there are 30 days of them, otherwise the
+    supplier's printed estimate, otherwise it refuses), says where the usage came from, and never
+    recommends anything. Honest gaps throughout: no bill is no bar, overlap and reading breaks are
+    named rather than blocked, a short history is labelled short. No authentication,
+    household-separation, storage-path or backup-format change (a household backup archives the whole
+    database file and restore applies `0022` to an older archive); no external call of any kind.
+    Evidence: `tests/energy-usage.test.ts` pins the household's own bill (gas 4,389p ex VAT → **£46.08**,
+    electricity **£105.41**, and the bill's £94.54 annual standing charge to the penny) plus the
+    parsing, formatting, period, derivation, annualisation and comparison rules;
+    `tests/energy-bills.test.ts` covers the database layer, the version guard, voids and refunds, the
+    category override, the prefills, the page's view, an unreadable saved tariff and the audited
+    settings; `e2e/energy.spec.ts` owns both navigation surfaces, the collapsed block, the save, the
+    chart, the tariff and the comparison. Ship as **v1.44.0** through one PR with the SPEC §29 text,
+    the guide's tenth idea, version metadata, release notes, handoff and current-release docs.
+
+268. **The seeded E2E installation carries a year of energy bills (v1.44.0).** To prove the Energy page
+    against something other than the empty state, `scripts/e2e-server.mts` annotates the twelve monthly
+    "Energy bill" purchases it already creates (Wattstream Energy, a fictional supplier) with fictional
+    kWh and a period of the calendar month each debit was paying for, and saves two fictional tariffs.
+    **Smart meters stay off**, because that is the default and the browser spec proves the reading
+    boxes stay out of the way until a household ticks them. No money figure moves: only the optional
+    usage rows are written, so every spec that asserts a total is unaffected.

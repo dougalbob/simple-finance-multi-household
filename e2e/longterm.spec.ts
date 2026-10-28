@@ -179,9 +179,11 @@ test.describe.serial('long-term forecast', () => {
     const drawer = page.getByRole('dialog', { name: 'Navigation menu' });
     await expect(drawer.getByRole('link', { name: 'Long-term forecast' })).toBeVisible();
 
-    // The guide's ninth idea explains the same arithmetic the page performs.
+    // The guide's seventh idea explains the same arithmetic the page performs.
+    // The heading counts the ideas, so a new one (v1.44.0's energy section)
+    // moves this number even though this section does not move.
     await page.goto('/guide#longterm');
-    await expect(page.getByText('The nine ideas')).toBeVisible();
+    await expect(page.getByText('The ten ideas')).toBeVisible();
     await expect(
       page.getByRole('heading', {
         name: 'The long-term forecast is your assumptions, not a prediction',

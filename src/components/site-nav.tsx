@@ -25,6 +25,9 @@ const NAV_ITEMS = [
   { href: '/income', label: 'Income' },
   { href: '/pots', label: 'Accounts, Pots & Checkpoints' },
   { href: '/borrowing', label: 'Borrowing' },
+  // Energy tracking (issue 118, v1.44.0): the gas and electricity figures the
+  // household records on its energy purchases, drawn over a year.
+  { href: '/energy', label: 'Energy' },
   { href: '/insights', label: 'Insights' },
   { href: '/charts', label: 'Charts' },
   { href: '/settings', label: 'Settings' },
@@ -60,6 +63,7 @@ const NAV_GROUPS = [
       { href: '/income', label: 'Income' },
       { href: '/pots', label: 'Accounts, Pots & Checkpoints' },
       { href: '/borrowing', label: 'Borrowing' },
+      { href: '/energy', label: 'Energy' },
       { href: '/insights', label: 'Insights' },
       { href: '/settings', label: 'Settings' },
       { href: '/suppliers', label: 'Suppliers' },

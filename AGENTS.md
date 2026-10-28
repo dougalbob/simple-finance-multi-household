@@ -1,3 +1,21 @@
+**v1.44.0 — energy tracking (issue 118, 2026-10-28):** any purchase paid under **Utilities / Energy**
+can carry an optional, collapsed **Energy details** block — the bill's gas and electricity kWh, the
+billing period, meter readings **only where the meter is smart**, and the supplier's printed estimated
+annual usage. A new **Energy** page (`/energy`) draws the last twelve months in kWh beside what was
+paid, lists every bill, holds one tariff per fuel and compares a typed quote on the household's own
+usage: arithmetic only, VAT included, no prices fetched and no recommendation. Rates are stored in
+thousandths of a penny and readings in ten-thousandths, exactly as a UK bill prints them; a month with
+no bill draws no bar; gas is never converted from m³ (the implied factor is checked instead). The
+purchase keeps the money — a direct debit is not the bill — and migration `0022_energy_bills.sql` adds
+one optional side table, with the meter setup and tariffs in the existing audited settings store. The
+issue's second ask (clickable Overview pot names) is **held** and stays open on #118. No
+authentication, household-separation, storage-path or backup-format change; back up the household and
+the registry before updating, because the container applies `0022` at start-up. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.44.0` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original installation
+or 3007. See [release notes](docs/RELEASE_NOTES_v1.44.0.md), SPEC §29, decisions 267–268 and
+[`docs/ENERGY_TRACKING_PLAN.md`](docs/ENERGY_TRACKING_PLAN.md).
+
 **v1.43.0 — Wiki link in the site menu (2026-10-25):** the site menu gains a **Wiki** entry, shown with the GitHub mark before the label, linking to the project wiki in a new tab. It appears on the desktop bar and in the phone drawer. External link only: no route, schema, migration, backup-format or storage change. Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.43.0` (stable also moves `latest`), appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never the original installation or 3007. See [release notes](docs/RELEASE_NOTES_v1.43.0.md) and decision 266.
 
 **v1.42.1 — the app icon ships with every release (issue 115, 2026-10-25):** every stable release
