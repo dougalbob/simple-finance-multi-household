@@ -1064,3 +1064,57 @@ export const longtermPlans = sqliteTable(
   },
   (table) => [uniqueIndex('longterm_plans_name_unique').on(table.name)],
 );
+
+/**
+ * The energy details on one purchase (issue 118, v1.44.0; SPEC §29): the
+ * billing period, the gas and electricity usage printed on the bill, the meter
+ * readings where the household has a smart meter, and the supplier's own
+ * estimated annual usage. One row per purchase, optional — a household that
+ * tracks nothing never writes one.
+ *
+ * Units follow the bill, not the app's convenience: usage is **watt-hours**
+ * (755.23 kWh = 755230), readings are **ten-thousandths of the meter's own
+ * unit** (13770.4660 m³ = 137704660), and nothing is converted in storage —
+ * the m³→kWh factor depends on the calorific value, so the app checks the
+ * implied factor instead of inventing one. The purchase owns the version:
+ * writing here bumps `purchases.version` and audits `purchase.energy_details`
+ * exactly as `purchases.fuel_millilitres` does.
+ */
+export const energyBills = sqliteTable(
+  'energy_bills',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    purchaseId: integer('purchase_id')
+      .notNull()
+      .references(() => purchases.id, { onDelete: 'cascade' }),
+    /** Local calendar dates ('YYYY-MM-DD'), inclusive of both ends. */
+    periodStart: text('period_start'),
+    periodEnd: text('period_end'),
+    /** Usage as printed: whole watt-hours. */
+    gasWh: integer('gas_wh'),
+    electricWh: integer('electric_wh'),
+    /** Meter readings in ten-thousandths of the meter's own unit. */
+    gasReadingStart: integer('gas_reading_start'),
+    gasReadingEnd: integer('gas_reading_end'),
+    electricReadingStart: integer('electric_reading_start'),
+    electricReadingEnd: integer('electric_reading_end'),
+    /** The supplier's "estimated annual usage", as printed on the bill. */
+    gasEstimateWh: integer('gas_estimate_wh'),
+    electricEstimateWh: integer('electric_estimate_wh'),
+    note: text('note'),
+    createdBy: text('created_by').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('energy_bills_purchase_unique').on(table.purchaseId),
+    check(
+      'energy_bills_usage_present',
+      sql`${table.gasWh} IS NOT NULL OR ${table.electricWh} IS NOT NULL`,
+    ),
+    check(
+      'energy_bills_period_order',
+      sql`${table.periodStart} IS NULL OR ${table.periodEnd} IS NULL OR ${table.periodEnd} >= ${table.periodStart}`,
+    ),
+  ],
+);

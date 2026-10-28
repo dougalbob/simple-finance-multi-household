@@ -241,6 +241,16 @@ export default defineConfig({
           use: { viewport: { width: 1400, height: 950 } },
         },
         {
+          // Own project (v1.44.0, issue 118): energy tracking. The spec records
+          // its own Utilities / Energy purchase and its own tariff, so it adds a
+          // purchase and a settings row but touches no seeded figure — and it
+          // runs late so nothing it writes can move a total an earlier spec
+          // asserts.
+          name: 'energy',
+          testMatch: /energy\.spec\.ts/,
+          use: { viewport: { width: 1400, height: 950 } },
+        },
+        {
           // The payday example rewrites only the isolated E2E seed. Keep it last so
           // its fictional account, schedules and settings cannot affect other specs.
           name: 'payday-summary',

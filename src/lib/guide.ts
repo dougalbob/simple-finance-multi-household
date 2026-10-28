@@ -1,11 +1,12 @@
 /**
- * The vocabulary page (docs/ONBOARDING_PLAN.md §5, Slice 2): nine ideas that
+ * The vocabulary page (docs/ONBOARDING_PLAN.md §5, Slice 2): ten ideas that
  * make the rest of the app click — checkpoint vs estimate vs bank balance,
  * income is not spending, transfers are not spending, borrowing is owed and
  * never income, schedules convert and history is never rewritten, the
  * projection is arithmetic on configured figures, the long-term forecast is
- * the same arithmetic across decades of assumptions, what “the app has
- * noticed” is, and what the app will never do.
+ * the same arithmetic across decades of assumptions, a direct debit is not
+ * the bill (v1.44.0), what “the app has noticed” is, and what the app will
+ * never do.
  *
  * The copy lives here, beside the anchor ids, for the same reason the setup
  * path keeps its copy in `setup-path.ts`: the “what this page needs first”
@@ -16,7 +17,7 @@
  * never extends it.
  */
 
-/** The nine anchors, in reading order. Any page may link to `/guide#<anchor>`. */
+/** The ten anchors, in reading order. Any page may link to `/guide#<anchor>`. */
 export const GUIDE_ANCHORS = [
   'checkpoint',
   'income',
@@ -25,6 +26,7 @@ export const GUIDE_ANCHORS = [
   'schedules',
   'projection',
   'longterm',
+  'energy',
   'noticed',
   'never',
 ] as const;
@@ -51,8 +53,8 @@ export const GUIDE_PAGE = {
   eyebrow: 'Guide',
   title: 'How this app thinks',
   intro:
-    'Nine short ideas that make the rest of the app click. None of this is a setting and none of it is a tutorial — it is how the app already behaves, said out loud, so the figures on every page can be trusted. Any page can link into a section: /guide#checkpoint lands straight on the first one.',
-  tocTitle: 'The nine ideas',
+    'Ten short ideas that make the rest of the app click. None of this is a setting and none of it is a tutorial — it is how the app already behaves, said out loud, so the figures on every page can be trusted. Any page can link into a section: /guide#checkpoint lands straight on the first one.',
+  tocTitle: 'The ten ideas',
 } as const;
 
 export const GUIDE_SECTIONS: readonly GuideSection[] = [
@@ -151,6 +153,21 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     seeAlso: [
       { href: '/longterm', label: 'Long-term forecast' },
       { href: '/guide#projection', label: 'the projection, the same idea over 400 days' },
+    ],
+  },
+  {
+    anchor: 'energy',
+    title: 'A direct debit is not the bill',
+    lead: 'The energy block keeps the bill’s kWh and the purchase keeps the money, and a month with no bill is a gap rather than a zero.',
+    paragraphs: [
+      'A monthly direct debit is a payment on account: it is smoothed, so it is rarely what the month actually cost, and the money can leave in a different month from the one the bill covers. So the app never treats the debit as the bill. The purchase holds what left the bank, exactly as it does for any other direct debit; the optional energy details on that purchase hold the bill’s own figures — the kWh, the dates the bill covers, the meter readings where the meter is smart, and the supplier’s estimated annual usage. Recording either is optional, and the block stays collapsed until you open it.',
+      'The app adds nothing of its own to those figures. Gas usage is taken from the bill’s kWh and never converted from m³, because the conversion depends on the calorific value of the gas that month; instead the app checks the implied factor and says when it looks wrong. Meter readings are asked for only on a meter you have told the app is smart, because an estimated reading drifts away from reality until somebody reads the meter. Two readings can supply the electricity figure when the bill’s kWh box is left blank — nothing else is ever derived.',
+      'What the page draws is only what you recorded. A month with no bill draws no bar; a bill with only gas recorded shows only gas; a period that overlaps another is named rather than added in. The tariff is yours to type, the comparison applies a typed candidate to the same usage so only the tariff changes, and the app does not fetch prices, recommend a supplier or claim a trend from two cold months. Every figure is arithmetic on your records, in the same voice as the payday projection.',
+    ],
+    seeAlso: [
+      { href: '/energy', label: 'Energy' },
+      { href: '/purchases', label: 'Purchases — the Energy details block' },
+      { href: '/guide#projection', label: 'the projection, arithmetic not a forecast' },
     ],
   },
   {

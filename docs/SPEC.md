@@ -2780,3 +2780,102 @@ No bank connection, no financial advice, no Monte Carlo, no bad-early-years stre
 IHT/care-cost modelling, no real annuity quote and no named saved scenarios in v1. A scenario is a
 later slice if the household wants one. The forecast never writes a household record: it reads, seeds
 a draft and saves its own plan.
+
+## 29. Energy tracking — the bill, not the direct debit (v1.44.0, issue 118)
+
+A monthly gas or electricity direct debit is a **payment on account**, and a UK bill is a different
+document: a mid-month to mid-month period, a consumption figure, a tariff with three-decimal rates, and
+often the supplier's own estimate of the year. The app keeps the two apart. The **purchase** continues
+to own the money that left the bank; an optional block on that purchase owns the **bill's** figures.
+
+### 29.1 What makes a purchase an energy purchase
+
+The **category**, never a schedule's name. A schedule called "Gas/Electric" is the household's own
+wording and another household will choose different words, so it can never be the hook; the direct
+debit a schedule converts carries a `Utilities > Energy` allocation line, and that line is what counts.
+A household that renamed the category points `energy_category_id` at its own leaf, and an empty value
+means "follow `Utilities / Energy` by name", the same lookup the fuel category uses.
+
+### 29.2 The optional block — hidden by default
+
+On **Purchases**, under any purchase with an energy line, a collapsed `<details>` ("Energy details —
+add this period's kWh") holds:
+
+- the **billing period** (both dates or neither), which is what puts a bill in the right month;
+- **gas kWh** and **electricity kWh**, as printed (755.23 kWh is stored as 755 230 Wh);
+- **meter readings** — opening and closing — but **only** for a fuel whose meter the household has
+  ticked as smart. An estimated reading drifts away from reality until somebody reads the meter, so
+  nothing asks for one until a real one exists. Readings are stored in ten-thousandths of the meter's
+  own unit, exactly as printed (13 770.4660 m³ = 137 704 660);
+- the **supplier's estimated annual usage** per fuel, as printed on the bill, because it is the only
+  usage figure a household has on day one;
+- an optional **note**.
+
+The block appears in the in-place correction panel on All Transactions too, beside the attachment
+block. It is not in the Quick Entry till. `energy_show_on_purchases = 0` removes it entirely for a
+household that tracks nothing, and one saved with details still shows them (read-only) so nothing is
+lost.
+
+The purchase owns the version: writing details bumps `purchases.version` and audits
+`purchase.energy_details` with before and after, exactly as the fuel details do. A refund carries
+none; a voided purchase shows what was recorded and refuses a change. Clearing both usage figures
+deletes the row.
+
+### 29.3 What the app does and does not derive
+
+- **Electricity may be derived from the readings** — and only when the bill's own kWh box is blank and
+  both readings are present and rising. The bill's figure always wins.
+- **Gas is never derived.** m³ → kWh depends on the gas's calorific value, so the app takes the bill's
+  kWh and instead **checks the implied factor** (kWh ÷ m³), saying "worth checking" outside 9–13 rather
+  than inventing a conversion.
+- Gas readings default to **m³**, what most gas meters print; the setting only relabels the fields.
+
+### 29.4 The Energy page
+
+`/energy`, household-scoped, in the menu after Borrowing: the household's meters and category
+(collapsed once set); the last twelve months at a glance with Ofgem's typical-medium-household figures
+as a labelled yardstick; a **month-by-month chart in kWh** (gas and electricity, grouped) with the table
+twin; every bill with its period, day count, kWh, readings, cost and notes; **one tariff per fuel**;
+and a **switching comparison**.
+
+A bill is drawn in the month its **period ends** in — 18 September to 18 October is October's — and the
+rule is printed under the chart. **A month with no bill draws no bar**: missing is not zero. A bill with
+one fuel recorded shows one fuel. Two bills bucketed into a month, overlapping periods, a reading that
+does not follow the previous closing reading, and a reading that goes backwards (a meter exchange) are
+**named beside the bill, never blocked**.
+
+### 29.5 The arithmetic
+
+Rates are saved in **thousandths of a penny, excluding VAT** (4.748p = 4748), because UK bills print
+three decimals; usage in watt-hours; readings in ten-thousandths. Per fuel:
+
+- units = `roundHalfUpDivide(unitRateMilli × Wh, 1 000 000)`, rounded half-up once;
+- standing = `roundHalfUpDivide(standingMilli × days, 1000)`, days counted inclusively;
+- VAT at **5%** is added per fuel and rounded once.
+
+Worked example (the household's own bill, 18 Sep – 18 Oct 2026, 31 days): gas 755.23 kWh at 4.748p plus
+25.902p a day = 4 389p ex VAT, 219p VAT, **£46.08**; electricity 327.8 kWh at 24.860p plus 60.970p a day
+= 10 039p, 502p VAT, **£105.41**. The bill's own £94.54 annual standing charge is reproduced to the
+penny by 365 days at 25.902p.
+
+The **switching comparison** applies a typed candidate to the household's own usage: annualised from
+the days its bills actually cover once there are at least 30 of them ("from your own 217 days of
+bills"), otherwise the supplier's printed estimate ("from the supplier's estimated annual usage"), and
+with neither it refuses rather than making a year out of a month. Both sides use the same kWh, standing
+charges use 365 days, the difference is quoted a year with its basis, and the current tariff's exit fee
+(on a bill, live only until the price guarantee ends) is expressed as months to pay itself back.
+**Nothing recommends anything**, nothing is saved, and no price is fetched from anywhere.
+
+### 29.6 What it is not
+
+No supplier integration, tariff feed or Ofgem API. No account balance, credit or debit modelling. No
+advice, no trend claimed from two cold months, no weather adjustment. One household, one set of meters
+per fuel. The tariff's fee-free switch date and its reminder stay in **Contracts & Renewals** (§22),
+which is where every other provider date lives.
+
+### 29.7 The guide vocabulary
+
+`/guide#energy` says the one idea in plain words: a direct debit is not the bill, the app keeps the
+money and the kWh apart, a month with no bill is a gap rather than a zero, readings are asked for only
+on a smart meter, gas is never converted behind the household's back, and the comparison is arithmetic
+on their own figures rather than advice.

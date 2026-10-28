@@ -1,3 +1,78 @@
+# v1.44.0 — energy tracking (issue 118, 2026-10-28)
+
+## Why this session happened
+
+GitHub issue #118: the household's "Gas/Electric" schedule pays a direct debit under the default
+**Utilities / Energy** category, and they asked for an **optional, hidden-by-default** way to record
+that month's gas and electricity on the purchase — to track usage over time and to gather what a
+switch needs — while "some other users may only want to track usage or not track at all". The issue's
+second ask (clickable Overview pot names) was **held** on the household's instruction and stays open.
+
+Four answers were agreed before any code: kWh + billing period + meter readings **only where the
+meter is smart**; a **new `/energy` page**; the **switching comparison in this release**; pot links
+parked. The household then supplied a real bill, which fixed the precision and three behaviours —
+rates to three decimals, readings to four, usage to two; a mid-month to mid-month period; the
+supplier's printed estimated annual usage; and an exit fee that expires with the price guarantee.
+The design record is [`docs/ENERGY_TRACKING_PLAN.md`](ENERGY_TRACKING_PLAN.md), updated to match the
+bill, and the product text is SPEC §29.
+
+## What this session built
+
+- **`drizzle/0022_energy_bills.sql`** — one optional side table keyed to a purchase: period, gas and
+  electric watt-hours, readings in ten-thousandths of the meter's unit, the supplier's annual
+  estimates, a note, creator and timestamps, with CHECKs for "some usage" and a period in order.
+- **`src/lib/records/energy-usage.ts`** — the pure domain: parsing and printing at the bill's own
+  precision, billing days (inclusive), the month a bill is drawn in, tariff JSON validation and its
+  expiry rule, per-fuel cost with half-up rounding and 5% VAT, annualisation with its basis, the
+  comparison, the twelve-month summary (a gap is `null`, never zero), the implied gas factor, and the
+  notes that never block a save.
+- **`src/lib/records/energy.ts`** — the category hook (settings override, else `Utilities > Energy` by
+  name), the purchase's energy lines, `editEnergyBill` (version guard, audit `purchase.energy_details`,
+  delete on clear), the row prefill context, and `getEnergyView` for the page.
+- **`src/lib/records/settings.ts`** — `energy_category_id`, `energy_smart_gas`,
+  `energy_smart_electric`, `energy_gas_reading_unit`, `energy_tariff_gas`, `energy_tariff_electric`,
+  `energy_show_on_purchases`: all in the existing audited key/value store, so no second migration.
+- **`src/components/energy-details-form.tsx`** — the collapsed block under a purchase row (Purchases
+  and the All Transactions in-place panel), with reading boxes only for a smart meter, prefills from
+  the previous bill, and the ⚡ summary line with the average price of a unit.
+- **`src/app/energy/page.tsx`**, **`src/components/energy-forms.tsx`** and
+  **`src/components/charts/energy-usage-chart.tsx`** — the page, its two server-action forms (meters,
+  tariff per fuel) and a kWh grouped-bar chart built on the existing chart geometry.
+- **`src/app/actions.ts`** — `editEnergyDetailsAction`, `saveEnergySetupAction`,
+  `saveEnergyTariffAction`, and `/energy` added to the revalidated page list.
+- **`src/components/site-nav.tsx`** — **Energy** on the desktop bar and in the drawer's More group.
+- **`src/lib/guide.ts`** — a tenth idea, `/guide#energy`: a direct debit is not the bill.
+- **The seeded E2E installation** (`scripts/e2e-server.mts`) now annotates its twelve fictional energy
+  bills with fictional kWh and two fictional tariffs, so the page has a year to draw in the browser
+  run. Smart meters stay off — that is the default, and the spec proves the reading boxes stay hidden.
+
+## Validation
+
+- `tests/energy-usage.test.ts` (33 tests) pins the household's own bill: gas **£46.08** and electricity
+  **£105.41** for 18 Sep – 18 Oct, the bill's **£94.54** annual standing charge to the penny, plus the
+  parsing, period, derivation, annualisation, comparison and chart rules.
+- `tests/energy-bills.test.ts` (18 tests): create/edit/clear, the version conflict, a voided purchase
+  refusing an edit, an empty save refused, the category override, prefills, the page's view, an
+  unreadable saved tariff not breaking the page, and the audited settings.
+- `npm test`: **1,305/1,305 tests across 297 suites**. `npm run typecheck`, `npm run format:check`,
+  `npm run themes:check` and `NEXT_TELEMETRY_DISABLED=1 npm run build` all pass locally (the build
+  lists `/energy` as a dynamic route).
+- A live seeded run (port 3100) rendered `/energy` 200 with a year of bars, tooltips per bar, a
+  "no bill recorded" mark for the empty month, the bill list (periods, kWh, paid, p/kWh), both tariff
+  cards and a working comparison ("£46.20 a year cheaper on the same usage, from your own 365 days of
+  bills"); `/purchases` carried twelve collapsed energy blocks, one per seeded bill.
+- PR checks `gates`, `browser` and `docker` are recorded below once they complete; the browser run is
+  the first execution of `e2e/energy.spec.ts`, because Playwright cannot install in this sandbox
+  (`docs/SANDBOX.md` entries 2 and 4).
+
+## After publication
+
+In Unraid, back up the households **and** the Admin registry, then **Force Update** only the **Simple
+Finance Multi-household** container on `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or pin
+`:v1.44.0`). Keep appdata `/mnt/user/appdata/simple-finance-multi-household` and host port **3009**.
+The container applies migration `0022` at start-up. Never touch the original installation
+(`/mnt/user/appdata/simple-finance`, port 3007).
+
 # v1.43.0 — Wiki link in the site menu (2026-10-25)
 
 ## Why this session happened

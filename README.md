@@ -1,3 +1,16 @@
+**v1.44.0 — Energy tracking (issue 118):** any purchase paid under **Utilities / Energy** can carry an
+optional, collapsed **Energy details** block — the bill's gas and electricity kWh, the billing period,
+meter readings only where the meter is smart, and the supplier's printed estimated annual usage. A new
+**Energy** page draws the last twelve months in kWh beside what was paid, lists every bill, holds one
+tariff per fuel and compares a typed quote on the household's own usage. Arithmetic only: no prices are
+fetched and nothing is recommended. A month with no bill is drawn as a gap rather than a zero, and gas
+is never converted from m³ behind the household's back. Migration `0022_energy_bills.sql` adds one
+optional side table; back up the household and the Admin registry before updating. The issue's second
+ask — clickable pot names on Overview — is held and stays open. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.44.0` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. See
+[release notes](docs/RELEASE_NOTES_v1.44.0.md), [handoff](docs/HANDOFF.md) and decisions 267–268.
+
 # Simple Finance Multi-household
 
 **v1.43.0 — Wiki link in the site menu:** the site menu gains a **Wiki** entry, shown with the GitHub

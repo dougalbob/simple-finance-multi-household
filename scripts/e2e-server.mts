@@ -7,6 +7,7 @@ import { findChildCategory } from '../src/lib/records/categories';
 import { createAgreement } from '../src/lib/records/agreements';
 import { createDebt, editDebt } from '../src/lib/records/debts';
 import { createExternalMovement } from '../src/lib/records/external-movements';
+import { editEnergyBill } from '../src/lib/records/energy';
 import { createPerson, setPersonEmail } from '../src/lib/records/people';
 import { addCheckpoint, createPot } from '../src/lib/records/pots';
 import { createPurchase } from '../src/lib/records/purchases';
@@ -14,6 +15,7 @@ import { createReceipt } from '../src/lib/records/receipts';
 import { createSchedule } from '../src/lib/records/schedules';
 import {
   setDefaultPurchasePotId,
+  setEnergyTariff,
   setMonthlyFuelPence,
   setPaydayDayOfMonth,
   setWeeklyGroceriesPence,
@@ -240,9 +242,9 @@ function seed(): void {
     target: { kind: 'household' | 'person'; id?: number },
     supplierId: number | null,
     note: string,
-  ): void => {
+  ): ReturnType<typeof createPurchase> => {
     const date = localDate(today, dayOffset);
-    createPurchase(db, {
+    return createPurchase(db, {
       potId: main.id,
       totalPence,
       occurredAt: new Date(`${date}T12:00:00Z`),
@@ -335,8 +337,12 @@ function seed(): void {
       null,
       'Takeaway together',
     );
-    // Household bills in tracked categories, easing down over the year.
-    historyPurchase(
+    // Household bills in tracked categories, easing down over the year. The
+    // energy bill carries the fictional kWh a bill would print (issue 118), so
+    // the Energy page has a real year to draw the moment the browser opens —
+    // and the period is the calendar month the money was paying for, not the
+    // day the debit happened to fall on.
+    const energyBill = historyPurchase(
       day - 9,
       9800 - monthsAgo * 120,
       energy.id,
@@ -344,11 +350,72 @@ function seed(): void {
       wattstream.id,
       'Energy bill',
     );
+    const periodEnd = new Date(`${energyBill.purchase.occurredDate}T00:00:00Z`);
+    periodEnd.setUTCDate(0); // the last day of the previous month
+    const periodStart = new Date(periodEnd);
+    periodStart.setUTCDate(1);
+    editEnergyBill(db, {
+      purchaseId: energyBill.purchase.id,
+      expectedVersion: energyBill.purchase.version,
+      actor: ACTOR,
+      details: {
+        periodStart: periodStart.toISOString().slice(0, 10),
+        periodEnd: periodEnd.toISOString().slice(0, 10),
+        // Winter months use more gas; the drift is invented, not modelled.
+        gasWh: (620_000 +
+          ((monthsAgo * 7) % 9) * 28_000 +
+          (monthsAgo > 8 || monthsAgo < 2 ? 180_000 : 0)) as number,
+        electricWh: 268_000 + ((monthsAgo * 5) % 7) * 9_000,
+        gasReadingStart: null,
+        gasReadingEnd: null,
+        electricReadingStart: null,
+        electricReadingEnd: null,
+        gasEstimateWh: monthsAgo === 0 ? 12_500_000 : null,
+        electricEstimateWh: monthsAgo === 0 ? 3_100_000 : null,
+        note: null,
+      },
+      now,
+    });
     historyPurchase(day - 10, 3600, water.id, { kind: 'household' }, null, 'Water bill');
     if (monthsAgo % 12 === 3) {
       historyPurchase(day - 12, 18000, roadTax.id, { kind: 'household' }, null, 'Road tax');
     }
   }
+
+  // The fictional tariffs the seeded bills were paid on (issue 118), so the
+  // Energy page's tariff cards and its switching comparison both work on first
+  // open. Smart meters stay OFF: that is the default, and the browser spec
+  // proves the reading boxes stay out of the way until a household ticks them.
+  setEnergyTariff(
+    db,
+    'gas',
+    {
+      supplier: 'Wattstream Energy',
+      tariffName: 'Everyday Fixed v3',
+      unitRateMilliPencePerKwh: 6240,
+      standingChargeMilliPencePerDay: 31470,
+      fixedUntil: localDate(today, 96),
+      exitFeePence: 5000,
+      notes: 'Fictional seed tariff.',
+    },
+    ACTOR,
+    now,
+  );
+  setEnergyTariff(
+    db,
+    'electric',
+    {
+      supplier: 'Wattstream Energy',
+      tariffName: 'Everyday Fixed v3',
+      unitRateMilliPencePerKwh: 24860,
+      standingChargeMilliPencePerDay: 60970,
+      fixedUntil: localDate(today, 96),
+      exitFeePence: 5000,
+      notes: 'Fictional seed tariff.',
+    },
+    ACTOR,
+    now,
+  );
 
   // One-off income (plan decision 110): the old bicycle sold for cash, paid
   // into the cash pot — so the Income page, All Transactions and the estimate

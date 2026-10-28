@@ -21,6 +21,7 @@ import {
   activityRowMatchesSearch,
 } from '@/lib/records/activity-search';
 import { leafCategoryOptions } from '@/lib/records/entry-view';
+import { energyRowDetails, getEnergyRowContext } from '@/lib/records/energy';
 import { ensureScheduleState } from '@/lib/records/money-view';
 import { listPeople } from '@/lib/records/people';
 import { listPots, listPotsIncludingArchived } from '@/lib/records/pots';
@@ -217,6 +218,13 @@ export default async function TransactionsPage({
     people: listPeople(db).map(({ id, label }) => ({ id, label })),
     vehicles: listVehicles(db).map(({ id, label }) => ({ id, label })),
   };
+  // Energy details for the open purchase, if it is an energy one (issue 118):
+  // the panel carries the same block the Purchases row does, beside the
+  // attachment block it already had.
+  const openPurchaseEnergy =
+    openPurchase === null
+      ? null
+      : energyRowDetails(getEnergyRowContext(db), openPurchase.purchase, openPurchase.allocations);
   let pinnedPurchase: PinnedPurchaseEntry | null = null;
   let pinnedPurchaseView: PinnedPurchaseView | null = null;
   if (openPurchase !== null && purchasePinReason !== null) {
@@ -410,6 +418,7 @@ export default async function TransactionsPage({
                         categories={purchaseEditor.categories}
                         people={purchaseEditor.people}
                         vehicles={purchaseEditor.vehicles}
+                        energy={openPurchaseEnergy}
                         striped={false}
                         focusAttachmentId={focusAttachmentId}
                         pinned={pinnedPurchaseView}
@@ -436,6 +445,7 @@ export default async function TransactionsPage({
                         categories={purchaseEditor.categories}
                         people={purchaseEditor.people}
                         vehicles={purchaseEditor.vehicles}
+                        energy={openPurchaseEnergy}
                         striped={(stripeIndex.get(entry.row.key) ?? 0) % 2 === 1}
                         focusAttachmentId={focusAttachmentId}
                         pinned={null}

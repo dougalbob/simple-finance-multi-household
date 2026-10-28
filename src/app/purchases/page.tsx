@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { RecentEntryActions } from '@/components/record-forms';
 import { AttachmentForm } from '@/components/attachment-form';
+import { EnergyDetailsForm } from '@/components/energy-details-form';
 import { FuelDetailsForm, type FuelDetailsFormProps } from '@/components/fuel-details-form';
 import { PurchaseFilterForm } from '@/components/purchase-filter-form';
 import { OpenTaskList, TaskCreateForm } from '@/components/task-forms';
@@ -25,7 +26,9 @@ import { PURCHASE_SEARCH_MAX_LENGTH } from '@/lib/records/purchase-search';
 import { supplierCardHref } from '@/lib/records/supplier-focus';
 import { targetLabel, targetNames } from '@/lib/records/targets';
 import { listStoredAttachments, type StoredAttachment } from '@/lib/records/attachments';
+import { energyRowDetails, getEnergyRowContext } from '@/lib/records/energy';
 import { fuelRowDetails, getFuelRowContext } from '@/lib/records/fuel';
+import type { EnergyRowDetailsProps } from '@/lib/records/energy';
 import { getTasksBySubject, type TaskRowView } from '@/lib/records/tasks-view';
 import { listVehicles } from '@/lib/records/vehicles';
 import { formatInstantLocal, toLocalDateString } from '@/lib/time';
@@ -235,6 +238,10 @@ export default async function PurchasesPage({
     });
   }
   const fuelContext = getFuelRowContext(db);
+  // The optional energy block (issue 118): present only on a purchase whose
+  // lines include the household's energy category, and hidden behind a
+  // collapsed disclosure even then.
+  const energyContext = getEnergyRowContext(db);
   // "Chase the refund" (decision 175): open tasks about each listed purchase.
   const tasksByPurchase = getTasksBySubject(db, 'purchase', now);
   // Refund signposting (issue #96): an original says how much has already
@@ -396,6 +403,7 @@ export default async function PurchasesPage({
                     attachments={listStoredAttachments(db, purchase.id)}
                     focusAttachmentId={focusAttachmentId}
                     fuel={fuelRowDetails(fuelContext, purchase, allocations)}
+                    energy={energyRowDetails(energyContext, purchase, allocations)}
                     history={listAuditForEntity(db, 'purchase', purchase.id)}
                     openTasks={tasksByPurchase.get(purchase.id)?.open ?? []}
                     fromSchedule={purchase.scheduleInstanceId !== null}
@@ -467,6 +475,8 @@ interface PurchaseRowProps {
   focusAttachmentId: number | null;
   /** Odometer, litres and mpg — fuel purchases only (v0.10.0). */
   fuel: FuelDetailsFormProps | null;
+  /** The bill's kWh, period and readings — energy purchases only (v1.44.0). */
+  energy: EnergyRowDetailsProps | null;
   history: AuditEntry[];
   /** Open tasks about this purchase — "Chase the refund" (v0.25.0). */
   openTasks: TaskRowView[];
@@ -567,6 +577,7 @@ function PurchaseRow(props: PurchaseRowProps) {
           </div>
         ) : null}
         {props.fuel !== null ? <FuelDetailsForm {...props.fuel} /> : null}
+        {props.energy !== null ? <EnergyDetailsForm {...props.energy} /> : null}
         <AttachmentForm
           purchaseId={props.purchaseId}
           attachments={props.attachments}

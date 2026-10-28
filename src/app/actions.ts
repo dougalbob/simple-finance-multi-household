@@ -27,6 +27,21 @@ import {
   storeAttachment,
 } from '@/lib/records/attachments';
 import { toLocalDateString } from '@/lib/time';
+import { editEnergyBill, NotAnEnergyPurchaseError } from '@/lib/records/energy';
+import {
+  InvalidEnergyInputError,
+  parseKwh,
+  parseRate,
+  parseReading,
+  type EnergyDetails,
+} from '@/lib/records/energy-usage';
+import {
+  setEnergyCategoryId,
+  setEnergyGasReadingUnit,
+  setEnergyShowOnPurchases,
+  setEnergySmartMeter,
+  setEnergyTariff,
+} from '@/lib/records/settings';
 import {
   InvalidFuelDetailsError,
   parseLitres,
@@ -1626,6 +1641,8 @@ const PAGE_PATHS = [
   '/transactions',
   '/tasks',
   '/longterm',
+  // Energy tracking (issue 118, v1.44.0).
+  '/energy',
   // The setup path (docs/ONBOARDING_PLAN.md): derived from the records, so an
   // action taken anywhere must refresh it too.
   '/start',
@@ -4020,5 +4037,200 @@ export async function applyProjectPlanAction(
     const message = projectErrorMessage(err);
     if (message !== null) return { status: 'error', message };
     throw err;
+  }
+}
+
+/* ------------------------------------------------------- energy (v1.44.0) */
+
+/**
+ * The optional energy fields on a purchase (issue 118, SPEC §29). Blank means
+ * "not recorded" for every field; the parser is the authority, so a browser
+ * cannot post a negative kWh or a four-decimal reading into the wrong unit.
+ */
+function parseEnergyExtras(
+  formData: FormData,
+): { ok: true; details: EnergyDetails } | { ok: false; error: string } {
+  const text = (name: string) => {
+    const value = formData.get(name);
+    return typeof value === 'string' ? value : '';
+  };
+  try {
+    return {
+      ok: true,
+      details: {
+        periodStart: text('periodStart').trim() || null,
+        periodEnd: text('periodEnd').trim() || null,
+        gasWh: parseKwh(text('gasKwh'), 'Gas usage'),
+        electricWh: parseKwh(text('electricKwh'), 'Electricity usage'),
+        gasReadingStart: parseReading(text('gasReadingStart'), 'Gas opening reading'),
+        gasReadingEnd: parseReading(text('gasReadingEnd'), 'Gas closing reading'),
+        electricReadingStart: parseReading(
+          text('electricReadingStart'),
+          'Electricity opening reading',
+        ),
+        electricReadingEnd: parseReading(text('electricReadingEnd'), 'Electricity closing reading'),
+        gasEstimateWh: parseKwh(text('gasEstimateKwh'), 'Estimated gas usage'),
+        electricEstimateWh: parseKwh(text('electricEstimateKwh'), 'Estimated electricity usage'),
+        note: text('note').trim() || null,
+      },
+    };
+  } catch (err) {
+    if (err instanceof InvalidEnergyInputError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+/**
+ * Record or correct a bill's energy details from the Purchases row. The
+ * purchase's own version guards it, exactly as the fuel details are guarded:
+ * a stale form is refused rather than overwriting a newer figure.
+ */
+export async function editEnergyDetailsAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const purchaseId = positiveNumber(formData.get('purchaseId'));
+  const expectedVersion = positiveNumber(formData.get('expectedVersion'));
+  if (purchaseId === null || expectedVersion === null) {
+    return { status: 'error', message: 'That purchase could not be found. Reload and try again.' };
+  }
+  const extras = parseEnergyExtras(formData);
+  if (!extras.ok) return { status: 'error', message: extras.error };
+  try {
+    editEnergyBill(user.db, {
+      purchaseId,
+      expectedVersion,
+      actor: user.email,
+      details: extras.details,
+    });
+    revalidatePages();
+    return { status: 'ok', message: 'Energy details saved.' };
+  } catch (err) {
+    if (
+      err instanceof InvalidEnergyInputError ||
+      err instanceof NotAnEnergyPurchaseError ||
+      err instanceof PurchaseNotFoundError ||
+      err instanceof RecordVoidedError ||
+      err instanceof VersionConflictError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    console.error('[energy] editEnergyDetailsAction failed', err);
+    return { status: 'error', message: 'The energy details could not be saved. Please try again.' };
+  }
+}
+
+/**
+ * The Energy page's own settings: which category means energy, which meters
+ * are smart, what the gas meter prints, and whether the purchase block shows.
+ * All of it lives in the existing audited key/value table — no migration.
+ */
+export async function saveEnergySetupAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const db = user.db;
+  try {
+    const categoryId = numberOrNull(formData.get('categoryId'));
+    setEnergyCategoryId(db, categoryId, user.email);
+    setEnergySmartMeter(db, 'gas', formData.get('gasSmart') !== null, user.email);
+    setEnergySmartMeter(db, 'electric', formData.get('electricSmart') !== null, user.email);
+    setEnergyGasReadingUnit(
+      db,
+      formData.get('gasReadingUnit') === 'kwh' ? 'kwh' : 'm3',
+      user.email,
+    );
+    setEnergyShowOnPurchases(db, formData.get('showOnPurchases') !== null, user.email);
+    revalidatePages();
+    return { status: 'ok', message: 'Energy settings saved.' };
+  } catch (err) {
+    console.error('[energy] saveEnergySetupAction failed', err);
+    return {
+      status: 'error',
+      message: domainMessage(err, 'The energy settings could not be saved. Please try again.'),
+    };
+  }
+}
+
+/** One fuel's tariff, or its removal when the household clears the card. */
+export async function saveEnergyTariffAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const fuel = formData.get('fuel') === 'electric' ? 'electric' : 'gas';
+  const label = fuel === 'gas' ? 'Gas' : 'Electricity';
+  const text = (name: string) => {
+    const value = formData.get(name);
+    return typeof value === 'string' ? value : '';
+  };
+  const clearing = formData.get('clear') !== null;
+  try {
+    if (clearing) {
+      setEnergyTariff(user.db, fuel, null, user.email);
+      revalidatePages();
+      return { status: 'ok', message: `${label} tariff cleared.` };
+    }
+    const unit = parseRate(text('unitRate'), `${label} unit rate`);
+    const standing = parseRate(text('standingCharge'), `${label} standing charge`);
+    if (unit === null || standing === null) {
+      return {
+        status: 'error',
+        message: `Enter the ${label.toLowerCase()} unit rate and standing charge from the bill.`,
+      };
+    }
+    const supplier = text('supplier').trim();
+    const tariffName = text('tariffName').trim();
+    if (supplier === '' || tariffName === '') {
+      return { status: 'error', message: 'A tariff needs a supplier and a tariff name.' };
+    }
+    const fixedUntil = text('fixedUntil').trim();
+    if (fixedUntil !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(fixedUntil)) {
+      return {
+        status: 'error',
+        message: 'Enter the fixed-until date as YYYY-MM-DD, or leave it blank.',
+      };
+    }
+    const exitFeeRaw = text('exitFee').trim();
+    const exitFeePence = exitFeeRaw === '' ? null : parsePence(exitFeeRaw);
+    if (exitFeeRaw !== '' && exitFeePence === null) {
+      return {
+        status: 'error',
+        message: 'The early exit fee should be an amount in pounds, like 50 or 50.00.',
+      };
+    }
+    setEnergyTariff(
+      user.db,
+      fuel,
+      {
+        supplier,
+        tariffName,
+        unitRateMilliPencePerKwh: unit,
+        standingChargeMilliPencePerDay: standing,
+        fixedUntil: fixedUntil === '' ? null : fixedUntil,
+        exitFeePence: exitFeePence,
+        notes: text('notes').trim(),
+      },
+      user.email,
+    );
+    revalidatePages();
+    return { status: 'ok', message: `${label} tariff saved.` };
+  } catch (err) {
+    if (err instanceof InvalidEnergyInputError) {
+      return { status: 'error', message: err.message };
+    }
+    console.error('[energy] saveEnergyTariffAction failed', err);
+    return {
+      status: 'error',
+      message: domainMessage(err, 'The tariff could not be saved. Please try again.'),
+    };
   }
 }

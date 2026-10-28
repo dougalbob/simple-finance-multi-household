@@ -10,10 +10,12 @@ import {
   useRowToggleReady,
 } from '@/components/activity-open-row';
 import { AttachmentForm } from '@/components/attachment-form';
+import { EnergyDetailsForm } from '@/components/energy-details-form';
 import { PurchaseEditForm, VoidForm, type EntryLineState } from '@/components/record-forms';
 import { formatPence } from '@/lib/money';
 import type { ActivityLink, ActivityRow } from '@/lib/records/activity';
 import type { ActivityWindow } from '@/lib/records/in-place-activity';
+import type { EnergyRowDetailsProps } from '@/lib/records/energy';
 import type { PinnedPurchaseReason } from '@/lib/records/purchase-activity';
 
 export interface PinnedPurchaseView {
@@ -39,6 +41,8 @@ export interface PurchaseActivityRowProps {
   pinned: PinnedPurchaseView | null;
   /** A document id to land on, from the Documents search (v1.41.0). */
   focusAttachmentId: number | null;
+  /** The energy block, when this purchase carries an energy line (v1.44.0). */
+  energy: EnergyRowDetailsProps | null;
 }
 
 const BADGE: Record<PinnedPurchaseReason, string> = {
@@ -87,6 +91,7 @@ export function PurchaseActivityRow({
   striped,
   pinned,
   focusAttachmentId,
+  energy,
 }: PurchaseActivityRowProps) {
   const purchaseId = row.recordId;
   const { open, openRow, closeRow } = useActivityRow();
@@ -288,6 +293,7 @@ export function PurchaseActivityRow({
                   people={people}
                   vehicles={vehicles}
                 />
+                {energy === null ? null : <EnergyDetailsForm {...energy} />}
                 <AttachmentForm
                   purchaseId={purchaseId}
                   attachments={facts.attachments}
