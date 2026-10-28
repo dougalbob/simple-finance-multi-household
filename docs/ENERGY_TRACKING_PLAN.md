@@ -137,7 +137,7 @@ with no bill yet can still be recorded. Gas is never derived.
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `energy.categoryId` | a child category id, or empty | Which category is "energy". **Empty means match `Utilities > Energy` by name**, the same name lookup fuel uses; setting it lets a household that renames the category keep working. Validated as a live child category. |
+| `energy_category_id` | a child category id, or empty | Which category is "energy". **Empty means match `Utilities > Energy` by name**, the same name lookup fuel uses; setting it lets a household that renames the category keep working. Validated as a live child category. |
 | `energy_smart_gas` | `1` / `0` (default `0`) | The gas meter is smart, so the gas reading fields appear. |
 | `energy_smart_electric` | `1` / `0` (default `0`) | Same for electricity. |
 | `energy_gas_reading_unit` | `m3` (default) / `kwh` | What the gas meter prints — labels only; nothing is converted. |
@@ -186,9 +186,9 @@ Energy details — add this period's kWh                     (collapsed summary 
 
 - **Only energy purchases get the block** — the same `null`-or-props gate `fuelRowDetails` uses.
   A collapsed `<details>`, exactly like "Fuel details", and removable entirely via
-  `energy.showOnPurchases`.
+  `energy_show_on_purchases`.
 - **Fields follow the household's setup**: the reading pair appears only for a fuel whose meter is
-  ticked smart; the gas unit label follows `energy.gas.readingUnit`.
+  ticked smart; the gas unit label follows `energy_gas_reading_unit`.
 - **Defaults that save typing, never guessed facts**: `Period from` is the previous energy bill's
   `period_end + 1 day` and `Period to` is the day before this purchase's date; the opening reading is
   prefilled from the previous bill's closing reading. With no previous bill the period is blank with a
@@ -345,7 +345,7 @@ Resolved by the household's bill and answers, 2026-10-28:
 
 1. **Gas readings in m³** — confirmed by the bill itself.
 2. **Electricity derived from readings** when the kWh box is blank — taken as proposed.
-3. **`energy.showOnPurchases`**, default shown — taken as proposed.
+3. **`energy_show_on_purchases`**, default shown — taken as proposed.
 4. **The Overview pot-name links** stay parked on issue #118.
 
 Still open, and deliberately deferred to a later release rather than guessed at:

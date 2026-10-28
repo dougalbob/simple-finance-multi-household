@@ -61,9 +61,13 @@ bill, and the product text is SPEC §29.
   "no bill recorded" mark for the empty month, the bill list (periods, kWh, paid, p/kWh), both tariff
   cards and a working comparison ("£46.20 a year cheaper on the same usage, from your own 365 days of
   bills"); `/purchases` carried twelve collapsed energy blocks, one per seeded bill.
-- PR checks `gates`, `browser` and `docker` are recorded below once they complete; the browser run is
-  the first execution of `e2e/energy.spec.ts`, because Playwright cannot install in this sandbox
-  (`docs/SANDBOX.md` entries 2 and 4).
+- **All three PR checks passed on run 40669565531** (`gates` 2m19s, `docker` 1m31s, `browser` 20m19s).
+  The browser run is the **first execution** of `e2e/energy.spec.ts`, because Playwright cannot download
+  browsers in this sandbox (`docs/SANDBOX.md` entries 2 and 4), and its first attempt found the three
+  things a browser run exists to find: the new spec never chose a pot (the settings project leaves the
+  till's default cleared, so Save stays disabled), `e2e/bell.spec.ts` pins the drawer's destinations and
+  had not learned about **Energy**, and `e2e/longterm.spec.ts` asserts the guide's heading, which now
+  reads **The ten ideas**. All three are fixed in the same PR.
 
 ## After publication
 
