@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  useActionState,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from 'react';
+import { useActionState, useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   deleteAttachmentAction,
@@ -159,7 +152,7 @@ export function AttachmentForm({
   // true from the first client render: with React on the page the upload is
   // started by the file choice itself (decision 204).
   const [jsReady, setJsReady] = useState(false);
-  useEffect(() => setJsReady(true), []);
+  const formRef = useRef<HTMLFormElement | null>(null);
   // Choosing the file is the whole gesture now: the form submits itself. The
   // browser's own `required` check still runs, and a cancelled picker fires
   // nothing at all.
@@ -171,10 +164,6 @@ export function AttachmentForm({
   /**
    * Post the chosen file to `/api/attachments`.
    *
-   * `jsReady` is the switch: before hydration the browser submits the form to
-   * the server action as a plain POST, and nothing here runs. After it, the
-   * submit is intercepted and the file goes to the route instead.
-   *
    * A refusal from the app always arrives as JSON in the action-state shape, so
    * the sentence is shown exactly as the action would have shown it. Anything
    * else — an HTML block page from a firewall, a proxy or Cloudflare — is
@@ -182,33 +171,64 @@ export function AttachmentForm({
    * from an upload the app refused, and the household should not have to guess
    * which they are looking at.
    */
-  const submitUpload = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    if (!jsReady) return;
-    event.preventDefault();
-    const form = event.currentTarget;
-    setUploading(true);
-    setRouteState(null);
-    try {
-      const response = await fetch('/api/attachments', {
-        method: 'POST',
-        body: new FormData(form),
-      });
-      const payload: unknown = await response.json().catch(() => null);
-      if (isUploadState(payload)) {
-        setRouteState(payload);
-      } else {
-        setRouteState({ status: 'error', message: describeUploadFailure(response.status) });
+  const sendUpload = useCallback(
+    async (form: HTMLFormElement): Promise<void> => {
+      setUploading(true);
+      setRouteState(null);
+      try {
+        const response = await fetch('/api/attachments', {
+          method: 'POST',
+          body: new FormData(form),
+        });
+        const payload: unknown = await response.json().catch(() => null);
+        if (isUploadState(payload)) {
+          setRouteState(payload);
+        } else {
+          setRouteState({ status: 'error', message: describeUploadFailure(response.status) });
+        }
+        if (response.ok) router.refresh();
+      } catch {
+        setRouteState({
+          status: 'error',
+          message: 'The upload could not be sent. Check the connection and try again.',
+        });
+      } finally {
+        setUploading(false);
       }
-      if (response.ok) router.refresh();
-    } catch {
-      setRouteState({
-        status: 'error',
-        message: 'The upload could not be sent. Check the connection and try again.',
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
+    },
+    [router],
+  );
+  /**
+   * The switch between the two front doors, and it is a **native** listener on
+   * purpose (v1.44.1).
+   *
+   * The form carries `action={formAction}` in the served HTML so a browser
+   * without JavaScript still submits the server action — that page has to work
+   * on its own. Once React is on the page the action is **removed** and the
+   * listener below does the work: React 19 drives a form action from its own
+   * root-level submit handling, so `preventDefault()` in a React handler does
+   * not stop it. The browser suite caught exactly that — the first cut of this
+   * release still posted `POST /purchases`, the one thing it exists to stop.
+   * With no action attribute there is nothing for React to run, and the
+   * capture-phase listener stops the event before any ancestor sees it (a form
+   * with no action would otherwise navigate to the current URL).
+   *
+   * Registering the listener and flipping `jsReady` together keeps them in
+   * step: the no-JavaScript button is shown, and the action attribute is
+   * present, exactly while interception is off.
+   */
+  useEffect(() => {
+    const form = formRef.current;
+    if (form === null) return;
+    const intercept = (event: Event): void => {
+      event.preventDefault();
+      event.stopPropagation();
+      void sendUpload(form);
+    };
+    form.addEventListener('submit', intercept, { capture: true });
+    setJsReady(true);
+    return () => form.removeEventListener('submit', intercept, { capture: true });
+  }, [sendUpload]);
   // A file input keeps its value, and re-choosing the *same* file fires no
   // change event — so clear it once each upload has reported back.
   useEffect(() => {
@@ -287,11 +307,7 @@ export function AttachmentForm({
         </ul>
       ) : null}
       {allowUpload ? (
-        <form
-          action={formAction}
-          onSubmit={submitUpload}
-          className="flex flex-wrap items-center gap-2"
-        >
+        <form ref={formRef} action={formAction} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name={words.field} value={ownerId} />
           <input
             id={inputId}
