@@ -1,3 +1,24 @@
+# v1.45.0 — account and supplier purchase links (issues #122 and #120)
+
+- The household-total cards on Overview and Home link each bank/credit-card name to its own
+  `/transactions?potId=…` view; cash names remain plain text and the destination keeps its default
+  date window. The name is linked even when that displayed pot has no checkpoint.
+- Each of the five recent purchases on a supplier card links to its exact row on Purchases by ID,
+  independent of the default 500-row cap, date and other purchases on that date. A visible Purchase
+  filter chip clears just the ID. The card's **All purchases from …** link opens the supplier-filtered
+  history when a record is older than the five shown there. The usual search, filters, editing,
+  refunds and voided history remain in effect; the query uses the request's household database.
+- Stable publication is approved by the owner for an Unraid Force Update. There is no migration,
+  data-format or authentication change. See SPEC §§15.1 and 21.4, decision 270 and the release notes.
+  Follow `docs/RELEASE_PROCESS.md`: one release PR, green PR and main CI, an annotated tag on the
+  exact merge commit, and a successful Publish with all tags verified. Before updating only the
+  multi-household container, back up the households and the Admin registry.
+- Validation: `npm test` passed **1,315/1,315**; typecheck, formatting, theme check and production
+  build passed. The build still reports the existing registry-migration dynamic filesystem tracing
+  warnings. Sixteen distinct targeted Chromium tests passed across mobile and desktop, including both
+  new journeys, the purchase filters, existing Overview/Supplier/Transactions checks, and the
+  credit-card case before its first checkpoint. The preview uses fictional data only.
+
 # v1.44.1 — document uploads post to their own address (2026-10-29)
 
 ## Why this session happened

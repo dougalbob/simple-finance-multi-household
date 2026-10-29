@@ -9,10 +9,9 @@
     - Do not replace or reconfigure the original app (port 3007,
       /mnt/user/appdata/simple-finance).
 
-  v1.44.1 is the stable production release and moves :latest (a document upload
-  now posts to its own address, POST /api/attachments, so a household can exempt
-  that one path from a firewall that scores multipart bodies instead of turning
-  rules off for the whole site). No schema, migration or storage change.
+  v1.45.0 is the stable production release and moves :latest. Bank and credit
+  account names open their own transactions, and supplier purchase history links
+  open the exact purchase. No schema, migration or storage change.
 -->
 <Container version="2">
   <Name>Simple Finance Multi-household</Name>
@@ -49,7 +48,7 @@
   <DonateLink/>
   <Description>
     Simple Finance Multi-household. Stable image: ghcr.io/dougalbob/simple-finance-multi-household:latest.
-    v1.44.1 is the stable production release and moves :latest. A document upload now posts to POST /api/attachments, an address nothing else uses, so a firewall or proxy that inspects multipart bodies (Cloudflare's OWASP ruleset scores them, and a real multi-page PDF bill can cross its anomaly threshold where a one-page render does not) can be given one narrow path exception instead of a zone-wide rule being weakened. The attach control, the 10 MB limit, content sniffing, the audit entry and the no-JavaScript fallback are all unchanged, and a block that happens before the app now reads as one. No schema, migration, data or storage change.
+    v1.45.0 is the stable production release and moves :latest. Bank and credit-card names on Overview and Home open that account on All Transactions; cash remains unlinked. Select a recent purchase on a supplier card to open the exact purchase, or open supplier-filtered history for older records. No schema, migration, data or storage change.
     Internal port 3000; host port 3009. New data root:
     /mnt/user/appdata/simple-finance-multi-household. Do not use the original
     appdata path or original image.

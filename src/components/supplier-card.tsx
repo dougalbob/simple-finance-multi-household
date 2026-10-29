@@ -365,24 +365,39 @@ export function SupplierCard({
             Recent purchases
           </h3>
           {recentPurchases.length > 0 ? (
-            <ul className="space-y-2 text-sm">
-              {recentPurchases.map((purchase) => (
-                <li key={purchase.id}>
-                  <span className={purchase.voided ? 'text-ink-faint line-through' : ''}>
-                    {purchase.date} · {formatPence(purchase.totalPence)}
-                    {purchase.lineLabel === '' ? null : ` · ${purchase.lineLabel}`}
-                  </span>
-                  {purchase.extraLines > 0 ? (
-                    <span className="ml-1 text-xs text-ink-muted">+{purchase.extraLines} more</span>
-                  ) : null}
-                  <AttachmentForm
-                    purchaseId={purchase.id}
-                    attachments={purchase.attachments}
-                    focusId={focusAttachmentId}
-                  />
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="space-y-2 text-sm">
+                {recentPurchases.map((purchase) => (
+                  <li key={purchase.id}>
+                    <Link
+                      href={`/purchases?purchaseId=${purchase.id}#purchase-${purchase.id}`}
+                      className="sf-link"
+                    >
+                      <span className={purchase.voided ? 'text-ink-faint line-through' : ''}>
+                        {purchase.date} · {formatPence(purchase.totalPence)}
+                        {purchase.lineLabel === '' ? null : ` · ${purchase.lineLabel}`}
+                      </span>
+                      <span className="sr-only"> — open this purchase on Purchases</span>
+                    </Link>
+                    {purchase.extraLines > 0 ? (
+                      <span className="ml-1 text-xs text-ink-muted">
+                        +{purchase.extraLines} more
+                      </span>
+                    ) : null}
+                    <AttachmentForm
+                      purchaseId={purchase.id}
+                      attachments={purchase.attachments}
+                      focusId={focusAttachmentId}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs">
+                <Link href={`/purchases?supplierId=${supplier.id}`} className="sf-link-arrow">
+                  All purchases from {supplier.name} →
+                </Link>
+              </p>
+            </>
           ) : (
             <p className="text-sm text-ink-muted">Nothing recorded against this supplier yet.</p>
           )}

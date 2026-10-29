@@ -2,7 +2,7 @@
 
 > **ACTIVE PLAN (approved 2026-10-10):** this repository is the independent multi-household edition. The concise
 > binding contract is [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md); the product requirements are in
-> [`docs/SPEC.md`](SPEC.md). The current stable release is `v1.32.1` (issue #87). Household-scoped storage, verified identity
+> [`docs/SPEC.md`](SPEC.md). The current stable release is `v1.45.0` (issues #122 and #120). Household-scoped storage, verified identity
 > assignment, support consent, tenant-scoped backup/restore, registry recovery and per-request tenant contexts are
 > implemented. Live import of the owner's pre-existing single-household data remains unimplemented and requires a
 > separately approved isolated-copy rehearsal. Decisions below preserve the delivery history; issues #85 and #86 were released as stable
@@ -4623,3 +4623,14 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     HTML file, an oversized body, signed out), the existing pipeline and browser specs unchanged, and
     `e2e/attachments.spec.ts` now asserts the upload posts to `/api/attachments` and **not** to
     `/purchases`. No schema, migration, storage, backup-format or authentication change.
+
+270. **Account and supplier history links (v1.45.0; issues #122 and #120).** In the
+    household-total cards on Home and Overview, bank and credit-card names link to All Transactions
+    for that exact pot, with its ordinary default date window; cash names remain plain text. On a
+    supplier card, each of the five recent purchase summaries links to its exact Purchases row, and a
+    separate supplier-filtered history link makes older entries discoverable. The Purchases page accepts a validated `purchaseId` and applies it in the household-scoped query
+    before the 500-row cap, with a removable **Also filtering: Purchase** chip. This avoids relying
+    on dates or the newest pageful and keeps a re-dated or subsequently voided record reachable.
+    Existing search and other filters still compose with the ID. No schema, authentication, backup
+    or accounting change. Coverage: `tests/purchase-deep-link.test.ts`, `e2e/deep-links.spec.ts`
+    and the uncheckpointed credit-card journey in `e2e/credit-card-pots.spec.ts`.

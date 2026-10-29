@@ -83,9 +83,9 @@ function fromValues(active: PurchaseFilterValues): FilterState {
  * server filters the history, so the count and the total describe what is
  * shown. Everything else waits for **Apply filters**, exactly as before.
  *
- * Links still carry the removed filters — a chart's category, All
- * Transactions' pot, a refund's pot — and the page shows each one as a chip
- * above the results rather than silently applying a filter with no control.
+ * Links still carry filters with no control here — a chart's category, All
+ * Transactions' pot, or a supplier history's purchase ID — and the page shows
+ * each as a chip above the results rather than applying it silently.
  * Those chips are the page's business (`page.tsx`), not the form's.
  */
 export function PurchaseFilterForm({

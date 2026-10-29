@@ -29,6 +29,24 @@ test('credit-card debt stays netted from household total, outside liquidity, wit
   await addPot.getByRole('button', { name: 'Add pot' }).click();
   await expect(addPot.getByRole('status')).toContainText('Pot “Everyday card” created.');
 
+  // A non-cash card is an account too. Its name opens the right activity
+  // even before the household has recorded its first checkpoint.
+  await page.goto('/overview');
+  const cardTile = page.locator('section[aria-labelledby="money-heading"] li').filter({
+    hasText: 'Everyday card',
+  });
+  await expect(cardTile).toContainText('no checkpoint');
+  const cardLink = cardTile.getByRole('link', { name: 'View transactions for Everyday card' });
+  const cardUrl = new URL((await cardLink.getAttribute('href')) ?? '', 'http://test');
+  expect(cardUrl.pathname).toBe('/transactions');
+  expect(cardUrl.searchParams.get('potId')).toMatch(/^\d+$/);
+  await cardLink.click();
+  await expect(page.getByLabel('Target', { exact: true })).toHaveValue(
+    cardUrl.searchParams.get('potId') ?? '',
+  );
+  await expect(page.locator('#activity-pot option:checked')).toHaveText('Everyday card');
+  await page.goto('/pots');
+
   const checkpoint = page.locator('section[aria-labelledby="add-checkpoint-heading"]');
   await checkpoint.getByLabel('Pot').selectOption({ label: 'Everyday card (credit card)' });
   await checkpoint.getByLabel('Balance right now').fill('-50.00');

@@ -1,3 +1,13 @@
+**v1.45.0 — Account and supplier purchase links (2026-10-29):** issues #122 and #120 add navigation
+only: a non-cash account name on Overview or Home opens that account on All Transactions; a recent
+supplier purchase opens its exact Purchases record, and a supplier-filtered history link reaches older
+entries. ID filtering is household-scoped and happens before the history cap; cash remains plain text.
+No schema, migration, backup-format, data or storage change. See
+[release notes](docs/RELEASE_NOTES_v1.45.0.md) and decision 270. Before Unraid **Force Update**, back
+up households and the Admin registry; use only `ghcr.io/dougalbob/simple-finance-multi-household:latest`,
+appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never alter the original
+installation or port 3007.
+
 **v1.44.1 — Document uploads post to their own address (2026-10-29):** the attach control posts
 multipart to **`POST /api/attachments`**, not to the page showing the document. Every other form here
 posts back to its own URL, so an upload was a `POST /purchases` — the same path the till saves a
@@ -23,7 +33,7 @@ thousandths of a penny and readings in ten-thousandths, exactly as a UK bill pri
 no bill draws no bar; gas is never converted from m³ (the implied factor is checked instead). The
 purchase keeps the money — a direct debit is not the bill — and migration `0022_energy_bills.sql` adds
 one optional side table, with the meter setup and tariffs in the existing audited settings store. The
-issue's second ask (clickable Overview pot names) is **held** and stays open on #118. No
+issue's second ask (clickable Overview pot names) was held and is delivered in v1.45.0 (#122). No
 authentication, household-separation, storage-path or backup-format change; back up the household and
 the registry before updating, because the container applies `0022` at start-up. Image
 `ghcr.io/dougalbob/simple-finance-multi-household:v1.44.0` (stable also moves `latest`), appdata

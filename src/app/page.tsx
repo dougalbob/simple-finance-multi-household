@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { PotTransactionLink } from '@/components/pot-transaction-link';
 import { GettingStartedCard } from '@/components/getting-started';
 import { NeedsFirst } from '@/components/needs-first';
 import { QuickEntry } from '@/components/quick-entry';
@@ -169,7 +170,9 @@ function MoneySection({ money }: { money: MoneySnapshot }) {
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {money.pots.map((view) => (
             <li key={view.pot.id} className="rounded-lg bg-canvas px-3 py-2">
-              <p className="text-xs text-ink-muted">{view.pot.label}</p>
+              <p className="text-xs text-ink-muted">
+                <PotTransactionLink pot={view.pot} />
+              </p>
               {view.estimatePence === null ? (
                 <p className="text-sm text-ink-faint">no checkpoint</p>
               ) : (
