@@ -4596,3 +4596,30 @@ tests/household.ts            — isolated household fixture (pots, people, vehi
     **Smart meters stay off**, because that is the default and the browser spec proves the reading
     boxes stay out of the way until a household ticks them. No money figure moves: only the optional
     usage rows are written, so every spec that asserts a total is unaffected.
+
+269. **A document upload gets an address of its own (v1.44.1).** A household could not attach its
+    four-page EDF energy bill: the browser's `POST` at `/purchases?q=edf` came back **403** with
+    Cloudflare's own headers (`server: cloudflare`, a `cf-ray`, `x-frame-options: SAMEORIGIN` — not the
+    app's `DENY`, which it never reached). The diagnosis came in stages, each one narrowing it: JPGs
+    uploaded fine; a 1 MB JPG fine; a 160 KB bill failed; another random PDF fine; printing page 1 of
+    the same bill to a new PDF *passed*, printing two pages *failed*. So the decision was made on the
+    **body**, not on the file type, the file name, the size or the session — the signature of
+    Cloudflare's OWASP Core Ruleset scoring multipart content, where a real bill's PDF byte sequences
+    and text cross the anomaly-score threshold that a single page does not (the same failure people hit
+    with `949110: Inbound Anomaly Score Exceeded`). Nothing in the app could produce that response: the
+    action only ever answers with a message, and no route in the app returns 403 for an upload.
+    The fix is **structural rather than a WAF exception**: every form here posts back to its own page
+    URL, so the upload was `POST /purchases` — the same path the till saves a purchase to — and any
+    exception would also exempt ordinary saves. A new route, **`POST /api/attachments`**, gives the
+    upload an address that nothing else uses, so a household can exempt one path (method `POST`, path
+    `/api/attachments`) instead of weakening the zone with a paranoia-level drop. The route is not a
+    second pipeline: the form-reading moved into `src/lib/records/attachment-upload.ts`, which both the
+    route and the server action call, and `storeAttachment` still sniffs the bytes, enforces 10 MB,
+    writes the file and the audit entry. The action stays as the **no-JavaScript fallback**. Because
+    the route always answers JSON in the action-state shape, the form can tell an app refusal from an
+    HTML block page and names the latter as a firewall or proxy refusal rather than showing an
+    unhandled RSC error. A declared body over ~11 MB is refused before it is read. Evidence:
+    `tests/attachment-upload-route.test.ts` (attach a PDF, no file, two owners, cross-origin, a renamed
+    HTML file, an oversized body, signed out), the existing pipeline and browser specs unchanged, and
+    `e2e/attachments.spec.ts` now asserts the upload posts to `/api/attachments` and **not** to
+    `/purchases`. No schema, migration, storage, backup-format or authentication change.

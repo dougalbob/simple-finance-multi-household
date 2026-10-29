@@ -24,8 +24,8 @@ import {
   AttachmentNotFoundError,
   deleteAttachment,
   renameAttachmentFile,
-  storeAttachment,
 } from '@/lib/records/attachments';
+import { uploadAttachmentFromForm } from '@/lib/records/attachment-upload';
 import { toLocalDateString } from '@/lib/time';
 import { editEnergyBill, NotAnEnergyPurchaseError } from '@/lib/records/energy';
 import {
@@ -404,31 +404,19 @@ export async function uploadAttachmentAction(
   const user = await householdContextFromRequest();
   if (!user) return NOT_SIGNED_IN;
   if (user.readOnly) return READ_ONLY_VIEW;
-  // A purchase's receipt, (v0.10.0, decision 138) an income record's
-  // document, or (v0.25.0, decision 175) a supplier's letter or policy — the
-  // form posts exactly one of the three ids.
-  const purchaseId = positiveNumber(formData.get('purchaseId'));
-  const receiptId = positiveNumber(formData.get('receiptId'));
-  const supplierId = positiveNumber(formData.get('supplierId'));
-  const ownerCount = [purchaseId, receiptId, supplierId].filter((id) => id !== null).length;
-  const file = formData.get('file');
-  if (ownerCount !== 1 || !(file instanceof File) || file.size === 0)
-    return { status: 'error', message: 'Choose a file to attach.' };
-
-  const bytes = Buffer.from(await file.arrayBuffer());
   try {
+    // A purchase's receipt, (v0.10.0, decision 138) an income record's
+    // document, or (v0.25.0, decision 175) a supplier's letter or policy — the
+    // form posts exactly one of the three ids.
     // One shared pipeline for sniffing, limits, storage keys and the audit
     // entry (SPEC §23): the action, the serving route and the backup engine
-    // cannot drift apart.
-    const stored = await storeAttachment({
+    // cannot drift apart. The *form reading* is shared too, because this
+    // action is now only the no-JavaScript fallback — with React on the page
+    // the browser posts the same fields to `POST /api/attachments` (v1.44.1),
+    // so that a firewall can be told to leave one path alone.
+    const stored = await uploadAttachmentFromForm({
+      form: formData,
       db: user.db,
-      ...(purchaseId !== null
-        ? { purchaseId }
-        : supplierId !== null
-          ? { supplierId }
-          : { receiptId: receiptId as number }),
-      originalName: file.name,
-      bytes,
       actor: user.email,
       documentsDir: user.documentsDir,
     });

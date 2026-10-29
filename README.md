@@ -1,3 +1,16 @@
+**v1.44.1 — Document uploads post to their own address:** the attach control now posts to
+`POST /api/attachments`, a path nothing else uses. Every other form here posts back to its own page,
+so an upload used to be a `POST /purchases` — the same path the till saves a purchase to — which left a
+household unable to exempt document uploads from anything (a firewall, a proxy, Cloudflare's OWASP
+ruleset, which scores multipart bodies and can block a real multi-page PDF bill while a one-page render
+passes) without also exempting every purchase save. The pipeline behind it is unchanged: the same
+content sniffing, the same 10 MB limit, the same audit entry, and the server action remains the
+no-JavaScript fallback. A block from something in front of the app is now named as one rather than
+surfacing an unhandled error. No schema, migration or storage change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.44.1` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. See
+[release notes](docs/RELEASE_NOTES_v1.44.1.md), [handoff](docs/HANDOFF.md) and decision 269.
+
 **v1.44.0 — Energy tracking (issue 118):** any purchase paid under **Utilities / Energy** can carry an
 optional, collapsed **Energy details** block — the bill's gas and electricity kWh, the billing period,
 meter readings only where the meter is smart, and the supplier's printed estimated annual usage. A new
