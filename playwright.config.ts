@@ -77,6 +77,12 @@ export default defineConfig({
           use: { viewport: { width: 1400, height: 950 } },
         },
         {
+          // Read-only navigation paths, checked at phone and desktop widths.
+          name: 'deep-links',
+          testMatch: /deep-links\.spec\.ts/,
+          use: { viewport: { width: 1400, height: 950 } },
+        },
+        {
           // Own project: testMatch is per-project, so a new spec file is not picked
           // up by mobile/desktop; include attachment and document specs explicitly.
           name: 'attachments',

@@ -11,6 +11,7 @@ import { formatPence } from '@/lib/money';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { categoryTree } from '@/lib/records/categories';
 import { buildEntryData } from '@/lib/records/entry-view';
+import { parseOpenRecordId } from '@/lib/records/in-place-activity';
 import { listPeople } from '@/lib/records/people';
 import { listPots } from '@/lib/records/pots';
 import {
@@ -51,6 +52,8 @@ const MONTH_NAMES = [
 ];
 
 interface SearchParams {
+  /** A specific purchase, e.g. a link from a supplier's history. */
+  purchaseId?: string | string[];
   from?: string;
   to?: string;
   potId?: string;
@@ -146,8 +149,10 @@ export default async function PurchasesPage({
   // The Documents search links a receipt back to its purchase row with
   // `?attachment=<id>`; the row scrolls to and rings that document.
   const focusAttachmentId = toNumber(params.attachment) ?? null;
+  const linkedPurchaseId = parseOpenRecordId(params.purchaseId);
 
   const filters: PurchaseFilters = {
+    purchaseId: linkedPurchaseId ?? undefined,
     potId: toNumber(params.potId),
     supplierId: toNumber(params.supplierId),
     categoryId: resolvedCategoryIds.length === 1 ? resolvedCategoryIds[0] : undefined,
@@ -190,7 +195,8 @@ export default async function PurchasesPage({
   // The Supplier and Category drop-downs are gone (the search replaces them),
   // but links still carry those filters — a chart's category, All
   // Transactions' pot, a refund's pot — so each one is shown as a chip above
-  // the results rather than being applied invisibly.
+  // the results rather than being applied invisibly. A link to an individual
+  // purchase is surfaced the same way, so it can be cleared independently.
   const categoryFilterLabels = new Map<number, string>();
   for (const parent of tree) {
     categoryFilterLabels.set(parent.id, `${parent.name} / all children`);
@@ -202,6 +208,14 @@ export default async function PurchasesPage({
   const supplierNames = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
   const personNames = new Map(people.map((person) => [person.id, person.label]));
   const linkedFilters: LinkedFilter[] = [];
+  if (linkedPurchaseId !== null) {
+    linkedFilters.push({
+      key: `purchase-${linkedPurchaseId}`,
+      kind: 'Purchase',
+      value: `#${linkedPurchaseId}`,
+      href: purchasesHrefWithout(params, { key: 'purchaseId' }),
+    });
+  }
   const linkedPotId = toNumber(params.potId);
   if (linkedPotId !== undefined) {
     linkedFilters.push({

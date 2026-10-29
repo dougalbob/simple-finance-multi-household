@@ -1,6 +1,6 @@
 # Simple Finance — Product Specification
 
-**Status:** original single-household requirements were agreed 2026-09-20; the multi-household direction and decisions below were approved 2026-10-10. This is the authoritative product spec for the independent multi-household edition. The current stable product includes household-scoped storage, verified identity assignment, support consent, and tenant-scoped backup/restore. Stable release v1.31.0 includes GitHub issues #85 and #86: the audited household payday setting and revised Getting Started guidance. No schema or backup-format change.
+**Status:** original single-household requirements were agreed 2026-09-20; the multi-household direction and decisions below were approved 2026-10-10. This is the authoritative product spec for the independent multi-household edition. The current stable product includes household-scoped storage, verified identity assignment, support consent, and tenant-scoped backup/restore. Stable release v1.45.0 adds direct links to account activity and original supplier purchases (issues #122 and #120). No schema or backup-format change.
 **Companion documents:** [`docs/MULTI_HOUSEHOLD_PLAN.md`](MULTI_HOUSEHOLD_PLAN.md) (active isolation, storage and release contract), `docs/HANDOFF.md` (session continuation point), and `docs/IMPLEMENTATION_PLAN.md` (phases and dated decisions). `AGENT_APP_BLUEPRINT.md` is historical and its original product-specific defaults are superseded here.
 
 > **Privacy notice — applies to this entire repository.**
@@ -860,6 +860,12 @@ laptop-first chore, reachable from the drawer as one item. The drawer leads with
 Horizon, Charts, Overview and Recurring; everything else sits in a second group. The laptop keeps the full
 navigation bar and opens on Overview when the household sits down.
 
+**Account links (issue #122).** In the household-total cards on Home and Overview, each bank or
+credit-card pot name links to All Transactions with that pot selected. The destination keeps its
+normal default date window; even an account with no checkpoint has a link when its name is shown.
+Cash pot names remain plain text. These are links to the household's own recorded activity, not a
+connection to the bank.
+
 Home = four big actions:
 
 1. **Add Purchase (redesigned v0.9.0, re-laid out v0.11.0)**. Two cards.
@@ -1091,9 +1097,10 @@ work of issue #98:
   *before* the 500-row cap, so the count, the net total and "up to 500 newest matches" all describe
   the matches. The heading says `N entries matching “…”`.
 - **Chips for filters with no control.** A link can still arrive with a category (a chart bar, the
-  Overview page), a pot (All Transactions, a refund's own link) or a supplier/payer. Rather than
-  applying a filter the form cannot show, the page lists each as an **Also filtering** chip above the
-  results; clicking one removes only that filter and keeps everything else in the URL. Clearing the
+  Overview page), a pot (All Transactions, a refund's own link), a supplier/payer or an individual
+  purchase (a supplier's history). Rather than applying a filter the form cannot show, the page lists
+  each as an **Also filtering** chip above the results; clicking one removes only that filter and
+  keeps everything else in the URL. Clearing the
   search (the box's own Clear search, or the empty state's link) likewise keeps the rest.
 - **No match** says "Nothing matches “…” in the supplier, category or notes" and offers
   **Clear the search**, instead of the generic empty-filter sentence.
@@ -2145,6 +2152,16 @@ A purchase **split across several targets** shows its first line and counts the 
 split stays one click away on Purchases. The card shows the **child** category only (`Mobile Phones`, not
 `Utilities / Mobile Phones`): the cards sit two-to-a-row on a laptop and full width on a phone, and the
 supplier already implies the parent. Voided purchases keep their struck-through styling.
+
+**Open the original (issue #120).** Each recent purchase's date, amount and line summary is a link to
+`/purchases?purchaseId=<id>#purchase-<id>`, where the original complete purchase row is visible and
+can be reviewed or corrected. The ID is applied before the 500-row cap, so an old purchase, one of
+several on the same day, a refund or a record re-dated after the link was made still resolves to the
+right record. Purchases shows an **Also filtering: Purchase** chip; removing it returns to the wider
+history while preserving any other filters. The card also links **All purchases from <supplier>** to
+Purchases filtered by that supplier, so the five-row summary does not strand older records. A missing
+ID shows no results, malformed IDs are ignored, and all reads stay within the household selected on
+the server.
 
 ## 22. Contracts, renewals and key-date alerts
 

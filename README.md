@@ -1,3 +1,12 @@
+**v1.45.0 — Account and supplier purchase links:** select a bank or credit-card name on Overview or
+Home to open that account on All Transactions; cash stays plain text (#122). A recent purchase on a
+supplier card opens the exact record on Purchases, and a supplier-filtered history link reaches older
+records (#120). No schema, migration, backup-format, data or storage change. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.45.0` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Back up each household and the
+Admin registry before updating only the multi-household container; never alter the original. See
+[release notes](docs/RELEASE_NOTES_v1.45.0.md), [handoff](docs/HANDOFF.md) and decision 270.
+
 **v1.44.1 — Document uploads post to their own address:** the attach control now posts to
 `POST /api/attachments`, a path nothing else uses. Every other form here posts back to its own page,
 so an upload used to be a `POST /purchases` — the same path the till saves a purchase to — which left a
@@ -19,7 +28,7 @@ tariff per fuel and compares a typed quote on the household's own usage. Arithme
 fetched and nothing is recommended. A month with no bill is drawn as a gap rather than a zero, and gas
 is never converted from m³ behind the household's back. Migration `0022_energy_bills.sql` adds one
 optional side table; back up the household and the Admin registry before updating. The issue's second
-ask — clickable pot names on Overview — is held and stays open. Image
+ask — clickable pot names on Overview — was held and is delivered in v1.45.0 (#122). Image
 `ghcr.io/dougalbob/simple-finance-multi-household:v1.44.0` (stable also moves `latest`), appdata
 `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. See
 [release notes](docs/RELEASE_NOTES_v1.44.0.md), [handoff](docs/HANDOFF.md) and decisions 267–268.

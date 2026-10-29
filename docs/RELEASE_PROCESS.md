@@ -4,6 +4,19 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.45.0 — account and supplier purchase links (2026-10-29)
+
+Stable release for issues #122 and #120, approved by the owner for an Unraid Force Update. Account
+names link to All Transactions and supplier history entries open their exact Purchases record; a
+supplier-filtered history link reaches older entries. UI/navigation only: no schema, migration,
+backup-format, auth or storage-path change. See `docs/RELEASE_NOTES_v1.45.0.md` and decision 270.
+
+Use the one-PR, one-merge, main-CI and exact-merge-commit annotated-tag procedure below. Publish only
+`ghcr.io/dougalbob/simple-finance-multi-household` as `:v1.45.0`, `:latest` and `:sha-<short>`;
+verify that all three share the published digest and that GitHub Latest includes the checked-in icon.
+Before the owner's Force Update, back up the households and Admin registry. Preserve the separate
+multi-household appdata and host port **3009**; never alter the original installation or port 3007.
+
 ## v1.44.1 — Document uploads post to their own address (2026-10-29)
 
 A live household could not attach a four-page PDF energy bill: the browser's POST came back 403 with

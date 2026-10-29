@@ -584,6 +584,8 @@ export function getPurchaseWithLines(db: Db | DbTx, purchaseId: number): Purchas
 }
 
 export interface PurchaseFilters {
+  /** A link to one specific purchase; applied before the history's row cap. */
+  purchaseId?: number;
   potId?: number;
   supplierId?: number;
   categoryId?: number;
@@ -643,8 +645,8 @@ export function sumListedPurchasesPence(rows: readonly PurchaseWithLines[]): num
 
 /**
  * Purchase history with the review-table filters (SPEC §15.2 Purchases
- * page, Phase 4a): date range, pot, supplier, category, target, paid-by
- * person and the "from schedule" / refund / voided tags. Voided records are
+ * page, Phase 4a): purchase ID, date range, pot, supplier, category, target,
+ * paid-by person and the "from schedule" / refund / voided tags. Voided records are
  * excluded unless explicitly requested (or the voided tag is active).
  * Line-level filters (category/target) match purchases; a matched purchase
  * returns with all of its lines, receipt-style.
@@ -688,6 +690,9 @@ export function listPurchases(db: Db | DbTx, filters: PurchaseFilters = {}): Pur
   }
 
   const conditions = [];
+  if (filters.purchaseId !== undefined) {
+    conditions.push(eq(purchases.id, filters.purchaseId));
+  }
   if (purchaseIds !== null) {
     conditions.push(inArray(purchases.id, purchaseIds));
   }
