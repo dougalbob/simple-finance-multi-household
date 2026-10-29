@@ -45,8 +45,20 @@ button. An upload needs an address of its own.
 
 ## Validation
 
-- `npx tsc --noEmit` clean; `npx tsx --test tests/attachment-upload-route.test.ts` **7/7**.
-- Full suite, format, themes, build, audit and the browser run: recorded below once the PR has run.
+- `npx tsc --noEmit` clean; `npx tsx --test tests/attachment-upload-route.test.ts` **7/7**; the full
+  suite **1,312/1,312 across 298 suites**; `format:check`, `themes:check`, `npm audit --omit=dev`
+  (0 vulnerabilities) and `next build` (lists `ƒ /api/attachments`) all clean.
+- A live seeded server took a real multipart PDF (`200` with `{"status":"ok","message":"Attached
+  smoke.pdf."}`), stored the row with `mime = application/pdf`, and refused a cross-origin post with
+  `403`.
+- **The browser run earned its keep again.** The first cut intercepted the submit with a React
+  `onSubmit`; the suite failed with `Received array: ["/api/presence", "/api/presence", "/purchases"]`
+  — React 19 runs a form `action` from its own root-level submit handling, so `preventDefault()` in a
+  React handler does not stop it and the upload still left as `POST /purchases`. The fix keeps the
+  action in the served HTML for the no-JavaScript path and **removes it once a capture-phase listener
+  is attached**, so there is nothing left for React to run. All three PR checks then passed
+  (`gates` 1m50s, `docker` 1m39s, `browser` 13m21s), and the spec now asserts the upload posts to
+  `/api/attachments` and **not** to `/purchases`.
 
 ## What the household should do in Cloudflare
 
