@@ -2344,6 +2344,28 @@ is shareable; the server scopes the query to the verified household and returns 
 attachments, capped at 100 results. Renaming a document is what makes `vehicle mot` find a
 photographed MOT, and the search reads the renamed name immediately.
 
+### 23.6 Where an upload is posted (v1.44.1)
+
+The browser posts a document to **`POST /api/attachments`** — its own address, not the page the
+document is shown on. Every other form in the app posts back to its own URL, which made an attachment
+a `POST /purchases`: indistinguishable by path from a purchase saved at the till, so a household could
+not exempt document uploads from anything (a firewall, a proxy, Cloudflare's OWASP ruleset) without
+also exempting every purchase save. Cloudflare's managed rules score the request **body**, and a real
+four-page energy bill accumulates enough PDF byte sequences to cross the anomaly threshold while a
+one-page render of the same bill does not — a false positive that should be answered with one narrow
+path exception, not by weakening the zone.
+
+The route answers **JSON in the action-state shape** (`{ status, message }`, `private, no-store`),
+uses the same household context and same-origin guard as every other mutating route, and runs the same
+`storeAttachment` pipeline through one shared form-reading module (`attachment-upload.ts`) that the
+server action also calls. The action therefore remains the **no-JavaScript fallback** and accepts
+exactly the same form; the two front doors cannot drift apart.
+
+Because a firewall's block page is HTML and not that shape, the form can tell the two apart and says
+so: an upload stopped **before** the app is named as a firewall or proxy refusal instead of surfacing
+an unhandled React error. The 10 MB per-file limit (§23) is unchanged; a request declaring a body over
+11 MB is refused without being read.
+
 ## 24. Credit-card pots, statement reviews and promotional dates
 
 A credit card is a pot for accurate bookkeeping, not a source of liquidity:

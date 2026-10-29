@@ -1,3 +1,18 @@
+**v1.44.1 — Document uploads post to their own address (2026-10-29):** the attach control posts
+multipart to **`POST /api/attachments`**, not to the page showing the document. Every other form here
+posts back to its own URL, so an upload was a `POST /purchases` — the same path the till saves a
+purchase to — and no firewall exception could separate the two. Cloudflare's OWASP ruleset scores
+multipart bodies, and a four-page PDF bill can cross its anomaly threshold where a one-page render does
+not (diagnosed from a live household: JPEGs fine, another PDF fine, page 1 of the bill fine, two pages
+blocked). The route and the server action call one shared form-reading module and the same
+`storeAttachment` pipeline (sniffing, 10 MB limit, audit); the action remains the no-JavaScript
+fallback. The route answers JSON in the action-state shape so a block that happens **before** the app
+is reported as a firewall/proxy refusal. No schema, migration, storage, backup-format or
+authentication change. Image `ghcr.io/dougalbob/simple-finance-multi-household:v1.44.1` (stable also
+moves `latest`), appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**, never
+the original installation or 3007. See [release notes](docs/RELEASE_NOTES_v1.44.1.md), SPEC §23.6,
+decision 269 and decision 267 for the energy feature this follows.
+
 **v1.44.0 — energy tracking (issue 118, 2026-10-28):** any purchase paid under **Utilities / Energy**
 can carry an optional, collapsed **Energy details** block — the bill's gas and electricity kWh, the
 billing period, meter readings **only where the meter is smart**, and the supplier's printed estimated

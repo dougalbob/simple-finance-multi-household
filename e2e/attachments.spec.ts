@@ -101,6 +101,14 @@ test.describe('renaming a receipt', () => {
     // the upload asks for nothing but the file.
     await expect(attachForm.locator('input[name="label"]')).toHaveCount(0);
 
+    // v1.44.1: a document upload has its own address. It used to be a POST to
+    // the page showing it — `/purchases`, the same path the till saves a
+    // purchase to — which left a household no way to exempt uploads from a
+    // firewall that scores multipart bodies without also exempting every save.
+    const posts: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST') posts.push(new URL(request.url()).pathname);
+    });
     await row.locator('input[type="file"]').setInputFiles({
       name: uploadedName,
       mimeType: 'image/png',
@@ -108,6 +116,8 @@ test.describe('renaming a receipt', () => {
     });
     const chip = row.getByRole('link', { name: new RegExp(uploadedName) });
     await expect(chip).toBeVisible({ timeout: 30_000 });
+    expect(posts).toContain('/api/attachments');
+    expect(posts).not.toContain('/purchases');
 
     const renamePanel = row.locator('details').filter({ hasText: 'Rename' }).first();
     const nameBox = renamePanel.locator('input[name="name"]');

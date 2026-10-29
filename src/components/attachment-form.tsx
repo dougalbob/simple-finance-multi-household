@@ -1,13 +1,21 @@
 'use client';
 
-import { useActionState, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import {
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from 'react';
+import { useRouter } from 'next/navigation';
 import {
   deleteAttachmentAction,
   renameAttachmentAction,
   uploadAttachmentAction,
 } from '@/app/actions';
 import { AttachmentViewer } from './attachment-viewer';
-import { initialActionState } from '@/lib/action-state';
+import { initialActionState, type ActionState } from '@/lib/action-state';
 import { formatAttachmentSize } from '@/lib/format';
 
 export interface AttachmentSummary {
@@ -26,6 +34,38 @@ export interface AttachmentSummary {
 /** The name a document is shown and downloaded by. */
 export function attachmentDisplayName(attachment: { originalName: string }): string {
   return attachment.originalName;
+}
+
+/** A route reply in the action-state shape, or anything else. */
+function isUploadState(value: unknown): value is ActionState {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as { status?: unknown; message?: unknown };
+  return (
+    (candidate.status === 'ok' || candidate.status === 'error' || candidate.status === 'idle') &&
+    (candidate.message === null || typeof candidate.message === 'string')
+  );
+}
+
+/**
+ * What to say when the reply was not the app's own.
+ *
+ * A 403 or a 413 that carries HTML did not come from `POST /api/attachments`:
+ * that route always answers JSON. It came from something standing in front of
+ * the app — most often a firewall scoring the multipart body, which is exactly
+ * what happened to this household's four-page energy bill while a one-page
+ * render passed (v1.44.1). Naming it saves an hour of guessing.
+ */
+function describeUploadFailure(status: number): string {
+  if (status === 403) {
+    return 'Something in front of the app refused that upload (403). The app never saw the file — check firewall or proxy rules for this document.';
+  }
+  if (status === 413) {
+    return 'Attachments must be 10 MB or smaller.';
+  }
+  if (status === 401) {
+    return 'Sign in again to attach documents.';
+  }
+  return `The upload failed (${status || 'no response'}). Nothing was attached — try again.`;
 }
 
 /**
@@ -97,7 +137,20 @@ export function AttachmentForm({
     attachment: AttachmentSummary;
     trigger: HTMLAnchorElement;
   } | null>(null);
-  const [state, formAction, pending] = useActionState(uploadAttachmentAction, initialActionState);
+  const router = useRouter();
+  // The server action is the **no-JavaScript fallback** only (v1.44.1). With
+  // React on the page the form posts the same fields to its own address,
+  // `POST /api/attachments`, so a household can point a firewall exception at
+  // one path instead of the page's own URL — which is also the URL the till
+  // saves a purchase to.
+  const [actionState, formAction, actionPending] = useActionState(
+    uploadAttachmentAction,
+    initialActionState,
+  );
+  const [routeState, setRouteState] = useState<ActionState | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const state: ActionState = routeState ?? actionState;
+  const pending = uploading || actionPending;
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const listRef = useRef<HTMLUListElement | null>(null);
@@ -114,6 +167,47 @@ export function AttachmentForm({
     const form = event.currentTarget.form;
     if (form === null) return;
     form.requestSubmit();
+  };
+  /**
+   * Post the chosen file to `/api/attachments`.
+   *
+   * `jsReady` is the switch: before hydration the browser submits the form to
+   * the server action as a plain POST, and nothing here runs. After it, the
+   * submit is intercepted and the file goes to the route instead.
+   *
+   * A refusal from the app always arrives as JSON in the action-state shape, so
+   * the sentence is shown exactly as the action would have shown it. Anything
+   * else — an HTML block page from a firewall, a proxy or Cloudflare — is
+   * named as such: an upload stopped *before* the app is a different problem
+   * from an upload the app refused, and the household should not have to guess
+   * which they are looking at.
+   */
+  const submitUpload = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    if (!jsReady) return;
+    event.preventDefault();
+    const form = event.currentTarget;
+    setUploading(true);
+    setRouteState(null);
+    try {
+      const response = await fetch('/api/attachments', {
+        method: 'POST',
+        body: new FormData(form),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (isUploadState(payload)) {
+        setRouteState(payload);
+      } else {
+        setRouteState({ status: 'error', message: describeUploadFailure(response.status) });
+      }
+      if (response.ok) router.refresh();
+    } catch {
+      setRouteState({
+        status: 'error',
+        message: 'The upload could not be sent. Check the connection and try again.',
+      });
+    } finally {
+      setUploading(false);
+    }
   };
   // A file input keeps its value, and re-choosing the *same* file fires no
   // change event — so clear it once each upload has reported back.
@@ -193,7 +287,11 @@ export function AttachmentForm({
         </ul>
       ) : null}
       {allowUpload ? (
-        <form action={formAction} className="flex flex-wrap items-center gap-2">
+        <form
+          action={formAction}
+          onSubmit={submitUpload}
+          className="flex flex-wrap items-center gap-2"
+        >
           <input type="hidden" name={words.field} value={ownerId} />
           <input
             id={inputId}

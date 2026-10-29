@@ -4,6 +4,26 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.44.1 — Document uploads post to their own address (2026-10-29)
+
+A live household could not attach a four-page PDF energy bill: the browser's POST came back 403 with
+Cloudflare's headers, while JPEGs, a 1 MB JPEG, another PDF and even page 1 of the same bill printed to
+a new PDF all succeeded. The decision was therefore made on the request **body** — Cloudflare's OWASP
+Core Ruleset scoring multipart content — and the app never saw the request. Because every form here
+posts back to its own page URL, the upload was a `POST /purchases`, indistinguishable from a till save,
+so no narrow firewall exception was possible. Ship one stable patch: `POST /api/attachments` as the
+upload's own address, the shared form-reading module that both the route and the server action call,
+the action kept as the no-JavaScript fallback, the JSON-in-action-state reply and the named
+firewall/proxy failure message, tests, SPEC §23.6, decision 269, version metadata, release notes, this
+file, README, AGENTS, the plan, the handoff and the Unraid template — **one PR**. Require PR `gates`,
+`browser` and `docker`, merge once with a merge commit, require main CI, then place annotated `v1.44.1`
+on the exact merge commit and verify Publish pushed only to
+`ghcr.io/dougalbob/simple-finance-multi-household` with `v1.44.1`, `latest` and `sha-<short>` on one
+digest, plus the GitHub Latest release carrying the icon asset. No migration; publication authorises an
+Unraid **Force Update** but is not itself a deployment. Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or 3007.
+
 ## v1.44.0 — energy tracking (issue 118, 2026-10-28)
 
 The household asked for optional, hidden-by-default energy tracking on the purchase its energy direct

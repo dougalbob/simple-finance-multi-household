@@ -1,3 +1,68 @@
+# v1.44.1 — document uploads post to their own address (2026-10-29)
+
+## Why this session happened
+
+A live household could not attach its **four-page EDF energy bill** to a purchase. The browser's
+request came back **403** carrying Cloudflare's own headers (`server: cloudflare`, a `cf-ray`,
+`x-frame-options: SAMEORIGIN` — not the app's `DENY`, which the request never reached). The app was
+clearly not the one refusing: the upload action only ever answers with a sentence, and no route in the
+app returns 403 for an upload.
+
+The diagnosis narrowed in stages, and every stage mattered: JPEGs were fine, a **1 MB JPEG** was fine,
+a random PDF was fine, the 160 KB bill failed, **page 1 of the bill printed to a new PDF passed**, and
+**two pages of the same bill failed**. So the decision is made on the request **body** — file type,
+name, size, session and machine are all excluded. That is Cloudflare's OWASP Core Ruleset scoring
+`multipart/form-data`: a real bill's PDF bytes and text cross the anomaly-score threshold
+(`949110: Inbound Anomaly Score Exceeded`) where one page does not.
+
+## Why the fix is code and not a WAF setting
+
+Every form in this app posts back to its own page URL, so the upload was `POST /purchases?q=edf` — the
+same path the till saves a purchase to. A path-scoped exception there would also exempt ordinary saves,
+and the blunt alternative (dropping the zone's OWASP paranoia level) weakens every page to fix one
+button. An upload needs an address of its own.
+
+## What this session built
+
+- **`src/app/api/attachments/route.ts`** — `POST /api/attachments`: the same household context and
+  same-origin guard as every other mutating route, a declared-length guard (over ~11 MB answered
+  `413` before the body is read), and the shared upload call. It always answers **JSON in the action
+  state shape** (`{ status, message }`, `private, no-store`), so the form can tell an app refusal from
+  an HTML block page.
+- **`src/lib/records/attachment-upload.ts`** — the form reading (exactly one owner id, the file) moved
+  out of the server action so **both front doors call it**: the route for browsers with React, the
+  action for the no-JavaScript fallback. `storeAttachment` is untouched, so sniffing, the 10 MB limit,
+  the storage key, the row and the audit entry are the same pipeline as before.
+- **`src/components/attachment-form.tsx`** — the submit is intercepted once React is on the page and
+  the file goes to the route; a success calls `router.refresh()` so the chip appears without a reload.
+  A reply that is not the app's own shape becomes *"Something in front of the app refused that upload
+  (403). The app never saw the file — check firewall or proxy rules for this document."*
+- **`tests/attachment-upload-route.test.ts`** (7 tests) — attaches a real PDF and asserts the row and
+  MIME; refuses no file, two owners, a cross-origin post, an HTML file renamed `.pdf`, an oversized
+  body and a signed-out request, each with the sentence the household sees.
+- **`e2e/attachments.spec.ts`** — now asserts the upload posts to `/api/attachments` and **not** to
+  `/purchases`, which is the whole point of the change.
+
+## Validation
+
+- `npx tsc --noEmit` clean; `npx tsx --test tests/attachment-upload-route.test.ts` **7/7**.
+- Full suite, format, themes, build, audit and the browser run: recorded below once the PR has run.
+
+## What the household should do in Cloudflare
+
+Add one **Skip → Managed rules** rule matched on
+`http.request.method eq "POST" and http.request.uri.path eq "/api/attachments"`. Nothing else on the
+zone needs to change. The technical account of the block is in `docs/RELEASE_NOTES_v1.44.1.md` and
+decision 269.
+
+## After publication
+
+Back up the households and the Admin registry, then **Force Update** only the **Simple Finance
+Multi-household** container on `ghcr.io/dougalbob/simple-finance-multi-household:latest` (or pin
+`:v1.44.1`). Keep appdata `/mnt/user/appdata/simple-finance-multi-household` and host port **3009**.
+There is no migration in this release. Never touch the original installation
+(`/mnt/user/appdata/simple-finance`, port 3007).
+
 # v1.44.0 — energy tracking (issue 118, 2026-10-28)
 
 ## Why this session happened
