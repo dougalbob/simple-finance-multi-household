@@ -8,6 +8,7 @@ import {
   waitForFilters,
   waitForTill,
 } from './support';
+import { recentMonthlyDueDay } from '../scripts/e2e-seed-dates';
 
 function rolling12Start(today: string): string {
   const [year, month] = today.split('-').map(Number);
@@ -376,7 +377,22 @@ test.describe('desktop review', () => {
     const scheduleName = `Playwright backfilled DD ${suffix}`;
     const supplierName = `Playwright Backfill Co ${suffix}`;
     const today = londonToday();
-    const missedDate = addDaysIso(today, -10); // already gone by, inside the default window
+    // The seeded installation carries monthly payments on days a lone item must
+    // not meet: Salary (a receipt) on the 27th, BroadbandCo two days ahead of
+    // today's date, and "Phone plan" a week behind (or on the 21st once the
+    // earlier spec in this file moves it there). A missed date landing on one
+    // of those prints a multi-item cell, so walk back to a quiet day — still
+    // already gone by, and inside the default window.
+    const seededDays = new Set([
+      Math.min(Number(today.slice(8, 10)) + 2, 28),
+      21,
+      27,
+      recentMonthlyDueDay(today, 6, [21]),
+    ]);
+    let missedDate = addDaysIso(today, -10); // already gone by, inside the default window
+    while (seededDays.has(Number(missedDate.slice(8, 10)))) {
+      missedDate = addDaysIso(missedDate, -1);
+    }
     const dueDayOfMonth = Number(missedDate.slice(8));
 
     await page.goto('/recurring');

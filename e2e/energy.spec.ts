@@ -31,10 +31,10 @@ test.describe('energy tracking', () => {
     await page.setViewportSize({ width: 393, height: 727 });
     await page.goto('/overview');
     await page.getByRole('button', { name: 'Open navigation menu' }).click();
-    await page
-      .getByRole('navigation', { name: 'Pages' })
-      .getByRole('link', { name: 'Energy', exact: true })
-      .click();
+    const drawerNav = page.getByRole('navigation', { name: 'Pages' });
+    // The drawer animates open; role queries only see it once it is visible.
+    await expect(drawerNav).toBeVisible();
+    await drawerNav.getByRole('link', { name: 'Energy', exact: true }).click();
     await expect(page).toHaveURL(/\/energy$/);
     await expect(
       page.getByRole('heading', { name: 'Gas and electricity over time', level: 1 }),

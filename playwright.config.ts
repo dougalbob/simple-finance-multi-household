@@ -257,6 +257,15 @@ export default defineConfig({
           use: { viewport: { width: 1400, height: 950 } },
         },
         {
+          // Own project (v1.46.0, issue 124): the track → settle → closed claim
+          // journey. It records its own one-off settlement income on behalf of a
+          // uniquely named counterparty, so nothing else's facts change; it runs
+          // late anyway, keeping `payday-summary` last.
+          name: 'claims',
+          testMatch: /claims\.spec\.ts/,
+          use: { viewport: { width: 1400, height: 950 } },
+        },
+        {
           // The payday example rewrites only the isolated E2E seed. Keep it last so
           // its fictional account, schedules and settings cannot affect other specs.
           name: 'payday-summary',
