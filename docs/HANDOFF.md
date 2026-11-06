@@ -1,3 +1,47 @@
+# v1.46.0 — money owed to us: tracked reimbursement claims (issue 124)
+
+- A third party that owes the household money back — a funeral estate reimbursing wake costs, an
+  insurer settling, an employer paying mileage — now gets **a claim** on the **Borrowing** page
+  (**Money owed to us — expected back**). A claim records who owes us and an optional note, and points
+  at the recorded purchases that make it up; the **outstanding figure is derived, never stored**
+  (linked non-void purchase totals minus live settlements), exactly the rule debts keep. Claimed
+  spend stays ordinary spending in Insights and the charts; the claim is a second record, never a
+  transfer, refund or void.
+- **Two settlement routes, one audited action each** (decisions 271–273). *The money arrived* records
+  the one-off income into a pot (source = the counterparty, SPEC §11.3) and the settlement in the same
+  transaction. *Paid directly, not into a pot* records the settlement with no pot movement, requires a
+  note saying where the money went, and may name an informal IOU to cancel by the same amount (the
+  estate pays the member of the family the household borrowed from). A settlement naming an IOU joins
+  the IOU's derived balance and the Borrowing ledger's chronological walk as a `claim settled` row;
+  over-settlement and IOU-reducing-beyond-balance are refused; voiding a claim voids its settlements
+  (so a mis-tracked claim stops reducing any IOU it named) but keeps income that already arrived;
+  voiding a settlement reopens an auto-closed claim and restores the IOU; cancelling keeps purchases
+  released for a future claim. Version counters guard concurrent writers; every step is audited.
+- Migration `0023_claims.sql` adds `claims`, `claim_purchases`, `claim_settlements`. No existing
+  table, backup-format or storage-path change; a household backup archives the whole SQLite file, so
+  archives restore under `0023` at start-up. SPEC gains §10.3 (the concept, the routes, the edges) and
+  worked example E14; the plan gains decisions 271–273; release notes are
+  `docs/RELEASE_NOTES_v1.46.0.md`.
+- **Before Unraid Force Update: back up every household and the Admin registry.** The container
+  applies `0023` at start-up. Only `ghcr.io/dougalbob/simple-finance-multi-household` may be
+  published; keep appdata at `/mnt/user/appdata/simple-finance-multi-household` and host port
+  **3009**; never touch the original installation at port 3007.
+- Validation to date: `npx tsc --noEmit` clean; full unit suite **1,328/1,328 across 300 suites**;
+  the seeded installation serves `/borrowing` with the new card rendering and the seeded claimable
+  picker populated; `e2e/claims.spec.ts` (track → settle-into-a-pot → closed; settle-outside-the-pots
+  with the IOU cancelling; void releases the purchases) is written but its Chromium run is blocked in
+  this build sandbox — it executes as the `browser` gate on the PR and again on main CI. The PR must
+  carry the `gates`, `browser` and `docker` checks before merge, then a merge commit, main CI, an
+  annotated `v1.46.0` tag on the exact merge commit, and a verified Publish; the GitHub Latest
+  release carries `docs/assets/simple-finance-icon.png` as
+  `simple-finance-multi-household-icon.png`. Per the release process, merge SHA, PR/check run IDs,
+  Publish run and digest are reported to the owner and the next working session — no post-merge
+  documentation PR.
+- Claims never net automatically against IOUs and never predict a payment date — deliberate: the
+  household is the only one who knows when the solicitor's letter arrives. A claim that settled out
+  leaves both the IOU and the estate honest, and the two honest answers to "where is that money?"
+  stay the two rows the household is looking at.
+
 # v1.45.0 — account and supplier purchase links (issues #122 and #120)
 
 - The household-total cards on Overview and Home link each bank/credit-card name to its own

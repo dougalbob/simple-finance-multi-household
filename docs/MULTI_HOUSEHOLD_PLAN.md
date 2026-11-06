@@ -1,3 +1,17 @@
+**v1.46.0 — Money owed to us: tracked reimbursement claims (issue 124):** money a third party owes
+the household back gets its own record on **Borrowing**, headed **Money owed to us — expected back**. The
+claim points at recorded purchases; its awaited figure is derived from them minus live settlements, never
+stored, and the spend stays in Insights as ordinary spending. Two settlement routes, one audited action
+each: *The money arrived* records the one-off income and settles in the same transaction; *Paid directly,
+not into a pot* settles with no pot movement and can cancel the informal IOU it belongs against by the
+same amount — the settlement joins the IOU's derived balance and the ledger. Claims never feed estimates,
+projections or Insights; nothing predicts a payment date. Migration `0023_claims.sql` adds `claims`,
+`claim_purchases`, `claim_settlements`; a household backup carries the tables with it. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.46.0` (stable also moves `latest`), Unraid host
+port **3009**, appdata `/mnt/user/appdata/simple-finance-multi-household`, never the original
+installation or port 3007. Back up households and the Admin registry before Force Update. See
+`docs/RELEASE_NOTES_v1.46.0.md` and decisions 271–273.
+
 # Multi-household edition — active product and safety contract
 
 **v1.45.0 — Account and supplier purchase links (issues #122 and #120):** a bank or credit-card

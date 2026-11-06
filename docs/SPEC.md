@@ -676,6 +676,62 @@ world of §10.1 cannot represent these, so they get their own honest boxes:
   (a repayment does not become borrowing); voiding keeps history. To fix those, void and re-record —
   for a swap, void both legs and record it anew.
 
+### 10.3 Money owed to us — reimbursement claims (v1.46.0; issue 124, decision 271)
+
+Sometimes the household fronts a cost a third party has promised to repay: a funeral estate
+reimbursing wake costs, an insurer settling a claim, an employer paying back mileage. That money is
+**owed to us**, the mirror image of an informal IOU, and it gets its own honest box rather than a
+fake expectation row or a new external-movement kind:
+
+- **A claim is not a balance.** A claim records *who* owes us (`Mum's estate`) and an optional note
+  (`wake costs`), and points at the purchases that make it up. The outstanding figure is always
+  **derived, never stored**: the sum of the linked, non-void purchases (their totals at the values
+  they carry today) minus the sum of the live settlements against the claim. Stored is only the
+  lifecycle (`open` / `closed`) and, once closed, the reason (`settled` — the money came or was
+  settled out, or `cancelled` — voided). A fully-settled claim auto-closes and reopens if a
+  settlement on it is voided; a cancelled claim stays cancelled.
+- **Claimed spend is still spend.** A purchase on a claim stays an ordinary, negative allocation
+  against a pot and keeps flowing to Insights and the charts unchanged — tracking a claim is not a
+  transfer, a void or a refund. The claim is a second record that remembers what is awaited, added
+  beside the money story rather than instead of it.
+- **Who can be on a claim.** Only spend the household has already recorded — the claimable set is
+  live, positive, non-refund purchases on no other live claim. Refunds can never be claimed (the
+  household is not owed its own money twice), and a purchase already on a live claim cannot be
+  double-claimed; voiding a claim releases its purchases for a future claim.
+- **One claim, two honest settlement routes** (decision 272) — both close the loop in one audited
+  action, from the Borrowing page's *Money owed to us* card:
+  1. **The money arrives in a pot.** One action records the one-off income (SPEC §11.3) into the
+     chosen pot — source named as the counterparty, audit-linked to the claim — and the settlement
+     against the claim in the same transaction, so the two can never half-save. The pot rises like
+     any receipt; the claim closes when its outstanding reaches zero.
+  2. **The third party paid someone else directly** (no money into, through or out of the
+     household's pots). One action settles the claim and — optionally — names the informal IOU it
+     clears by the same amount (e.g. the estate paid the member of the family the household borrowed
+     from, so the `we_owe` IOU drops by the settled amount). The IOU drops below zero is refused;
+     no pot moves; a note saying where the money went is required, because that note is the whole
+     record. The settlement joins the IOU's derived balance and the Borrowing ledger like any
+     movement, so the IOU cancels visibly where the household watches it.
+- **Honest edges, on purpose.** Over-settling is refused (a settlement can never exceed the derived
+  outstanding). Voiding a claim voids its settlements — so a mis-tracked claim stops reducing any
+  IOU it named — but keeps income that already arrived (the money really moved); everything is
+  audited and history is kept. Claims never net automatically against IOUs, never predict a payment
+  date, and never feed pot estimates, projections or Insights: they remember what is awaited, and
+  the household's own repayment flow remains the way the money eventually moves.
+- **Corrections mirror the boundary rules.** Kind (pot vs direct) is immutable; amounts, dates and
+  notes are editable only as new settlements or via the ordinary correction panels; voiding keeps
+  history; a claim's version counter guards concurrent writers.
+- **Storage and backup.** Three side tables — `claims`, `claim_purchases` (one live claim per
+  purchase), `claim_settlements` (whose kind names the route and whose `reduces_debt_id` optionally
+  links the cleared IOU). A household backup archives the whole SQLite file, so the tables travel
+  with it; restore applies migration `0023` to older archives at start-up. No existing record,
+  backup-format or storage-path change.
+
+Worked example (fictional, E14 in SPEC §17): the household fronts a £47.50 shop for a wake
+invoice the estate owes; the grocery run and the flowers are put on one claim. The charts keep
+both costs; the Borrowing page shows *"Mum's estate — £47.50 awaited"* beside the informal IOU
+with the sister. When the estate pays the sister directly, one action closes the claim and the IOU
+cancels by £47.50 — no pot moved and no money was invented.
+
 ## 11. Recurring payments (DD/SO) and expected income
 
 ### 11.1 Schedules
@@ -1909,6 +1965,35 @@ the swap was recorded, the out-leg (a same-day debit) counts against it and Main
 Main's next checkpoint — the safe direction, self-correcting, while the in-leg is absorbed. Acceptance:
 steps read 2000 / 10000 / 10000 / 10000 / 10000 pence; live v0.2.0 data self-heals under the new rule —
 no migration.
+
+### E14 — Money owed to us, and paid directly elsewhere (claim acceptance scenario)
+
+Mum dies in spring; the household pays the funeral home £1,850.00 and the florist £146.40 up front,
+and the estate (handled by a solicitor) reimburses whoever fronted the money. Mum had lent the
+household £1,000 the previous summer ("Mum", we owe) and it was never repaid.
+
+1. The household records both funeral payments as ordinary purchases (the spending stays in the
+   charts, exactly as any shop).
+2. On **Borrowing** → **Money owed to us** they start a claim on "Mum's estate" (note: "funeral costs")
+   and tick the two purchases: **£1,996.40 awaited** — derived, never typed in. The funeral home's
+   supplier card shows nothing different; the till behaves exactly as before.
+3. The overdraft-sized £1,000 IOU sits beside it on the same page: *we owe Mum £1,000* and
+   *Mum's estate owes us £1,996.40* — never netted, both plain to see.
+4. The solicitor pays the money to the member of the family the household borrowed from, not to the
+   household. One action (**Paid directly, not into a pot**) first settles £1,000 of the claim with
+   the IOU named in the same form — the IOU cancels by exactly that amount and the ledger shows one
+   `claim settled` row against the person; a settlement naming an IOU can never exceed what is still
+   owed on it, so £996.40 remains awaited on the claim. A second **Paid directly** action for
+   £996.40, note "estate paid straight to the family", closes the claim. No pot moved, no money was
+   invented, and every figure on both pages reads exactly what the solicitor's letter says.
+5. Alternatively the estate pays the household into Main: one action (**The money arrived**) records
+   £1,996.40 of one-off income (SPEC §11.3) with source "Mum's estate" and the settlement in the same
+   transaction; Main rises like any receipt and the claim closes when its outstanding reaches zero.
+
+Insights at every step see ordinary spending (steps 1–2) and ordinary one-off income (step 5), or
+no pot at all (step 4). The expected-reimbursement money is never a projection, never an insight,
+and never nets against the IOU behind the household's back — the two honest answers to "where is that
+money?" stay the two rows the household is looking at.
 
 ## 18. Backup, restore and data locations
 

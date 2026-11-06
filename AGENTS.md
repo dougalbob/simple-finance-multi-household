@@ -1,3 +1,16 @@
+**v1.46.0 — Money owed to us: tracked reimbursement claims (2026-11-06):** money a third party owes
+the household back (a funeral estate, an insurer, an employer) gets its own record on **Borrowing**,
+headed **Money owed to us — expected back**. The claim points at recorded purchases and its awaited
+figure is derived, never stored; claimed spend stays ordinary spending in Insights. Two settlement
+routes, one audited action each: *The money arrived* records the one-off income and settles together;
+*Paid directly, not into a pot* settles with no pot movement and can cancel the informal IOU it belongs
+against by the same amount. Claims never feed estimates, projections or Insights; nothing predicts a
+payment date; voiding keeps history. Migration `0023_claims.sql`. See
+[release notes](docs/RELEASE_NOTES_v1.46.0.md) and decisions 271–273. Before Unraid **Force Update**, back
+up households and the Admin registry; use only `ghcr.io/dougalbob/simple-finance-multi-household:latest`,
+appdata `/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never alter the original
+installation or port 3007.
+
 **v1.45.0 — Account and supplier purchase links (2026-10-29):** issues #122 and #120 add navigation
 only: a non-cash account name on Overview or Home opens that account on All Transactions; a recent
 supplier purchase opens its exact Purchases record, and a supplier-filtered history link reaches older

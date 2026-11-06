@@ -1118,3 +1118,117 @@ export const energyBills = sqliteTable(
     ),
   ],
 );
+
+/**
+ * Money owed to us — reimbursement claims (SPEC §10.3, v1.46.0, issue 124).
+ *
+ * Some costs are not the household's: a third party (an estate, an insurer, an
+ * employer) will reimburse them. A claim links the purchases it covers to who
+ * owes the money, and its total is **derived** — the sum of its linked,
+ * non-voided purchases — never stored, so it can never drift (the same rule
+ * as debt balances). Claims and their links never move a pot: the pot-estimate
+ * invariant is untouched. A claim closes itself when its settlements bring the
+ * outstanding figure to zero.
+ */
+export const claims = sqliteTable(
+  'claims',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Who the money is owed by — the third party ("Mum's estate", "the insurer"). */
+    counterparty: text('counterparty').notNull(),
+    note: text('note'),
+    /** Stored transition state; the domain recomputes it on every write. */
+    status: text('status', { enum: ['open', 'closed'] })
+      .notNull()
+      .default('open'),
+    /** Why the claim is closed: settled in full, or cancelled by the household. */
+    closedReason: text('closed_reason', { enum: ['settled', 'cancelled'] }),
+    closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+    createdBy: text('created_by').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    voidedAt: integer('voided_at', { mode: 'timestamp_ms' }),
+    voidedBy: text('voided_by'),
+    voidReason: text('void_reason'),
+    /** Optimistic concurrency counter (blueprint §3) */
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    check('claims_counterparty_present', sql`length(trim(${table.counterparty})) > 0`),
+    check(
+      'claims_status_reason_pair',
+      sql`(${table.status} = 'closed') = (${table.closedReason} IS NOT NULL)`,
+    ),
+    index('claims_status_created_idx').on(table.status, table.createdAt),
+  ],
+);
+
+/**
+ * The purchases a claim covers. Links are join rows: they carry no
+ * money, so voiding a claim simply stops reading them (history is retained); a
+ * purchase may sit on at most one live claim, enforced in the domain layer.
+ */
+export const claimPurchases = sqliteTable(
+  'claim_purchases',
+  {
+    claimId: integer('claim_id')
+      .notNull()
+      .references(() => claims.id),
+    purchaseId: integer('purchase_id')
+      .notNull()
+      .references(() => purchases.id),
+  },
+  (table) => [
+    uniqueIndex('claim_purchases_claim_purchase_unique').on(table.claimId, table.purchaseId),
+    index('claim_purchases_purchase_idx').on(table.purchaseId),
+  ],
+);
+
+/**
+ * How a claim was settled — in whole pence, dated, retained like every other
+ * record. `pot` means the money arrived: an ordinary one-off income record
+ * was created in the same transaction and is linked here (`receipt_id`).
+ * `direct` means the third party paid somebody else on the household's behalf
+ * (no pot moves at all) — optionally clearing one named informal IOU by the
+ * same amount (`reduces_debt_id`), the assignment case. A `direct` settlement
+ * is the only non-movement the debt-balance derivation reads.
+ */
+export const claimSettlements = sqliteTable(
+  'claim_settlements',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    claimId: integer('claim_id')
+      .notNull()
+      .references(() => claims.id),
+    amountPence: integer('amount_pence').notNull(),
+    occurredAt: integer('occurred_at', { mode: 'timestamp_ms' }).notNull(),
+    /** Local calendar date the settlement belongs to ('YYYY-MM-DD'). */
+    occurredDate: text('occurred_date').notNull(),
+    kind: text('kind', { enum: ['pot', 'direct'] }).notNull(),
+    /** Set iff kind = 'pot': the one-off income record this settlement created. */
+    receiptId: integer('receipt_id').references(() => receipts.id),
+    /** 'direct' only: the informal IOU this settlement clears, by the same amount. */
+    reducesDebtId: integer('reduces_debt_id').references(() => debts.id),
+    note: text('note'),
+    createdBy: text('created_by').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    voidedAt: integer('voided_at', { mode: 'timestamp_ms' }),
+    voidedBy: text('voided_by'),
+    voidReason: text('void_reason'),
+    /** Optimistic concurrency counter (blueprint §3) */
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    check('claim_settlements_amount_positive', sql`${table.amountPence} > 0`),
+    check(
+      'claim_settlements_receipt_link',
+      sql`(${table.kind} = 'pot') = (${table.receiptId} IS NOT NULL)`,
+    ),
+    check(
+      'claim_settlements_direct_only_reduction',
+      sql`(${table.kind} = 'direct') OR (${table.reducesDebtId} IS NULL)`,
+    ),
+    index('claim_settlements_claim_occurred_idx').on(table.claimId, table.occurredAt),
+    index('claim_settlements_reduces_debt_idx').on(table.reducesDebtId),
+  ],
+);

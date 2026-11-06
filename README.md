@@ -1,3 +1,16 @@
+**v1.46.0 — Money owed to us: tracked reimbursement claims:** money a third party owes the household
+back (a funeral estate, an insurer, an employer) gets its own record on **Borrowing**, headed
+**Money owed to us — expected back**. Pick the purchases the claim covers; the awaited figure is derived
+from them minus what has settled, never stored, and the spend stays in your charts as ordinary spending.
+Close the loop with one audited action: *The money arrived* records the one-off income and settles the
+claim together; *Paid directly, not into a pot* settles with no pot movement and can cancel the informal
+IOU it belongs against by the same amount (the ledger shows it as a claim settlement). Claims never feed
+estimates, projections or Insights, and nothing predicts a payment date. Migration `0023_claims.sql` adds
+three side tables; back up the household and the Admin registry before updating. Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.46.0` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never alter the original. See
+[release notes](docs/RELEASE_NOTES_v1.46.0.md), [handoff](docs/HANDOFF.md) and decisions 271–273.
+
 **v1.45.0 — Account and supplier purchase links:** select a bank or credit-card name on Overview or
 Home to open that account on All Transactions; cash stays plain text (#122). A recent purchase on a
 supplier card opens the exact record on Purchases, and a supplier-filtered history link reaches older

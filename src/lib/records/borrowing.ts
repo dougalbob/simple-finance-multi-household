@@ -11,6 +11,7 @@ import {
 } from './debts';
 import type { Db } from '../db/client';
 import { listExternalMovements, type ExternalMovement } from './external-movements';
+import { listSettlementRowsReducingDebt } from './claims';
 
 /**
  * The Borrowing page's view layer (GitHub issue #60,
@@ -107,7 +108,30 @@ export interface BorrowingExpectedRow {
   runningBalancePence: null;
 }
 
-export type BorrowingLedgerRow = BorrowingMovementRow | BorrowingExpectedRow;
+export interface BorrowingSettlementRow {
+  kind: 'settlement';
+  /** Row key: `settlement-{id}`. */
+  key: string;
+  id: number;
+  date: string;
+  /** The IOU's counterparty — the From/To filter value, like a movement row. */
+  counterparty: string;
+  /** The claim whose settlement this is — what the money was settling. */
+  claimCounterparty: string | null;
+  /** The claim the settlement belongs to. */
+  claimId: number;
+  debtId: number;
+  amountPence: number;
+  /** Money in = settlement cleared a `they_owe` IOU; mirrors the movements' convention. */
+  moneyIn: boolean;
+  /** The debt's signed balance **after** this row (ledger convention), live rows only. */
+  runningBalancePence: number | null;
+  voided: boolean;
+  note: string | null;
+}
+
+export type BorrowingLedgerRow =
+  BorrowingMovementRow | BorrowingExpectedRow | BorrowingSettlementRow;
 
 export interface BorrowingLedger {
   people: BorrowingPerson[];
@@ -267,9 +291,9 @@ export function buildBorrowingLedger(
   const debtById = new Map(debtLines.map((line) => [line.debt.id, line.debt]));
   const rows: BorrowingLedgerRow[] = [];
 
-  // Movement rows, with the running balance walked in true chronological
-  // order per debt (voided rows never move it), whatever display order the
-  // household asked for.
+  // Movement and settlement rows, with the running balance walked in true
+  // chronological order per debt (voided rows never move it), whatever display
+  // order the household asked for.
   const movements = listExternalMovements(db, { kind: 'loan', includeVoided: true, limit: 1000 });
   const byDebt = new Map<number, ExternalMovement[]>();
   for (const movement of movements) {
@@ -278,34 +302,102 @@ export function buildBorrowingLedger(
     if (list === undefined) byDebt.set(movement.debtId, [movement]);
     else list.push(movement);
   }
-  for (const [debtId, list] of byDebt) {
+  const settlementDebtIds = new Set<number>();
+  for (const debt of debtById.values()) {
+    settlementDebtIds.add(debt.id);
+  }
+  // Settlements reducing an IOU with no loan movements at all still belong in
+  // that arrangement's ledger — they are why its balance moved.
+  const allMovementDebtIds = new Set([...byDebt.keys()]);
+  for (const debtId of settlementDebtIds) {
+    allMovementDebtIds.add(debtId);
+  }
+  type LedgerEntry =
+    | { sort: 'movement'; at: number; id: number; movement: ExternalMovement }
+    | {
+        sort: 'settlement';
+        at: number;
+        id: number;
+        settlement: ReturnType<typeof listSettlementRowsReducingDebt>[number];
+      };
+  const chronologicalByDebt = new Map<number, LedgerEntry[]>();
+  for (const debtId of allMovementDebtIds) {
+    const entries: LedgerEntry[] = [];
+    for (const movement of byDebt.get(debtId) ?? []) {
+      entries.push({
+        sort: 'movement',
+        at: movement.occurredAt.getTime(),
+        id: movement.id,
+        movement,
+      });
+    }
+    for (const settlement of listSettlementRowsReducingDebt(db, debtId)) {
+      entries.push({
+        sort: 'settlement',
+        at: settlement.occurredAt.getTime(),
+        id: settlement.id,
+        settlement,
+      });
+    }
+    entries.sort((a, b) =>
+      a.at !== b.at
+        ? a.at - b.at
+        : a.sort === b.sort
+          ? a.id - b.id
+          : a.sort === 'movement'
+            ? -1
+            : 1,
+    );
+    chronologicalByDebt.set(debtId, entries);
+  }
+  for (const [debtId, entries] of chronologicalByDebt) {
     const debt = debtById.get(debtId);
     if (debt === undefined) continue;
-    const chronological = [...list].sort((a, b) =>
-      a.occurredAt.getTime() !== b.occurredAt.getTime()
-        ? a.occurredAt.getTime() - b.occurredAt.getTime()
-        : a.id - b.id,
-    );
+    const chronological = entries;
     let outstanding = 0;
-    for (const movement of chronological) {
-      const raises =
-        (debt.direction === 'we_owe' && movement.direction === 'in') ||
-        (debt.direction === 'they_owe' && movement.direction === 'out');
-      const live = movement.voidedAt === null;
-      if (live) outstanding += raises ? movement.amountPence : -movement.amountPence;
-      rows.push({
-        kind: 'movement',
-        key: `movement-${movement.id}`,
-        id: movement.id,
-        date: movement.occurredDate,
-        movement,
-        debtId,
-        counterparty: debt.counterparty,
-        direction: debt.direction,
-        moneyIn: movement.direction === 'in',
-        runningBalancePence: live ? signedBalancePence(debt.direction, outstanding) : null,
-        voided: !live,
-      });
+    for (const entry of chronological) {
+      if (entry.sort === 'settlement') {
+        const settlement = entry.settlement;
+        const live = settlement.voidedAt === null;
+        if (live) outstanding -= settlement.amountPence;
+        rows.push({
+          kind: 'settlement',
+          key: `settlement-${settlement.id}`,
+          id: settlement.id,
+          date: settlement.occurredDate,
+          counterparty: debt.counterparty,
+          claimCounterparty: settlement.claimCounterparty,
+          claimId: settlement.claimId,
+          debtId,
+          amountPence: settlement.amountPence,
+          moneyIn: debt.direction === 'they_owe',
+          runningBalancePence: live ? signedBalancePence(debt.direction, outstanding) : null,
+          voided: !live,
+          note: settlement.note,
+        });
+        continue;
+      }
+      const movement = entry.movement;
+      {
+        const raises =
+          (debt.direction === 'we_owe' && movement.direction === 'in') ||
+          (debt.direction === 'they_owe' && movement.direction === 'out');
+        const live = movement.voidedAt === null;
+        if (live) outstanding += raises ? movement.amountPence : -movement.amountPence;
+        rows.push({
+          kind: 'movement',
+          key: `movement-${movement.id}`,
+          id: movement.id,
+          date: movement.occurredDate,
+          movement,
+          debtId,
+          counterparty: debt.counterparty,
+          direction: debt.direction,
+          moneyIn: movement.direction === 'in',
+          runningBalancePence: live ? signedBalancePence(debt.direction, outstanding) : null,
+          voided: !live,
+        });
+      }
     }
   }
 
@@ -335,12 +427,16 @@ export function buildBorrowingLedger(
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
     // On one date: recorded rows before expected ones, then the record's own
     // instant/id — a stable order a re-render cannot reshuffle.
-    if (a.kind !== b.kind) return a.kind === 'movement' ? -1 : 1;
+    const recorded = (kind: BorrowingLedgerRow['kind']) => kind !== 'expected';
+    if (recorded(a.kind) !== recorded(b.kind)) return recorded(a.kind) ? -1 : 1;
     if (a.kind === 'movement' && b.kind === 'movement') {
       const delta = a.movement.occurredAt.getTime() - b.movement.occurredAt.getTime();
       if (delta !== 0) return delta;
       return a.id - b.id;
     }
+    if (a.kind === 'movement' && b.kind === 'settlement') return -1;
+    if (a.kind === 'settlement' && b.kind === 'movement') return 1;
+    if (a.kind === 'settlement' && b.kind === 'settlement') return a.id - b.id;
     return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
   });
   const rowsInOrder = order === 'oldest' ? filtered : [...filtered].reverse();
