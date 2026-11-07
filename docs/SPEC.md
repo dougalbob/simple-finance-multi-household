@@ -719,7 +719,9 @@ fake expectation row or a new external-movement kind:
   the household's own repayment flow remains the way the money eventually moves.
 - **Corrections mirror the boundary rules.** Kind (pot vs direct) is immutable; amounts, dates and
   notes are editable only as new settlements or via the ordinary correction panels; voiding keeps
-  history; a claim's version counter guards concurrent writers.
+  history, and a settlement can be voided wherever its rows are shown — including on a claim that has
+  already closed, from the **Settled and closed** disclosure (v1.46.1), which reopens the claim; a
+  claim's version counter guards concurrent writers.
 - **Storage and backup.** Three side tables — `claims`, `claim_purchases` (one live claim per
   purchase), `claim_settlements` (whose kind names the route and whose `reduces_debt_id` optionally
   links the cleared IOU). A household backup archives the whole SQLite file, so the tables travel

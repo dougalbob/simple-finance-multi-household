@@ -1,3 +1,10 @@
+**v1.46.1 — Void a settlement on a closed claim:** a settlement can now be voided from the claim's
+**Settled and closed** disclosure, so a prematurely closed claim reopens with its purchases still
+linked and history kept. No schema change (`0023` remains the latest). Image
+`ghcr.io/dougalbob/simple-finance-multi-household:v1.46.1` (stable also moves `latest`), appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never alter the original. See
+[release notes](docs/RELEASE_NOTES_v1.46.1.md), [handoff](docs/HANDOFF.md) and decision 274.
+
 **v1.46.0 — Money owed to us: tracked reimbursement claims:** money a third party owes the household
 back (a funeral estate, an insurer, an employer) gets its own record on **Borrowing**, headed
 **Money owed to us — expected back**. Pick the purchases the claim covers; the awaited figure is derived

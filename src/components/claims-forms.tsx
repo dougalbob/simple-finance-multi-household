@@ -866,6 +866,12 @@ function SettledClaimsList({ claims }: { claims: ClaimWithDetails[] }) {
                     year: 'numeric',
                   }).format(entry.claim.closedAt)}
             </span>
+            {entry.settlements.length > 0 ? (
+              <span className="w-full text-xs text-ink-muted">
+                Void a settlement to reopen the claim and settle again.
+              </span>
+            ) : null}
+            <ClaimSettlements entry={entry} />
           </li>
         ))}
       </ul>

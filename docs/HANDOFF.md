@@ -1,3 +1,32 @@
+# v1.46.1 — settlement void reaches closed claims (issue 124)
+
+- A v1.46.0 follow-up for the UI gap found the day after that update went live: the Void control
+  for a claim settlement renders only on open claims, so a claim that auto-closed — including an
+  accidental full settle — showed no way to void its settlement, and its linked purchases stayed
+  reserved forever. The **Settled and closed** disclosure on the Borrowing card now renders each
+  live settlement row with the same Void control (one line of hint text); voiding reopens the
+  auto-closed claim with its pre-settlement awaited figure, linked purchases stay linked, income
+  that already arrived is kept, and history is kept.
+- No schema change, no migration (`0023` remains the latest), no change to settlement semantics —
+  only the reachability of the existing, tested void action in the UI. SPEC §10.3 records the
+  correction; the plan gains decision 274; release notes are `docs/RELEASE_NOTES_v1.46.1.md`.
+- **Before Unraid Force Update: back up every household and the Admin registry** (as for every
+  release here; nothing about storage changed). Publish only
+  `ghcr.io/dougalbob/simple-finance-multi-household`; keep appdata
+  `/mnt/user/appdata/simple-finance-multi-household` and host port **3009**; never touch the
+  original installation or port 3007.
+- Validation: `npx tsc --noEmit` clean; full unit suite **1,328/1,328 across 300 suites**;
+  `e2e/claims.spec.ts` gains `voiding a settlement on a closed claim reopens it — the purchases stay
+  linked` (all four claims tests green locally against a fresh seeded server; the browser gate on
+  the PR is authoritative). Merge once with a merge commit, require main CI, tag annotated
+  `v1.46.1` on the exact merge commit, verify Publish with `v1.46.1`, `latest` and `sha-<short>` on
+  one digest and the Latest release carrying the icon; record the merge SHA, PR, run IDs and digest
+  here next session.
+- Context recorded without private detail: after the v1.46.0 update a household accidentally closed
+  a claim via *The money arrived*, believing it did something else. The money had not moved, so the
+  income entry is a separate record to be voided on its own page, and the settlement is the record
+  v1.46.1 makes undoable. Context is generic here on purpose — this file lives in a public repo.
+
 # v1.46.0 — money owed to us: tracked reimbursement claims (issue 124)
 
 - A third party that owes the household money back — a funeral estate reimbursing wake costs, an
