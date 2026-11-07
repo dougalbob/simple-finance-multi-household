@@ -30,10 +30,15 @@ test.describe('energy tracking', () => {
   test('the phone drawer reaches the same page', async ({ page }) => {
     await page.setViewportSize({ width: 393, height: 727 });
     await page.goto('/overview');
-    await page.getByRole('button', { name: 'Open navigation menu' }).click();
-    const drawerNav = page.getByRole('navigation', { name: 'Pages' });
-    // The drawer animates open; role queries only see it once it is visible.
-    await expect(drawerNav).toBeVisible();
+    // The hamburger is hydration-gated: a click before React attaches is
+    // swallowed, so retry the action until the drawer is open. The assertion
+    // itself is unchanged.
+    const hamburger = page.getByRole('button', { name: 'Open navigation menu' });
+    const drawerNav = page.locator('#mobile-nav-drawer nav[aria-label="Pages"]');
+    await expect(async () => {
+      await hamburger.click();
+      await expect(drawerNav).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
     await drawerNav.getByRole('link', { name: 'Energy', exact: true }).click();
     await expect(page).toHaveURL(/\/energy$/);
     await expect(
