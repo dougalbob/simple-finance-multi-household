@@ -217,3 +217,49 @@ test('voiding a claim releases its purchases and keeps the income that already a
     reopened.locator('li', { hasText: supplier }).locator('input[type="checkbox"]'),
   ).toBeVisible();
 });
+
+test('voiding a settlement on a closed claim reopens it — the purchases stay linked', async ({
+  page,
+}) => {
+  test.slow();
+  const stamp = Date.now();
+  const supplier = `Playwright claim reopen ${stamp}`;
+  const counterparty = `Estate reopen ${stamp}`;
+  await recordPurchase(page, supplier, '63.47');
+  await page.goto('/borrowing');
+
+  await createClaimFrom(page, supplier, counterparty, /Tracking £63\.47/i);
+
+  // Settle into the Main account — the claim auto-closes.
+  const card = openClaimCard(page, counterparty);
+  await card.getByText('The money arrived').click();
+  const settle = card
+    .locator('form')
+    .filter({ has: page.getByRole('button', { name: 'Record the income and settle' }) });
+  await settle.getByLabel('Which pot did it land in?').selectOption({ label: 'Main account' });
+  await settle.getByRole('button', { name: 'Record the income and settle' }).click();
+  await expect(openClaimCard(page, counterparty)).toHaveCount(0);
+
+  // The closed disclosure carries the settlement with its Void control.
+  await page.goto('/borrowing');
+  const closed = openClaimsCard(page).getByText(/Settled and closed/);
+  await closed.click();
+  const row = openClaimsCard(page).locator('li', { hasText: counterparty });
+  await expect(row.getByText('Settled into a pot — recorded as income')).toBeVisible();
+  await row.getByText('Void', { exact: true }).click();
+  await row.getByLabel(/Why is this being voided/).fill('entered in error — no money has moved');
+  await row.getByRole('button', { name: 'Void it' }).click();
+
+  // The claim is open again, still covering the same purchases — nothing to re-tick.
+  await expect(openClaimCard(page, counterparty)).toContainText('£63.47 awaited');
+  await expect(openClaimCard(page, counterparty).getByText(supplier)).toBeVisible();
+  // And the closed list no longer claims it.
+  await page.goto('/borrowing');
+  await expect(openClaimsCard(page).locator('li', { hasText: counterparty })).toHaveCount(1);
+  await expect(
+    openClaimsCard(page)
+      .getByText(/Settled and closed/)
+      .locator('xpath=..')
+      .locator('li', { hasText: counterparty }),
+  ).toHaveCount(0);
+});

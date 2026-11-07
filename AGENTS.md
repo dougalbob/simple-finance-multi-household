@@ -1,3 +1,12 @@
+**v1.46.1 — settlement void reaches closed claims (2026-11-07):** voiding a settlement from the
+**Settled and closed** disclosure reopens the claim (purchases stay linked; history kept). No
+migration; `0023` remains current. See
+[release notes](docs/RELEASE_NOTES_v1.46.1.md) and decision 274. Back up households and the Admin
+registry before Unraid **Force Update**; use only
+`ghcr.io/dougalbob/simple-finance-multi-household:latest`, appdata
+`/mnt/user/appdata/simple-finance-multi-household`, host port **3009**. Never alter the original
+installation or port 3007.
+
 **v1.46.0 — Money owed to us: tracked reimbursement claims (2026-11-06):** money a third party owes
 the household back (a funeral estate, an insurer, an employer) gets its own record on **Borrowing**,
 headed **Money owed to us — expected back**. The claim points at recorded purchases and its awaited

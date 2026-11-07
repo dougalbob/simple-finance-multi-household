@@ -4,6 +4,24 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.46.1 — settlement void reaches closed claims (issue 124, 2026-11-07)
+
+A patch for the UI gap found on the day after v1.46.0: the Void control for a claim settlement renders
+only while the claim is open, so a claim that auto-closed (including by an accidental full settle) showed
+no settlement and offered no way back — its linked purchases stayed reserved forever. Ship a small,
+honest patch: the **Settled and closed** disclosure on the Borrowing page renders each live settlement
+row with the same Void control as the open card, voiding reopens the auto-closed claim with the
+pre-settlement awaited figure, linked purchases stay linked, income that already arrived is kept and
+history is kept; one line of hint text says so. No schema change, no migration (`0023` remains the latest);
+no change to settlement semantics. Require PR `gates`, `browser` and `docker`, merge once with a merge
+commit, require main CI, then place annotated `v1.46.1` on the exact merge commit and verify Publish
+pushed only to `ghcr.io/dougalbob/simple-finance-multi-household` with `v1.46.1`, `latest` and
+`sha-<short>` on one digest, plus the GitHub Latest release carrying the icon asset. Publication authorises
+an Unraid **Force Update** but is not itself a deployment; back up the households and the Admin registry
+first (this release does not change storage or backup format). Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or port 3007.
+
 ## v1.46.0 — money owed to us: tracked reimbursement claims (issue 124, 2026-11-06)
 
 A third party that owes the household money back (a funeral estate, an insurer, an employer) now gets
