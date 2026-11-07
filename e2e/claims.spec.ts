@@ -71,6 +71,9 @@ async function recordPurchase(page: Page, supplier: string, amount: string): Pro
   await waitForTill(page);
   const entry = page.getByRole('region', { name: /Record it while it is fresh/i });
   await entry.locator('input[name="supplierName"]').fill(supplier);
+  // The settings project's default-pot tests end with the household default
+  // pot cleared, so the till cannot preselect one for us — name it.
+  await entry.getByLabel('Pot').selectOption({ label: 'Main account' });
   await entry.locator('input[name="amount"]').fill(amount);
   await entry.getByLabel('Line 1 amount').fill(amount);
   await pickEntryCategory(entry, 'Groceries / Weekly Shop');
