@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { DebtEditForm, DeleteDebtForm } from '@/components/external-forms';
 import { BorrowSetupSection, PersonDebtRecord } from '@/components/borrowing-forms';
 import { BorrowingLedger } from '@/components/borrowing-ledger';
+import { ClaimsSection } from '@/components/claims-forms';
 import { householdContextFromRequest } from '@/lib/auth/next';
 import { formatPence } from '@/lib/money';
 import { buildBorrowingLedger, type BorrowingPerson } from '@/lib/records/borrowing';
@@ -14,6 +15,8 @@ import {
 import { parseOpenRecordId } from '@/lib/records/in-place-activity';
 import { getMoneySnapshot } from '@/lib/records/money-view';
 import { listPots, type PotKind } from '@/lib/records/pots';
+import { listDebtsWithBalances } from '@/lib/records/debts';
+import { listClaimablePurchases, listClaims } from '@/lib/records/claims';
 import { toLocalDateString } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +39,7 @@ export default async function BorrowingPage({
     debt?: string;
     what?: string;
     amountPence?: string;
+    claimQ?: string;
   }>;
 }) {
   const user = await householdContextFromRequest();
@@ -57,6 +61,29 @@ export default async function BorrowingPage({
     }
   }
 
+  const claimQ = typeof params.claimQ === 'string' ? params.claimQ.slice(0, 120) : '';
+  const openClaims = listClaims(db, { status: 'open', limit: 20 });
+  const closedClaims = listClaims(db, { status: 'closed', limit: 5 });
+  const claimablePurchases = listClaimablePurchases(db, {
+    ...(claimQ === '' ? {} : { search: claimQ }),
+    limit: 50,
+  });
+  const allDebtBalances = listDebtsWithBalances(db);
+  const reducibleDebts = allDebtBalances
+    .filter((row) => row.balancePence > 0)
+    .map((row) => ({
+      id: row.debt.id,
+      counterparty: row.debt.counterparty,
+      direction: row.debt.direction,
+      balancePence: row.balancePence,
+    }));
+  const counterpartySuggestions = [
+    ...new Set([
+      ...allDebtBalances.map((row) => row.debt.counterparty),
+      ...openClaims.map((entry) => entry.claim.counterparty),
+      ...closedClaims.map((entry) => entry.claim.counterparty),
+    ]),
+  ].slice(0, 20);
   const who = typeof params.who === 'string' && params.who !== '' ? params.who : undefined;
   // Newest first is the default (issue #68): the household reads the ledger
   // for what just happened, and the old-first bank-statement order is one
@@ -128,6 +155,17 @@ export default async function BorrowingPage({
           </p>
         ) : null}
       </div>
+
+      <ClaimsSection
+        openClaims={openClaims}
+        closedClaims={closedClaims}
+        candidates={claimablePurchases}
+        pots={pots.map((pot) => ({ id: pot.id, label: pot.label, kind: pot.kind }))}
+        reducibleDebts={reducibleDebts}
+        counterpartySuggestions={counterpartySuggestions}
+        claimQ={claimQ}
+        today={today}
+      />
 
       <section
         aria-labelledby="ledger-heading"

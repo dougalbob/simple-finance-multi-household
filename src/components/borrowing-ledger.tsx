@@ -13,6 +13,7 @@ import {
   potLandingPhrase,
   type BorrowingLedgerRow,
   type BorrowingMovementRow,
+  type BorrowingSettlementRow,
 } from '@/lib/records/borrowing';
 import { describeExternalMovement } from '@/lib/records/external-movements';
 import { activityWindowContaining, parseOpenRecordId } from '@/lib/records/in-place-activity';
@@ -125,6 +126,9 @@ function LedgerRow({
   open: boolean;
   onToggle: () => void;
 }) {
+  if (row.kind === 'settlement') {
+    return <SettlementLedgerRow row={row} striped={striped} />;
+  }
   if (row.kind === 'expected') {
     return (
       <tr
@@ -325,4 +329,44 @@ function MovementLedgerRow({
 /** Small muted line under a section heading. */
 export function LedgerNote({ children }: { children: ReactNode }) {
   return <p className="mt-1 text-xs text-ink-muted">{children}</p>;
+}
+
+/**
+ * A claim settlement that cleared this IOU outside the pots (SPEC §10.3): the
+ * only non-movement that moves a debt balance, drawn as its own signed row so
+ * a changing balance always has a row explaining why. Not a movement — there
+ * is nothing to correct here; corrections happen on the Claims card.
+ */
+function SettlementLedgerRow({ row, striped }: { row: BorrowingSettlementRow; striped: boolean }) {
+  const amount = `${row.moneyIn ? '+' : '−'}${formatPence(row.amountPence)}`;
+  const balance = row.voided ? '—' : formatSignedBalancePence(row.runningBalancePence);
+  return (
+    <tr
+      id={`settlement-${row.id}`}
+      className={`sf-anchor border-t border-border-hairline align-top text-ink-muted ${
+        striped ? 'bg-canvas' : ''
+      } ${row.voided ? 'text-ink-faint line-through' : ''}`}
+    >
+      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{row.date}</td>
+      <td className="px-3 py-2.5">
+        {row.counterparty}
+        <span className="mt-0.5 block text-xs">
+          claim settled{row.claimCounterparty === null ? '' : ` — ${row.claimCounterparty}`}
+          {row.note === null ? '' : ` · ${row.note}`}
+          {' · '}
+          <Link href="/borrowing#claims" className="sf-link">
+            Money owed to us
+          </Link>
+        </span>
+      </td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{row.moneyIn ? amount : '—'}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{row.moneyIn ? '—' : amount}</td>
+      <td
+        className="px-3 py-2.5 text-right tabular-nums"
+        title={row.voided ? 'Voided — this row never moved the balance' : undefined}
+      >
+        {balance}
+      </td>
+    </tr>
+  );
 }

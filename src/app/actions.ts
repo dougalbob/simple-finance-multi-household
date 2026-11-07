@@ -236,7 +236,31 @@ import {
   projectQuoteDeleteEntrySchema,
   projectSelectionEntrySchema,
   projectApplyPlanEntrySchema,
+  claimCreateEntrySchema,
+  claimEditEntrySchema,
+  claimAttachEntrySchema,
+  claimSettlePotEntrySchema,
+  claimSettleDirectEntrySchema,
+  claimVoidEntrySchema,
+  claimSettlementVoidEntrySchema,
 } from '@/lib/validation';
+import {
+  attachClaimPurchases,
+  claimTotals,
+  createClaim,
+  detachClaimPurchase,
+  editClaim,
+  settleClaim,
+  voidClaim,
+  voidSettlement,
+  ClaimNotFoundError,
+  ClaimNotOpenError,
+  ClaimOverSettledError,
+  ClaimSettlementNotFoundError,
+  DebtReductionExceedsBalanceError,
+  InvalidClaimInputError,
+  PurchaseNotClaimableError,
+} from '@/lib/records/claims';
 import {
   cancelSchedule,
   createSchedule,
@@ -1631,6 +1655,8 @@ const PAGE_PATHS = [
   '/longterm',
   // Energy tracking (issue 118, v1.44.0).
   '/energy',
+  // Money owed to us (issue 124).
+  '/borrowing',
   // The setup path (docs/ONBOARDING_PLAN.md): derived from the records, so an
   // action taken anywhere must refresh it too.
   '/start',
@@ -4220,5 +4246,384 @@ export async function saveEnergyTariffAction(
       status: 'error',
       message: domainMessage(err, 'The tariff could not be saved. Please try again.'),
     };
+  }
+}
+
+/** Create a claim for money owed to us — covers the picked purchases (SPEC §10.3). */
+export async function createClaimAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const purchaseIds = formData
+    .getAll('purchaseId')
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  const parsed = claimCreateEntrySchema.safeParse({
+    counterparty: String(formData.get('counterparty') ?? ''),
+    note: typeof formData.get('note') === 'string' ? formData.get('note') : '',
+    purchaseIds,
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the claim.') };
+  }
+  try {
+    const details = createClaim(user.db, {
+      counterparty: parsed.data.counterparty,
+      note: parsed.data.note,
+      purchaseIds: parsed.data.purchaseIds,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: `Tracking ${formatPence(details.claimedPence)} owed to us by ${details.claim.counterparty}.`,
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof ClaimNotFoundError ||
+      err instanceof PurchaseNotClaimableError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The claim could not be saved. Please try again.' };
+  }
+}
+
+/** Attach more purchases to an open claim (the estate keeps adding wake costs). */
+export async function attachClaimPurchasesAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const purchaseIds = formData
+    .getAll('purchaseId')
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  const parsed = claimAttachEntrySchema.safeParse({
+    claimId: numberOrNull(formData.get('claimId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    purchaseIds,
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Pick purchases to attach.') };
+  }
+  try {
+    const details = attachClaimPurchases(user.db, {
+      id: parsed.data.claimId,
+      expectedVersion: parsed.data.expectedVersion,
+      purchaseIds: parsed.data.purchaseIds,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: `Attached — ${details.claim.counterparty} now ${formatPence(details.claimedPence)} claimed.`,
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof PurchaseNotClaimableError ||
+      err instanceof ClaimNotOpenError ||
+      err instanceof VersionConflictError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The purchases could not be attached. Please try again.' };
+  }
+}
+
+/** Detach one purchase from an open claim — a correction, not a void. */
+export async function detachClaimPurchaseAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const claimId = numberOrNull(formData.get('claimId'));
+  const purchaseId = numberOrNull(formData.get('purchaseId'));
+  const expectedVersion = numberOrNull(formData.get('expectedVersion'));
+  if (claimId === null || purchaseId === null || expectedVersion === null) {
+    return { status: 'error', message: 'That purchase could not be detached.' };
+  }
+  try {
+    const details = detachClaimPurchase(user.db, {
+      id: claimId,
+      expectedVersion,
+      purchaseId,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: `Detached — ${formatPence(details.claimedPence)} still claimed on “${details.claim.counterparty}”.`,
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof ClaimNotOpenError ||
+      err instanceof ClaimNotFoundError ||
+      err instanceof VersionConflictError ||
+      err instanceof RecordVoidedError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The purchase could not be detached. Please try again.' };
+  }
+}
+
+/** Correct who owes us, or the note. */
+export async function editClaimAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const parsed = claimEditEntrySchema.safeParse({
+    claimId: numberOrNull(formData.get('claimId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    counterparty: String(formData.get('counterparty') ?? ''),
+    note: typeof formData.get('note') === 'string' ? formData.get('note') : '',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the claim.') };
+  }
+  try {
+    const details = editClaim(user.db, {
+      id: parsed.data.claimId,
+      expectedVersion: parsed.data.expectedVersion,
+      actor: user.email,
+      patch: { counterparty: parsed.data.counterparty, note: parsed.data.note },
+    });
+    revalidatePages();
+    return { status: 'ok', message: `Claim on “${details.claim.counterparty}” updated.` };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof ClaimNotFoundError ||
+      err instanceof ClaimNotOpenError ||
+      err instanceof VersionConflictError ||
+      err instanceof RecordVoidedError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The claim could not be saved. Please try again.' };
+  }
+}
+
+/** Void a claim — its settlements are voided with it; linked income is kept. */
+export async function voidClaimAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const parsed = claimVoidEntrySchema.safeParse({
+    claimId: numberOrNull(formData.get('claimId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    reason: typeof formData.get('reason') === 'string' ? formData.get('reason') : '',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Say why this is being voided.') };
+  }
+  try {
+    voidClaim(user.db, {
+      id: parsed.data.claimId,
+      expectedVersion: parsed.data.expectedVersion,
+      reason: parsed.data.reason,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: 'Claim voided. The purchases are released for a future claim.',
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof ClaimNotFoundError ||
+      err instanceof VersionConflictError ||
+      err instanceof RecordVoidedError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The claim could not be voided. Please try again.' };
+  }
+}
+
+/** Void one settlement on a claim — a mistaken reimbursement figure. */
+export async function voidSettlementAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const parsed = claimSettlementVoidEntrySchema.safeParse({
+    settlementId: numberOrNull(formData.get('settlementId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    reason: typeof formData.get('reason') === 'string' ? formData.get('reason') : '',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Say why this is being voided.') };
+  }
+  try {
+    voidSettlement(user.db, {
+      settlementId: parsed.data.settlementId,
+      expectedVersion: parsed.data.expectedVersion,
+      reason: parsed.data.reason,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message: 'Settlement voided. If the claim had closed, it is open again.',
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof ClaimNotFoundError ||
+      err instanceof ClaimSettlementNotFoundError ||
+      err instanceof AlreadyVoidError ||
+      err instanceof VersionConflictError ||
+      err instanceof RecordVoidedError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The settlement could not be voided. Please try again.' };
+  }
+}
+
+const settlementAmountFromForm = (
+  formData: FormData,
+): { amount: number | null; error: string | null } => {
+  const raw =
+    typeof formData.get('amount') === 'string' ? String(formData.get('amount')).trim() : '';
+  if (raw === '') return { amount: null, error: null };
+  const amount = parsePence(raw);
+  if (amount === null) {
+    return { amount: null, error: 'The amount could not be read.' };
+  }
+  return { amount, error: null };
+};
+
+/** Settle (part of) a claim — the money arrived; one-off income is recorded in the same save. */
+export async function settleClaimIntoPotAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const { amount, error } = settlementAmountFromForm(formData);
+  if (error !== null) return { status: 'error', message: error };
+  const parsed = claimSettlePotEntrySchema.safeParse({
+    claimId: numberOrNull(formData.get('claimId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    potId: numberOrNull(formData.get('potId')),
+    amountPence: amount,
+    occurredDate: textOrNull(formData.get('occurredDate')),
+    note: typeof formData.get('note') === 'string' ? formData.get('note') : '',
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the settlement.') };
+  }
+  try {
+    const { claim } = settleClaim(user.db, {
+      kind: 'pot',
+      id: parsed.data.claimId,
+      expectedVersion: parsed.data.expectedVersion,
+      potId: parsed.data.potId,
+      ...(amount === null ? {} : { amountPence: amount }),
+      occurredDate: parsed.data.occurredDate ?? undefined,
+      note: parsed.data.note,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message:
+        claim.claim.status === 'closed'
+          ? `Settled — “${claim.claim.counterparty}” is closed. Income recorded.`
+          : `Settled part — ${formatPence(claim.outstandingPence)} still awaited from “${claim.claim.counterparty}”. Income recorded.`,
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof ClaimNotFoundError ||
+      err instanceof ClaimNotOpenError ||
+      err instanceof ClaimOverSettledError ||
+      err instanceof VersionConflictError ||
+      err instanceof RecordVoidedError ||
+      err instanceof AlreadyVoidError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The settlement could not be saved. Please try again.' };
+  }
+}
+
+/** Settle (part of) a claim outside the pots — optionally clearing a named informal IOU. */
+export async function settleClaimDirectAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await householdContextFromRequest();
+  if (user === null) return NOT_SIGNED_IN;
+  if (user.readOnly) return READ_ONLY_VIEW;
+  const { amount, error } = settlementAmountFromForm(formData);
+  if (error !== null) return { status: 'error', message: error };
+  const parsed = claimSettleDirectEntrySchema.safeParse({
+    claimId: numberOrNull(formData.get('claimId')),
+    expectedVersion: numberOrNull(formData.get('expectedVersion')),
+    amountPence: amount,
+    occurredDate: textOrNull(formData.get('occurredDate')),
+    note: typeof formData.get('note') === 'string' ? formData.get('note') : '',
+    reduceDebtId: numberOrNull(formData.get('reduceDebtId')),
+  });
+  if (!parsed.success) {
+    return { status: 'error', message: firstIssue(parsed.error, 'Check the settlement.') };
+  }
+  try {
+    const { claim } = settleClaim(user.db, {
+      kind: 'direct',
+      id: parsed.data.claimId,
+      expectedVersion: parsed.data.expectedVersion,
+      ...(amount === null ? {} : { amountPence: amount }),
+      occurredDate: parsed.data.occurredDate ?? undefined,
+      note: parsed.data.note,
+      reduceDebtId: parsed.data.reduceDebtId,
+      actor: user.email,
+    });
+    revalidatePages();
+    return {
+      status: 'ok',
+      message:
+        claim.claim.status === 'closed'
+          ? `Settled — “${claim.claim.counterparty}” is closed. No money moved in or out of your pots.`
+          : `Settled part — ${formatPence(claim.outstandingPence)} still awaited from “${claim.claim.counterparty}”.`,
+    };
+  } catch (err) {
+    if (
+      err instanceof InvalidClaimInputError ||
+      err instanceof ClaimNotFoundError ||
+      err instanceof ClaimNotOpenError ||
+      err instanceof ClaimOverSettledError ||
+      err instanceof DebtReductionExceedsBalanceError ||
+      err instanceof DebtNotFoundError ||
+      err instanceof VersionConflictError ||
+      err instanceof RecordVoidedError
+    ) {
+      return { status: 'error', message: err.message };
+    }
+    return { status: 'error', message: 'The settlement could not be saved. Please try again.' };
   }
 }

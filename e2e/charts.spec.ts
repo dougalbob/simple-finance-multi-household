@@ -154,10 +154,42 @@ test.describe('charts', () => {
       await expect(laptop.getByText(/^Show the numbers/)).toContainText(`${rows} row`);
 
       // Each bar's drill-down is repeated as a real link in the table, in the
-      // same order — that is the keyboard and screen-reader path.
+      // same order — that is the keyboard and screen-reader path. A £0.00
+      // figure opens nothing (decision 232), so the months chart's table
+      // shows plain text where the bar is silent; the linked cells must
+      // still repeat their bars, in order.
       const bars = await barLinks(laptop);
       if (bars.length > 0) {
-        expect(await tableLinks(laptop), `${chart}: bar links vs table links`).toEqual(bars);
+        if (chart === 'months') {
+          const rows = await table.locator('tbody tr').all();
+          const monthsPerBand = bars.length / rows.length;
+          expect(Number.isInteger(monthsPerBand), 'months: bar grouping').toBe(true);
+          const expected: string[] = [];
+          for (const [rowIndex, row] of rows.entries()) {
+            const bandBars = bars.slice(rowIndex * monthsPerBand, (rowIndex + 1) * monthsPerBand);
+            const cells = await row.locator('td').all();
+            expect(cells.length, 'months: cell per month plus the category cell').toBe(
+              bandBars.length + 1,
+            );
+            for (let col = 0; col < bandBars.length; col += 1) {
+              const cell = cells[col + 1];
+              if (cell === undefined) continue;
+              const links = await cell.locator('a').all();
+              if (links.length === 0) {
+                await expect(cell, 'months: an unlinked cell must read £0.00').toHaveText('£0.00');
+              } else {
+                expect(links.length, 'months: one link per non-zero bar').toBe(1);
+                const bar = bandBars[col];
+                if (bar === undefined) continue;
+                expect(await links[0]?.getAttribute('href')).toBe(bar);
+                expected.push(bar);
+              }
+            }
+          }
+          expect(await tableLinks(laptop), 'months: bar links vs table links').toEqual(expected);
+        } else {
+          expect(await tableLinks(laptop), `${chart}: bar links vs table links`).toEqual(bars);
+        }
       }
     }
 

@@ -37,11 +37,16 @@ test.describe('Documents page', () => {
   test('the phone drawer opens /documents too', async ({ page }) => {
     await page.setViewportSize({ width: 393, height: 727 });
     await page.goto('/overview');
-    await page.getByRole('button', { name: 'Open navigation menu' }).click();
-    await page
-      .getByRole('navigation', { name: 'Pages' })
-      .getByRole('link', { name: 'Documents', exact: true })
-      .click();
+    // The hamburger is hydration-gated: a click before React attaches is
+    // swallowed, so retry the action until the drawer is open. The assertion
+    // itself is unchanged.
+    const hamburger = page.getByRole('button', { name: 'Open navigation menu' });
+    const drawerNav = page.locator('#mobile-nav-drawer nav[aria-label="Pages"]');
+    await expect(async () => {
+      await hamburger.click();
+      await expect(drawerNav).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
+    await drawerNav.getByRole('link', { name: 'Documents', exact: true }).click();
     await expect(page).toHaveURL(/\/documents$/);
     await expect(
       page.getByRole('heading', { name: 'Every stored document', level: 1 }),

@@ -4,6 +4,27 @@
 
 This file supersedes the original single-household release process for this repository. Historical v0.x tags and notes came from `dougalbob/simple-finance`; they are not releases or upgrade images of this product line.
 
+## v1.46.0 — money owed to us: tracked reimbursement claims (issue 124, 2026-11-06)
+
+A third party that owes the household money back (a funeral estate, an insurer, an employer) now gets
+a **claim** on the **Borrowing** page — the mirror image of an informal IOU. The claim points at the
+recorded purchases that make it up, its awaited figure is derived and never stored, claimed spend
+stays ordinary spending in Insights, and closing the loop takes one audited action through either of
+two honest routes: the money arrived in a pot (one-off income recorded in the same transaction), or
+the third party paid someone else directly (no pot movement; an informal IOU may be cancelled by the
+same amount; a note saying where the money went is required). Claims never feed estimates, projections
+or Insights and never predict a payment date. Ship one stable feature release: migration `0023`, the
+domain module, the actions, the `Money owed to us` card, the settlement rows folded into the Borrowing
+ledger and IOU balances, version metadata, release notes, SPEC §10.3 + E14, decisions 271–273,
+handoff and this file — **one PR**. Require PR `gates`, `browser` and `docker` (the browser run is the
+first execution of `e2e/claims.spec.ts`), merge once with a merge commit, require main CI, then place
+annotated `v1.46.0` on the exact merge commit and verify Publish pushed only to
+`ghcr.io/dougalbob/simple-finance-multi-household` with `v1.46.0`, `latest` and `sha-<short>` on one
+digest, plus the GitHub Latest release carrying the icon asset. The container applies migration
+`0023` at start-up, so back up the households and the Admin registry first. Only target appdata
+`/mnt/user/appdata/simple-finance-multi-household` and host port **3009**, never the original
+installation or 3007.
+
 ## v1.45.0 — account and supplier purchase links (2026-10-29)
 
 Stable release for issues #122 and #120, approved by the owner for an Unraid Force Update. Account

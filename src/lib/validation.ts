@@ -1228,3 +1228,83 @@ export const projectApplyPlanEntrySchema = z.object({
   plan: z.enum(['split', 'single-supplier'], { error: 'Choose a plan to apply.' }),
   expectedTotalPence: z.number().int().min(0),
 });
+
+/** Money owed to us — creating a claim from its covered purchases (SPEC §10.3). */
+export const claimCreateEntrySchema = z.object({
+  counterparty: z
+    .string()
+    .trim()
+    .min(1, 'Say who owes us the money.')
+    .max(120, 'Keep the name to 120 characters or fewer.'),
+  note: nullableText(280, 'Note'),
+  purchaseIds: z
+    .array(positiveIdSchema)
+    .min(1, 'Pick at least one purchase the claim covers.')
+    .max(200, 'Pick the purchases from the list.'),
+});
+
+/** Editing a claim: who owes us, and the note. Status changes go through the domain. */
+export const claimEditEntrySchema = z.object({
+  claimId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  counterparty: z
+    .string()
+    .trim()
+    .min(1, 'Say who owes us the money.')
+    .max(120, 'Keep the name to 120 characters or fewer.'),
+  note: nullableText(280, 'Note'),
+});
+
+/** Settling a claim into a pot — the money arrived; income is recorded in the same save. */
+export const claimSettlePotEntrySchema = z.object({
+  claimId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  potId: positiveIdSchema,
+  amountPence: positivePenceSchema.nullable().default(null),
+  occurredDate: localDateSchema.nullable().default(null),
+  note: nullableText(280, 'Note'),
+});
+
+/** Settling a claim outside the pots — the third party paid somebody else, not the household. */
+export const claimSettleDirectEntrySchema = z.object({
+  claimId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  amountPence: positivePenceSchema.nullable().default(null),
+  occurredDate: localDateSchema.nullable().default(null),
+  /** Where the money went — required for a settlement outside the pots. */
+  note: z
+    .string()
+    .trim()
+    .min(1, 'Say where the money went.')
+    .max(280, 'Keep the note to 280 characters or fewer.'),
+  reduceDebtId: positiveIdSchema.nullable().default(null),
+});
+
+export const claimVoidEntrySchema = z.object({
+  claimId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  reason: z
+    .string()
+    .trim()
+    .min(1, 'Say why this is being voided.')
+    .max(280, 'Keep the reason to 280 characters or fewer.'),
+});
+
+export const claimSettlementVoidEntrySchema = z.object({
+  settlementId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  reason: z
+    .string()
+    .trim()
+    .min(1, 'Say why this is being voided.')
+    .max(280, 'Keep the reason to 280 characters or fewer.'),
+});
+
+export const claimAttachEntrySchema = z.object({
+  claimId: positiveIdSchema,
+  expectedVersion: positiveIdSchema,
+  purchaseIds: z
+    .array(positiveIdSchema)
+    .min(1, 'Pick at least one purchase to attach.')
+    .max(200, 'Pick the purchases from the list.'),
+});

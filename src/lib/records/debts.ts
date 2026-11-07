@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { recordAudit } from '../audit';
 import type { Db } from '../db/client';
-import { debts, externalMovements } from '../db/schema';
+import { claimSettlements, debts, externalMovements } from '../db/schema';
+import type { DbTx } from '../audit';
 import { formatPence, isValidPenceAmount } from '../money';
 import { isValidLocalDate } from '../time';
 import { VersionConflictError } from './errors';
@@ -26,6 +27,9 @@ import { listPots } from './pots';
  * stays as history. An empty mistaken setup with no movements at all,
  * including voided, may be permanently deleted (decision 167).
  */
+
+/** A query surface: the database itself or one of its write transactions. */
+export type Reader = Db | DbTx;
 
 export type Debt = typeof debts.$inferSelect;
 export type DebtDirection = 'we_owe' | 'they_owe';
@@ -209,7 +213,7 @@ export function editDebt(db: Db, input: EditDebtInput): Debt {
   });
 }
 
-export function getDebt(db: Db, debtId: number): Debt {
+export function getDebt(db: Reader, debtId: number): Debt {
   const row = db.select().from(debts).where(eq(debts.id, debtId)).get();
   if (row === undefined) {
     throw new DebtNotFoundError(debtId);
@@ -239,7 +243,7 @@ export interface DebtWithBalance {
  * rows, which blocks permanent deletion (decision 167).
  */
 export function debtBalance(
-  db: Db,
+  db: Reader,
   debt: Debt,
 ): {
   balancePence: number;
@@ -255,6 +259,18 @@ export function debtBalance(
     .from(externalMovements)
     .where(eq(externalMovements.debtId, debt.id))
     .all();
+  // Live claim settlements reduce this IOU without any pot movement (SPEC
+  // §10.3): the assignment case, where the third party pays the person the
+  // household owes. They count as effective history for display and deletion
+  // guards; voided settlements never move the balance.
+  const settlementRows = db
+    .select({
+      amountPence: claimSettlements.amountPence,
+      voidedAt: claimSettlements.voidedAt,
+    })
+    .from(claimSettlements)
+    .where(eq(claimSettlements.reducesDebtId, debt.id))
+    .all();
   let balancePence = 0;
   let movementCount = 0;
   for (const row of rows) {
@@ -266,7 +282,16 @@ export function debtBalance(
       balancePence += row.direction === 'out' ? row.amountPence : -row.amountPence;
     }
   }
-  return { balancePence, movementCount, totalMovementCount: rows.length };
+  for (const row of settlementRows) {
+    if (row.voidedAt !== null) continue;
+    movementCount += 1;
+    balancePence -= row.amountPence;
+  }
+  return {
+    balancePence,
+    movementCount,
+    totalMovementCount: rows.length + settlementRows.length,
+  };
 }
 
 export function listDebtsWithBalances(db: Db): DebtWithBalance[] {
